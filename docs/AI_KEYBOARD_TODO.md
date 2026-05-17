@@ -387,3 +387,21 @@
 - [ ] Context-aware autocomplete/suggestion bar.
 - [ ] Preview before replacing long text; avoid destructive auto-replace.
 - [ ] Fast, cancellable LLM calls with graceful fallback UI.
+
+### Keyboard UI Reference: Grammarly Keyboard
+- [ ] Use Grammarly keyboard screenshot as UX reference for first visual target.
+- [ ] Dark keyboard surface with rounded top container.
+- [ ] Top assistant/suggestion row:
+  - [ ] Left brand/logo button.
+  - [ ] 3 predictive suggestions separated by vertical dividers.
+  - [ ] Right AI assistant/action button.
+- [ ] QWERTY layout with large rounded dark-gray keys and white labels.
+- [ ] Rows:
+  - [ ] QWERTY row.
+  - [ ] ASDF row with horizontal inset.
+  - [ ] Shift + ZXCV row + backspace.
+  - [ ] 123 + emoji + wide space + return.
+  - [ ] Bottom utility row with globe/next keyboard and microphone.
+- [ ] Support dark mode first; add light mode later.
+- [ ] Keep UI SwiftUI-first; any `UIInputViewController` should only host SwiftUI.
+- [ ] Avoid exact Grammarly branding/copying; use it as layout/quality benchmark only.
