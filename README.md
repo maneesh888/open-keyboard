@@ -1,23 +1,25 @@
 # Open Keyboard
 
-Open Keyboard is an open-source iOS keyboard with private AI assistance, designed to work with a self-hosted LLM Gateway instead of sending typed text to third-party keyboard services.
+Open Keyboard is an open-source, Grammarly-class AI writing assistant for iOS, delivered through a custom keyboard and paired with a self-hosted LLM Gateway instead of sending typed text to third-party keyboard services.
 
 > Status: early development. The product vision is defined, but the Xcode project and keyboard extension are still being built.
 
 ## What it will do
 
-Open Keyboard aims to provide a normal iOS typing experience plus optional AI tools:
+Open Keyboard aims to provide a normal iOS typing experience plus high-quality writing assistance:
 
 - Custom iOS keyboard extension for everyday typing.
 - AI suggestion bar for context-aware completions.
-- Rewrite actions for grammar, tone, clarity, and short/long variants.
-- Configurable LLM Gateway URL and API key.
+- Grammarly-level grammar, spelling, clarity, and rewrite assistance.
+- Tone transforms such as professional, friendly, concise, assertive, and polished.
+- Smart reply drafting, expansion, shortening, and summarization.
+- Pairing flow for LLM Gateway URL and API key.
 - Self-hosted/local model support through LLM Gateway and Ollama-compatible backends.
 - Privacy-first defaults: no hardcoded keys, no bundled secrets, and user-controlled infrastructure.
 
 ## Why this exists
 
-Most AI keyboards route private typing data through someone else's cloud. Open Keyboard is for people who want AI writing help while keeping control of their gateway, keys, logs, and model backend.
+Most AI keyboards and writing assistants route private typing data through someone else's cloud. Open Keyboard is for people who want Grammarly-level writing help while keeping control of their gateway, keys, logs, and model backend.
 
 ## Architecture
 
@@ -118,10 +120,18 @@ xcodebuild build \
   -destination 'platform=iOS Simulator,name=iPhone 16'
 ```
 
-## Related project
+## LLM Gateway pairing
 
-Open Keyboard is designed to work with [LLM Gateway](../llm-gateway), a lightweight authenticated gateway for Ollama-compatible LLM backends.
+Open Keyboard is designed to pair with [LLM Gateway](../llm-gateway). The gateway is the required backend layer for authentication, rate limits, model routing, and safe access to Ollama-compatible LLM backends.
+
+Planned pairing flow:
+
+1. User creates an API key in LLM Gateway admin.
+2. User enters or scans the gateway URL and API key in Open Keyboard.
+3. Open Keyboard tests the key with a live chat/completion request.
+4. The host app stores the configuration locally and shares it with the keyboard extension through App Group storage.
+5. The keyboard extension uses that gateway pairing for suggestions, rewrites, and writing actions.
 
 ## License
 
-This project is released under the Unlicense. See [LICENSE](LICENSE).
+This project is released under the MIT License. See [LICENSE](LICENSE).
