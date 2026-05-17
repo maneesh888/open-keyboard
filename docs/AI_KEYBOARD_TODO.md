@@ -344,3 +344,46 @@
 ---
 
 **Last Updated:** 2026-04-20 18:51 UTC by Coder Bot
+
+---
+
+## Product/Architecture Decisions Added 2026-05-18
+
+### Product Target
+- [ ] Target a Grammarly-level or better AI writing assistant, not just a basic AI keyboard.
+- [ ] Pair Open Keyboard with LLM Gateway as the required backend for auth, rate limits, model routing, and LLM access.
+- [ ] Keep the public positioning privacy-first: user-owned gateway, keys, logs, and model backend.
+
+### Backend Pairing UX
+- [ ] Configure backend in the main Open Keyboard app, not inside the keyboard UI.
+- [ ] Settings/onboarding should collect:
+  - [ ] LLM Gateway URL
+  - [ ] API key
+  - [ ] Connection status
+  - [ ] Full Access/network permission guidance
+- [ ] Add a "Test Connection" flow:
+  - [ ] Check gateway health.
+  - [ ] Validate API key with an authenticated lightweight request or chat/completion test.
+  - [ ] Show safe errors: invalid key, gateway offline, rate limited, Full Access required.
+- [ ] Store gateway URL/API key in shared App Group config so the keyboard extension can read it.
+- [ ] Keyboard extension should consume saved pairing and call:
+  - [ ] `POST {gatewayURL}/v1/chat/completions`
+  - [ ] `Authorization: Bearer {apiKey}`
+
+### UI/Implementation Constraints
+- [ ] Use SwiftUI for Open Keyboard UI.
+- [ ] Use SwiftUI for keyboard views/components.
+- [ ] Avoid UIKit UI implementation.
+- [ ] If iOS requires `UIInputViewController` for the keyboard extension lifecycle, keep it as a minimal hosting bridge only; product UI should remain SwiftUI.
+- [ ] Reference Allora Keyboard only for behavioral/UX inspiration where useful; do not copy code blindly and do not treat it as our project.
+
+### Grammarly-Class Feature Roadmap
+- [ ] Grammar and spelling fixes.
+- [ ] Clarity improvements.
+- [ ] Tone transforms: professional, friendly, concise, assertive, polished.
+- [ ] Rewrite variants: shorter, longer, simpler, more formal.
+- [ ] Smart replies for messages/email.
+- [ ] Summarize selected/recent text where iOS context allows.
+- [ ] Context-aware autocomplete/suggestion bar.
+- [ ] Preview before replacing long text; avoid destructive auto-replace.
+- [ ] Fast, cancellable LLM calls with graceful fallback UI.
