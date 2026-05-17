@@ -411,3 +411,8 @@
   - [ ] Logo badge can indicate number of issues/actions available.
   - [ ] Remaining row slots can still show predictive words/quoted replacements.
   - [ ] Tapping correction card should preview/apply fix safely depending on text length.
+- [ ] Use standard iOS keyboard colors/materials for light/dark mode instead of hardcoding Grammarly screenshot colors.
+- [ ] Top-left icon opens an in-keyboard AI/issues UI panel.
+- [ ] Top-right assistant icon opens the main AI interaction UI inside the keyboard.
+- [ ] Treat these icon-triggered panels as primary AI interaction surfaces; Maneesh will provide more UI references after basic setup is complete.
+- [ ] Basic setup milestone should prioritize project/buildability and shell keyboard first; detailed AI panels come after.
