@@ -405,3 +405,9 @@
 - [ ] Support dark mode first; add light mode later.
 - [ ] Keep UI SwiftUI-first; any `UIInputViewController` should only host SwiftUI.
 - [ ] Avoid exact Grammarly branding/copying; use it as layout/quality benchmark only.
+- [ ] Suggestion row must support inline correction cards, not only plain word predictions:
+  - [ ] Correction card shows action label such as "Correct spelling".
+  - [ ] Correction card shows replacement text with accent color.
+  - [ ] Logo badge can indicate number of issues/actions available.
+  - [ ] Remaining row slots can still show predictive words/quoted replacements.
+  - [ ] Tapping correction card should preview/apply fix safely depending on text length.
