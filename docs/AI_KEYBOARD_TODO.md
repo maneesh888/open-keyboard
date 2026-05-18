@@ -416,3 +416,49 @@
 - [ ] Top-right assistant icon opens the main AI interaction UI inside the keyboard.
 - [ ] Treat these icon-triggered panels as primary AI interaction surfaces; Maneesh will provide more UI references after basic setup is complete.
 - [ ] Basic setup milestone should prioritize project/buildability and shell keyboard first; detailed AI panels come after.
+
+---
+
+## POC Architecture Decisions Added 2026-05-18
+
+### Profiles and Gateway Configuration
+- [ ] Treat Open Keyboard profiles as user-friendly saved connections to LLM Gateway API keys.
+- [ ] Backend/Gateway key configuration owns AI behavior:
+  - [ ] model routing: Private local vs Ollama Cloud
+  - [ ] temperature
+  - [ ] max tokens
+  - [ ] rate limits
+  - [ ] enabled features/actions
+  - [ ] base system behavior/prompt
+  - [ ] key enabled/disabled state
+- [ ] Open Keyboard client owns UX intent only:
+  - [ ] selected profile/key
+  - [ ] action type such as fix grammar, rewrite, shorten, reply
+  - [ ] selected/current text and nearby context
+  - [ ] optional user tone/intention when explicitly chosen
+  - [ ] preview vs replace behavior
+- [ ] Do not fully configure model/temp/system prompts client-side for POC.
+- [ ] POC should start with one default profile in the UI, but storage should support multiple profiles.
+- [ ] Later add profile switching in the keyboard UI.
+
+### Server-Driven Configuration, Native UI
+- [ ] Use server-driven configuration/capabilities, not server-driven layout.
+- [ ] Gateway should eventually expose a safe metadata endpoint, e.g. `GET /v1/profile` or `GET /v1/capabilities`, authenticated by API key.
+- [ ] Endpoint should return safe profile metadata only, such as:
+  - [ ] profile name/label
+  - [ ] model label: Private or Ollama Cloud
+  - [ ] enabled actions
+  - [ ] default tone
+  - [ ] capabilities such as rewrite/suggestions/streaming
+  - [ ] limits useful for UX
+- [ ] Open Keyboard should render all UI with native SwiftUI components.
+- [ ] Gateway decides what is available; Open Keyboard decides how it looks.
+
+### POC Request Flow
+- [ ] User pairs Open Keyboard with Gateway URL + API key.
+- [ ] App stores profile in App Group storage.
+- [ ] Keyboard extension reads selected profile.
+- [ ] Keyboard sends action + text/context to Gateway using the selected profile key.
+- [ ] Gateway applies key-level model/temp/system behavior.
+- [ ] Gateway returns improved text/suggestions.
+- [ ] Keyboard previews result before replacing longer text.
