@@ -1,0 +1,86 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+/* Begin PBXBuildFile section */
+		5BD7666BECBD76E9791FCCB7B /* OpenKeyboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD7666BECBD76E9791FCCB7; };
+		B4B9DFC292831B136A20EC6DB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B9DFC292831B136A20EC6D; };
+		833D81870E9009BD3DD6669EB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833D81870E9009BD3DD6669E; };
+		F86D05867CF16CCF5D03F55DB /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86D05867CF16CCF5D03F55D; };
+		64D79951F7327AC0D1CA1BDAB /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D79951F7327AC0D1CA1BDA; };
+		582E49DC7350041B2D2D135DB /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D; };
+		972B832BB4490EB9A8C5CA2CB /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B832BB4490EB9A8C5CA2C; };
+		4AA7F5EC8066C0C5DAC5080AB /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA7F5EC8066C0C5DAC5080A; };
+		572626087CD519914B6B58B5B /* KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572626087CD519914B6B58B5; };
+		39D261B1DB017C6BA7680468B /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468; };
+		2012167C7CC2E3BB270F0D60B /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D; };
+		87224365CBBE99FADBBBAB47 /* OpenKeyboardExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DB6DC819E4A61132A86EEAE8; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+/* Begin PBXContainerItemProxy section */
+		D0A642A5DDFBC919F2DC5695 = {isa = PBXContainerItemProxy; containerPortal = 6D9882797250F9A619D27D03; proxyType = 1; remoteGlobalIDString = 1DBA88FA4203F880F8410F13; remoteInfo = OpenKeyboardExtension; };
+/* End PBXContainerItemProxy section */
+/* Begin PBXCopyFilesBuildPhase section */
+		429A1EC1379593EF1FF5148A /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (87224365CBBE99FADBBBAB47,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+/* Begin PBXFileReference section */
+		DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		703438C4D3A1836F6B202DA7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboard/Info.plist; sourceTree = SOURCE_ROOT; };
+		807C41B5A20BFF253A7A6DAD /* OpenKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboard/OpenKeyboard.entitlements; sourceTree = SOURCE_ROOT; };
+		DA9DFCAF73CAE0F983350CE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboardExtension/Info.plist; sourceTree = SOURCE_ROOT; };
+		00925BF528988C8F99265380 /* OpenKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; sourceTree = SOURCE_ROOT; };
+		5BD7666BECBD76E9791FCCB7 /* OpenKeyboardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/OpenKeyboardApp.swift; sourceTree = SOURCE_ROOT; };
+		B4B9DFC292831B136A20EC6D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ContentView.swift; sourceTree = SOURCE_ROOT; };
+		833D81870E9009BD3DD6669E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/SettingsView.swift; sourceTree = SOURCE_ROOT; };
+		F86D05867CF16CCF5D03F55D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
+		64D79951F7327AC0D1CA1BDA /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/ViewModels/SettingsViewModel.swift; sourceTree = SOURCE_ROOT; };
+		582E49DC7350041B2D2D135D /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/AppConfig.swift; sourceTree = SOURCE_ROOT; };
+		972B832BB4490EB9A8C5CA2C /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/NetworkManager.swift; sourceTree = SOURCE_ROOT; };
+		4AA7F5EC8066C0C5DAC5080A /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
+		572626087CD519914B6B58B5 /* KeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardView.swift; sourceTree = SOURCE_ROOT; };
+		39D261B1DB017C6BA7680468 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+/* Begin PBXFrameworksBuildPhase section */
+		DD684E1831AD60E76CDC5FEA /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		27D6499381ABC205D16C80A7 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXGroup section */
+		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (703438C4D3A1836F6B202DA7,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
+		31FF30F881C179EC5AEBB66C /* Products */ = {isa = PBXGroup; children = (DDD0DF4B54E56F178EE967CC,DB6DC819E4A61132A86EEAE8,); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+/* Begin PBXNativeTarget section */
+		6969AE0C0DACA9F77BE12409 /* OpenKeyboard */ = {isa = PBXNativeTarget; buildConfigurationList = AD68C5BFA78393E20996BDA3; buildPhases = (02021F3DA6D315C6903BEA79,DD684E1831AD60E76CDC5FEA,C9A5745812E6FCEA649C7E0B,429A1EC1379593EF1FF5148A,); buildRules = (); dependencies = (68DEE20203FED99CE9C62661,); name = OpenKeyboard; productName = OpenKeyboard; productReference = DDD0DF4B54E56F178EE967CC; productType = "com.apple.product-type.application"; };
+		1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */ = {isa = PBXNativeTarget; buildConfigurationList = FA961B9D5EBBF2ACCF1F38BE; buildPhases = (C3B61026B4B857CF532189C5,27D6499381ABC205D16C80A7,3DDA42D724FCBBBA2C59D1B7,); buildRules = (); dependencies = (); name = OpenKeyboardExtension; productName = OpenKeyboardExtension; productReference = DB6DC819E4A61132A86EEAE8; productType = "com.apple.product-type.app-extension"; };
+/* End PBXNativeTarget section */
+/* Begin PBXProject section */
+		6D9882797250F9A619D27D03 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = {6969AE0C0DACA9F77BE12409 = {CreatedOnToolsVersion = 15.4; }; 1DBA88FA4203F880F8410F13 = {CreatedOnToolsVersion = 15.4; }; }; }; buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 1907F0F8DF9C0B5C3BCFA307; productRefGroup = 31FF30F881C179EC5AEBB66C; projectDirPath = ""; projectRoot = ""; targets = (6969AE0C0DACA9F77BE12409,1DBA88FA4203F880F8410F13,); };
+/* End PBXProject section */
+/* Begin PBXResourcesBuildPhase section */
+		C9A5745812E6FCEA649C7E0B /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		3DDA42D724FCBBBA2C59D1B7 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */
+		02021F3DA6D315C6903BEA79 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5BD7666BECBD76E9791FCCB7B,B4B9DFC292831B136A20EC6DB,833D81870E9009BD3DD6669EB,F86D05867CF16CCF5D03F55DB,64D79951F7327AC0D1CA1BDAB,582E49DC7350041B2D2D135DB,972B832BB4490EB9A8C5CA2CB,); runOnlyForDeploymentPostprocessing = 0; };
+		C3B61026B4B857CF532189C5 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (4AA7F5EC8066C0C5DAC5080AB,572626087CD519914B6B58B5B,39D261B1DB017C6BA7680468B,2012167C7CC2E3BB270F0D60B,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+/* Begin PBXTargetDependency section */
+		68DEE20203FED99CE9C62661 = {isa = PBXTargetDependency; target = 1DBA88FA4203F880F8410F13; targetProxy = D0A642A5DDFBC919F2DC5695; };
+/* End PBXTargetDependency section */
+/* Begin XCBuildConfiguration section */
+		65DE611B6C93116CD30615EC /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; VERSIONING_SYSTEM = "apple-generic"; }; name = Debug; };
+		80718C4429A5D9A9C293E13E /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; VERSIONING_SYSTEM = "apple-generic"; }; name = Release; };
+		B011A32F83834FF145F800A1 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboard/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard; PRODUCT_NAME = OpenKeyboard; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		F233DA21B620DFC23AA4B5A0 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboard/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard; PRODUCT_NAME = OpenKeyboard; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		DF069D110E5FA9C63B288E72 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		2A078DB6E5281664BDF4EE74 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+/* Begin XCConfigurationList section */
+		7114CF5E6C5CB6284A8BF5F4 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (65DE611B6C93116CD30615EC,80718C4429A5D9A9C293E13E,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */ = {isa = XCConfigurationList; buildConfigurations = (B011A32F83834FF145F800A1,F233DA21B620DFC23AA4B5A0,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		FA961B9D5EBBF2ACCF1F38BE /* Build configuration list for PBXNativeTarget "OpenKeyboardExtension" */ = {isa = XCConfigurationList; buildConfigurations = (DF069D110E5FA9C63B288E72,2A078DB6E5281664BDF4EE74,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+/* End XCConfigurationList section */
+	};
+	rootObject = 6D9882797250F9A619D27D03;
+}

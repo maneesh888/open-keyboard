@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 
 @MainActor
 class SettingsViewModel: ObservableObject {
