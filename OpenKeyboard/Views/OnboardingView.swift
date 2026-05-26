@@ -10,11 +10,16 @@ import SwiftUI
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @EnvironmentObject var settingsViewModel: SettingsViewModel
-    @State private var currentPage = 0
+    @State private var currentPage: Int
     @State private var showingSettings = false
+
+    init(hasCompletedOnboarding: Binding<Bool>, initialPage: Int = 0) {
+        self._hasCompletedOnboarding = hasCompletedOnboarding
+        self._currentPage = State(initialValue: initialPage)
+    }
     
     var body: some View {
-        VStack {
+        VStack(spacing: 0) {
             TabView(selection: $currentPage) {
                 WelcomePage()
                     .tag(0)
@@ -28,8 +33,12 @@ struct OnboardingView: View {
                 CompletePage(hasCompletedOnboarding: $hasCompletedOnboarding)
                     .tag(3)
             }
-            .tabViewStyle(.page)
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            PageIndicator(currentPage: currentPage, pageCount: 4)
+                .accessibilityIdentifier("onboarding_page_indicator")
+                .frame(height: 30)
+                .padding(.bottom, 8)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -40,42 +49,52 @@ struct OnboardingView: View {
 
 struct WelcomePage: View {
     var body: some View {
-        VStack(spacing: 30) {
-            Spacer()
-            
-            Text("🔓")
-                .font(.system(size: 100))
-            
-            Text("Welcome to\nOpen Keyboard")
-                .font(.largeTitle)
-                .fontWeight(.bold)
-                .multilineTextAlignment(.center)
-            
-            Text("AI-powered typing with privacy in mind")
-                .font(.headline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-            
-            Spacer()
-            
-            VStack(alignment: .leading, spacing: 16) {
-                FeatureRow(icon: "cpu", title: "Your Own LLM", description: "Connect to your self-hosted LLM gateway")
-                FeatureRow(icon: "lock.shield", title: "Privacy First", description: "Your data never leaves your control")
-                FeatureRow(icon: "sparkles", title: "AI Powered", description: "Smart suggestions and text improvements")
+        VStack(spacing: 14) {
+            Image(systemName: "keyboard.badge.eye")
+                .font(.system(size: 42, weight: .regular))
+                .foregroundColor(.accentColor)
+                .accessibilityHidden(true)
+                .padding(.top, 12)
+
+            VStack(spacing: 6) {
+                Text("Welcome to\nOpen Keyboard")
+                    .accessibilityIdentifier("onboarding_title")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("AI-powered typing with privacy in mind")
+                    .accessibilityIdentifier("onboarding_subtitle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 30)
-            
-            Spacer()
-            
+            .padding(.horizontal, 18)
+
+            VStack(alignment: .leading, spacing: 10) {
+                FeatureRow(icon: "cpu", title: "Your Own LLM", description: "Connect to your self-hosted LLM gateway", titleIdentifier: "onboarding_feature_llm_title", descriptionIdentifier: "onboarding_feature_llm_description")
+                FeatureRow(icon: "lock.shield", title: "Privacy First", description: "Your data never leaves your control", titleIdentifier: "onboarding_feature_privacy_title", descriptionIdentifier: "onboarding_feature_privacy_description")
+                FeatureRow(icon: "sparkles", title: "AI Powered", description: "Smart suggestions and text improvements", titleIdentifier: "onboarding_feature_ai_title", descriptionIdentifier: "onboarding_feature_ai_description")
+            }
+            .padding(.horizontal, 22)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
+
             Text("Swipe to continue →")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundColor(.secondary)
-                .padding(.bottom, 40)
+                .padding(.bottom, 2)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 16)
     }
 }
-
 struct GatewaySetupPage: View {
     @Binding var showingSettings: Bool
     @EnvironmentObject var settingsViewModel: SettingsViewModel
@@ -235,25 +254,66 @@ struct CompletePage: View {
 
 // Helper Views
 
+struct PageIndicator: View {
+    let currentPage: Int
+    let pageCount: Int
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(0..<pageCount, id: \.self) { index in
+                Circle()
+                    .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.3))
+                    .frame(width: 8, height: 8)
+            }
+        }
+        .accessibilityLabel("Page \(currentPage + 1) of \(pageCount)")
+    }
+}
+
 struct FeatureRow: View {
     let icon: String
     let title: String
     let description: String
+    let titleIdentifier: String?
+    let descriptionIdentifier: String?
+
+    init(icon: String, title: String, description: String, titleIdentifier: String? = nil, descriptionIdentifier: String? = nil) {
+        self.icon = icon
+        self.title = title
+        self.description = description
+        self.titleIdentifier = titleIdentifier
+        self.descriptionIdentifier = descriptionIdentifier
+    }
+
+    @ViewBuilder
+    private func identifiedText(_ text: String, identifier: String?) -> some View {
+        if let identifier {
+            Text(text)
+                .accessibilityIdentifier(identifier)
+        } else {
+            Text(text)
+        }
+    }
     
     var body: some View {
         HStack(alignment: .top, spacing: 15) {
             Image(systemName: icon)
-                .font(.title2)
+                .font(.title3)
                 .foregroundColor(.accentColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
+                identifiedText(title, identifier: titleIdentifier)
                     .fontWeight(.semibold)
-                Text(description)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+                identifiedText(description, identifier: descriptionIdentifier)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -274,6 +334,8 @@ struct SetupStep: View {
             
             Text(text)
                 .font(.body)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -286,17 +348,22 @@ struct TipRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 15) {
             Image(systemName: icon)
-                .font(.title2)
+                .font(.title3)
                 .foregroundColor(.accentColor)
                 .frame(width: 30)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .fontWeight(.semibold)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(description)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }

@@ -1,0 +1,29 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific files
+*.xcuserstate
+xcuserdata/
+*.xcscmblueprint
+*.xccheckout
+
+# Xcode build products
+DerivedData/
+build/
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.swiftpm/
+.build/
+
+# CocoaPods / Carthage generated output
+Pods/
+Carthage/Build/
+
+# Local agent scratch files
+.agent/
+
+# Local CI artifacts
+.ci-results/

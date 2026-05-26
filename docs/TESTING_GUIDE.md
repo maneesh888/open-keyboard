@@ -12,7 +12,7 @@ The gateway is **complete and ready to test**.
 ### Start the Gateway
 
 ```bash
-cd /app/workspace/hobby/llm-gateway
+cd /app/projects/hobby/llm-gateway
 npm start
 ```
 
@@ -216,7 +216,7 @@ http://localhost:8080/admin/
 
 The Swift files already exist in:
 ```
-/app/workspace/hobby/open-keyboard/OpenKeyboard/
+/app/projects/hobby/open-keyboard/OpenKeyboard/
 ├── OpenKeyboardApp.swift
 ├── Views/
 │   ├── ContentView.swift

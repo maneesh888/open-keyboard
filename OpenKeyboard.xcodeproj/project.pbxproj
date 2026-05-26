@@ -17,9 +17,13 @@
 		39D261B1DB017C6BA7680468B /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468; };
 		2012167C7CC2E3BB270F0D60B /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D; };
 		87224365CBBE99FADBBBAB47 /* OpenKeyboardExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DB6DC819E4A61132A86EEAE8; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		AB0000000000000000000005 /* BaseOpenKeyboardUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002; };
+		AB0000000000000000000006 /* OpenKeyboardUITestDataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000003; };
+		AB0000000000000000000007 /* OnboardingScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000004; };
 /* End PBXBuildFile section */
 /* Begin PBXContainerItemProxy section */
 		D0A642A5DDFBC919F2DC5695 = {isa = PBXContainerItemProxy; containerPortal = 6D9882797250F9A619D27D03; proxyType = 1; remoteGlobalIDString = 1DBA88FA4203F880F8410F13; remoteInfo = OpenKeyboardExtension; };
+		AB0000000000000000000010 = {isa = PBXContainerItemProxy; containerPortal = 6D9882797250F9A619D27D03; proxyType = 1; remoteGlobalIDString = 6969AE0C0DACA9F77BE12409; remoteInfo = OpenKeyboard; };
 /* End PBXContainerItemProxy section */
 /* Begin PBXCopyFilesBuildPhase section */
 		429A1EC1379593EF1FF5148A /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (87224365CBBE99FADBBBAB47,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
@@ -41,32 +45,42 @@
 		4AA7F5EC8066C0C5DAC5080A /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
 		572626087CD519914B6B58B5 /* KeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardView.swift; sourceTree = SOURCE_ROOT; };
 		39D261B1DB017C6BA7680468 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000001 /* OpenKeyboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenKeyboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB0000000000000000000002 /* BaseOpenKeyboardUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000003 /* OpenKeyboardUITestDataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000004 /* OnboardingScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OnboardingScreenshotUITests.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 /* Begin PBXFrameworksBuildPhase section */
 		DD684E1831AD60E76CDC5FEA /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		27D6499381ABC205D16C80A7 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AB0000000000000000000008 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 /* Begin PBXGroup section */
-		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (703438C4D3A1836F6B202DA7,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
-		31FF30F881C179EC5AEBB66C /* Products */ = {isa = PBXGroup; children = (DDD0DF4B54E56F178EE967CC,DB6DC819E4A61132A86EEAE8,); name = Products; sourceTree = "<group>"; };
+		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (703438C4D3A1836F6B202DA7,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,AB000000000000000000000F,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
+		31FF30F881C179EC5AEBB66C /* Products */ = {isa = PBXGroup; children = (DDD0DF4B54E56F178EE967CC,DB6DC819E4A61132A86EEAE8,AB0000000000000000000001,); name = Products; sourceTree = "<group>"; };
+		AB000000000000000000000F /* OpenKeyboardUITests */ = {isa = PBXGroup; children = (AB0000000000000000000002,AB0000000000000000000003,AB0000000000000000000004,); name = OpenKeyboardUITests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 /* Begin PBXNativeTarget section */
 		6969AE0C0DACA9F77BE12409 /* OpenKeyboard */ = {isa = PBXNativeTarget; buildConfigurationList = AD68C5BFA78393E20996BDA3; buildPhases = (02021F3DA6D315C6903BEA79,DD684E1831AD60E76CDC5FEA,C9A5745812E6FCEA649C7E0B,429A1EC1379593EF1FF5148A,); buildRules = (); dependencies = (68DEE20203FED99CE9C62661,); name = OpenKeyboard; productName = OpenKeyboard; productReference = DDD0DF4B54E56F178EE967CC; productType = "com.apple.product-type.application"; };
 		1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */ = {isa = PBXNativeTarget; buildConfigurationList = FA961B9D5EBBF2ACCF1F38BE; buildPhases = (C3B61026B4B857CF532189C5,27D6499381ABC205D16C80A7,3DDA42D724FCBBBA2C59D1B7,); buildRules = (); dependencies = (); name = OpenKeyboardExtension; productName = OpenKeyboardExtension; productReference = DB6DC819E4A61132A86EEAE8; productType = "com.apple.product-type.app-extension"; };
+		AB000000000000000000000B /* OpenKeyboardUITests */ = {isa = PBXNativeTarget; buildConfigurationList = AB000000000000000000000E; buildPhases = (AB000000000000000000000A,AB0000000000000000000008,AB0000000000000000000009,); buildRules = (); dependencies = (AB0000000000000000000011,); name = OpenKeyboardUITests; productName = OpenKeyboardUITests; productReference = AB0000000000000000000001; productType = "com.apple.product-type.bundle.ui-testing"; };
 /* End PBXNativeTarget section */
 /* Begin PBXProject section */
-		6D9882797250F9A619D27D03 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = {6969AE0C0DACA9F77BE12409 = {CreatedOnToolsVersion = 15.4; }; 1DBA88FA4203F880F8410F13 = {CreatedOnToolsVersion = 15.4; }; }; }; buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 1907F0F8DF9C0B5C3BCFA307; productRefGroup = 31FF30F881C179EC5AEBB66C; projectDirPath = ""; projectRoot = ""; targets = (6969AE0C0DACA9F77BE12409,1DBA88FA4203F880F8410F13,); };
+		6D9882797250F9A619D27D03 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = {6969AE0C0DACA9F77BE12409 = {CreatedOnToolsVersion = 15.4; }; 1DBA88FA4203F880F8410F13 = {CreatedOnToolsVersion = 15.4; }; AB000000000000000000000B = {CreatedOnToolsVersion = 15.4; TestTargetID = 6969AE0C0DACA9F77BE12409; }; }; }; buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 1907F0F8DF9C0B5C3BCFA307; productRefGroup = 31FF30F881C179EC5AEBB66C; projectDirPath = ""; projectRoot = ""; targets = (6969AE0C0DACA9F77BE12409,1DBA88FA4203F880F8410F13,AB000000000000000000000B,); };
 /* End PBXProject section */
 /* Begin PBXResourcesBuildPhase section */
 		C9A5745812E6FCEA649C7E0B /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		3DDA42D724FCBBBA2C59D1B7 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		AB0000000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 /* Begin PBXSourcesBuildPhase section */
 		02021F3DA6D315C6903BEA79 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (5BD7666BECBD76E9791FCCB7B,B4B9DFC292831B136A20EC6DB,833D81870E9009BD3DD6669EB,F86D05867CF16CCF5D03F55DB,64D79951F7327AC0D1CA1BDAB,582E49DC7350041B2D2D135DB,972B832BB4490EB9A8C5CA2CB,); runOnlyForDeploymentPostprocessing = 0; };
 		C3B61026B4B857CF532189C5 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (4AA7F5EC8066C0C5DAC5080AB,572626087CD519914B6B58B5B,39D261B1DB017C6BA7680468B,2012167C7CC2E3BB270F0D60B,); runOnlyForDeploymentPostprocessing = 0; };
+		AB000000000000000000000A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (AB0000000000000000000005,AB0000000000000000000006,AB0000000000000000000007,); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 /* Begin PBXTargetDependency section */
 		68DEE20203FED99CE9C62661 = {isa = PBXTargetDependency; target = 1DBA88FA4203F880F8410F13; targetProxy = D0A642A5DDFBC919F2DC5695; };
+		AB0000000000000000000011 = {isa = PBXTargetDependency; target = 6969AE0C0DACA9F77BE12409; targetProxy = AB0000000000000000000010; };
 /* End PBXTargetDependency section */
 /* Begin XCBuildConfiguration section */
 		65DE611B6C93116CD30615EC /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; VERSIONING_SYSTEM = "apple-generic"; }; name = Debug; };
@@ -75,11 +89,14 @@
 		F233DA21B620DFC23AA4B5A0 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboard/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard; PRODUCT_NAME = OpenKeyboard; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
 		DF069D110E5FA9C63B288E72 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
 		2A078DB6E5281664BDF4EE74 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+		AB000000000000000000000C /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = OpenKeyboard; }; name = Debug; };
+		AB000000000000000000000D /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = OpenKeyboard; }; name = Release; };
 /* End XCBuildConfiguration section */
 /* Begin XCConfigurationList section */
 		7114CF5E6C5CB6284A8BF5F4 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (65DE611B6C93116CD30615EC,80718C4429A5D9A9C293E13E,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 		AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */ = {isa = XCConfigurationList; buildConfigurations = (B011A32F83834FF145F800A1,F233DA21B620DFC23AA4B5A0,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 		FA961B9D5EBBF2ACCF1F38BE /* Build configuration list for PBXNativeTarget "OpenKeyboardExtension" */ = {isa = XCConfigurationList; buildConfigurations = (DF069D110E5FA9C63B288E72,2A078DB6E5281664BDF4EE74,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		AB000000000000000000000E /* Build configuration list for PBXNativeTarget "OpenKeyboardUITests" */ = {isa = XCConfigurationList; buildConfigurations = (AB000000000000000000000C,AB000000000000000000000D,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 6D9882797250F9A619D27D03;
