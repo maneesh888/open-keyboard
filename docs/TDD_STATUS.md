@@ -1,6 +1,6 @@
 # Open Keyboard TDD Status
 
-Last updated: 2026-05-22
+Last updated: 2026-05-28
 
 ## Local CI
 
@@ -12,11 +12,11 @@ Host command:
 
 Current verified host result:
 
-- Core package tests: 48 passed, 1 skipped, 0 failed
-- iOS app/extension build: passed
-- Onboarding first-page visual verification: passed on iPhone 16 simulator
-- Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation)
-- Latest verified ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/2026-05-23T130408-openkeyboard-ui-test-harness.md`
+- Focused `KeyboardContextTests`: 12 tests, 0 failed
+- Core package tests: 61 executed, 2 skipped live tests, 0 failed
+- iOS app/extension build: passed on iPhone 16
+- Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation) in the previous foundation slice
+- Latest verified ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md`
 
 ## Completed TDD slices
 
@@ -38,6 +38,7 @@ Current verified host result:
 - [x] Gateway edge cases: 403, unexpected status, invalid health JSON
 - [x] Prompt edge cases: translate, continue-writing, custom template without placeholder
 - [x] Offline prompt evaluation fixture tests
+- [x] Opt-in `LivePromptEvaluationTests` scaffold for grammar/rewrite/prompt-injection live quality checks
 - [x] Onboarding first-page layout fix verified by simulator screenshot
 - [x] Xcode UI test target and screenshot harness for iPhone 16 + iPhone SE
 
@@ -65,8 +66,20 @@ The live smoke covers:
 
 ## Next TDD TODO
 
-1. Add before/after cursor context and replacement range tests.
-2. Add prompt quality/performance eval docs and offline fixtures.
-3. Add opt-in live prompt eval tests for real LLM quality/model comparison/latency.
-4. Add timeout, cancellation, offline/network resilience tests.
-5. Wire app/extension code to consume `OpenKeyboardCore` only after backend tests stay green.
+1. Expand prompt quality/performance eval fixtures and rubric coverage.
+2. Run opt-in live prompt evals against a configured gateway/model and record results.
+3. Add timeout, cancellation, offline/network resilience tests.
+4. Wire app/extension code to consume `OpenKeyboardCore` only after backend tests stay green.
+
+## Completed slice: context and replacement ranges
+
+Added an initial `KeyboardDocumentContext` / replacement strategy slice for realistic keyboard behavior:
+
+- before-cursor + selected-text + after-cursor document context
+- bounded after-cursor extraction
+- insert-at-cursor and selected-text replacement
+- last sentence and last paragraph replacement
+- completed-final-sentence regression coverage
+- emoji/grapheme-safety tests
+
+Host Swift validation passed through direct ClawMaster host-path requests. The devtools `ai-keyboard` project mapping still points to a stale/missing host path and should be repaired separately; it is not a code validation blocker for this slice.

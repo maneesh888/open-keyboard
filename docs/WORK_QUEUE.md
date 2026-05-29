@@ -1,6 +1,6 @@
 # Open Keyboard Work Queue
 
-Last updated: 2026-05-22
+Last updated: 2026-05-27
 
 ## Current verified baseline
 
@@ -100,7 +100,7 @@ Acceptance:
 
 ### 3. Prompt quality/performance eval suite
 
-Status: Planned
+Status: In progress
 
 Goal: measure how well system/action prompts perform with real LLMs.
 
@@ -109,7 +109,7 @@ Add docs/tests for:
 - golden prompt fixtures
 - grammar/rewrite/summarize/translate/tone/continue-writing examples
 - deterministic rubric checks first
-- optional live LLM evals behind env vars
+- optional live LLM evals behind env vars (initial scaffold added)
 - prompt injection cases: selected text tries to override instructions
 - model comparison across local/cloud models
 - latency and token/cost tracking when gateway exposes usage
@@ -125,28 +125,26 @@ OpenKeyboardCore/Tests/OpenKeyboardCoreTests/LivePromptEvaluationTests.swift
 Acceptance:
 
 - Normal CI stays deterministic.
-- Live evals skip unless env vars are set.
+- Live evals skip unless env vars are set; `LivePromptEvaluationTests` covers grammar, rewrite, and prompt-injection smoke scenarios.
 - Results document pass/fail criteria and known weak prompts.
 
 ### 4. Before/after cursor context and replacement ranges
 
-Status: Planned
+Status: Done
 
 Goal: support real keyboard extension behavior where selected/context text is not always replace-all or append-only.
 
-Add tests/logic for:
+Added initial core slice:
 
-- context before cursor
-- context after cursor
-- selected text replacement
-- replace last sentence/paragraph
-- insert at cursor
-- Unicode-safe replacement ranges
+- `KeyboardDocumentContext` with before-cursor, selected-text, and after-cursor fields.
+- `KeyboardContextExtractor.contextAfterCursor` and `contextAroundCursor` with bounded, grapheme-safe prefix/suffix behavior.
+- `AITextReplacementStrategy` cases for `replaceSelected`, `insertAtCursor`, `replaceLastSentence`, and `replaceLastParagraph` while preserving existing `replaceAll` / `appendToCursor` behavior.
+- `KeyboardContextTests` covering selected replacement, insertion, last sentence/paragraph replacement, completed final sentence replacement, after-cursor preservation, and emoji/grapheme safety.
 
-Likely files:
+Likely follow-up files:
 
 ```text
-OpenKeyboardCore/Sources/OpenKeyboardCore/KeyboardContext.swift
+OpenKeyboardCore/Sources/OpenKeyboardCore/KeyboardInputReducer.swift
 OpenKeyboardCore/Tests/OpenKeyboardCoreTests/KeyboardContextTests.swift
 ```
 
@@ -154,6 +152,9 @@ Acceptance:
 
 - Handles emoji/grapheme clusters correctly.
 - Clear strategy enum for replacement behavior.
+- Host Swift validation passed via direct ClawMaster host-path requests.
+
+Note: devtools `ai-keyboard` mapping still points to a stale/missing host path; repair that separately from this completed core slice.
 
 ### 5. Timeout, cancellation, and network resilience tests
 

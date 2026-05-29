@@ -10,66 +10,72 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
-    
+
     var body: some View {
         NavigationView {
-            VStack(spacing: 30) {
-                // Header
-                VStack(spacing: 12) {
-                    Text("🔓")
-                        .font(.system(size: 72))
-                    
-                    Text("Open Keyboard")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text("AI-Powered Typing")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top, 60)
-                
-                Spacer()
-                
-                // Status Card
-                StatusCard(config: settingsViewModel.config)
-                
-                Spacer()
-                
-                // Actions
-                VStack(spacing: 16) {
-                    // Open Keyboard Settings Button
-                    Button(action: {
-                        settingsViewModel.openKeyboardSettings()
-                    }) {
-                        HStack {
-                            Image(systemName: "keyboard")
-                            Text("Open Keyboard Settings")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 28) {
+                    // Header
+                    VStack(spacing: 10) {
+                        Text("🔓")
+                            .font(.system(size: 58))
+                            .lineLimit(1)
+
+                        Text("Open Keyboard")
+                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Text("AI-Powered Typing")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
                     }
-                    
-                    // Settings Button
-                    Button(action: {
-                        showingSettings = true
-                    }) {
-                        HStack {
-                            Image(systemName: "gearshape")
-                            Text("App Settings")
+                    .padding(.top, 28)
+
+                    // Status Card
+                    StatusCard(config: settingsViewModel.config)
+
+                    // Actions
+                    VStack(spacing: 16) {
+                        // Open Keyboard Settings Button
+                        Button(action: {
+                            settingsViewModel.openKeyboardSettings()
+                        }) {
+                            HStack {
+                                Image(systemName: "keyboard")
+                                Text("Open Keyboard Settings")
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.accentColor)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.gray.opacity(0.2))
-                        .foregroundColor(.primary)
-                        .cornerRadius(12)
+
+                        // Settings Button
+                        Button(action: {
+                            showingSettings = true
+                        }) {
+                            HStack {
+                                Image(systemName: "gearshape")
+                                Text("App Settings")
+                            }
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.gray.opacity(0.2))
+                            .foregroundColor(.primary)
+                            .cornerRadius(12)
+                        }
                     }
+                    .padding(.horizontal)
                 }
-                .padding(.horizontal)
-                .padding(.bottom, 40)
+                .padding(.bottom, 28)
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showingSettings) {
@@ -82,22 +88,24 @@ struct ContentView: View {
 
 struct StatusCard: View {
     let config: AppConfig
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                     .foregroundColor(config.isConfigured ? .green : .orange)
                     .font(.title2)
-                
+
                 Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
                     .font(.headline)
             }
-            
+
             if !config.isConfigured {
                 Text("Configure your API key in Settings to start using AI features.")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -108,7 +116,7 @@ struct StatusCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
-                    
+
                     HStack {
                         Text("API Key:")
                             .fontWeight(.medium)

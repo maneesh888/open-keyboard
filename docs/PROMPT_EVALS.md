@@ -1,6 +1,6 @@
 # Prompt Evaluation Suite
 
-Last updated: 2026-05-22
+Last updated: 2026-05-28
 
 ## Purpose
 
@@ -54,11 +54,24 @@ Live evals should track:
 - latency
 - token usage/cost if the gateway exposes usage
 
-Planned live test file:
+Implemented live test file:
 
 ```text
 OpenKeyboardCore/Tests/OpenKeyboardCoreTests/LivePromptEvaluationTests.swift
 ```
+
+
+Current live harness coverage:
+
+- Grammar correction sanity check.
+- Rewrite clarity sanity check.
+- Prompt-injection-as-input summarization check.
+- Broad latency budget tracking per scenario.
+- Forbidden phrase checks for meta commentary, auth/API-key leakage, and obvious instruction leakage.
+
+The live harness intentionally uses broad assertions because model output is non-deterministic. Normal CI should compile the file and skip it unless all live env vars are set.
+
+Live eval fixtures must use synthetic, non-sensitive text only. Do not add real private user text, secrets, API keys, Authorization headers, or production conversation content to live eval scenarios.
 
 ## CI/logging safety
 
