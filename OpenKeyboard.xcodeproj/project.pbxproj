@@ -5,6 +5,7 @@
 	objectVersion = 56;
 	objects = {
 /* Begin PBXBuildFile section */
+		OKLS00000000000000000002 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = OKLS00000000000000000001 /* LaunchScreen.storyboard */; };
 		5BD7666BECBD76E9791FCCB7B /* OpenKeyboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD7666BECBD76E9791FCCB7; };
 		B4B9DFC292831B136A20EC6DB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B9DFC292831B136A20EC6D; };
 		833D81870E9009BD3DD6669EB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833D81870E9009BD3DD6669E; };
@@ -29,6 +30,7 @@
 		429A1EC1379593EF1FF5148A /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (87224365CBBE99FADBBBAB47,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXCopyFilesBuildPhase section */
 /* Begin PBXFileReference section */
+		OKLS00000000000000000001 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = OpenKeyboard/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
 		DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		703438C4D3A1836F6B202DA7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboard/Info.plist; sourceTree = SOURCE_ROOT; };
@@ -56,7 +58,7 @@
 		AB0000000000000000000008 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 /* Begin PBXGroup section */
-		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (703438C4D3A1836F6B202DA7,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,AB000000000000000000000F,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
+		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (703438C4D3A1836F6B202DA7,OKLS00000000000000000001,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,AB000000000000000000000F,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
 		31FF30F881C179EC5AEBB66C /* Products */ = {isa = PBXGroup; children = (DDD0DF4B54E56F178EE967CC,DB6DC819E4A61132A86EEAE8,AB0000000000000000000001,); name = Products; sourceTree = "<group>"; };
 		AB000000000000000000000F /* OpenKeyboardUITests */ = {isa = PBXGroup; children = (AB0000000000000000000002,AB0000000000000000000003,AB0000000000000000000004,); name = OpenKeyboardUITests; sourceTree = "<group>"; };
 /* End PBXGroup section */
@@ -69,7 +71,7 @@
 		6D9882797250F9A619D27D03 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = {6969AE0C0DACA9F77BE12409 = {CreatedOnToolsVersion = 15.4; }; 1DBA88FA4203F880F8410F13 = {CreatedOnToolsVersion = 15.4; }; AB000000000000000000000B = {CreatedOnToolsVersion = 15.4; TestTargetID = 6969AE0C0DACA9F77BE12409; }; }; }; buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 1907F0F8DF9C0B5C3BCFA307; productRefGroup = 31FF30F881C179EC5AEBB66C; projectDirPath = ""; projectRoot = ""; targets = (6969AE0C0DACA9F77BE12409,1DBA88FA4203F880F8410F13,AB000000000000000000000B,); };
 /* End PBXProject section */
 /* Begin PBXResourcesBuildPhase section */
-		C9A5745812E6FCEA649C7E0B /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		C9A5745812E6FCEA649C7E0B /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (OKLS00000000000000000002 /* LaunchScreen.storyboard in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
 		3DDA42D724FCBBBA2C59D1B7 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		AB0000000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */

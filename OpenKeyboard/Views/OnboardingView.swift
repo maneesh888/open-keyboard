@@ -19,26 +19,30 @@ struct OnboardingView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            TabView(selection: $currentPage) {
-                WelcomePage()
-                    .tag(0)
+        ZStack {
+            AppBackground()
 
-                GatewaySetupPage(showingSettings: $showingSettings)
-                    .tag(1)
+            VStack(spacing: 0) {
+                TabView(selection: $currentPage) {
+                    WelcomePage()
+                        .tag(0)
 
-                KeyboardSetupPage()
-                    .tag(2)
+                    GatewaySetupPage(showingSettings: $showingSettings)
+                        .tag(1)
 
-                CompletePage(hasCompletedOnboarding: $hasCompletedOnboarding)
-                    .tag(3)
+                    KeyboardSetupPage()
+                        .tag(2)
+
+                    CompletePage(hasCompletedOnboarding: $hasCompletedOnboarding)
+                        .tag(3)
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+
+                PageIndicator(currentPage: currentPage, pageCount: 4)
+                    .accessibilityIdentifier("onboarding_page_indicator")
+                    .padding(.top, 6)
+                    .padding(.bottom, 14)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            PageIndicator(currentPage: currentPage, pageCount: 4)
-                .accessibilityIdentifier("onboarding_page_indicator")
-                .frame(height: 30)
-                .padding(.bottom, 8)
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -49,144 +53,90 @@ struct OnboardingView: View {
 
 struct WelcomePage: View {
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "keyboard.badge.eye")
-                .font(.system(size: 42, weight: .regular))
-                .foregroundColor(.accentColor)
-                .accessibilityHidden(true)
-                .padding(.top, 12)
-
-            VStack(spacing: 6) {
-                Text("Welcome to\nOpen Keyboard")
-                    .accessibilityIdentifier("onboarding_title")
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("AI-powered typing with privacy in mind")
-                    .accessibilityIdentifier("onboarding_subtitle")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .fixedSize(horizontal: false, vertical: true)
+        ModernOnboardingPage(
+            icon: "keyboard.badge.eye",
+            eyebrow: "Private AI keyboard",
+            title: "Welcome to\nOpen Keyboard",
+            subtitle: "AI-powered typing with privacy in mind"
+        ) {
+            VStack(spacing: 10) {
+                FeatureRow(
+                    icon: "cpu",
+                    title: "Your Own LLM",
+                    description: "Connect to your self-hosted LLM gateway",
+                    titleIdentifier: "onboarding_feature_llm_title",
+                    descriptionIdentifier: "onboarding_feature_llm_description"
+                )
+                FeatureRow(
+                    icon: "lock.shield",
+                    title: "Privacy First",
+                    description: "Your data never leaves your control",
+                    titleIdentifier: "onboarding_feature_privacy_title",
+                    descriptionIdentifier: "onboarding_feature_privacy_description"
+                )
+                FeatureRow(
+                    icon: "sparkles",
+                    title: "AI Powered",
+                    description: "Smart suggestions and text improvements",
+                    titleIdentifier: "onboarding_feature_ai_title",
+                    descriptionIdentifier: "onboarding_feature_ai_description"
+                )
             }
-            .padding(.horizontal, 18)
-
-            VStack(alignment: .leading, spacing: 10) {
-                FeatureRow(icon: "cpu", title: "Your Own LLM", description: "Connect to your self-hosted LLM gateway", titleIdentifier: "onboarding_feature_llm_title", descriptionIdentifier: "onboarding_feature_llm_description")
-                FeatureRow(icon: "lock.shield", title: "Privacy First", description: "Your data never leaves your control", titleIdentifier: "onboarding_feature_privacy_title", descriptionIdentifier: "onboarding_feature_privacy_description")
-                FeatureRow(icon: "sparkles", title: "AI Powered", description: "Smart suggestions and text improvements", titleIdentifier: "onboarding_feature_ai_title", descriptionIdentifier: "onboarding_feature_ai_description")
-            }
-            .padding(.horizontal, 22)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            Spacer(minLength: 0)
-
-            Text("Swipe to continue →")
-                .font(.caption2)
+        } footer: {
+            Text("Swipe to continue")
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(.secondary)
-                .padding(.bottom, 2)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.bottom, 16)
+        .accessibilityElement(children: .contain)
     }
 }
+
 struct GatewaySetupPage: View {
     @Binding var showingSettings: Bool
     @EnvironmentObject var settingsViewModel: SettingsViewModel
 
     var body: some View {
-        ResponsiveOnboardingPage(icon: "link.circle.fill") {
-            Text("Connect to Gateway")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.7)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("You'll need an API key from your LLM gateway")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-        } middle: {
-            VStack(alignment: .leading, spacing: 16) {
-                SetupStep(number: "1", text: "Set up LLM Gateway on your Mac")
-                SetupStep(number: "2", text: "Get your API key from admin panel")
-                SetupStep(number: "3", text: "Enter API key in app settings")
+        ModernOnboardingPage(
+            icon: "link.badge.plus",
+            eyebrow: "Step 1",
+            title: "Connect your gateway",
+            subtitle: "Use an API key from your LLM Gateway admin panel."
+        ) {
+            VStack(spacing: 10) {
+                SetupStep(number: "1", text: "Run LLM Gateway on your Mac")
+                SetupStep(number: "2", text: "Create or copy an API key")
+                SetupStep(number: "3", text: "Paste it in Open Keyboard")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } bottom: {
-            Button(action: {
-                showingSettings = true
-            }) {
-                Text("Configure API Key")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(settingsViewModel.config.isConfigured ? Color.green : Color.accentColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-            }
-
-            if settingsViewModel.config.isConfigured {
-                Label("Gateway configured", systemImage: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-                    .font(.headline)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        } footer: {
+            PrimaryButton(
+                title: settingsViewModel.config.isConfigured ? "Gateway Configured" : "Configure API Key",
+                systemImage: settingsViewModel.config.isConfigured ? "checkmark.circle.fill" : "key.fill",
+                tint: settingsViewModel.config.isConfigured ? .green : .accentColor,
+                action: { showingSettings = true }
+            )
         }
     }
 }
 
 struct KeyboardSetupPage: View {
     var body: some View {
-        ResponsiveOnboardingPage(icon: "keyboard") {
-            Text("Enable Keyboard")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Follow these steps to add Open Keyboard")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-        } middle: {
-            VStack(alignment: .leading, spacing: 14) {
-                SetupStep(number: "1", text: "Tap 'Open Keyboard Settings' below")
-                SetupStep(number: "2", text: "Select 'Keyboards' → 'Add New Keyboard'")
-                SetupStep(number: "3", text: "Choose 'Open Keyboard'")
-                SetupStep(number: "4", text: "Enable 'Allow Full Access'")
+        ModernOnboardingPage(
+            icon: "keyboard",
+            eyebrow: "Step 2",
+            title: "Enable the keyboard",
+            subtitle: "Add Open Keyboard in iOS Settings, then allow full access."
+        ) {
+            VStack(spacing: 10) {
+                SetupStep(number: "1", text: "Open iOS Keyboard Settings")
+                SetupStep(number: "2", text: "Choose Keyboards → Add New Keyboard")
+                SetupStep(number: "3", text: "Select Open Keyboard")
+                SetupStep(number: "4", text: "Enable Allow Full Access")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } bottom: {
-            Button(action: {
+        } footer: {
+            PrimaryButton(title: "Open Keyboard Settings", systemImage: "gearshape.fill") {
                 if let url = URL(string: "App-Prefs:root=General&path=Keyboard") {
                     UIApplication.shared.open(url)
                 }
-            }) {
-                HStack {
-                    Image(systemName: "gearshape")
-                    Text("Open Keyboard Settings")
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color.accentColor)
-                .foregroundColor(.white)
-                .cornerRadius(12)
             }
         }
     }
@@ -196,38 +146,20 @@ struct CompletePage: View {
     @Binding var hasCompletedOnboarding: Bool
 
     var body: some View {
-        ResponsiveOnboardingPage(emoji: "🎉") {
-            Text("You're All Set!")
-                .font(.system(size: 34, weight: .bold, design: .rounded))
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .minimumScaleFactor(0.75)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("Open any app and start typing with AI assistance")
-                .font(.body)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .lineLimit(nil)
-                .fixedSize(horizontal: false, vertical: true)
-        } middle: {
-            VStack(alignment: .leading, spacing: 14) {
-                TipRow(icon: "globe", title: "Switch Keyboards", description: "Long-press the 🌐 globe icon")
-                TipRow(icon: "sparkles", title: "AI Features", description: "Tap ✨ for AI interaction mode")
-                TipRow(icon: "bubble.left.and.bubble.right", title: "Suggestions", description: "AI suggestions appear as you type")
+        ModernOnboardingPage(
+            icon: "checkmark.seal.fill",
+            eyebrow: "Ready",
+            title: "You're all set",
+            subtitle: "Switch keyboards in any app and start typing with AI assistance."
+        ) {
+            VStack(spacing: 10) {
+                TipRow(icon: "globe", title: "Switch Keyboards", description: "Long-press the globe key")
+                TipRow(icon: "sparkles", title: "AI Features", description: "Tap sparkles for AI actions")
+                TipRow(icon: "bubble.left.and.bubble.right", title: "Suggestions", description: "Use suggestions while you type")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        } bottom: {
-            Button(action: {
+        } footer: {
+            PrimaryButton(title: "Get Started", systemImage: "arrow.right.circle.fill") {
                 hasCompletedOnboarding = true
-            }) {
-                Text("Get Started")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
             }
         }
     }
@@ -235,59 +167,126 @@ struct CompletePage: View {
 
 // Helper Views
 
-struct ResponsiveOnboardingPage<Header: View, Middle: View, Bottom: View>: View {
-    let icon: String?
-    let emoji: String?
-    let header: Header
-    let middle: Middle
-    let bottom: Bottom
+struct AppBackground: View {
+    var body: some View {
+        LinearGradient(
+            colors: [Color(.systemBackground), Color.accentColor.opacity(0.08), Color(.systemBackground)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+}
+
+struct ModernOnboardingPage<Content: View, Footer: View>: View {
+    let icon: String
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    let content: Content
+    let footer: Footer
 
     init(
-        icon: String? = nil,
-        emoji: String? = nil,
-        @ViewBuilder header: () -> Header,
-        @ViewBuilder middle: () -> Middle,
-        @ViewBuilder bottom: () -> Bottom
+        icon: String,
+        eyebrow: String,
+        title: String,
+        subtitle: String,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
     ) {
         self.icon = icon
-        self.emoji = emoji
-        self.header = header()
-        self.middle = middle()
-        self.bottom = bottom()
+        self.eyebrow = eyebrow
+        self.title = title
+        self.subtitle = subtitle
+        self.content = content()
+        self.footer = footer()
     }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                if let icon {
-                    Image(systemName: icon)
-                        .font(.system(size: 46, weight: .regular))
+            VStack(spacing: 14) {
+                VStack(spacing: 9) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.accentColor.opacity(0.12))
+                            .frame(width: 58, height: 58)
+                        Image(systemName: icon)
+                            .font(.system(size: 25, weight: .semibold))
+                            .foregroundColor(.accentColor)
+                    }
+                    .accessibilityHidden(true)
+
+                    Text(eyebrow.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.1)
                         .foregroundColor(.accentColor)
-                        .accessibilityHidden(true)
-                        .padding(.top, 12)
-                } else if let emoji {
-                    Text(emoji)
-                        .font(.system(size: 54))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .accessibilityHidden(true)
-                        .padding(.top, 10)
+
+                    Text(title)
+                        .accessibilityIdentifier(title == "Welcome to\nOpen Keyboard" ? "onboarding_title" : "")
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.7)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(subtitle)
+                        .accessibilityIdentifier(title == "Welcome to\nOpen Keyboard" ? "onboarding_subtitle" : "")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(3)
+                        .minimumScaleFactor(0.82)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .padding(.horizontal, 18)
 
-                VStack(spacing: 10) {
-                    header
+                VStack(spacing: 9) {
+                    content
                 }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 8)
 
-                middle
-                    .padding(.top, 10)
-
-                bottom
-                    .padding(.top, 4)
+                footer
+                    .padding(.top, 2)
             }
-            .padding(.horizontal, 28)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
             .padding(.bottom, 18)
             .frame(maxWidth: .infinity)
         }
+        .safeAreaPadding(.top, 4)
+        .safeAreaPadding(.bottom, 2)
+    }
+}
+
+struct PrimaryButton: View {
+    let title: String
+    let systemImage: String
+    var tint: Color = .accentColor
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .font(.headline)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: tint.opacity(0.25), radius: 10, x: 0, y: 6)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -296,11 +295,12 @@ struct PageIndicator: View {
     let pageCount: Int
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             ForEach(0..<pageCount, id: \.self) { index in
-                Circle()
-                    .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.3))
-                    .frame(width: 8, height: 8)
+                Capsule()
+                    .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .frame(width: index == currentPage ? 18 : 7, height: 7)
+                    .animation(.spring(response: 0.25, dampingFraction: 0.8), value: currentPage)
             }
         }
         .accessibilityLabel("Page \(currentPage + 1) of \(pageCount)")
@@ -333,21 +333,22 @@ struct FeatureRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 15) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.accentColor)
-                .frame(width: 30)
+                .frame(width: 34, height: 34)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 identifiedText(title, identifier: titleIdentifier)
-                    .fontWeight(.semibold)
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                 identifiedText(description, identifier: descriptionIdentifier)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundColor(.secondary)
-                    .lineLimit(nil)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -360,19 +361,19 @@ struct SetupStep: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 15) {
+        HStack(alignment: .top, spacing: 12) {
             Text(number)
-                .font(.headline)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .frame(width: 32, height: 32)
-                .background(Color.accentColor)
-                .cornerRadius(16)
+                .font(.caption.weight(.bold))
+                .foregroundColor(.accentColor)
+                .frame(width: 30, height: 30)
+                .background(Color.accentColor.opacity(0.12), in: Circle())
 
             Text(text)
-                .font(.body)
-                .lineLimit(nil)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(.primary)
+                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 }
@@ -383,21 +384,22 @@ struct TipRow: View {
     let description: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 15) {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .font(.title3)
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(.accentColor)
-                .frame(width: 30)
+                .frame(width: 34, height: 34)
+                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .fontWeight(.semibold)
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(nil)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(description)
-                    .font(.subheadline)
+                    .font(.footnote)
                     .foregroundColor(.secondary)
-                    .lineLimit(nil)
+                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

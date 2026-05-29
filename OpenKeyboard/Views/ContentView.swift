@@ -13,69 +13,64 @@ struct ContentView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 28) {
-                    // Header
-                    VStack(spacing: 10) {
-                        Text("🔓")
-                            .font(.system(size: 58))
-                            .lineLimit(1)
+            ZStack {
+                AppBackground()
 
-                        Text("Open Keyboard")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.75)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text("AI-Powered Typing")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.top, 28)
-
-                    // Status Card
-                    StatusCard(config: settingsViewModel.config)
-
-                    // Actions
-                    VStack(spacing: 16) {
-                        // Open Keyboard Settings Button
-                        Button(action: {
-                            settingsViewModel.openKeyboardSettings()
-                        }) {
-                            HStack {
-                                Image(systemName: "keyboard")
-                                Text("Open Keyboard Settings")
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        VStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                    .fill(Color.accentColor.opacity(0.12))
+                                    .frame(width: 78, height: 78)
+                                Image(systemName: "keyboard.badge.eye")
+                                    .font(.system(size: 34, weight: .semibold))
+                                    .foregroundColor(.accentColor)
                             }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.accentColor)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
+                            .padding(.top, 12)
+
+                            Text("Open Keyboard")
+                                .font(.system(size: 36, weight: .bold, design: .rounded))
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.75)
+
+                            Text("Private AI-powered typing")
+                                .font(.headline.weight(.medium))
+                                .foregroundColor(.secondary)
                         }
 
-                        // Settings Button
-                        Button(action: {
-                            showingSettings = true
-                        }) {
-                            HStack {
-                                Image(systemName: "gearshape")
-                                Text("App Settings")
+                        StatusCard(config: settingsViewModel.config)
+
+                        VStack(spacing: 12) {
+                            PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
+                                settingsViewModel.openKeyboardSettings()
                             }
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.gray.opacity(0.2))
-                            .foregroundColor(.primary)
-                            .cornerRadius(12)
+
+                            Button(action: {
+                                showingSettings = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "gearshape.fill")
+                                    Text("App Settings")
+                                }
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
+                        .padding(.horizontal, 20)
                     }
-                    .padding(.horizontal)
+                    .padding(.vertical, 18)
+                    .padding(.bottom, 28)
                 }
-                .padding(.bottom, 28)
             }
             .navigationBarHidden(true)
             .sheet(isPresented: $showingSettings) {
@@ -90,49 +85,60 @@ struct StatusCard: View {
     let config: AppConfig
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .foregroundColor(config.isConfigured ? .green : .orange)
-                    .font(.title2)
+                    .font(.title3)
+                    .frame(width: 34, height: 34)
+                    .background((config.isConfigured ? Color.green : Color.orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
-                    .font(.headline)
-            }
-
-            if !config.isConfigured {
-                Text("Configure your API key in Settings to start using AI features.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Gateway:")
-                            .fontWeight(.medium)
-                        Spacer()
-                        Text(config.gatewayURL)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-
-                    HStack {
-                        Text("API Key:")
-                            .fontWeight(.medium)
-                        Spacer()
-                        Text(config.apiKey.prefix(10) + "...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
+                        .font(.headline)
+                    Text(config.isConfigured ? "Your gateway is ready." : "Add your API key to unlock AI features.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            if config.isConfigured {
+                VStack(alignment: .leading, spacing: 8) {
+                    InfoRow(label: "Gateway", value: config.gatewayURL)
+                    InfoRow(label: "API Key", value: String(config.apiKey.prefix(10)) + "...")
+                }
+                .padding(.top, 2)
+            }
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.gray.opacity(0.1))
-        .cornerRadius(12)
-        .padding(.horizontal)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 8)
+        .padding(.horizontal, 20)
+    }
+}
+
+struct InfoRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label)
+                .font(.subheadline.weight(.medium))
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
     }
 }
 
