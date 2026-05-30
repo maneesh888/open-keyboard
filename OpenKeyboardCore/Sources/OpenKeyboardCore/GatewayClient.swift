@@ -38,7 +38,7 @@ public final class GatewayClient: Sendable {
     }
 
     public func checkHealth() async throws -> Bool {
-        let response = try await httpClient.send(request(path: "/health", method: "GET"))
+        let response = try await send(request(path: "/health", method: "GET"))
         try mapStatus(response.statusCode)
 
         if response.data.isEmpty {
@@ -52,7 +52,7 @@ public final class GatewayClient: Sendable {
     }
 
     public func fetchModels() async throws -> [String] {
-        let response = try await httpClient.send(request(path: "/v1/models", method: "GET"))
+        let response = try await send(request(path: "/v1/models", method: "GET"))
         try mapStatus(response.statusCode)
 
         guard let models = try? JSONDecoder().decode(ModelsResponse.self, from: response.data) else {
@@ -77,7 +77,7 @@ public final class GatewayClient: Sendable {
         var chatRequest = request(path: "/v1/chat/completions", method: "POST", body: body)
         chatRequest.headers["Content-Type"] = "application/json"
 
-        let response = try await httpClient.send(chatRequest)
+        let response = try await send(chatRequest)
         try mapStatus(response.statusCode)
 
         guard let completion = try? JSONDecoder().decode(ChatCompletionResponse.self, from: response.data),
@@ -93,6 +93,20 @@ public final class GatewayClient: Sendable {
         return trimmed
     }
 
+    private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        do {
+            return try await httpClient.send(request)
+        } catch let error as GatewayClientError {
+            throw error
+        } catch is CancellationError {
+            throw GatewayClientError.cancelled
+        } catch let error as URLError {
+            throw mapNetworkError(error)
+        } catch {
+            throw GatewayClientError.transportError
+        }
+    }
+
     private func request(path: String, method: String, body: Data? = nil) -> HTTPRequest {
         let url = config.gatewayURL.appendingPathComponent(path.trimmingPrefix("/"))
         return HTTPRequest(
@@ -104,6 +118,19 @@ public final class GatewayClient: Sendable {
             ],
             body: body
         )
+    }
+
+    private func mapNetworkError(_ error: URLError) -> GatewayClientError {
+        switch error.code {
+        case .timedOut:
+            return .timedOut
+        case .cancelled:
+            return .cancelled
+        case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+            return .networkUnavailable
+        default:
+            return .transportError
+        }
     }
 
     private func mapStatus(_ statusCode: Int) throws {
@@ -131,6 +158,35 @@ public enum GatewayClientError: Error, Equatable, Sendable {
     case serverError(statusCode: Int)
     case unexpectedStatus(statusCode: Int)
     case invalidResponse
+    case timedOut
+    case cancelled
+    case networkUnavailable
+    case transportError
+
+    public var userMessage: String {
+        switch self {
+        case .unauthorized:
+            return "API key is missing or invalid. Check your Open Keyboard gateway settings."
+        case .forbidden:
+            return "This API key is not allowed to use the requested gateway resource."
+        case .rateLimited:
+            return "The gateway is receiving too many requests. Wait a moment and try again."
+        case .serverError:
+            return "The gateway had a server error. Try again shortly."
+        case .unexpectedStatus:
+            return "The gateway returned an unexpected response."
+        case .invalidResponse:
+            return "The gateway response could not be understood."
+        case .timedOut:
+            return "The gateway request timed out. Check your connection and try again."
+        case .cancelled:
+            return "The gateway request was cancelled."
+        case .networkUnavailable:
+            return "The gateway is unreachable. Check your network or gateway URL."
+        case .transportError:
+            return "The gateway request failed before a response was received."
+        }
+    }
 }
 
 private struct HealthResponse: Decodable {
