@@ -23,6 +23,18 @@ struct SettingsView: View {
                     SecureField("API Key", text: $viewModel.config.apiKey)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+
+                    TextField("Model", text: $viewModel.config.selectedModel)
+                        .autocapitalization(.none)
+                        .disableAutocorrection(true)
+
+                    if !viewModel.availableModels.isEmpty {
+                        Picker("Available Models", selection: $viewModel.config.selectedModel) {
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                    }
                 }
                 
                 Section(header: Text("Connection Test")) {
@@ -69,8 +81,10 @@ struct SettingsView: View {
                     }
                     
                     Link("Documentation", destination: URL(string: "https://github.com/maneesh/open-keyboard")!)
-                    
-                    Link("Gateway Admin", destination: URL(string: "http://localhost:8080/ui")!)
+
+                    if let adminURL = gatewayAdminURL {
+                        Link("Gateway Admin", destination: adminURL)
+                    }
                 }
                 
                 Section {
@@ -92,6 +106,18 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var gatewayAdminURL: URL? {
+        guard var components = URLComponents(string: viewModel.config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              components.scheme != nil,
+              components.host != nil else {
+            return nil
+        }
+        components.path = "/ui"
+        components.query = nil
+        components.fragment = nil
+        return components.url
     }
 }
 

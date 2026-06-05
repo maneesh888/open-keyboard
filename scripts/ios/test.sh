@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|ui|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -74,6 +74,24 @@ case "${1:-}" in
     echo -e "${GREEN}✓ UI tests complete${NC}"
     ;;
 
+  live-ui)
+    echo -e "${YELLOW}Running live gateway AI UI tests on iPhone 16...${NC}"
+    require_xcodebuild
+    if [[ -z "${OPEN_KEYBOARD_LIVE_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_LIVE_API_KEY:-}" || -z "${OPEN_KEYBOARD_LIVE_MODEL:-}" ]]; then
+      echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_GATEWAY_URL, OPEN_KEYBOARD_LIVE_API_KEY, and OPEN_KEYBOARD_LIVE_MODEL are required for live-ui.${NC}"
+      exit 1
+    fi
+    run_xcodebuild xcodebuild test \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "$DESTINATION" \
+      -configuration Debug \
+      -only-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
+      CODE_SIGN_IDENTITY="" \
+      CODE_SIGNING_REQUIRED=NO
+    echo -e "${GREEN}✓ Live gateway AI UI tests complete${NC}"
+    ;;
+
   screenshots)
     echo -e "${YELLOW}Running onboarding screenshot UI tests on iPhone 16 and iPhone SE...${NC}"
     require_xcodebuild
@@ -105,10 +123,11 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|ui|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
+    echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"
     echo "  coverage    - Run core package tests with coverage"

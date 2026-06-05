@@ -107,7 +107,8 @@ struct StatusCard: View {
             if config.isConfigured {
                 VStack(alignment: .leading, spacing: 8) {
                     InfoRow(label: "Gateway", value: config.gatewayURL)
-                    InfoRow(label: "API Key", value: String(config.apiKey.prefix(10)) + "...")
+                    InfoRow(label: "Model", value: config.selectedModel)
+                    InfoRow(label: "API Key", value: config.apiKey.isEmpty ? "Not set" : "Configured")
                 }
                 .padding(.top, 2)
             }

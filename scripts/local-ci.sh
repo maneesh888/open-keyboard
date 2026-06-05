@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard local CI runner.
-# Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--screenshots]
+# Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--screenshots]
 
 set -euo pipefail
 
@@ -51,17 +51,22 @@ case "$MODE" in
     run_step "OpenKeyboard UI tests" "$SCRIPT_DIR/ios/test.sh" ui
     ;;
 
+  --live-ui)
+    run_step "OpenKeyboard live gateway AI UI tests" "$SCRIPT_DIR/ios/test.sh" live-ui
+    ;;
+
   --screenshots)
     run_step "OpenKeyboard screenshot UI tests" "$SCRIPT_DIR/ios/test.sh" screenshots
     ;;
 
   --help|-h)
-    echo "Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--screenshots]"
+    echo "Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--screenshots]"
     echo "  --quick       Run core tests + iOS build (default)"
     echo "  --all         Run core tests + iOS build (UI tests are available via --ui)"
     echo "  --core        Run OpenKeyboardCore Swift package tests only"
     echo "  --ios-build   Build OpenKeyboard app/extension only"
     echo "  --ui          Run OpenKeyboardUITests on iPhone 16"
+    echo "  --live-ui     Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  --screenshots Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     ;;
 

@@ -13,6 +13,7 @@ import UIKit
 class SettingsViewModel: ObservableObject {
     @Published var config: AppConfig
     @Published var isTestingConnection = false
+    @Published var availableModels: [String] = []
     @Published var connectionStatus: ConnectionStatus = .unknown
     @Published var errorMessage: String?
     
@@ -42,6 +43,14 @@ class SettingsViewModel: ObservableObject {
             )
             
             if success {
+                let models = try? await NetworkManager.shared.fetchModels(
+                    gatewayURL: config.gatewayURL,
+                    apiKey: config.apiKey
+                )
+                availableModels = models ?? []
+                if !availableModels.isEmpty && !availableModels.contains(config.selectedModel) {
+                    config.selectedModel = availableModels[0]
+                }
                 connectionStatus = .success
                 config.isConfigured = true
                 saveSettings()

@@ -10,11 +10,13 @@ import Foundation
 struct AppConfig: Codable {
     var apiKey: String
     var gatewayURL: String
+    var selectedModel: String
     var isConfigured: Bool
     
     static let `default` = AppConfig(
         apiKey: "",
-        gatewayURL: "http://localhost:8080",
+        gatewayURL: "",
+        selectedModel: "",
         isConfigured: false
     )
     
@@ -24,30 +26,54 @@ struct AppConfig: Codable {
     // UserDefaults keys
     static let apiKeyKey = "apiKey"
     static let gatewayURLKey = "gatewayURL"
+    static let selectedModelKey = "selectedModel"
     static let isConfiguredKey = "isConfigured"
 }
 
 // Extension for saving/loading from App Group
 extension AppConfig {
+    static func sharedDefaults() -> UserDefaults? {
+        UserDefaults(suiteName: AppConfig.appGroupIdentifier)
+    }
+
     static func load() -> AppConfig {
-        guard let sharedDefaults = UserDefaults(suiteName: AppConfig.appGroupIdentifier) else {
+        guard let sharedDefaults = sharedDefaults() else {
             return .default
         }
-        
-        return AppConfig(
-            apiKey: sharedDefaults.string(forKey: AppConfig.apiKeyKey) ?? "",
-            gatewayURL: sharedDefaults.string(forKey: AppConfig.gatewayURLKey) ?? "http://localhost:8080",
-            isConfigured: sharedDefaults.bool(forKey: AppConfig.isConfiguredKey)
+
+        return load(from: sharedDefaults)
+    }
+
+    static func load(from defaults: UserDefaults) -> AppConfig {
+        AppConfig(
+            apiKey: defaults.string(forKey: AppConfig.apiKeyKey) ?? "",
+            gatewayURL: defaults.string(forKey: AppConfig.gatewayURLKey) ?? "",
+            selectedModel: defaults.string(forKey: AppConfig.selectedModelKey) ?? "",
+            isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey)
         )
     }
-    
+
     func save() {
-        guard let sharedDefaults = UserDefaults(suiteName: AppConfig.appGroupIdentifier) else {
+        guard let sharedDefaults = AppConfig.sharedDefaults() else {
             return
         }
-        
-        sharedDefaults.set(apiKey, forKey: AppConfig.apiKeyKey)
-        sharedDefaults.set(gatewayURL, forKey: AppConfig.gatewayURLKey)
-        sharedDefaults.set(isConfigured, forKey: AppConfig.isConfiguredKey)
+
+        save(to: sharedDefaults)
+    }
+
+    func save(to defaults: UserDefaults) {
+        defaults.set(apiKey, forKey: AppConfig.apiKeyKey)
+        defaults.set(gatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(selectedModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(isConfigured, forKey: AppConfig.isConfiguredKey)
+        defaults.synchronize()
+    }
+
+    static func clearSharedConfig() {
+        guard let sharedDefaults = sharedDefaults() else { return }
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled"].forEach {
+            sharedDefaults.removeObject(forKey: $0)
+        }
+        sharedDefaults.synchronize()
     }
 }

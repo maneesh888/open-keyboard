@@ -8,6 +8,7 @@ import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private var hostingController: UIHostingController<KeyboardView>?
+    private var viewModel: KeyboardViewModel?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -16,7 +17,12 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
-        hostingController?.rootView.viewModel.reloadConfig()
+        refreshRuntimeState()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        refreshRuntimeState()
     }
 
     private func installKeyboardView() {
@@ -26,6 +32,8 @@ final class KeyboardViewController: UIInputViewController {
                 self?.advanceToNextInputMode()
             }
         )
+        self.viewModel = viewModel
+
         let keyboardView = KeyboardView(viewModel: viewModel)
         let controller = UIHostingController(rootView: keyboardView)
 
@@ -44,5 +52,10 @@ final class KeyboardViewController: UIInputViewController {
 
         controller.didMove(toParent: self)
         hostingController = controller
+        refreshRuntimeState()
+    }
+
+    private func refreshRuntimeState() {
+        viewModel?.updateFullAccess(hasFullAccess)
     }
 }
