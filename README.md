@@ -2,7 +2,7 @@
 
 Open Keyboard is an open-source, Grammarly-class AI writing assistant for iOS, delivered through a custom keyboard and paired with a self-hosted LLM Gateway instead of sending typed text to third-party keyboard services.
 
-> Status: early implementation. The iOS app + keyboard extension shell is buildable, and the UI-independent backend core is being developed test-first.
+> Status: early implementation. The iOS app + keyboard extension shell is buildable, core logic is covered test-first, and the first real keyboard-extension Fix Grammar flow has passed an end-to-end simulator test against LLM Gateway.
 
 ## What it does
 
@@ -34,11 +34,14 @@ The project now has a buildable app and keyboard extension shell:
 - basic keyboard shell with letters, shift, globe, delete, space, and return
 - host app/settings/onboarding scaffolding
 
-Latest known build checkpoint:
+Latest known functional checkpoint:
 
 ```text
-Commit: 692adb8 Add buildable keyboard shell
-Host build: passed via devtools, run_after=false
+Commit: 764c6e6 Add real keyboard AI functional path
+Host build-for-testing: passed
+Selected UI test: passed
+End-to-end flow: custom keyboard Fix Grammar replaced "i have a apple" with "I have an apple." through a temp LLM Gateway
+Verification request: /app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md
 ```
 
 ### Test-first backend core
@@ -46,10 +49,11 @@ Host build: passed via devtools, run_after=false
 `OpenKeyboardCore` is a Swift package for UI-independent logic. Current verified host CI result:
 
 ```text
-Core package tests: 48 passed, 1 skipped, 0 failed
+Core package tests: 61 executed, 2 skipped live tests, 0 failed
 iOS app/extension build: passed
 Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation)
-Latest CI request: /app/workspace/clawd-coder/requests/clawmaster/2026-05-23T130408-openkeyboard-ui-test-harness.md
+Latest full quick-CI request: /app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md
+Latest functional keyboard request: /app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md
 ```
 
 Covered so far:
@@ -65,9 +69,10 @@ Covered so far:
 - Keyboard reducer behavior: character input, shift, space, return, delete
 - Keyboard edge cases: empty delete, emoji delete, shift persistence
 - Context extraction edge cases: over-limit, zero/negative limits, emoji/grapheme-safe suffix
-- AI replacement strategies: replace all, append to cursor
+- AI replacement strategies: replace all, append to cursor, replace selected text, insert at cursor, replace last sentence, and replace last paragraph
 - Offline realistic user-flow tests: config validation, model selection, prompt/chat request, and final replacement for grammar, rewrite, summarize, and continue-writing flows
 - Opt-in live gateway smoke test scaffold, skipped by default without env vars
+- Real keyboard-extension Fix Grammar UI test with injected gateway credentials and debug-state assertions
 
 Detailed status lives in:
 
@@ -194,15 +199,17 @@ The live smoke currently covers:
 - [x] Validate gateway URL and API key in core tests.
 - [x] Add local config persistence abstraction.
 - [x] Test API key request plumbing against LLM Gateway endpoints.
-- [ ] Wire host app settings to `OpenKeyboardCore`.
-- [ ] Share config safely between host app and keyboard extension.
+- [x] Wire initial host-app settings/config seeding to keyboard extension for UI tests.
+- [x] Share initial gateway config between host app and keyboard extension through App Group storage.
+- [ ] Move API key storage from App Group `UserDefaults` to shared Keychain before release.
 
 ### Milestone 4 — AI assistance
 
 - [x] Add prompt builder for core writing actions.
 - [x] Add gateway chat completion client.
-- [ ] Add AI suggestion/action UI.
-- [ ] Add rewrite/fix-tone/grammar actions in keyboard extension.
+- [x] Add initial AI action UI in keyboard extension.
+- [x] Add first real Fix Grammar action path in keyboard extension.
+- [ ] Add rewrite/fix-tone/summarize/continue actions in keyboard extension.
 - [ ] Handle loading, rate limits, invalid keys, offline gateway, and Full Access permission states.
 - [ ] Add prompt-performance eval suite.
 
@@ -211,15 +218,16 @@ The live smoke currently covers:
 - [ ] App icon and screenshots.
 - [ ] Onboarding instructions for enabling the keyboard.
 - [ ] TestFlight-ready signing and build pipeline.
-- [ ] Privacy documentation.
+- [ ] Privacy documentation for Full Access and network text transmission.
+- [ ] Shared Keychain migration for gateway API keys.
 
 ## Privacy and security notes
 
 - API keys must never be committed.
 - Production config should stay local to the user/device.
 - iOS keyboard extensions require **Full Access** for network calls. Open Keyboard should explain this clearly during onboarding.
-- App Group storage is planned for sharing config between the host app and keyboard extension.
-- Stronger key storage options should be evaluated before production release.
+- App Group storage is currently used for gateway config sharing between the host app and keyboard extension.
+- API key storage must move to a shared Keychain before production release; App Group `UserDefaults` is acceptable only for current development/test slices.
 - Prompt eval fixtures should avoid real private user text.
 
 ## LLM Gateway pairing

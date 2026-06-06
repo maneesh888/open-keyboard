@@ -1,6 +1,6 @@
 # Open Keyboard TDD Status
 
-Last updated: 2026-05-28
+Last updated: 2026-06-07
 
 ## Local CI
 
@@ -16,7 +16,9 @@ Current verified host result:
 - Core package tests: 61 executed, 2 skipped live tests, 0 failed
 - iOS app/extension build: passed on iPhone 16
 - Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation) in the previous foundation slice
-- Latest verified ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md`
+- Latest full quick-CI ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md`
+- Latest real keyboard functional ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md`
+- Real keyboard Fix Grammar UI test: passed against temp LLM Gateway; final host text `I have an apple.`; gateway POST observed; injected URL/key debug assertions passed without printing secrets
 
 ## Completed TDD slices
 
@@ -41,6 +43,7 @@ Current verified host result:
 - [x] Opt-in `LivePromptEvaluationTests` scaffold for grammar/rewrite/prompt-injection live quality checks
 - [x] Onboarding first-page layout fix verified by simulator screenshot
 - [x] Xcode UI test target and screenshot harness for iPhone 16 + iPhone SE
+- [x] Real keyboard-extension Fix Grammar functional UI test path with injected gateway credentials
 
 ## Live smoke scaffold
 
@@ -68,8 +71,9 @@ The live smoke covers:
 
 1. Expand prompt quality/performance eval fixtures and rubric coverage.
 2. Run opt-in live prompt evals against a configured gateway/model and record results.
-3. Add timeout, cancellation, offline/network resilience tests.
-4. Wire app/extension code to consume `OpenKeyboardCore` only after backend tests stay green.
+3. Move gateway API key sharing from App Group `UserDefaults` to shared Keychain before release.
+4. Document UI-test `.xctestrun` environment injection and privacy copy for Full Access/network text transmission.
+5. Add remaining rewrite/fix-tone/summarize/continue keyboard actions after Fix Grammar stabilizes.
 
 ## Completed slice: context and replacement ranges
 
