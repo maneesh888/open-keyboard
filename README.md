@@ -218,7 +218,7 @@ The live smoke currently covers:
 - [ ] App icon and screenshots.
 - [ ] Onboarding instructions for enabling the keyboard.
 - [ ] TestFlight-ready signing and build pipeline.
-- [ ] Privacy documentation for Full Access and network text transmission.
+- [x] Privacy documentation for Full Access and network text transmission (`docs/RELEASE_HARDENING.md`).
 - [ ] Shared Keychain migration for gateway API keys.
 
 ## Privacy and security notes

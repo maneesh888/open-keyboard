@@ -72,8 +72,16 @@ The live smoke covers:
 1. Expand prompt quality/performance eval fixtures and rubric coverage.
 2. Run opt-in live prompt evals against a configured gateway/model and record results.
 3. Move gateway API key sharing from App Group `UserDefaults` to shared Keychain before release.
-4. Document UI-test `.xctestrun` environment injection and privacy copy for Full Access/network text transmission.
+4. Wire the documented Full Access/network privacy copy into onboarding/settings/error states.
 5. Add remaining rewrite/fix-tone/summarize/continue keyboard actions after Fix Grammar stabilizes.
+
+## Release-hardening docs
+
+Added `docs/RELEASE_HARDENING.md` with:
+
+- UI-test `.xctestrun` environment-injection guardrails for live gateway URL/API key/model values.
+- Full Access/network privacy copy for onboarding, settings/help, and unavailable-network error states.
+- Release privacy commitments and remaining blockers, including shared Keychain migration for gateway API keys.
 
 ## Completed slice: context and replacement ranges
 
