@@ -14,6 +14,7 @@ struct OpenKeyboardApp: App {
     private var hasCompletedOnboarding = false
     
     init() {
+        Self.clearUITestConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayConfigAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
     }
@@ -62,6 +63,12 @@ struct OpenKeyboardApp: App {
         }
 
         return min(max(value, 0), 3)
+    }
+
+    private static func clearUITestConfigAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"), arguments.contains("--clear-gateway-config") else { return }
+        AppConfig.clearSharedConfig()
     }
 
     private static func seedUITestGatewayConfigAtLaunchIfNeeded() {

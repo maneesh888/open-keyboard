@@ -21,11 +21,11 @@ struct ContentView: View {
                         VStack(spacing: 12) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                    .fill(Color.accentColor.opacity(0.12))
+                                    .fill(OpenKeyboardTheme.Surface.iconBackground)
                                     .frame(width: 78, height: 78)
                                 Image(systemName: "keyboard.badge.eye")
                                     .font(.system(size: 34, weight: .semibold))
-                                    .foregroundColor(.accentColor)
+                                    .foregroundColor(OpenKeyboardTheme.Brand.blue)
                             }
                             .padding(.top, 12)
 
@@ -37,7 +37,7 @@ struct ContentView: View {
 
                             Text("Private AI-powered typing")
                                 .font(.headline.weight(.medium))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         }
 
                         StatusCard(config: settingsViewModel.config)
@@ -61,7 +61,7 @@ struct ContentView: View {
                                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                                        .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -78,6 +78,7 @@ struct ContentView: View {
                     .environmentObject(settingsViewModel)
             }
         }
+        .tint(OpenKeyboardTheme.Brand.cyan)
     }
 }
 
@@ -88,17 +89,17 @@ struct StatusCard: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundColor(config.isConfigured ? .green : .orange)
+                    .foregroundColor(config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning)
                     .font(.title3)
                     .frame(width: 34, height: 34)
-                    .background((config.isConfigured ? Color.green : Color.orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .background((config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
                         .font(.headline)
                     Text(config.isConfigured ? "Your gateway is ready." : "Add your API key to unlock AI features.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -118,9 +119,9 @@ struct StatusCard: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 8)
+        .shadow(color: OpenKeyboardTheme.Shadow.card, radius: 14, x: 0, y: 8)
         .padding(.horizontal, 20)
     }
 }
@@ -136,7 +137,7 @@ struct InfoRow: View {
             Spacer(minLength: 12)
             Text(value)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
