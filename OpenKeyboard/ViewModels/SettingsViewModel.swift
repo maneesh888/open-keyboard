@@ -48,9 +48,16 @@ class SettingsViewModel: ObservableObject {
                     apiKey: config.apiKey
                 )
                 availableModels = models ?? []
-                if !availableModels.isEmpty && !availableModels.contains(config.selectedModel) {
-                    config.selectedModel = availableModels[0]
+                guard let gatewayModel = availableModels.first else {
+                    connectionStatus = .failure
+                    errorMessage = "No models returned by gateway"
+                    config.isConfigured = false
+                    saveSettings()
+                    isTestingConnection = false
+                    return
                 }
+
+                config.selectedModel = gatewayModel
                 connectionStatus = .success
                 config.isConfigured = true
                 saveSettings()
