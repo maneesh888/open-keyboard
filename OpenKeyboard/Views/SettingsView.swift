@@ -35,7 +35,7 @@ struct SettingsView: View {
 
                     Text("Model is read-only and is loaded from the configured gateway after testing the connection.")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
                 
                 Section(header: Text("Connection Test")) {
@@ -57,12 +57,12 @@ struct SettingsView: View {
                     
                     if viewModel.connectionStatus == .success {
                         Label("Connected successfully", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(OpenKeyboardTheme.Semantic.success)
                     }
                     
                     if viewModel.connectionStatus == .failure {
                         Label(viewModel.errorMessage ?? "Connection failed", systemImage: "xmark.circle.fill")
-                            .foregroundColor(.red)
+                            .foregroundColor(OpenKeyboardTheme.Semantic.error)
                     }
                 }
                 
@@ -71,14 +71,14 @@ struct SettingsView: View {
                         Text("Version")
                         Spacer()
                         Text("1.0.0")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
                     
                     HStack {
                         Text("Build")
                         Spacer()
                         Text("1")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
                     
                     Link("Documentation", destination: URL(string: "https://github.com/maneesh/open-keyboard")!)
@@ -93,7 +93,7 @@ struct SettingsView: View {
                         UserDefaults(suiteName: "group.com.maneesh.openkeyboard")?
                             .set(false, forKey: "hasCompletedOnboarding")
                     }
-                    .foregroundColor(.red)
+                    .foregroundColor(OpenKeyboardTheme.Semantic.error)
                 }
             }
             .navigationTitle("Settings")
@@ -107,6 +107,7 @@ struct SettingsView: View {
                 }
             }
         }
+        .tint(OpenKeyboardTheme.Brand.cyan)
     }
 
     private var gatewayAdminURL: URL? {

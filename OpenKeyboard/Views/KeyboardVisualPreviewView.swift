@@ -33,20 +33,20 @@ struct KeyboardVisualPreviewView: View {
             .padding(.horizontal, 6)
             .padding(.top, 8)
             .padding(.bottom, 6)
-            .background(Color(.systemGray5))
+            .background(OpenKeyboardTheme.Surface.keyboardBackground)
             .accessibilityIdentifier("keyboard_visual_preview")
         }
-        .background(Color(.systemBackground))
+        .background(OpenKeyboardTheme.Surface.panelBackground)
         .ignoresSafeArea(.keyboard)
     }
 
     private var previewToolbar: some View {
         HStack(spacing: 8) {
             ZStack {
-                Circle().fill(Color.green.opacity(0.16))
+                Circle().fill(OpenKeyboardTheme.Surface.successBackground)
                 Image(systemName: "keyboard")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.green)
+                    .foregroundColor(OpenKeyboardTheme.Semantic.success)
             }
             .frame(width: 34, height: 34)
 
@@ -58,7 +58,7 @@ struct KeyboardVisualPreviewView: View {
                         .lineLimit(1)
                     Text("Ready")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
@@ -66,20 +66,20 @@ struct KeyboardVisualPreviewView: View {
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color(.systemBackground).opacity(0.72))
+            .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.72))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Image(systemName: "sparkles")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(OpenKeyboardTheme.Text.inverse)
                 .frame(width: 34, height: 34)
-                .background(Color.accentColor)
+                .background(OpenKeyboardTheme.Semantic.primaryAction)
                 .clipShape(Circle())
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(Color(.systemGray4).opacity(0.72))
+        .background(OpenKeyboardTheme.Surface.toolbarBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier("preview_ai_toolbar")
     }
@@ -110,10 +110,10 @@ struct KeyboardVisualPreviewView: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 ZStack {
-                    Circle().fill(Color.accentColor.opacity(0.14))
+                    Circle().fill(OpenKeyboardTheme.Surface.iconBackground)
                     Image(systemName: "sparkles")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
                 }
                 .frame(width: 38, height: 38)
 
@@ -122,7 +122,7 @@ struct KeyboardVisualPreviewView: View {
                         .font(.headline.weight(.semibold))
                     Text("Choose what Open Keyboard should do next.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(2)
                 }
 
@@ -132,9 +132,9 @@ struct KeyboardVisualPreviewView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.primary)
                     .frame(width: 40, height: 40)
-                    .background(Color(.systemBackground).opacity(0.98))
+                    .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.98))
                     .overlay(
-                        Circle().stroke(Color.secondary.opacity(0.24), lineWidth: 1)
+                        Circle().stroke(OpenKeyboardTheme.Stroke.control, lineWidth: 1)
                     )
                     .clipShape(Circle())
             }
@@ -149,12 +149,12 @@ struct KeyboardVisualPreviewView: View {
         .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(Color(.secondarySystemBackground).opacity(0.96))
-                .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 6)
+                .fill(OpenKeyboardTheme.Surface.overlayBackground)
+                .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                .stroke(OpenKeyboardTheme.Stroke.panel, lineWidth: 1)
         )
         .padding(.horizontal, 2)
         .accessibilityIdentifier("preview_ai_action_panel")
@@ -164,7 +164,7 @@ struct KeyboardVisualPreviewView: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 54, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Semantic.success)
                 .padding(.bottom, 4)
 
             Text("All Done")
@@ -172,23 +172,23 @@ struct KeyboardVisualPreviewView: View {
 
             Text("There are no more suggestions.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
             Text("Back to Keyboard")
                 .font(.headline.weight(.semibold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
                 .padding(.horizontal, 18)
                 .frame(minHeight: 42)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.accentColor, lineWidth: 1.5)
+                        .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
                 )
                 .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, minHeight: 226)
         .padding(.horizontal, 18)
         .padding(.vertical, 26)
-        .background(Color(.secondarySystemBackground).opacity(0.96))
+        .background(OpenKeyboardTheme.Surface.overlayBackground)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("preview_correction_complete_panel")
     }
@@ -210,9 +210,9 @@ struct KeyboardVisualPreviewView: View {
             .font(previewKeyFont(label, role: role))
             .foregroundColor(.primary)
             .frame(maxWidth: .infinity, minHeight: role == .letter ? 52 : 46)
-            .background(role == .modifier ? Color(.systemGray3) : Color(.systemBackground))
+            .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 0, x: 0, y: 1)
+            .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
     }
 
     private func previewKeyFont(_ label: String, role: PreviewKeyRole) -> Font {
@@ -228,8 +228,8 @@ struct KeyboardVisualPreviewView: View {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 30, height: 30)
-                .foregroundColor(isPrimary ? .white : .accentColor)
-                .background(isPrimary ? Color.accentColor : Color.accentColor.opacity(0.12))
+                .foregroundColor(isPrimary ? OpenKeyboardTheme.Text.inverse : OpenKeyboardTheme.Semantic.primaryAction)
+                .background(isPrimary ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Surface.iconBackground)
                 .clipShape(Circle())
 
             VStack(alignment: .leading, spacing: 1) {
@@ -238,7 +238,7 @@ struct KeyboardVisualPreviewView: View {
                     .lineLimit(1)
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(1)
             }
 
@@ -246,15 +246,15 @@ struct KeyboardVisualPreviewView: View {
 
             Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
         }
         .frame(maxWidth: .infinity, minHeight: 50)
         .padding(.horizontal, 12)
         .foregroundColor(.primary)
-        .background(Color(.systemBackground).opacity(0.94))
+        .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.94))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(isPrimary ? Color.accentColor.opacity(0.9) : Color.secondary.opacity(0.18), lineWidth: isPrimary ? 1.5 : 1)
+                .stroke(isPrimary ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.9) : OpenKeyboardTheme.Stroke.control.opacity(0.75), lineWidth: isPrimary ? 1.5 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }

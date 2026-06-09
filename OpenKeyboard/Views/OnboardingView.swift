@@ -48,6 +48,7 @@ struct OnboardingView: View {
             SettingsView()
                 .environmentObject(settingsViewModel)
         }
+        .tint(OpenKeyboardTheme.Brand.cyan)
     }
 }
 
@@ -85,7 +86,7 @@ struct WelcomePage: View {
         } footer: {
             Text("Swipe to continue")
                 .font(.footnote.weight(.semibold))
-                .foregroundColor(.secondary)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
         }
         .accessibilityElement(children: .contain)
     }
@@ -111,7 +112,7 @@ struct GatewaySetupPage: View {
             PrimaryButton(
                 title: settingsViewModel.config.isConfigured ? "Gateway Configured" : "Configure API Key",
                 systemImage: settingsViewModel.config.isConfigured ? "checkmark.circle.fill" : "key.fill",
-                tint: settingsViewModel.config.isConfigured ? .green : .accentColor,
+                tint: settingsViewModel.config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Brand.blue,
                 action: { showingSettings = true }
             )
         }
@@ -170,7 +171,7 @@ struct CompletePage: View {
 struct AppBackground: View {
     var body: some View {
         LinearGradient(
-            colors: [Color(.systemBackground), Color.accentColor.opacity(0.08), Color(.systemBackground)],
+            colors: [OpenKeyboardTheme.Surface.panelBackground, OpenKeyboardTheme.Surface.appBackgroundAccent, OpenKeyboardTheme.Surface.panelBackground],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -208,18 +209,18 @@ struct ModernOnboardingPage<Content: View, Footer: View>: View {
                 VStack(spacing: 9) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.12))
+                            .fill(OpenKeyboardTheme.Surface.iconBackground)
                             .frame(width: 58, height: 58)
                         Image(systemName: icon)
                             .font(.system(size: 25, weight: .semibold))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(OpenKeyboardTheme.Brand.blue)
                     }
                     .accessibilityHidden(true)
 
                     Text(eyebrow.uppercased())
                         .font(.caption2.weight(.bold))
                         .tracking(1.1)
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OpenKeyboardTheme.Brand.blue)
 
                     Text(title)
                         .accessibilityIdentifier(title == "Welcome to\nOpen Keyboard" ? "onboarding_title" : "")
@@ -232,7 +233,7 @@ struct ModernOnboardingPage<Content: View, Footer: View>: View {
                     Text(subtitle)
                         .accessibilityIdentifier(title == "Welcome to\nOpen Keyboard" ? "onboarding_subtitle" : "")
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .multilineTextAlignment(.center)
                         .lineLimit(3)
                         .minimumScaleFactor(0.82)
@@ -248,9 +249,9 @@ struct ModernOnboardingPage<Content: View, Footer: View>: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+                        .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.05), radius: 14, x: 0, y: 8)
+                .shadow(color: OpenKeyboardTheme.Shadow.card, radius: 14, x: 0, y: 8)
 
                 footer
                     .padding(.top, 2)
@@ -268,7 +269,7 @@ struct ModernOnboardingPage<Content: View, Footer: View>: View {
 struct PrimaryButton: View {
     let title: String
     let systemImage: String
-    var tint: Color = .accentColor
+    var tint: Color = OpenKeyboardTheme.Brand.blue
     let action: () -> Void
 
     var body: some View {
@@ -280,7 +281,7 @@ struct PrimaryButton: View {
                     .minimumScaleFactor(0.75)
             }
             .font(.headline)
-            .foregroundColor(.white)
+            .foregroundColor(OpenKeyboardTheme.Text.inverse)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(tint, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
@@ -298,7 +299,7 @@ struct PageIndicator: View {
         HStack(spacing: 7) {
             ForEach(0..<pageCount, id: \.self) { index in
                 Capsule()
-                    .fill(index == currentPage ? Color.accentColor : Color.secondary.opacity(0.25))
+                    .fill(index == currentPage ? OpenKeyboardTheme.Brand.blue : OpenKeyboardTheme.Stroke.control)
                     .frame(width: index == currentPage ? 18 : 7, height: 7)
                     .animation(.spring(response: 0.25, dampingFraction: 0.8), value: currentPage)
             }
@@ -336,9 +337,9 @@ struct FeatureRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Brand.blue)
                 .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(OpenKeyboardTheme.Surface.iconBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 identifiedText(title, identifier: titleIdentifier)
@@ -347,7 +348,7 @@ struct FeatureRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 identifiedText(description, identifier: descriptionIdentifier)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -364,9 +365,9 @@ struct SetupStep: View {
         HStack(alignment: .top, spacing: 12) {
             Text(number)
                 .font(.caption.weight(.bold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Brand.blue)
                 .frame(width: 30, height: 30)
-                .background(Color.accentColor.opacity(0.12), in: Circle())
+                .background(OpenKeyboardTheme.Surface.iconBackground, in: Circle())
 
             Text(text)
                 .font(.subheadline.weight(.medium))
@@ -387,9 +388,9 @@ struct TipRow: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Brand.blue)
                 .frame(width: 34, height: 34)
-                .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(OpenKeyboardTheme.Surface.iconBackground, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -398,7 +399,7 @@ struct TipRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text(description)
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }

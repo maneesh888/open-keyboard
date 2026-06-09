@@ -127,10 +127,10 @@ private struct KeyboardAIToolbar: View {
 
     private var statusIcon: some View {
         ZStack {
-            Circle().fill(actionsEnabled ? Color.green.opacity(0.16) : Color.orange.opacity(0.18))
+            Circle().fill(actionsEnabled ? OpenKeyboardTheme.Surface.successBackground : OpenKeyboardTheme.Surface.warningBackground)
             Image(systemName: state.leadingSystemImage)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(actionsEnabled ? .green : .orange)
+                .foregroundColor(actionsEnabled ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning)
         }
         .frame(width: 34, height: 34)
         .accessibilityHidden(true)
@@ -145,7 +145,7 @@ private struct KeyboardAIToolbar: View {
                     .lineLimit(1)
                 Text(state.subtitle)
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
@@ -166,8 +166,8 @@ private struct KeyboardAIToolbar: View {
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: 34, height: 34)
         }
-        .foregroundColor(actionsEnabled ? .white : .secondary)
-        .background(actionsEnabled ? Color.accentColor : KeyboardColors.panelBackground.opacity(0.72))
+        .foregroundColor(actionsEnabled ? OpenKeyboardTheme.Text.inverse : .secondary)
+        .background(actionsEnabled ? OpenKeyboardTheme.Semantic.primaryAction : KeyboardColors.panelBackground.opacity(0.72))
         .clipShape(Circle())
         .disabled(!actionsEnabled)
         .accessibilityIdentifier("ai_sparkle_action")
@@ -183,10 +183,10 @@ private struct AIActionPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 ZStack {
-                    Circle().fill(Color.accentColor.opacity(0.14))
+                    Circle().fill(OpenKeyboardTheme.Surface.iconBackground)
                     Image(systemName: "sparkles")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.accentColor)
+                        .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
                 }
                 .frame(width: 38, height: 38)
 
@@ -195,7 +195,7 @@ private struct AIActionPanel: View {
                         .font(.headline.weight(.semibold))
                     Text("Choose what Open Keyboard should do next.")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(2)
                 }
 
@@ -210,7 +210,7 @@ private struct AIActionPanel: View {
                 .foregroundColor(.primary)
                 .background(KeyboardColors.panelBackground.opacity(0.98))
                 .overlay(
-                    Circle().stroke(Color.secondary.opacity(0.24), lineWidth: 1)
+                    Circle().stroke(OpenKeyboardTheme.Stroke.control, lineWidth: 1)
                 )
                 .clipShape(Circle())
                 .accessibilityIdentifier("back_to_keyboard")
@@ -227,11 +227,11 @@ private struct AIActionPanel: View {
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
-                .shadow(color: .black.opacity(0.22), radius: 16, x: 0, y: 6)
+                .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color.white.opacity(0.45), lineWidth: 1)
+                .stroke(OpenKeyboardTheme.Stroke.panel, lineWidth: 1)
         )
         .padding(.horizontal, 2)
         .accessibilityIdentifier("ai_action_panel")
@@ -243,8 +243,8 @@ private struct AIActionPanel: View {
                 Image(systemName: systemImage)
                     .font(.system(size: 16, weight: .semibold))
                     .frame(width: 30, height: 30)
-                    .foregroundColor(action == .fixGrammar ? .white : .accentColor)
-                    .background(action == .fixGrammar ? Color.accentColor : Color.accentColor.opacity(0.12))
+                    .foregroundColor(action == .fixGrammar ? OpenKeyboardTheme.Text.inverse : OpenKeyboardTheme.Semantic.primaryAction)
+                    .background(action == .fixGrammar ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Surface.iconBackground)
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -253,7 +253,7 @@ private struct AIActionPanel: View {
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(1)
                 }
 
@@ -261,7 +261,7 @@ private struct AIActionPanel: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
             }
             .frame(maxWidth: .infinity, minHeight: 50)
             .padding(.horizontal, 12)
@@ -270,7 +270,7 @@ private struct AIActionPanel: View {
         .background(KeyboardColors.panelBackground.opacity(0.94))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(action == .fixGrammar ? Color.accentColor.opacity(0.9) : Color.secondary.opacity(0.18), lineWidth: action == .fixGrammar ? 1.5 : 1)
+                .stroke(action == .fixGrammar ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.9) : OpenKeyboardTheme.Stroke.control.opacity(0.75), lineWidth: action == .fixGrammar ? 1.5 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .disabled(!actionsEnabled)
@@ -285,7 +285,7 @@ private struct CorrectionCompletePanel: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 54, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundColor(OpenKeyboardTheme.Semantic.success)
                 .padding(.bottom, 4)
 
             Text("All Done")
@@ -293,7 +293,7 @@ private struct CorrectionCompletePanel: View {
 
             Text("There are no more suggestions.")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
             Button(action: onBackToKeyboard) {
                 Text("Back to Keyboard")
@@ -302,10 +302,10 @@ private struct CorrectionCompletePanel: View {
                     .frame(minHeight: 42)
             }
             .buttonStyle(.plain)
-            .foregroundColor(.accentColor)
+            .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
             .overlay(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.accentColor, lineWidth: 1.5)
+                    .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
             )
             .padding(.top, 4)
             .accessibilityIdentifier("back_to_keyboard")
@@ -340,7 +340,7 @@ private struct KeyButton: View {
                 .frame(maxWidth: .infinity, minHeight: role == .letter ? 52 : 46)
                 .background(backgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: .black.opacity(0.18), radius: 0, x: 0, y: 1)
+                .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
         }
         .buttonStyle(.plain)
     }
@@ -354,7 +354,7 @@ private struct KeyButton: View {
     }
 
     private var backgroundColor: Color {
-        if isAccent { return Color.accentColor.opacity(0.32) }
+        if isAccent { return OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32) }
         switch role {
         case .letter, .space:
             return KeyboardColors.keyBackground
@@ -365,10 +365,10 @@ private struct KeyButton: View {
 }
 
 private enum KeyboardColors {
-    static let keyboardBackground = Color(.systemGray5)
-    static let toolbarBackground = Color(.systemGray4).opacity(0.72)
-    static let panelBackground = Color(.systemBackground)
-    static let overlayBackground = Color(.secondarySystemBackground).opacity(0.96)
-    static let keyBackground = Color(.systemBackground)
-    static let modifierKeyBackground = Color(.systemGray3)
+    static let keyboardBackground = OpenKeyboardTheme.Surface.keyboardBackground
+    static let toolbarBackground = OpenKeyboardTheme.Surface.toolbarBackground
+    static let panelBackground = OpenKeyboardTheme.Surface.panelBackground
+    static let overlayBackground = OpenKeyboardTheme.Surface.overlayBackground
+    static let keyBackground = OpenKeyboardTheme.Surface.keyBackground
+    static let modifierKeyBackground = OpenKeyboardTheme.Surface.modifierKeyBackground
 }
