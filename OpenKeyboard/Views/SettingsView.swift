@@ -24,17 +24,18 @@ struct SettingsView: View {
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
 
-                    TextField("Model", text: $viewModel.config.selectedModel)
-                        .autocapitalization(.none)
-                        .disableAutocorrection(true)
-
-                    if !viewModel.availableModels.isEmpty {
-                        Picker("Available Models", selection: $viewModel.config.selectedModel) {
-                            ForEach(viewModel.availableModels, id: \.self) { model in
-                                Text(model).tag(model)
-                            }
-                        }
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Model")
+                        Spacer(minLength: 12)
+                        Text(viewModel.config.selectedModel.isEmpty ? "Loaded from gateway" : viewModel.config.selectedModel)
+                            .foregroundColor(viewModel.config.selectedModel.isEmpty ? .secondary : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
+
+                    Text("Model is read-only and is loaded from the configured gateway after testing the connection.")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
                 
                 Section(header: Text("Connection Test")) {
@@ -49,10 +50,10 @@ struct SettingsView: View {
                                     .padding(.trailing, 8)
                             }
                             
-                            Text(viewModel.isTestingConnection ? "Testing..." : "Test Connection")
+                            Text(viewModel.isTestingConnection ? "Testing..." : "Test Connection & Load Models")
                         }
                     }
-                    .disabled(viewModel.config.apiKey.isEmpty || viewModel.isTestingConnection)
+                    .disabled(viewModel.config.gatewayURL.isEmpty || viewModel.config.apiKey.isEmpty || viewModel.isTestingConnection)
                     
                     if viewModel.connectionStatus == .success {
                         Label("Connected successfully", systemImage: "checkmark.circle.fill")

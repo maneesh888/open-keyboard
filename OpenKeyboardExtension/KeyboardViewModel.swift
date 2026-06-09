@@ -13,10 +13,12 @@ final class KeyboardViewModel: ObservableObject {
     private let aiService = KeyboardAIService()
 
     @Published var isShiftEnabled = false
+    @Published var isNumbersEnabled = false
     @Published private(set) var config = AppConfig.load()
     @Published private(set) var hasFullAccess = false
     @Published private(set) var aiStatus = "Ready"
     @Published private(set) var isPerformingAIAction = false
+    @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
     private var composingBuffer = ""
 
     private enum Keys {
@@ -27,6 +29,16 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess && config.isConfigured && !config.apiKey.isEmpty && !isPerformingAIAction
     }
 
+    var toolbarState: KeyboardToolbarState {
+        KeyboardToolbarState.current(
+            hasFullAccess: hasFullAccess,
+            isConfigured: config.isConfigured,
+            selectedModel: config.selectedModel,
+            isPerformingAIAction: isPerformingAIAction,
+            aiStatus: aiStatus
+        )
+    }
+
     init(
         textDocumentProxy: UITextDocumentProxy,
         advanceToNextInputMode: @escaping () -> Void
@@ -34,6 +46,7 @@ final class KeyboardViewModel: ObservableObject {
         self.textDocumentProxy = textDocumentProxy
         self.advanceToNextInputMode = advanceToNextInputMode
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
+        self.panelMode = Self.consumeInitialPanelModeSeed()
     }
 
     func insert(_ character: String) {
@@ -70,8 +83,22 @@ final class KeyboardViewModel: ObservableObject {
         isShiftEnabled.toggle()
     }
 
+    func toggleNumbers() {
+        isNumbersEnabled.toggle()
+        isShiftEnabled = false
+    }
+
     func switchKeyboard() {
         advanceToNextInputMode()
+    }
+
+    func showActionPanel() {
+        guard canRunAIAction else { return }
+        panelMode = .actions
+    }
+
+    func showKeyboardPanel() {
+        panelMode = .keyboard
     }
 
     func updateFullAccess(_ value: Bool) {
@@ -113,6 +140,7 @@ final class KeyboardViewModel: ObservableObject {
         }
 
         let currentConfig = config
+        panelMode = .keyboard
         isPerformingAIAction = true
         aiStatus = "\(action.title)…"
         let sanitizedKey = currentConfig.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -125,8 +153,9 @@ final class KeyboardViewModel: ObservableObject {
                 await MainActor.run {
                     recordDebugEvent("action_request_success output=\(output.count)")
                     replace(plan: replacementPlan, with: output)
-                    aiStatus = "\(action.title) done"
+                    aiStatus = "No more suggestions"
                     isPerformingAIAction = false
+                    panelMode = .correctionComplete
                 }
             } catch {
                 await MainActor.run {
@@ -174,6 +203,22 @@ final class KeyboardViewModel: ObservableObject {
     private static func loadPersistedComposingBuffer() -> String {
         guard debugStateEnabled else { return "" }
         return AppConfig.sharedDefaults()?.string(forKey: Keys.composingBuffer) ?? ""
+    }
+
+    private static func consumeInitialPanelModeSeed() -> KeyboardPanelMode {
+        guard debugStateEnabled,
+              let defaults = AppConfig.sharedDefaults(),
+              let rawValue = defaults.string(forKey: "keyboardExtension.initialPanelMode") else {
+            return .keyboard
+        }
+        defaults.removeObject(forKey: "keyboardExtension.initialPanelMode")
+        defaults.synchronize()
+
+        switch rawValue {
+        case "actions": return .actions
+        case "correctionComplete": return .correctionComplete
+        default: return .keyboard
+        }
     }
 
     private static var debugStateEnabled: Bool {

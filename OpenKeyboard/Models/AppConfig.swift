@@ -71,9 +71,13 @@ extension AppConfig {
 
     static func clearSharedConfig() {
         guard let sharedDefaults = sharedDefaults() else { return }
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled"].forEach {
-            sharedDefaults.removeObject(forKey: $0)
+        clear(from: sharedDefaults)
+    }
+
+    static func clear(from defaults: UserDefaults) {
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode"].forEach {
+            defaults.removeObject(forKey: $0)
         }
-        sharedDefaults.synchronize()
+        defaults.synchronize()
     }
 }

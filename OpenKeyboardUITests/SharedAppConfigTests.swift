@@ -54,4 +54,20 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertNotEqual(extensionLoadedConfig.apiKey, "sk-main-app-only")
         XCTAssertEqual(extensionLoadedConfig.apiKey, "")
     }
+
+    func testClearRemovesKeyboardDebugAndPanelSeedState() throws {
+        defaults.set("actions", forKey: "keyboardExtension.initialPanelMode")
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        defaults.set("private typed text", forKey: "keyboardExtension.composingBuffer")
+        defaults.set("debug event", forKey: "keyboardExtension.lastDebugEvent")
+        defaults.set("debug events", forKey: "keyboardExtension.debugEvents")
+
+        AppConfig.clear(from: defaults)
+
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelMode"))
+        XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.composingBuffer"))
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.lastDebugEvent"))
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.debugEvents"))
+    }
 }

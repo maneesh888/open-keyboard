@@ -15,6 +15,7 @@ struct OpenKeyboardApp: App {
     
     init() {
         Self.seedUITestGatewayConfigAtLaunchIfNeeded()
+        Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
     }
 
     private var launchArguments: [String] {
@@ -31,6 +32,15 @@ struct OpenKeyboardApp: App {
 
     private var shouldShowKeyboardHostTest: Bool {
         isUITesting && launchArguments.contains("--keyboard-host-test")
+    }
+
+    private var keyboardPreviewPanel: KeyboardVisualPreviewPanel? {
+        guard isUITesting,
+              let argument = launchArguments.first(where: { $0.hasPrefix("--keyboard-preview-panel=") }) else {
+            return nil
+        }
+        let value = argument.replacingOccurrences(of: "--keyboard-preview-panel=", with: "")
+        return KeyboardVisualPreviewPanel(rawValue: value)
     }
 
     private var shouldShowOnboarding: Bool {
@@ -85,6 +95,24 @@ struct OpenKeyboardApp: App {
         }
     }
 
+    private static func seedUITestKeyboardPanelModeAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let panelArgument = arguments.first(where: { $0.hasPrefix("--keyboard-initial-panel=") }),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+
+        let panelMode = panelArgument.replacingOccurrences(of: "--keyboard-initial-panel=", with: "")
+        switch panelMode {
+        case "actions", "correctionComplete":
+            sharedDefaults.set(panelMode, forKey: "keyboardExtension.initialPanelMode")
+        default:
+            sharedDefaults.removeObject(forKey: "keyboardExtension.initialPanelMode")
+        }
+        sharedDefaults.synchronize()
+    }
+
     private static func normalizeUITestGatewayURL(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("http:/"), !trimmed.hasPrefix("http://") {
@@ -106,7 +134,9 @@ struct OpenKeyboardApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if shouldShowLiveAITestHarness {
+                if let keyboardPreviewPanel {
+                    KeyboardVisualPreviewView(panel: keyboardPreviewPanel)
+                } else if shouldShowLiveAITestHarness {
                     LiveAITestHarnessView()
                 } else if shouldShowKeyboardHostTest {
                     KeyboardExtensionHostTestView()
