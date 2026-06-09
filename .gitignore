@@ -27,3 +27,7 @@ Carthage/Build/
 
 # Local CI artifacts
 .ci-results/
+
+# Generated reports and verification artifacts
+reports/
+*.xcresult
