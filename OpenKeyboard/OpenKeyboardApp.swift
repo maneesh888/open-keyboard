@@ -96,10 +96,12 @@ struct OpenKeyboardApp: App {
         )
         config.save()
 
+#if DEBUG
         if requiresFunctionalCredentials, let sharedDefaults = AppConfig.sharedDefaults() {
             sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             sharedDefaults.synchronize()
         }
+#endif
     }
 
     private static func seedUITestKeyboardPanelModeAtLaunchIfNeeded() {

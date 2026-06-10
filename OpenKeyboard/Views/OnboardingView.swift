@@ -132,6 +132,7 @@ struct KeyboardSetupPage: View {
                 SetupStep(number: "2", text: "Choose Keyboards → Add New Keyboard")
                 SetupStep(number: "3", text: "Select Open Keyboard")
                 SetupStep(number: "4", text: "Enable Allow Full Access")
+                TipRow(icon: "lock.shield", title: "Privacy", description: "Basic typing stays local; AI actions send bounded text/context to your gateway")
             }
         } footer: {
             PrimaryButton(title: "Open Keyboard Settings", systemImage: "gearshape.fill") {
