@@ -44,6 +44,9 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.title, "Open Keyboard AI")
         XCTAssertEqual(state.subtitle, "Ready")
         XCTAssertTrue(state.isActionEnabled)
+        XCTAssertTrue(state.showsBrandMark)
+        XCTAssertFalse(state.showsIssueCount)
+        XCTAssertEqual(state.issueCount, 0)
     }
 
     func testLoadingStateBlocksActions() {
@@ -69,8 +72,24 @@ final class KeyboardToolbarStateTests: XCTestCase {
             original: "i has a apple"
         ))
 
-        XCTAssertEqual(state.title, "Grammar suggestion")
+        XCTAssertEqual(state.title, "1 writing suggestion")
         XCTAssertEqual(state.subtitle, "i has a apple → I have an apple.")
         XCTAssertFalse(state.isActionEnabled)
+        XCTAssertFalse(state.showsBrandMark)
+        XCTAssertTrue(state.showsIssueCount)
+        XCTAssertEqual(state.issueCount, 1)
+    }
+
+    func testCorrectionPreviewPluralizesIssueCount() {
+        let state = KeyboardToolbarState(kind: .correctionPreview(
+            count: 3,
+            explanation: "Spelling and grammar suggestions",
+            replacement: "I have an apple.",
+            original: "i has a apple"
+        ))
+
+        XCTAssertEqual(state.title, "3 writing suggestions")
+        XCTAssertTrue(state.showsIssueCount)
+        XCTAssertEqual(state.issueCount, 3)
     }
 }

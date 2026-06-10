@@ -127,7 +127,12 @@ private struct KeyboardAIToolbar: View {
 
     private var statusIcon: some View {
         ZStack {
-            if actionsEnabled {
+            if state.showsIssueCount {
+                Circle().fill(OpenKeyboardTheme.Semantic.error)
+                Text("\(state.issueCount)")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+            } else if state.showsBrandMark && actionsEnabled {
                 OpenKeyboardBrandMark(size: 36, symbolSize: 16)
             } else {
                 Circle().fill(OpenKeyboardTheme.Surface.warningBackground)
@@ -137,7 +142,7 @@ private struct KeyboardAIToolbar: View {
             }
         }
         .frame(width: 36, height: 36)
-        .accessibilityHidden(true)
+        .accessibilityLabel(state.showsIssueCount ? "\(state.issueCount) writing suggestions" : "Open Keyboard status")
     }
 
     private var statusContent: some View {
