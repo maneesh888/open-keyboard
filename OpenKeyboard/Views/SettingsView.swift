@@ -14,7 +14,7 @@ struct SettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section(header: Text("Gateway Configuration")) {
+                Section(header: Label("Gateway Configuration", systemImage: "sparkles")) {
                     TextField("Gateway URL", text: $viewModel.config.gatewayURL)
                         .keyboardType(.URL)
                         .autocapitalization(.none)
@@ -38,13 +38,13 @@ struct SettingsView: View {
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
 
-                Section(header: Text("Privacy & Full Access")) {
+                Section(header: Label("Privacy & Full Access", systemImage: "lock.shield.fill")) {
                     Text("Basic typing stays local on the keyboard. Full Access is only needed for AI actions so Open Keyboard can send bounded text/context to your configured gateway and receive suggestions. Text sent to the gateway may follow that gateway or model provider logging policy.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
 
-                Section(header: Text("Connection Test")) {
+                Section(header: Label("Connection Test", systemImage: "antenna.radiowaves.left.and.right")) {
                     Button(action: {
                         Task {
                             await viewModel.testConnection()
@@ -64,11 +64,13 @@ struct SettingsView: View {
                     if viewModel.connectionStatus == .success {
                         Label("Connected successfully", systemImage: "checkmark.circle.fill")
                             .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                            .listRowBackground(OpenKeyboardTheme.Surface.successBackground)
                     }
 
                     if viewModel.connectionStatus == .failure {
                         Label(viewModel.errorMessage ?? "Connection failed", systemImage: "xmark.circle.fill")
                             .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                            .listRowBackground(OpenKeyboardTheme.Surface.errorBackground)
                     }
                 }
 

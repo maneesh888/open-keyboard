@@ -11,8 +11,10 @@ enum OpenKeyboardTheme {
         static let cyan = Color(red: 0.00, green: 0.66, blue: 0.82)
         static let teal = Color(red: 0.00, green: 0.70, blue: 0.58)
         static let green = Color(red: 0.00, green: 0.72, blue: 0.38)
+        static let violet = Color(red: 0.42, green: 0.28, blue: 0.96)
+        static let electricCyan = Color(red: 0.00, green: 0.82, blue: 0.95)
         static let blueGreenGradient = LinearGradient(
-            colors: [blue, cyan, teal, green],
+            colors: [blue, electricCyan, teal, green],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -28,13 +30,16 @@ enum OpenKeyboardTheme {
     }
 
     enum Surface {
-        static let appBackgroundAccent = Brand.cyan.opacity(0.10)
-        static let iconBackground = Brand.cyan.opacity(0.13)
+        static let appBackgroundAccent = Brand.cyan.opacity(0.16)
+        static let iconBackground = Brand.electricCyan.opacity(0.18)
+        static let brandCardBackground = Brand.blue.opacity(0.12)
+        static let brandPanelBackground = Brand.electricCyan.opacity(0.18)
+        static let brandGlow = Brand.electricCyan.opacity(0.28)
         static let successBackground = Brand.teal.opacity(0.15)
         static let warningBackground = Semantic.warning.opacity(0.14)
         static let errorBackground = Semantic.error.opacity(0.12)
         static let keyboardBackground = Color(.systemGray5)
-        static let toolbarBackground = Color(.systemGray4).opacity(0.72)
+        static let toolbarBackground = Brand.blue.opacity(0.14)
         static let panelBackground = Color(.systemBackground)
         static let overlayBackground = Color(.secondarySystemBackground).opacity(0.96)
         static let keyBackground = Color(.systemBackground)
@@ -58,5 +63,20 @@ enum OpenKeyboardTheme {
         static let card = Color.black.opacity(0.05)
         static let key = Color.black.opacity(0.18)
         static let overlay = Color.black.opacity(0.22)
+    }
+}
+
+
+struct OpenKeyboardBrandMark: View {
+    var size: CGFloat = 78
+    var symbolSize: CGFloat = 32
+
+    var body: some View {
+        Image("OpenKeyboardBrandIcon")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .shadow(color: OpenKeyboardTheme.Surface.brandGlow, radius: size * 0.10, x: 0, y: size * 0.05)
+            .accessibilityLabel("Open Keyboard app icon")
     }
 }

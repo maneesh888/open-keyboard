@@ -3,9 +3,9 @@ import XCTest
 final class KeyboardPanelModeTests: XCTestCase {
     func testDebugStatePersistenceIsOnlyAvailableInDebugBuilds() {
 #if DEBUG
-        XCTAssertTrue(KeyboardViewModel.isDebugStatePersistenceAvailable)
+        XCTAssertTrue(KeyboardDebugStatePolicy.isPersistenceAvailable)
 #else
-        XCTAssertFalse(KeyboardViewModel.isDebugStatePersistenceAvailable)
+        XCTAssertFalse(KeyboardDebugStatePolicy.isPersistenceAvailable)
 #endif
     }
 
