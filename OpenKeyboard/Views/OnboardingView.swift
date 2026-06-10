@@ -210,11 +210,12 @@ struct ModernOnboardingPage<Content: View, Footer: View>: View {
                 VStack(spacing: 9) {
                     ZStack {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(OpenKeyboardTheme.Surface.iconBackground)
-                            .frame(width: 58, height: 58)
+                            .fill(OpenKeyboardTheme.Brand.blueGreenGradient)
+                            .frame(width: 62, height: 62)
+                            .shadow(color: OpenKeyboardTheme.Surface.brandGlow, radius: 14, x: 0, y: 7)
                         Image(systemName: icon)
-                            .font(.system(size: 25, weight: .semibold))
-                            .foregroundColor(OpenKeyboardTheme.Brand.blue)
+                            .font(.system(size: 26, weight: .semibold))
+                            .foregroundColor(OpenKeyboardTheme.Text.inverse)
                     }
                     .accessibilityHidden(true)
 

@@ -127,12 +127,16 @@ private struct KeyboardAIToolbar: View {
 
     private var statusIcon: some View {
         ZStack {
-            Circle().fill(actionsEnabled ? OpenKeyboardTheme.Surface.successBackground : OpenKeyboardTheme.Surface.warningBackground)
-            Image(systemName: state.leadingSystemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(actionsEnabled ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning)
+            if actionsEnabled {
+                OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+            } else {
+                Circle().fill(OpenKeyboardTheme.Surface.warningBackground)
+                Image(systemName: state.leadingSystemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+            }
         }
-        .frame(width: 34, height: 34)
+        .frame(width: 36, height: 36)
         .accessibilityHidden(true)
     }
 
@@ -156,7 +160,7 @@ private struct KeyboardAIToolbar: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(KeyboardColors.panelBackground.opacity(0.72))
+        .background(actionsEnabled ? OpenKeyboardTheme.Surface.brandPanelBackground : KeyboardColors.panelBackground.opacity(0.72))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -183,10 +187,10 @@ private struct AIActionPanel: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 10) {
                 ZStack {
-                    Circle().fill(OpenKeyboardTheme.Surface.iconBackground)
+                    Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
                     Image(systemName: "sparkles")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+                        .foregroundColor(OpenKeyboardTheme.Text.inverse)
                 }
                 .frame(width: 38, height: 38)
 
@@ -231,7 +235,7 @@ private struct AIActionPanel: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(OpenKeyboardTheme.Stroke.panel, lineWidth: 1)
+                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.55), lineWidth: 1.2)
         )
         .padding(.horizontal, 2)
         .accessibilityIdentifier("ai_action_panel")
@@ -283,10 +287,14 @@ private struct CorrectionCompletePanel: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 54, weight: .semibold))
-                .foregroundColor(OpenKeyboardTheme.Semantic.success)
-                .padding(.bottom, 4)
+            ZStack {
+                Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+            }
+            .frame(width: 64, height: 64)
+            .padding(.bottom, 4)
 
             Text("All Done")
                 .font(.title3.weight(.bold))

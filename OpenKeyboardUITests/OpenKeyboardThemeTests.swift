@@ -5,6 +5,8 @@ final class OpenKeyboardThemeTests: XCTestCase {
     func testBrandPaletteHasDistinctBlueAndGreen() {
         XCTAssertNotEqual(OpenKeyboardTheme.Brand.blue.description, OpenKeyboardTheme.Brand.green.description)
         XCTAssertNotEqual(OpenKeyboardTheme.Brand.cyan.description, OpenKeyboardTheme.Brand.green.description)
+        XCTAssertNotEqual(OpenKeyboardTheme.Brand.electricCyan.description, OpenKeyboardTheme.Brand.blue.description)
+        XCTAssertNotEqual(OpenKeyboardTheme.Brand.violet.description, OpenKeyboardTheme.Brand.green.description)
     }
 
     func testSemanticStatusColorsUseThemeTokens() {

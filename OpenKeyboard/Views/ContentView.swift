@@ -19,14 +19,7 @@ struct ContentView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 18) {
                         VStack(spacing: 12) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                                    .fill(OpenKeyboardTheme.Surface.iconBackground)
-                                    .frame(width: 78, height: 78)
-                                Image(systemName: "keyboard.badge.eye")
-                                    .font(.system(size: 34, weight: .semibold))
-                                    .foregroundColor(OpenKeyboardTheme.Brand.blue)
-                            }
+                            OpenKeyboardBrandMark(size: 86, symbolSize: 36)
                             .padding(.top, 12)
 
                             Text("Open Keyboard")
@@ -61,7 +54,7 @@ struct ContentView: View {
                                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
+                                        .stroke(settingsViewModel.config.isConfigured ? OpenKeyboardTheme.Semantic.success.opacity(0.45) : OpenKeyboardTheme.Semantic.warning.opacity(0.42), lineWidth: 1.2)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -116,7 +109,7 @@ struct StatusCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(OpenKeyboardTheme.Surface.brandCardBackground, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)

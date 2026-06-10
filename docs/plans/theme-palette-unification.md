@@ -55,3 +55,7 @@ Because this is an architecture-sensitive theming/refactor slice:
 - Screenshots pass recursive visual verification.
 - Tests/build pass.
 - Security/architecture reviewers mark safe to commit.
+
+## 2026-06-10 visible icon/color refresh note
+
+The approved icon asset is now committed in `OpenKeyboard/OpenKeyboardAssets.xcassets` as both `OpenKeyboardBrandIcon` and `AppIcon`. `OpenKeyboardBrandMark` renders the real asset directly/as-is, with only an outside shadow so screenshots match the approved icon while nearby surfaces use the shared palette.
