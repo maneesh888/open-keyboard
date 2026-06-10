@@ -41,7 +41,7 @@ struct OpenKeyboardApp: App {
             return nil
         }
         let value = argument.replacingOccurrences(of: "--keyboard-preview-panel=", with: "")
-        return KeyboardVisualPreviewPanel(rawValue: value)
+        return KeyboardPreviewLabState(rawValue: value)?.previewPanel ?? KeyboardVisualPreviewPanel(rawValue: value)
     }
 
     private var shouldShowOnboarding: Bool {

@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
+    @State private var showingKeyboardPreviewLab = false
 
     var body: some View {
         NavigationView {
@@ -38,6 +39,38 @@ struct ContentView: View {
                         VStack(spacing: 12) {
                             PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
                                 settingsViewModel.openKeyboardSettings()
+                            }
+
+                            if settingsViewModel.config.isConfigured {
+                                NavigationLink(destination: KeyboardPreviewLabView(), isActive: $showingKeyboardPreviewLab) {
+                                    Button(action: { showingKeyboardPreviewLab = true }) {
+                                        HStack(spacing: 12) {
+                                            OpenKeyboardBrandMark(size: 34, symbolSize: 14)
+                                            VStack(alignment: .leading, spacing: 2) {
+                                                Text("Keyboard Preview Lab")
+                                                    .font(.headline.weight(.semibold))
+                                                Text("Test zero-issue, issue count, correction cards, and AI actions.")
+                                                    .font(.caption)
+                                                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                                    .lineLimit(2)
+                                            }
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption.weight(.bold))
+                                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                        }
+                                        .foregroundColor(.primary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(14)
+                                        .background(OpenKeyboardTheme.Surface.brandPanelBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.55), lineWidth: 1.2)
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .accessibilityIdentifier("keyboard_preview_lab_entry")
                             }
 
                             Button(action: {

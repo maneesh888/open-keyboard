@@ -28,6 +28,20 @@ struct KeyboardToolbarState: Equatable {
         return false
     }
 
+    var issueCount: Int {
+        if case .correctionPreview(let count, _, _, _) = kind { return count }
+        return 0
+    }
+
+    var showsBrandMark: Bool {
+        if case .actions = kind { return true }
+        return false
+    }
+
+    var showsIssueCount: Bool {
+        issueCount > 0
+    }
+
     var leadingSystemImage: String {
         switch kind {
         case .fullAccessRequired, .notConfigured, .error:
@@ -49,8 +63,8 @@ struct KeyboardToolbarState: Equatable {
             return "Open Keyboard AI"
         case .loading(let title):
             return title
-        case .correctionPreview:
-            return "Grammar suggestion"
+        case .correctionPreview(let count, _, _, _):
+            return count == 1 ? "1 writing suggestion" : "\(count) writing suggestions"
         case .error:
             return "AI unavailable"
         }

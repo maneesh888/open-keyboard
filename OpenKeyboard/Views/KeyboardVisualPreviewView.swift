@@ -5,10 +5,77 @@
 
 import SwiftUI
 
-enum KeyboardVisualPreviewPanel: String {
-    case keyboard
-    case actions
-    case correctionComplete
+struct KeyboardPreviewLabView: View {
+    @State private var selectedState: KeyboardPreviewLabState = .ready
+
+    var body: some View {
+        ZStack {
+            AppBackground()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Keyboard Preview Lab")
+                            .font(.largeTitle.weight(.bold))
+                        Text("Safe deterministic previews for the future Grammarly-style correction flow. No private typed text or live debug internals are exposed here.")
+                            .font(.subheadline)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+                    .padding(.horizontal, 20)
+
+                    Picker("Preview state", selection: $selectedState) {
+                        ForEach(KeyboardPreviewLabState.allCases) { state in
+                            Text(state.title).tag(state)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+                    .accessibilityIdentifier("keyboard_preview_lab_state_picker")
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(selectedState.title)
+                            .font(.headline.weight(.semibold))
+                        Text(description(for: selectedState))
+                            .font(.caption)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+                    .padding(14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(OpenKeyboardTheme.Surface.brandCardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
+                    )
+                    .padding(.horizontal, 20)
+
+                    KeyboardVisualPreviewView(panel: selectedState.previewPanel)
+                        .frame(minHeight: 390)
+                        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                        .padding(.horizontal, 12)
+                }
+                .padding(.vertical, 18)
+            }
+        }
+        .navigationTitle("Keyboard Preview Lab")
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("keyboard_preview_lab")
+    }
+
+    private func description(for state: KeyboardPreviewLabState) -> String {
+        switch state {
+        case .ready:
+            return "Ready state: top-left shows the approved OpenKeyboard icon and the right sparkle opens AI actions."
+        case .issue:
+            return "Detected issue state: top-left changes to a count badge so it is visibly different from zero issues."
+        case .correctionCard:
+            return "Compact Grammarly-like card with action label, problem context, replacement, and alternatives."
+        case .correctionDetail:
+            return "Detail panel shown after tapping the issue count/card; this is where apply/dismiss can wire into the replacement planner later."
+        case .actions:
+            return "Right sparkle assistant panel with Improve, Rephrase, and Summarize actions."
+        case .correctionComplete:
+            return "Completion panel after suggestions are resolved."
+        }
+    }
 }
 
 struct KeyboardVisualPreviewView: View {
@@ -22,8 +89,15 @@ struct KeyboardVisualPreviewView: View {
                 previewToolbar
 
                 switch panel {
-                case .keyboard:
+                case .keyboard, .issue:
                     keyGrid
+                case .correctionCard:
+                    VStack(spacing: 8) {
+                        compactCorrectionCard
+                        keyGrid
+                    }
+                case .correctionDetail:
+                    correctionDetailPanel
                 case .actions:
                     actionPanel
                 case .correctionComplete:
@@ -40,17 +114,36 @@ struct KeyboardVisualPreviewView: View {
         .ignoresSafeArea(.keyboard)
     }
 
+    private struct PreviewToolbarDisplay {
+        let title: String
+        let subtitle: String
+        let issueCount: Int
+
+        var showsIssueCount: Bool { issueCount > 0 }
+    }
+
+    private var toolbarState: PreviewToolbarDisplay {
+        switch panel {
+        case .keyboard, .actions, .correctionComplete:
+            return PreviewToolbarDisplay(title: "Open Keyboard AI", subtitle: "Ready", issueCount: 0)
+        case .issue:
+            return PreviewToolbarDisplay(title: "2 writing suggestions", subtitle: "Spelling and grammar suggestions", issueCount: 2)
+        case .correctionCard, .correctionDetail:
+            return PreviewToolbarDisplay(title: "1 writing suggestion", subtitle: "Subject-verb agreement", issueCount: 1)
+        }
+    }
+
     private var previewToolbar: some View {
         HStack(spacing: 8) {
-            OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+            previewStatusIcon
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("Open Keyboard AI")
+                    Text(toolbarState.title)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.primary)
                         .lineLimit(1)
-                    Text("Ready")
+                    Text(toolbarState.subtitle)
                         .font(.caption2)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(1)
@@ -69,6 +162,7 @@ struct KeyboardVisualPreviewView: View {
                 .frame(width: 34, height: 34)
                 .background(OpenKeyboardTheme.Semantic.primaryAction)
                 .clipShape(Circle())
+                .accessibilityIdentifier("preview_ai_sparkle_action")
         }
         .frame(minHeight: 44)
         .padding(.horizontal, 8)
@@ -76,6 +170,21 @@ struct KeyboardVisualPreviewView: View {
         .background(OpenKeyboardTheme.Surface.toolbarBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier("preview_ai_toolbar")
+    }
+
+    private var previewStatusIcon: some View {
+        ZStack {
+            if toolbarState.showsIssueCount {
+                Circle().fill(OpenKeyboardTheme.Semantic.error)
+                Text("\(toolbarState.issueCount)")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+            } else {
+                OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+            }
+        }
+        .frame(width: 36, height: 36)
+        .accessibilityIdentifier(toolbarState.showsIssueCount ? "preview_issue_count_badge" : "preview_openkeyboard_icon")
     }
 
     private var keyGrid: some View {
@@ -98,6 +207,84 @@ struct KeyboardVisualPreviewView: View {
             }
         }
         .accessibilityIdentifier("preview_keyboard_grid")
+    }
+
+    private var compactCorrectionCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Text("Correct grammar")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("1 of 1")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+            }
+            Text("i has a apple")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.86))
+                .strikethrough(color: OpenKeyboardTheme.Semantic.error)
+            Text("I have an apple.")
+                .font(.headline.weight(.semibold))
+                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+            HStack(spacing: 8) {
+                suggestionChip("I have an apple.")
+                suggestionChip("I've got an apple.")
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OpenKeyboardTheme.Surface.overlayBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.error.opacity(0.72), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityIdentifier("preview_correction_card")
+    }
+
+    private var correctionDetailPanel: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Correct grammar")
+                    .font(.headline.weight(.bold))
+                Spacer()
+                Text("1 issue")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(OpenKeyboardTheme.Semantic.error, in: Capsule())
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Problem")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Text("i has a apple")
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.9))
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Suggestion")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Text("I have an apple.")
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+            }
+            HStack(spacing: 10) {
+                detailButton("Apply", filled: true)
+                detailButton("Dismiss", filled: false, tint: OpenKeyboardTheme.Semantic.error)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
+        .background(OpenKeyboardTheme.Surface.overlayBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.error.opacity(0.55), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityIdentifier("preview_correction_detail_panel")
     }
 
     private var actionPanel: some View {
@@ -127,9 +314,7 @@ struct KeyboardVisualPreviewView: View {
                     .foregroundColor(.primary)
                     .frame(width: 40, height: 40)
                     .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.98))
-                    .overlay(
-                        Circle().stroke(OpenKeyboardTheme.Stroke.control, lineWidth: 1)
-                    )
+                    .overlay(Circle().stroke(OpenKeyboardTheme.Stroke.control, lineWidth: 1))
                     .clipShape(Circle())
             }
 
@@ -163,7 +348,7 @@ struct KeyboardVisualPreviewView: View {
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
             }
             .frame(width: 64, height: 64)
-                .padding(.bottom, 4)
+            .padding(.bottom, 4)
 
             Text("All Done")
                 .font(.title3.weight(.bold))
@@ -255,5 +440,28 @@ struct KeyboardVisualPreviewView: View {
                 .stroke(isPrimary ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.9) : OpenKeyboardTheme.Stroke.control.opacity(0.75), lineWidth: isPrimary ? 1.5 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func suggestionChip(_ title: String, tint: Color = OpenKeyboardTheme.Semantic.primaryAction) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundColor(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(OpenKeyboardTheme.Surface.iconBackground, in: Capsule())
+    }
+
+    private func detailButton(_ title: String, filled: Bool, tint: Color = OpenKeyboardTheme.Semantic.primaryAction) -> some View {
+        Text(title)
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(filled ? OpenKeyboardTheme.Text.inverse : tint)
+            .frame(maxWidth: .infinity, minHeight: 42)
+            .background(filled ? tint : Color.clear)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tint, lineWidth: 1.2)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
