@@ -59,9 +59,9 @@ struct KeyboardToolbarState: Equatable {
     var subtitle: String {
         switch kind {
         case .fullAccessRequired:
-            return "Enable Allow Full Access"
+            return "Basic typing is local. Full Access lets AI send bounded text to your gateway."
         case .notConfigured:
-            return "Pair gateway in app"
+            return "Pair your gateway in the app before using AI actions."
         case .actions(let status):
             return status
         case .loading:

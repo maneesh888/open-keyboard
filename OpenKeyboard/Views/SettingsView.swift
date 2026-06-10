@@ -10,7 +10,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var viewModel: SettingsViewModel
-    
+
     var body: some View {
         NavigationView {
             Form {
@@ -19,7 +19,7 @@ struct SettingsView: View {
                         .keyboardType(.URL)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
-                    
+
                     SecureField("API Key", text: $viewModel.config.apiKey)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
@@ -37,7 +37,13 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
-                
+
+                Section(header: Text("Privacy & Full Access")) {
+                    Text("Basic typing stays local on the keyboard. Full Access is only needed for AI actions so Open Keyboard can send bounded text/context to your configured gateway and receive suggestions. Text sent to the gateway may follow that gateway or model provider logging policy.")
+                        .font(.footnote)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                }
+
                 Section(header: Text("Connection Test")) {
                     Button(action: {
                         Task {
@@ -49,23 +55,23 @@ struct SettingsView: View {
                                 ProgressView()
                                     .padding(.trailing, 8)
                             }
-                            
+
                             Text(viewModel.isTestingConnection ? "Testing..." : "Test Connection & Load Models")
                         }
                     }
                     .disabled(viewModel.config.gatewayURL.isEmpty || viewModel.config.apiKey.isEmpty || viewModel.isTestingConnection)
-                    
+
                     if viewModel.connectionStatus == .success {
                         Label("Connected successfully", systemImage: "checkmark.circle.fill")
                             .foregroundColor(OpenKeyboardTheme.Semantic.success)
                     }
-                    
+
                     if viewModel.connectionStatus == .failure {
                         Label(viewModel.errorMessage ?? "Connection failed", systemImage: "xmark.circle.fill")
                             .foregroundColor(OpenKeyboardTheme.Semantic.error)
                     }
                 }
-                
+
                 Section(header: Text("About")) {
                     HStack {
                         Text("Version")
@@ -73,21 +79,21 @@ struct SettingsView: View {
                         Text("1.0.0")
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
-                    
+
                     HStack {
                         Text("Build")
                         Spacer()
                         Text("1")
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
-                    
+
                     Link("Documentation", destination: URL(string: "https://github.com/maneesh/open-keyboard")!)
 
                     if let adminURL = gatewayAdminURL {
                         Link("Gateway Admin", destination: adminURL)
                     }
                 }
-                
+
                 Section {
                     Button("Reset Onboarding") {
                         UserDefaults(suiteName: "group.com.maneesh.openkeyboard")?

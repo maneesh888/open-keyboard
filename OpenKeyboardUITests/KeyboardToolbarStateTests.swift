@@ -12,7 +12,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
 
         XCTAssertEqual(state.kind, .fullAccessRequired)
         XCTAssertEqual(state.title, "Full Access required")
-        XCTAssertEqual(state.subtitle, "Enable Allow Full Access")
+        XCTAssertEqual(state.subtitle, "Basic typing is local. Full Access lets AI send bounded text to your gateway.")
         XCTAssertFalse(state.isActionEnabled)
     }
 
@@ -27,7 +27,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
 
         XCTAssertEqual(state.kind, .notConfigured)
         XCTAssertEqual(state.title, "Gateway not configured")
-        XCTAssertEqual(state.subtitle, "Pair gateway in app")
+        XCTAssertEqual(state.subtitle, "Pair your gateway in the app before using AI actions.")
         XCTAssertFalse(state.isActionEnabled)
     }
 

@@ -221,7 +221,16 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
+    static var isDebugStatePersistenceAvailable: Bool {
+#if DEBUG
+        return true
+#else
+        return false
+#endif
+    }
+
     private static var debugStateEnabled: Bool {
-        AppConfig.sharedDefaults()?.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") ?? false
+        guard isDebugStatePersistenceAvailable else { return false }
+        return AppConfig.sharedDefaults()?.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") ?? false
     }
 }
