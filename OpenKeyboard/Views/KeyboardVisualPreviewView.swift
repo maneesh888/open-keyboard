@@ -187,47 +187,30 @@ struct KeyboardVisualPreviewView: View {
     @ViewBuilder
     private var previewToolbarContent: some View {
         if (panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) {
-            HStack(spacing: 6) {
+            HStack(spacing: 7) {
                 if panel != .predictionOnly {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(panelState.compactSuggestion?.label ?? "Correct grammar:")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                            .lineLimit(1)
-                        Text(panelState.compactSuggestion?.replacement ?? "I")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(OpenKeyboardTheme.Semantic.primaryAction)
-                            .lineLimit(1)
-                    }
+                    compactSuggestionBlock(
+                        hint: panelState.compactSuggestion?.label ?? "Correct grammar",
+                        value: panelState.compactSuggestion?.replacement ?? "I",
+                        valueColor: OpenKeyboardTheme.Semantic.primaryAction,
+                        identifier: "preview_compact_correction_block"
+                    )
                     .layoutPriority(2)
                 }
 
                 if let prediction = panelState.compactSuggestion?.prediction {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(panel == .predictionOnly ? "Suggestion" : "Next word")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                            .lineLimit(1)
-                        Text(prediction)
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.primary)
-                            .lineLimit(1)
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.86), in: Capsule())
-                    .overlay(
-                        Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.7), lineWidth: 1)
+                    compactSuggestionBlock(
+                        hint: panel == .predictionOnly ? "Suggestion" : "Next word",
+                        value: prediction,
+                        valueColor: .primary,
+                        identifier: "preview_prediction_block"
                     )
-                    .accessibilityIdentifier("preview_prediction_chip")
+                    .layoutPriority(1)
                 }
 
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.bold))
-                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Spacer(minLength: 0)
             }
-            .accessibilityIdentifier("preview_compact_correction_strip")
+            .accessibilityIdentifier("preview_compact_suggestion_strip")
         } else {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -243,6 +226,28 @@ struct KeyboardVisualPreviewView: View {
                 Spacer(minLength: 4)
             }
         }
+    }
+
+    private func compactSuggestionBlock(hint: String, value: String, valueColor: Color, identifier: String) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(hint.replacingOccurrences(of: ":", with: ""))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .lineLimit(1)
+            Text(value)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .padding(.vertical, 5)
+        .frame(minWidth: 58, alignment: .leading)
+        .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.90), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(OpenKeyboardTheme.Stroke.control.opacity(0.55), lineWidth: 1)
+        )
+        .accessibilityIdentifier(identifier)
     }
 
     private var previewStatusIcon: some View {
