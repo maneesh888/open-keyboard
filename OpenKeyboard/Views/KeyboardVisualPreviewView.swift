@@ -70,6 +70,10 @@ struct KeyboardPreviewLabView: View {
             return "First compact suggestion: one focused replacement token, not the full corrected sentence."
         case .correctionCardNext:
             return "Next compact suggestion after applying the first token; this models recursive issue handling."
+        case .correctionOnly:
+            return "Correction-only compact state with no prediction lane."
+        case .predictionOnly:
+            return "Prediction-only compact state with no correction count confusion."
         case .correctionDetail:
             return "Detail panel shown after tapping the issue count/card; this is where apply/dismiss can wire into the replacement planner later."
         case .actions:
@@ -93,7 +97,7 @@ struct KeyboardVisualPreviewView: View {
                 switch panel {
                 case .keyboard, .issue:
                     keyGrid
-                case .correctionCard, .correctionCardNext:
+                case .correctionCard, .correctionCardNext, .correctionOnly, .predictionOnly:
                     keyGrid
                 case .correctionDetail:
                     correctionDetailPanel
@@ -127,8 +131,10 @@ struct KeyboardVisualPreviewView: View {
             return PreviewToolbarDisplay(title: "Open Keyboard AI", subtitle: "Ready", issueCount: 0)
         case .issue:
             return PreviewToolbarDisplay(title: "2 writing suggestions", subtitle: "Spelling and grammar suggestions", issueCount: 2)
-        case .correctionCard, .correctionCardNext, .correctionDetail:
+        case .correctionCard, .correctionCardNext, .correctionOnly, .correctionDetail:
             return PreviewToolbarDisplay(title: "1 writing suggestion", subtitle: panel == .correctionCardNext ? "Next grammar suggestion" : "Subject-verb agreement", issueCount: 1)
+        case .predictionOnly:
+            return PreviewToolbarDisplay(title: "Open Keyboard AI", subtitle: "Suggestion", issueCount: 0)
         }
     }
 
@@ -139,6 +145,8 @@ struct KeyboardVisualPreviewView: View {
         case .issue: return .issue
         case .correctionCard: return .correctionCard
         case .correctionCardNext: return .correctionCardNext
+        case .correctionOnly: return .correctionOnly
+        case .predictionOnly: return .predictionOnly
         case .correctionDetail: return .correctionDetail
         case .actions: return .actions
         case .correctionComplete: return .correctionComplete
@@ -153,10 +161,10 @@ struct KeyboardVisualPreviewView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .background((panel == .correctionCard || panel == .correctionCardNext) ? OpenKeyboardTheme.Surface.overlayBackground : OpenKeyboardTheme.Surface.brandPanelBackground)
+                .background((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Surface.overlayBackground : OpenKeyboardTheme.Surface.brandPanelBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke((panel == .correctionCard || panel == .correctionCardNext) ? OpenKeyboardTheme.Semantic.error.opacity(0.42) : Color.clear, lineWidth: 1)
+                        .stroke((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Semantic.error.opacity(0.42) : Color.clear, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
@@ -178,16 +186,42 @@ struct KeyboardVisualPreviewView: View {
 
     @ViewBuilder
     private var previewToolbarContent: some View {
-        if (panel == .correctionCard || panel == .correctionCardNext) {
+        if (panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) {
             HStack(spacing: 6) {
-                Text(panelState.compactSuggestion?.label ?? "Correct grammar:")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(.primary)
-                    .lineLimit(1)
-                Text(panelState.compactSuggestion?.replacement ?? "I")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(OpenKeyboardTheme.Semantic.primaryAction)
-                    .lineLimit(1)
+                if panel != .predictionOnly {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(panelState.compactSuggestion?.label ?? "Correct grammar:")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                            .lineLimit(1)
+                        Text(panelState.compactSuggestion?.replacement ?? "I")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(OpenKeyboardTheme.Semantic.primaryAction)
+                            .lineLimit(1)
+                    }
+                    .layoutPriority(2)
+                }
+
+                if let prediction = panelState.compactSuggestion?.prediction {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(panel == .predictionOnly ? "Suggestion" : "Next word")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                            .lineLimit(1)
+                        Text(prediction)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.86), in: Capsule())
+                    .overlay(
+                        Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.7), lineWidth: 1)
+                    )
+                    .accessibilityIdentifier("preview_prediction_chip")
+                }
+
                 Spacer(minLength: 2)
                 Image(systemName: "chevron.right")
                     .font(.caption2.weight(.bold))
