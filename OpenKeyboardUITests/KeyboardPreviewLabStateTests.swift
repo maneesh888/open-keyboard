@@ -6,6 +6,8 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPreviewLabState.issue.previewPanel, .issue)
         XCTAssertEqual(KeyboardPreviewLabState.correctionCard.previewPanel, .correctionCard)
         XCTAssertEqual(KeyboardPreviewLabState.correctionCardNext.previewPanel, .correctionCardNext)
+        XCTAssertEqual(KeyboardPreviewLabState.correctionOnly.previewPanel, .correctionOnly)
+        XCTAssertEqual(KeyboardPreviewLabState.predictionOnly.previewPanel, .predictionOnly)
         XCTAssertEqual(KeyboardPreviewLabState.correctionDetail.previewPanel, .correctionDetail)
         XCTAssertEqual(KeyboardPreviewLabState.actions.previewPanel, .actions)
         XCTAssertEqual(KeyboardPreviewLabState.correctionComplete.previewPanel, .correctionComplete)
@@ -16,6 +18,8 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "issue"), .issue)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionCard"), .correctionCard)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionCardNext"), .correctionCardNext)
+        XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionOnly"), .correctionOnly)
+        XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "predictionOnly"), .predictionOnly)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionDetail"), .correctionDetail)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "actions"), .actions)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionComplete"), .correctionComplete)
@@ -28,6 +32,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(suggestion?.original, "i")
         XCTAssertEqual(suggestion?.replacement, "I")
         XCTAssertEqual(suggestion?.remainingCount, 3)
+        XCTAssertEqual(suggestion?.prediction, "apple")
         XCTAssertFalse(suggestion?.replacement.contains(" ") ?? true)
         XCTAssertNotEqual(suggestion?.replacement, "I have an apple.")
     }
@@ -41,6 +46,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(suggestion?.original, "has")
         XCTAssertEqual(suggestion?.replacement, "have")
         XCTAssertEqual(suggestion?.remainingCount, 2)
+        XCTAssertEqual(suggestion?.prediction, "an")
         XCTAssertFalse(suggestion?.replacement.contains(" ") ?? true)
         XCTAssertNotEqual(suggestion?.replacement, "I have an apple.")
     }
@@ -50,12 +56,18 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
             label: "Correct article:",
             replacement: "an",
             original: "a",
-            remainingCount: 1
+            remainingCount: 1,
+            prediction: nil
         )
 
         XCTAssertEqual(finalSuggestion.nextState, .correctionComplete)
         XCTAssertEqual(KeyboardPreviewLabState.correctionComplete.compactSuggestion, nil)
         XCTAssertEqual(KeyboardPreviewLabState.correctionComplete.previewPanel, .correctionComplete)
+    }
+
+    func testCompactSuggestionsCanIncludeOnePredictionLane() {
+        XCTAssertEqual(KeyboardPreviewLabState.correctionCard.compactSuggestion?.prediction, "apple")
+        XCTAssertEqual(KeyboardPreviewLabState.correctionCardNext.compactSuggestion?.prediction, "an")
     }
 
     func testNonCompactStatesDoNotExposeReplacementTokens() {

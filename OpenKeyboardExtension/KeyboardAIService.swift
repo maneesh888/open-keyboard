@@ -67,8 +67,21 @@ enum KeyboardAIError: LocalizedError {
 }
 
 final class KeyboardAIService {
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        let output = try await performRawSuggestionRequest(prompt: KeyboardSuggestionParser.prompt(for: text), config: config)
+        return try KeyboardSuggestionParser.parseAssistantContent(output)
+    }
+
+    private func performRawSuggestionRequest(prompt: String, config: AppConfig) async throws -> String {
+        try await performRequest(systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.", userPrompt: prompt, maxTokens: 360, config: config)
+    }
+
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return try await performRequest(systemPrompt: "You are an iOS keyboard text editing assistant. Return only the replacement text.", userPrompt: action.prompt(for: text), maxTokens: 180, config: config)
+    }
+
+    private func performRequest(systemPrompt: String, userPrompt: String, maxTokens: Int, config: AppConfig) async throws -> String {
+        let trimmed = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         var gatewayURL = config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
         while gatewayURL.hasSuffix("/") {
@@ -89,10 +102,10 @@ final class KeyboardAIService {
         let body = ChatRequest(
             model: config.selectedModel,
             messages: [
-                ChatMessage(role: "system", content: "You are an iOS keyboard text editing assistant. Return only the replacement text."),
-                ChatMessage(role: "user", content: action.prompt(for: trimmed))
+                ChatMessage(role: "system", content: systemPrompt),
+                ChatMessage(role: "user", content: trimmed)
             ],
-            maxTokens: 180,
+            maxTokens: maxTokens,
             temperature: 0.1,
             stream: false
         )
