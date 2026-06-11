@@ -70,6 +70,21 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPreviewLabState.correctionCardNext.compactSuggestion?.prediction, "an")
     }
 
+    func testCompactStripViewStateUsesSeparateBlocksAndNoDetailChevronContract() {
+        let correction = KeyboardPreviewLabState.correctionCard.compactSuggestion
+        XCTAssertEqual(correction?.label, "Correct capitalization:")
+        XCTAssertEqual(correction?.replacement, "I")
+        XCTAssertEqual(correction?.prediction, "apple")
+
+        let correctionOnly = KeyboardPreviewLabState.correctionOnly.compactSuggestion
+        XCTAssertEqual(correctionOnly?.replacement, "an")
+        XCTAssertNil(correctionOnly?.prediction)
+
+        let predictionOnly = KeyboardPreviewLabState.predictionOnly.compactSuggestion
+        XCTAssertEqual(predictionOnly?.prediction, "apple")
+        XCTAssertEqual(predictionOnly?.remainingCount, 0)
+    }
+
     func testNonCompactStatesDoNotExposeReplacementTokens() {
         XCTAssertNil(KeyboardPreviewLabState.ready.compactSuggestion)
         XCTAssertNil(KeyboardPreviewLabState.issue.compactSuggestion)
