@@ -92,10 +92,7 @@ struct KeyboardVisualPreviewView: View {
                 case .keyboard, .issue:
                     keyGrid
                 case .correctionCard:
-                    VStack(spacing: 8) {
-                        compactCorrectionCard
-                        keyGrid
-                    }
+                    keyGrid
                 case .correctionDetail:
                     correctionDetailPanel
                 case .actions:
@@ -137,24 +134,16 @@ struct KeyboardVisualPreviewView: View {
         HStack(spacing: 8) {
             previewStatusIcon
 
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(toolbarState.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.primary)
-                        .lineLimit(1)
-                    Text(toolbarState.subtitle)
-                        .font(.caption2)
-                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                        .lineLimit(1)
-                }
-                Spacer(minLength: 4)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(OpenKeyboardTheme.Surface.brandPanelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            previewToolbarContent
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(panel == .correctionCard ? OpenKeyboardTheme.Surface.overlayBackground : OpenKeyboardTheme.Surface.brandPanelBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(panel == .correctionCard ? OpenKeyboardTheme.Semantic.error.opacity(0.42) : Color.clear, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Image(systemName: "sparkles")
                 .font(.system(size: 16, weight: .semibold))
@@ -170,6 +159,41 @@ struct KeyboardVisualPreviewView: View {
         .background(OpenKeyboardTheme.Surface.toolbarBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityIdentifier("preview_ai_toolbar")
+    }
+
+    @ViewBuilder
+    private var previewToolbarContent: some View {
+        if panel == .correctionCard {
+            HStack(spacing: 6) {
+                Text("Correct grammar:")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                Text("I have an apple.")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(OpenKeyboardTheme.Semantic.primaryAction)
+                    .lineLimit(1)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+            }
+            .accessibilityIdentifier("preview_compact_correction_strip")
+        } else {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(toolbarState.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    Text(toolbarState.subtitle)
+                        .font(.caption2)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+            }
+        }
     }
 
     private var previewStatusIcon: some View {
@@ -209,39 +233,6 @@ struct KeyboardVisualPreviewView: View {
         .accessibilityIdentifier("preview_keyboard_grid")
     }
 
-    private var compactCorrectionCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Correct grammar")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Text("1 of 1")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-            }
-            Text("i has a apple")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.86))
-                .strikethrough(color: OpenKeyboardTheme.Semantic.error)
-            Text("I have an apple.")
-                .font(.headline.weight(.semibold))
-                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-            HStack(spacing: 8) {
-                suggestionChip("I have an apple.")
-                suggestionChip("I've got an apple.")
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenKeyboardTheme.Surface.overlayBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(OpenKeyboardTheme.Semantic.error.opacity(0.72), lineWidth: 1.2)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .accessibilityIdentifier("preview_correction_card")
-    }
-
     private var correctionDetailPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -262,6 +253,7 @@ struct KeyboardVisualPreviewView: View {
                 Text("i has a apple")
                     .font(.body.weight(.semibold))
                     .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.9))
+                    .strikethrough(color: OpenKeyboardTheme.Semantic.error)
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text("Suggestion")
@@ -440,16 +432,6 @@ struct KeyboardVisualPreviewView: View {
                 .stroke(isPrimary ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.9) : OpenKeyboardTheme.Stroke.control.opacity(0.75), lineWidth: isPrimary ? 1.5 : 1)
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-    }
-
-    private func suggestionChip(_ title: String, tint: Color = OpenKeyboardTheme.Semantic.primaryAction) -> some View {
-        Text(title)
-            .font(.caption.weight(.semibold))
-            .foregroundColor(tint)
-            .lineLimit(1)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(OpenKeyboardTheme.Surface.iconBackground, in: Capsule())
     }
 
     private func detailButton(_ title: String, filled: Bool, tint: Color = OpenKeyboardTheme.Semantic.primaryAction) -> some View {
