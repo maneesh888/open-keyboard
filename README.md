@@ -1,142 +1,123 @@
 # Open Keyboard
 
-Open Keyboard is an open-source, Grammarly-class AI writing assistant for iOS, delivered through a custom keyboard and paired with a self-hosted LLM Gateway instead of sending typed text to third-party keyboard services.
+Open Keyboard is a privacy-focused, open-source iOS keyboard with AI writing actions, paired with a self-hosted LLM Gateway. Basic typing stays local. When the user chooses an AI action, the keyboard sends the needed text/context to the gateway configured by the user and inserts the model response back into the current app.
 
-> Status: early implementation. The iOS app + keyboard extension shell is buildable, core logic is covered test-first, and the first real keyboard-extension Fix Grammar flow has passed an end-to-end simulator test against LLM Gateway.
+> Status: active early implementation. The app, keyboard extension, shared configuration, gateway pairing, and first AI actions are buildable and tested, but the project is not production-ready yet.
 
-## What it does
+## What It Does
 
-Open Keyboard aims to provide a normal iOS typing experience plus high-quality writing assistance:
+Open Keyboard is built for people who want AI writing help while keeping control of the client, gateway, keys, model backend, and logging policy.
 
-- Custom iOS keyboard extension for everyday typing.
-- AI suggestion bar for context-aware completions.
-- Grammarly-level grammar, spelling, clarity, and rewrite assistance.
-- Tone transforms such as professional, friendly, concise, assertive, and polished.
-- Smart reply drafting, expansion, shortening, and summarization.
-- Pairing flow for LLM Gateway URL and API key.
-- Self-hosted/local model support through LLM Gateway and Ollama-compatible backends.
-- Privacy-first defaults: no hardcoded keys, no bundled secrets, and user-controlled infrastructure.
+- Provides a custom iOS keyboard extension for everyday typing.
+- Connects to a user-controlled LLM Gateway using a gateway URL and API key.
+- Loads the selected model from the configured gateway.
+- Exposes AI writing actions from the keyboard, currently including Fix Grammar, Rewrite, and Summarize.
+- Stores the gateway API key in a shared Keychain access group.
+- Shares non-sensitive gateway settings with the keyboard extension through App Group storage.
+- Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
+- Keeps normal CI deterministic with offline mocks; live model tests are opt-in.
 
-## Why this exists
+## Why This Exists
 
-Most AI keyboards and writing assistants route private typing data through someone else's cloud. Open Keyboard is for people who want Grammarly-level writing help while keeping control of their gateway, keys, logs, and model backend.
+Keyboards sit directly in the path of private writing: messages, notes, searches, addresses, work drafts, and personal details. Many AI keyboard products route that text through an app-owned service by default, which means the user has limited control over where text is processed, how requests are logged, and which model provider receives the data.
 
-## Current implementation status
+Open Keyboard is built around a different privacy model. The keyboard client is open source, the backend gateway is user-controlled, and AI routing is explicit. Normal typing stays local. AI actions only run after the user has configured a gateway and enabled the iOS permissions needed for network access.
 
-### Buildable iOS shell
+The goal is not to claim that text never leaves the device. The goal is to put that decision under the user's control: local model, home server, private cloud, or another backend chosen by the user.
 
-The project now has a buildable app and keyboard extension shell:
+## Privacy Model
 
-- `OpenKeyboard.xcodeproj`
-- iOS host app target
-- keyboard extension target
-- App Group configuration plumbing
-- basic keyboard shell with letters, shift, globe, delete, space, and return
-- host app/settings/onboarding scaffolding
+- The iOS keyboard client is open source and does not include a bundled service endpoint.
+- Basic typing does not require network access.
+- AI actions require Full Access because iOS keyboard extensions need it for network calls.
+- AI-action text is sent to the user-configured gateway, not to a hardcoded third-party keyboard service.
+- The user controls gateway deployment, API keys, model backend, and logging policy.
+- If the gateway routes to a local model, requests can stay within the user's own device or network.
+- If the gateway routes to a hosted model, that provider may still receive the text according to the user's gateway configuration.
 
-Latest known functional checkpoint:
+## Current Implementation
 
-```text
-Commit: 764c6e6 Add real keyboard AI functional path
-Host build-for-testing: passed
-Selected UI test: passed
-End-to-end flow: custom keyboard Fix Grammar replaced "i have a apple" with "I have an apple." through a temp LLM Gateway
-Verification request: /app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md
-```
+### iOS App
 
-### Test-first backend core
+The host app currently includes:
 
-`OpenKeyboardCore` is a Swift package for UI-independent logic. Current verified host CI result:
+- onboarding for gateway setup and iOS keyboard enablement
+- settings for gateway URL and API key entry
+- connection testing against the configured gateway
+- model discovery through the gateway
+- visible Full Access and privacy copy
+- link-out to the gateway admin UI when a gateway URL is configured
+- shared Keychain storage for the API key
+- App Group storage for gateway URL, selected model, and configured state
 
-```text
-Core package tests: 61 executed, 2 skipped live tests, 0 failed
-iOS app/extension build: passed
-Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation)
-Latest full quick-CI request: /app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md
-Latest functional keyboard request: /app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md
-```
+### Keyboard Extension
 
-Covered so far:
+The keyboard extension currently includes:
 
-- Gateway config validation and normalization
-- Gateway config persistence via injectable key-value store
-- Authorized `/health` request
+- SwiftUI keyboard UI
+- basic letter, number, symbol, space, return, delete, shift, and globe-key behavior
+- Full Access and gateway-configuration state in the toolbar
+- AI action panel
+- Fix Grammar, Rewrite, and Summarize actions
+- replacement of the current line/context before the cursor with the AI result
+- debug-only state persistence for UI tests
+
+Current limitation: the active extension path uses the last line before the cursor as the main replacement unit. Broader selected-text, paragraph, and multi-action workflows are still being developed.
+
+### OpenKeyboardCore
+
+`OpenKeyboardCore` contains UI-independent logic:
+
+- gateway URL/API key validation and normalization
+- gateway config persistence abstractions
 - OpenAI-compatible `/v1/models` parsing
 - OpenAI-compatible `/v1/chat/completions` request/response handling
-- Gateway error mapping: unauthorized, forbidden, rate-limited, server error, unexpected status, invalid response
-- Writing action prompt generation
-- Prompt edge cases: translate, continue writing, custom templates with/without `{{text}}`
-- Keyboard reducer behavior: character input, shift, space, return, delete
-- Keyboard edge cases: empty delete, emoji delete, shift persistence
-- Context extraction edge cases: over-limit, zero/negative limits, emoji/grapheme-safe suffix
-- AI replacement strategies: replace all, append to cursor, replace selected text, insert at cursor, replace last sentence, and replace last paragraph
-- Offline realistic user-flow tests: config validation, model selection, prompt/chat request, and final replacement for grammar, rewrite, summarize, and continue-writing flows
-- Opt-in live gateway smoke test scaffold, skipped by default without env vars
-- Real keyboard-extension Fix Grammar UI test with injected gateway credentials and debug-state assertions
+- typed gateway error mapping
+- prompt builders for grammar fixing, rewrite, summarize, translate, continue writing, and custom templates
+- keyboard reducer behavior
+- context extraction and replacement strategies
+- deterministic unit tests
 
-Detailed status lives in:
+### LLM Gateway
 
-```text
-docs/TDD_STATUS.md
-docs/TDD_BACKEND_PLAN.md
-docs/AI_KEYBOARD_TEST_PLAN.md
-docs/AI_KEYBOARD_TODO.md
-```
+Open Keyboard is designed to pair with [LLM Gateway](../llm-gateway), the companion backend that:
 
-## LLM prompt/performance evaluation status
+- authenticates gateway API keys
+- applies per-key rate limits
+- manages keys through an admin API/UI
+- lists available models
+- proxies OpenAI-compatible `/v1/*` requests to Ollama-compatible backends
+- can route selected models to an optional Apfel backend
 
-Current automated tests verify prompt construction and gateway plumbing. They do **not yet** measure LLM quality deeply.
+The gateway is the trust boundary for model access, API keys, rate limits, logs, and upstream model routing.
 
-Needed next:
+## Pairing Flow
 
-- Golden prompt eval fixtures for grammar, rewrite, summarize, translate, tone, and continuation.
-- Rubric-based scoring for meaning preservation, correctness, tone, concision, and “return only the answer”.
-- Prompt injection cases where selected text says things like “ignore previous instructions”.
-- Regression examples with slang, mixed language, emojis, code snippets, long text, and private-looking content.
-- Model comparison across local/cloud models.
-- Latency and token/cost tracking when the gateway exposes usage.
+1. Run LLM Gateway locally or on a host reachable by the iPhone/simulator.
+2. Create an API key in the LLM Gateway admin UI/API.
+3. Enter the gateway URL and API key in Open Keyboard settings.
+4. Test the connection and load available models.
+5. Enable Open Keyboard in iOS Settings.
+6. Enable Allow Full Access for AI network actions.
+7. Use keyboard AI actions in any app that allows custom keyboards.
 
-Planned docs/tests:
+## API Contract
+
+Open Keyboard expects the gateway to provide:
 
 ```text
-docs/PROMPT_EVALS.md
-OpenKeyboardCore/Tests/OpenKeyboardCoreTests/PromptEvaluationFixturesTests.swift
-OpenKeyboardCore/Tests/OpenKeyboardCoreTests/LivePromptEvaluationTests.swift
+GET  /health
+GET  /v1/models
+POST /v1/chat/completions
 ```
 
-Live LLM evals should stay opt-in so normal CI remains deterministic.
+Authenticated gateway calls use:
 
-## Architecture
-
-```text
-iOS Host App
-  - onboarding
-  - settings
-  - gateway URL + API key configuration
-  - connection testing
-
-Keyboard Extension
-  - custom keyboard UI
-  - text insertion/deletion
-  - AI suggestion/actions UI
-  - reads shared config from App Group
-
-OpenKeyboardCore
-  - gateway config validation
-  - gateway config persistence abstractions
-  - gateway HTTP client
-  - writing action prompt builder
-  - keyboard reducer/context/replacement logic
-  - deterministic unit tests
-
-LLM Gateway
-  - authenticates API keys
-  - rate limits clients
-  - proxies requests to Ollama/LLM backend
-
-Ollama / LLM Backend
-  - local or hosted models
+```http
+Authorization: Bearer <gateway-api-key>
 ```
+
+The keyboard sends text/context only when an AI action is requested by the user.
 
 ## Local CI
 
@@ -149,17 +130,18 @@ Primary local check:
 The quick CI path runs:
 
 - Swift package tests for `OpenKeyboardCore`
-- iOS simulator build for the app/extension
+- iOS simulator build for the app and keyboard extension
 
-Docker Coder cannot run Swift/Xcode directly because the Swift toolchain is on the host Mac. Host-side CI is coordinated through ClawMaster request files under:
+Individual checks:
 
-```text
-/app/workspace/clawd-coder/requests/clawmaster/
+```bash
+./scripts/ios/test.sh core
+./scripts/ios/test.sh build
+./scripts/ios/test.sh ui
+./scripts/ios/test.sh screenshots
 ```
 
-## Live gateway smoke test
-
-Offline tests are deterministic by default. Live tests are skipped unless env vars are set:
+Live gateway tests are opt-in:
 
 ```bash
 OPEN_KEYBOARD_LIVE_GATEWAY_URL=http://localhost:8080 \
@@ -168,79 +150,68 @@ OPEN_KEYBOARD_LIVE_MODEL=... \
 swift test --package-path OpenKeyboardCore --filter LiveGatewayTests
 ```
 
-The live smoke currently covers:
+Do not commit live keys, local config, `.xctestrun` files containing secrets, or live logs.
 
-- gateway health
-- model list request
-- one fix-grammar chat completion round trip
+## Current Verification
+
+Recent local verification:
+
+- `swift test --package-path OpenKeyboardCore`: passed, with live tests skipped unless configured
+- `./scripts/ios/test.sh build`: passed for the iOS app and keyboard extension
+
+The project still needs broader UI, real-device, live-gateway, and prompt-quality verification before release.
 
 ## Roadmap
 
-### Milestone 1 — Buildable shell
+### Keyboard Experience
 
-- [x] Create `OpenKeyboard.xcodeproj`.
-- [x] Add main iOS app target.
-- [x] Add keyboard extension target.
-- [x] Configure shared App Group plumbing.
-- [x] Build host app in Simulator.
-- [x] Provide a minimal keyboard that can insert letters, space, return, and delete.
+- [x] Buildable host app and keyboard extension
+- [x] Basic typing keys, delete, space, return, shift, number/symbol toggle, and globe-key switching
+- [x] AI action panel in the keyboard extension
+- [ ] More complete keyboard layout and native-feeling key behavior
+- [ ] Haptics, animations, and dark-mode polish
+- [ ] Better selected-text and paragraph-level replacement behavior
 
-### Milestone 2 — Functional keyboard
+### Gateway Pairing
 
-- [ ] Complete QWERTY layout.
-- [ ] Add symbols and numbers.
-- [ ] Improve shift/caps behavior.
-- [ ] Add dark mode polish.
-- [ ] Add haptics.
-- [ ] Improve key press animations and native iOS feel.
+- [x] Gateway URL and API key entry
+- [x] Connection testing
+- [x] Model discovery
+- [x] Shared App Group config for non-sensitive settings
+- [x] Shared Keychain storage for gateway API key
+- [ ] Runtime verification for shared Keychain/App Group behavior on simulator and device
 
-### Milestone 3 — Gateway configuration
+### AI Writing
 
-- [x] Validate gateway URL and API key in core tests.
-- [x] Add local config persistence abstraction.
-- [x] Test API key request plumbing against LLM Gateway endpoints.
-- [x] Wire initial host-app settings/config seeding to keyboard extension for UI tests.
-- [x] Share initial gateway config between host app and keyboard extension through App Group storage.
-- [ ] Move API key storage from App Group `UserDefaults` to shared Keychain before release.
+- [x] Core prompt builders for grammar, rewrite, summarize, translate, continue writing, and custom templates
+- [x] Gateway chat-completion client in core
+- [x] Extension actions for Fix Grammar, Rewrite, and Summarize
+- [ ] Continue writing and translate actions in the extension UI
+- [ ] Better loading, retry, offline, rate-limit, and invalid-key states
+- [ ] Prompt-quality evaluation suite
+- [ ] Latency and quality checks across local and hosted models
 
-### Milestone 4 — AI assistance
+### Release Readiness
 
-- [x] Add prompt builder for core writing actions.
-- [x] Add gateway chat completion client.
-- [x] Add initial AI action UI in keyboard extension.
-- [x] Add first real Fix Grammar action path in keyboard extension.
-- [ ] Add rewrite/fix-tone/summarize/continue actions in keyboard extension.
-- [ ] Handle loading, rate limits, invalid keys, offline gateway, and Full Access permission states.
-- [ ] Add prompt-performance eval suite.
+- [x] Full Access and network privacy copy in onboarding/settings/keyboard states
+- [x] API key migration away from App Group `UserDefaults`
+- [x] App icon asset
+- [ ] TestFlight-ready signing and build pipeline
+- [ ] App Store privacy details
+- [ ] Real-device testing
+- [ ] Public setup guide with gateway hardening notes
 
-### Milestone 5 — Release polish
+## Privacy and Security Notes
 
-- [ ] App icon and screenshots.
-- [ ] Onboarding instructions for enabling the keyboard.
-- [ ] TestFlight-ready signing and build pipeline.
-- [x] Privacy documentation for Full Access and network text transmission (`docs/RELEASE_HARDENING.md`).
-- [ ] Shared Keychain migration for gateway API keys.
-
-## Privacy and security notes
-
+- Privacy is centered on user control: the user controls both the keyboard client and the gateway it calls.
+- Basic typing should work without network calls.
+- AI actions require iOS keyboard Full Access because they call the configured gateway.
+- AI actions send the selected text or bounded context needed for that action to the configured gateway.
+- Text sent to the gateway is subject to that gateway and model backend's logging policy.
 - API keys must never be committed.
-- Production config should stay local to the user/device.
-- iOS keyboard extensions require **Full Access** for network calls. Open Keyboard should explain this clearly during onboarding.
-- App Group storage is currently used for gateway config sharing between the host app and keyboard extension.
-- API key storage must move to a shared Keychain before production release; App Group `UserDefaults` is acceptable only for current development/test slices.
-- Prompt eval fixtures should avoid real private user text.
-
-## LLM Gateway pairing
-
-Open Keyboard is designed to pair with [LLM Gateway](../llm-gateway). The gateway is the required backend layer for authentication, rate limits, model routing, and safe access to Ollama-compatible LLM backends.
-
-Planned pairing flow:
-
-1. User creates an API key in LLM Gateway admin.
-2. User enters or scans the gateway URL and API key in Open Keyboard.
-3. Open Keyboard tests the key with health/model/chat requests.
-4. The host app stores the configuration locally and shares it with the keyboard extension through App Group storage.
-5. The keyboard extension uses that gateway pairing for suggestions, rewrites, and writing actions.
+- Gateway API keys are stored in shared Keychain, not App Group `UserDefaults`.
+- Prompt fixtures, screenshots, logs, and UI-test artifacts should avoid private user text and raw API keys.
+- Public gateway deployments need HTTPS, strong admin credentials, protected config files, and careful reverse-proxy rules.
 
 ## License
 
