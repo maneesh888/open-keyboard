@@ -22,8 +22,8 @@ private final class InMemoryAppConfigSecretStore: AppConfigSecretStore {
 }
 
 final class SharedAppConfigTests: XCTestCase {
-    private let placeholderGatewayURL = "https://gateway.example.invalid"
-    private let placeholderModel = "test-placeholder-model"
+    private let fixtureGatewayURL = "https://gateway.test.local"
+    private let fixtureModel = "fixture-model"
 
     private var suiteName: String!
     private var defaults: UserDefaults!
@@ -50,9 +50,11 @@ final class SharedAppConfigTests: XCTestCase {
     func testMainAppSaveSharesNonSensitiveConfigAndStoresAPIKeyInSecretStore() throws {
         let mainAppConfig = AppConfig(
             apiKey: "sk-shared-test-token",
-            gatewayURL: placeholderGatewayURL,
-            selectedModel: placeholderModel,
-            isConfigured: true
+            gatewayURL: fixtureGatewayURL,
+            selectedModel: fixtureModel,
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
 
         mainAppConfig.save(to: defaults)
@@ -61,16 +63,18 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(secretStore.apiKey, "sk-shared-test-token")
 
         let extensionLoadedConfig = AppConfig.load(from: defaults)
-        XCTAssertEqual(extensionLoadedConfig.gatewayURL, placeholderGatewayURL)
+        XCTAssertEqual(extensionLoadedConfig.gatewayURL, fixtureGatewayURL)
         XCTAssertEqual(extensionLoadedConfig.apiKey, "sk-shared-test-token")
-        XCTAssertEqual(extensionLoadedConfig.selectedModel, placeholderModel)
+        XCTAssertEqual(extensionLoadedConfig.selectedModel, fixtureModel)
         XCTAssertTrue(extensionLoadedConfig.isConfigured)
+        XCTAssertTrue(extensionLoadedConfig.supportsStructuredCorrections)
+        XCTAssertEqual(extensionLoadedConfig.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
     }
 
     func testLegacyDefaultsAPIKeyMigratesToSecretStoreAndIsRemovedFromDefaults() throws {
         defaults.set("sk-legacy-test-token", forKey: AppConfig.apiKeyKey)
-        defaults.set(placeholderGatewayURL, forKey: AppConfig.gatewayURLKey)
-        defaults.set(placeholderModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(fixtureModel, forKey: AppConfig.selectedModelKey)
         defaults.set(true, forKey: AppConfig.isConfiguredKey)
 
         let migratedConfig = AppConfig.load(from: defaults)
@@ -78,21 +82,46 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(migratedConfig.apiKey, "sk-legacy-test-token")
         XCTAssertEqual(secretStore.apiKey, "sk-legacy-test-token")
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
-        XCTAssertEqual(migratedConfig.gatewayURL, placeholderGatewayURL)
-        XCTAssertEqual(migratedConfig.selectedModel, placeholderModel)
+        XCTAssertEqual(migratedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(migratedConfig.selectedModel, fixtureModel)
         XCTAssertTrue(migratedConfig.isConfigured)
+        XCTAssertFalse(migratedConfig.supportsStructuredCorrections)
+        XCTAssertEqual(migratedConfig.structuredCorrectionSchemaVersion, "")
     }
 
     func testLegacyDefaultsAPIKeyIsPreservedWhenSecretStoreMigrationFails() throws {
         secretStore.shouldFailSave = true
         defaults.set("sk-legacy-test-token", forKey: AppConfig.apiKeyKey)
-        defaults.set(placeholderGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
 
         let loadedConfig = AppConfig.load(from: defaults)
 
         XCTAssertEqual(loadedConfig.apiKey, "sk-legacy-test-token")
         XCTAssertNil(secretStore.apiKey)
         XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), "sk-legacy-test-token")
+    }
+
+
+    func testKnownUITestPlaceholderConfigIsRejectedOutsideUITestingLaunch() throws {
+        secretStore.apiKey = AppConfig.testPlaceholderAPIKey
+        defaults.set(AppConfig.testPlaceholderGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(AppConfig.testPlaceholderModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
+        defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
+
+        let loadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(loadedConfig.apiKey, "")
+        XCTAssertEqual(loadedConfig.gatewayURL, "")
+        XCTAssertEqual(loadedConfig.selectedModel, "")
+        XCTAssertFalse(loadedConfig.isConfigured)
+        XCTAssertFalse(loadedConfig.supportsStructuredCorrections)
+        XCTAssertEqual(loadedConfig.structuredCorrectionSchemaVersion, "")
+        XCTAssertNil(secretStore.apiKey)
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
     }
 
     func testKeychainSecretStoreUsesSharedAccessGroup() throws {
@@ -103,8 +132,8 @@ final class SharedAppConfigTests: XCTestCase {
 
     func testConfigWrittenToStandardDefaultsIsNotVisibleToAppGroupSuite() throws {
         UserDefaults.standard.set("sk-main-app-only", forKey: AppConfig.apiKeyKey)
-        UserDefaults.standard.set(placeholderGatewayURL, forKey: AppConfig.gatewayURLKey)
-        UserDefaults.standard.set(placeholderModel, forKey: AppConfig.selectedModelKey)
+        UserDefaults.standard.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
+        UserDefaults.standard.set(fixtureModel, forKey: AppConfig.selectedModelKey)
         UserDefaults.standard.set(true, forKey: AppConfig.isConfiguredKey)
         defer {
             [AppConfig.apiKeyKey, AppConfig.gatewayURLKey, AppConfig.selectedModelKey, AppConfig.isConfiguredKey].forEach {
@@ -116,6 +145,61 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(extensionLoadedConfig.isConfigured)
         XCTAssertNotEqual(extensionLoadedConfig.apiKey, "sk-main-app-only")
         XCTAssertEqual(extensionLoadedConfig.apiKey, "")
+    }
+
+
+
+    func testCorrectionSmokeResponseRequiresUsableCorrection() {
+        XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse("I have an apple."))
+        XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse("Corrected: I have an apple"))
+        XCTAssertFalse(NetworkManager.isUsableCorrectionSmokeResponse("OK"))
+        XCTAssertFalse(NetworkManager.isUsableCorrectionSmokeResponse(""))
+    }
+
+    func testSmokeErrorMappingUsesSpecificGenerationMessages() {
+        XCTAssertEqual(
+            NetworkManager.userFacingSmokeErrorMessage(for: NetworkError.serverError("HTTP 500 FoundationModels.LanguageModelSession.GenerationError error -1"), model: "apple-foundationmodel"),
+            "Gateway connected, but Apple Foundation model did not respond. Try another key/model."
+        )
+        XCTAssertEqual(
+            NetworkManager.userFacingSmokeErrorMessage(for: NetworkError.unusableCorrection, model: "gpt-oss:120b-cloud"),
+            "Gateway connected, but the selected model did not return a usable correction."
+        )
+        XCTAssertEqual(
+            NetworkManager.userFacingSmokeErrorMessage(for: NetworkError.timeout, model: "gpt-oss:120b-cloud"),
+            "Gateway connected, but the selected model timed out during the test."
+        )
+        XCTAssertEqual(
+            NetworkManager.userFacingSmokeErrorMessage(for: NetworkError.unauthorized, model: "gpt-oss:120b-cloud"),
+            "API key was rejected by the gateway. Reconnect your gateway in the app."
+        )
+    }
+
+    func testResolvedGatewayModelPrefersCurrentModelBeforeAppleFallback() {
+        let model = AppConfig.resolvedGatewayModel(
+            from: ["gemma4:latest", "apple-foundationmodel", "gpt-oss:120b-cloud"],
+            currentModel: "gemma4:latest"
+        )
+
+        XCTAssertEqual(model, "gemma4:latest")
+        XCTAssertEqual(
+            AppConfig.gatewayModelCandidates(from: ["gemma4:latest", "apple-foundationmodel", "gpt-oss:120b-cloud"], currentModel: "gemma4:latest"),
+            ["gemma4:latest", "apple-foundationmodel", "gpt-oss:120b-cloud"]
+        )
+    }
+
+    func testResolvedGatewayModelFallsBackToCurrentModelWhenAppleFoundationModelUnavailable() {
+        let model = AppConfig.resolvedGatewayModel(
+            from: ["qwen2.5-coder:3b", "gpt-oss:120b-cloud"],
+            currentModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(model, "gpt-oss:120b-cloud")
+    }
+
+    func testResolvedGatewayModelTrimsAndFallsBackToFirstGatewayModel() {
+        XCTAssertEqual(AppConfig.resolvedGatewayModel(from: ["  qwen2.5-coder:3b  "], currentModel: "missing"), "qwen2.5-coder:3b")
+        XCTAssertNil(AppConfig.resolvedGatewayModel(from: ["  ", ""], currentModel: "missing"))
     }
 
     func testClearRemovesSecretStoreAPIKeyAndKeyboardDebugAndPanelSeedState() throws {
@@ -136,5 +220,7 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.composingBuffer"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.lastDebugEvent"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.debugEvents"))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey))
     }
 }
