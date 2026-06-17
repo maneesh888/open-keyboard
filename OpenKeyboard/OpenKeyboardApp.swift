@@ -16,7 +16,9 @@ struct OpenKeyboardApp: App {
     init() {
         Self.clearUITestConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayConfigAtLaunchIfNeeded()
+        Self.seedUITestGatewayErrorAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
+        Self.seedUITestKeyboardSuggestionStateAtLaunchIfNeeded()
     }
 
     private var launchArguments: [String] {
@@ -35,13 +37,29 @@ struct OpenKeyboardApp: App {
         isUITesting && launchArguments.contains("--keyboard-host-test")
     }
 
-    private var keyboardPreviewPanel: KeyboardVisualPreviewPanel? {
+    private var shouldShowPlaygroundDirectly: Bool {
+        isUITesting && (launchArguments.contains("--playground-all-good-regression-proof") || launchArguments.contains("--playground-direct"))
+    }
+
+    private var productionKeyboardState: String? {
         guard isUITesting,
-              let argument = launchArguments.first(where: { $0.hasPrefix("--keyboard-preview-panel=") }) else {
+              let argument = launchArguments.first(where: { $0.hasPrefix("--production-keyboard-state=") }) else {
             return nil
         }
-        let value = argument.replacingOccurrences(of: "--keyboard-preview-panel=", with: "")
-        return KeyboardPreviewLabState(rawValue: value)?.previewPanel ?? KeyboardVisualPreviewPanel(rawValue: value)
+        return argument.replacingOccurrences(of: "--production-keyboard-state=", with: "")
+    }
+
+    private var editorHostPreviewState: KeyboardPreviewLabState? {
+        guard isUITesting,
+              let argument = launchArguments.first(where: { $0.hasPrefix("--editor-host-preview=") }) else {
+            return nil
+        }
+        let value = argument.replacingOccurrences(of: "--editor-host-preview=", with: "")
+        return KeyboardPreviewLabState(rawValue: value)
+    }
+
+    private var keyboardPreviewPanel: KeyboardVisualPreviewPanel? {
+        nil
     }
 
     private var shouldShowOnboarding: Bool {
@@ -92,7 +110,9 @@ struct OpenKeyboardApp: App {
             apiKey: apiKey,
             gatewayURL: normalizeUITestGatewayURL(gatewayURL),
             selectedModel: selectedModel,
-            isConfigured: true
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
         config.save()
 
@@ -102,6 +122,17 @@ struct OpenKeyboardApp: App {
             sharedDefaults.synchronize()
         }
 #endif
+    }
+
+    private static func seedUITestGatewayErrorAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let errorArgument = arguments.first(where: { $0.hasPrefix("--seed-gateway-error=") }) else {
+            return
+        }
+
+        let message = errorArgument.replacingOccurrences(of: "--seed-gateway-error=", with: "")
+        AppConfig.saveGatewayConnectionError(message)
     }
 
     private static func seedUITestKeyboardPanelModeAtLaunchIfNeeded() {
@@ -122,6 +153,25 @@ struct OpenKeyboardApp: App {
         sharedDefaults.synchronize()
     }
 
+    private static func seedUITestKeyboardSuggestionStateAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let stateArgument = arguments.first(where: { $0.hasPrefix("--keyboard-suggestion-state=") }),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+
+        let state = stateArgument.replacingOccurrences(of: "--keyboard-suggestion-state=", with: "")
+        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "allGood", "analysisFailed", "analyzing"]
+        if allowedStates.contains(state) {
+            sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
+        } else {
+            sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionState")
+        }
+        sharedDefaults.synchronize()
+    }
+
     private static func normalizeUITestGatewayURL(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("http:/"), !trimmed.hasPrefix("http://") {
@@ -136,19 +186,28 @@ struct OpenKeyboardApp: App {
     private func refreshUITestGatewayConfigIfNeeded() {
         guard isUITesting, launchArguments.contains("--seed-gateway-config") || launchArguments.contains("--seed-functional-gateway-config") else { return }
 
-        settingsViewModel.config = AppConfig.load()
+        settingsViewModel.applyConfig(AppConfig.load())
         hasCompletedOnboarding = true
     }
 
     var body: some Scene {
         WindowGroup {
             Group {
-                if let keyboardPreviewPanel {
+                if let editorHostPreviewState {
+                    KeyboardEditorHostPreviewView(state: editorHostPreviewState)
+                } else if let keyboardPreviewPanel {
                     KeyboardVisualPreviewView(panel: keyboardPreviewPanel)
                 } else if shouldShowLiveAITestHarness {
                     LiveAITestHarnessView()
+                } else if let productionKeyboardState {
+                    ProductionKeyboardStateHostView(state: productionKeyboardState)
                 } else if shouldShowKeyboardHostTest {
                     KeyboardExtensionHostTestView()
+                } else if shouldShowPlaygroundDirectly {
+                    NavigationView {
+                        PlaygroundView()
+                    }
+                    .environmentObject(settingsViewModel)
                 } else if shouldShowOnboarding {
                     OnboardingView(
                         hasCompletedOnboarding: $hasCompletedOnboarding,
@@ -168,6 +227,9 @@ struct OpenKeyboardApp: App {
                 if isUITesting && launchArguments.contains("--skip-onboarding") {
                     hasCompletedOnboarding = true
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .openKeyboardOnboardingReset)) { _ in
+                hasCompletedOnboarding = false
             }
         }
     }

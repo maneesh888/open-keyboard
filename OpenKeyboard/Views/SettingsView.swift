@@ -10,32 +10,108 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var viewModel: SettingsViewModel
+    @FocusState private var focusedField: SettingsField?
+
+    private enum SettingsField: Hashable {
+        case gatewayURL
+        case apiKey
+    }
 
     var body: some View {
         NavigationView {
             Form {
                 Section(header: Label("Gateway Configuration", systemImage: "sparkles")) {
-                    TextField("Gateway URL", text: $viewModel.config.gatewayURL)
+                    TextField("Gateway URL", text: Binding(
+                        get: { viewModel.gatewayURLInput },
+                        set: { viewModel.updateGatewayURLInput($0) }
+                    ))
                         .keyboardType(.URL)
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .submitLabel(.done)
+                        .focused($focusedField, equals: .gatewayURL)
+                        .onSubmit {
+                            viewModel.normalizeGatewayURLInputForEditing()
+                            dismissKeyboard()
+                        }
 
-                    SecureField("API Key", text: $viewModel.config.apiKey)
+                    SecureField("API Key", text: Binding(
+                        get: { viewModel.apiKeyInput },
+                        set: { viewModel.updateAPIKeyInput($0) }
+                    ))
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
+                        .submitLabel(.done)
+                        .focused($focusedField, equals: .apiKey)
+                        .onSubmit {
+                            viewModel.normalizeGatewayURLInputForEditing()
+                            dismissKeyboard()
+                        }
 
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Model")
-                        Spacer(minLength: 12)
-                        Text(viewModel.config.selectedModel.isEmpty ? "Loaded from gateway" : viewModel.config.selectedModel)
-                            .foregroundColor(viewModel.config.selectedModel.isEmpty ? .secondary : .primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-
-                    Text("Model is read-only and is loaded from the configured gateway after testing the connection.")
+                    Text("Enter your gateway as https://host. Bare hosts are saved as https://host; /v1 is added automatically for model/chat endpoints.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+
+                    if viewModel.shouldShowConnectionActions {
+                        Button(action: {
+                            dismissKeyboard()
+                            Task {
+                                await viewModel.testConnection()
+                            }
+                        }) {
+                            HStack {
+                                if viewModel.isTestingConnection {
+                                    ProgressView()
+                                        .padding(.trailing, 8)
+                                }
+
+                                Text(viewModel.isTestingConnection ? "Testing..." : "Test Connection & Save")
+                            }
+                        }
+                        .disabled(!viewModel.canTestConnection)
+                    }
+
+                    Text("Tip: enter your gateway host and Open Keyboard will use https:// automatically.")
+                        .font(.caption)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+
+                    if viewModel.showsValidatedGatewayDetails {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Model")
+                            Spacer(minLength: 12)
+                            Text(viewModel.trustedModelDisplay)
+                                .foregroundColor(viewModel.trustedModelLoaded ? .primary : .secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Structured corrections")
+                            Spacer(minLength: 12)
+                            Text(viewModel.structuredCapabilityDisplay)
+                                .foregroundColor(viewModel.config.supportsStructuredCorrections ? .primary : .secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Text("Model and structured corrections are trusted from the latest successful Test Connection.")
+                            .font(.footnote)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+
+                    if viewModel.connectionStatus == .success {
+                        Label("Connection verified. Model and structured corrections loaded from gateway.", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                            .listRowBackground(OpenKeyboardTheme.Surface.successBackground)
+                            .accessibilityIdentifier("settings_connection_success")
+                    }
+
+                    if viewModel.connectionStatus == .failure {
+                        Label(viewModel.errorMessage ?? "Connection failed", systemImage: "xmark.circle.fill")
+                            .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                            .listRowBackground(OpenKeyboardTheme.Surface.errorBackground)
+                            .accessibilityIdentifier("settings_connection_error")
+                    }
                 }
 
                 Section(header: Label("Privacy & Full Access", systemImage: "lock.shield.fill")) {
@@ -44,35 +120,6 @@ struct SettingsView: View {
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
 
-                Section(header: Label("Connection Test", systemImage: "antenna.radiowaves.left.and.right")) {
-                    Button(action: {
-                        Task {
-                            await viewModel.testConnection()
-                        }
-                    }) {
-                        HStack {
-                            if viewModel.isTestingConnection {
-                                ProgressView()
-                                    .padding(.trailing, 8)
-                            }
-
-                            Text(viewModel.isTestingConnection ? "Testing..." : "Test Connection & Load Models")
-                        }
-                    }
-                    .disabled(viewModel.config.gatewayURL.isEmpty || viewModel.config.apiKey.isEmpty || viewModel.isTestingConnection)
-
-                    if viewModel.connectionStatus == .success {
-                        Label("Connected successfully", systemImage: "checkmark.circle.fill")
-                            .foregroundColor(OpenKeyboardTheme.Semantic.success)
-                            .listRowBackground(OpenKeyboardTheme.Surface.successBackground)
-                    }
-
-                    if viewModel.connectionStatus == .failure {
-                        Label(viewModel.errorMessage ?? "Connection failed", systemImage: "xmark.circle.fill")
-                            .foregroundColor(OpenKeyboardTheme.Semantic.error)
-                            .listRowBackground(OpenKeyboardTheme.Surface.errorBackground)
-                    }
-                }
 
                 Section(header: Text("About")) {
                     HStack {
@@ -89,23 +136,27 @@ struct SettingsView: View {
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
 
-                    Link("Documentation", destination: URL(string: "https://github.com/maneesh/open-keyboard")!)
-
-                    if let adminURL = gatewayAdminURL {
-                        Link("Gateway Admin", destination: adminURL)
-                    }
+                    Link("Documentation", destination: SettingsDocumentationLink.url)
                 }
 
                 Section {
                     Button("Reset Onboarding") {
-                        UserDefaults(suiteName: "group.com.maneesh.openkeyboard")?
-                            .set(false, forKey: "hasCompletedOnboarding")
+                        viewModel.resetOnboarding()
+                        dismiss()
                     }
                     .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                    .accessibilityIdentifier("settings_reset_onboarding")
+
+                    if let message = viewModel.onboardingResetMessage {
+                        Label(message, systemImage: "arrow.counterclockwise.circle.fill")
+                            .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                            .accessibilityIdentifier("settings_reset_onboarding_confirmation")
+                    }
                 }
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
@@ -113,22 +164,25 @@ struct SettingsView: View {
                         dismiss()
                     }
                 }
+
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") {
+                        dismissKeyboard()
+                    }
+                }
             }
+        }
+        .onAppear {
+            viewModel.applyConfig(viewModel.config)
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
     }
 
-    private var gatewayAdminURL: URL? {
-        guard var components = URLComponents(string: viewModel.config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-              components.scheme != nil,
-              components.host != nil else {
-            return nil
-        }
-        components.path = "/ui"
-        components.query = nil
-        components.fragment = nil
-        return components.url
+    private func dismissKeyboard() {
+        focusedField = nil
     }
+
 }
 
 struct SettingsView_Previews: PreviewProvider {
