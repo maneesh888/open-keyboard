@@ -124,6 +124,26 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
     }
 
+
+    func testKnownUITestPlaceholderConfigIsAcceptedWhenKeyboardDebugStateEnabled() throws {
+        secretStore.apiKey = AppConfig.testPlaceholderAPIKey
+        defaults.set(AppConfig.testPlaceholderGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(AppConfig.testPlaceholderModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
+        defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+
+        let loadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(loadedConfig.apiKey, AppConfig.testPlaceholderAPIKey)
+        XCTAssertEqual(loadedConfig.gatewayURL, AppConfig.testPlaceholderGatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, AppConfig.testPlaceholderModel)
+        XCTAssertTrue(loadedConfig.isConfigured)
+        XCTAssertTrue(loadedConfig.supportsStructuredCorrections)
+        XCTAssertEqual(loadedConfig.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
+    }
+
     func testKeychainSecretStoreUsesSharedAccessGroup() throws {
         let query = KeychainAppConfigSecretStore(accessGroup: "ABCDE12345.com.maneesh.openkeyboard.shared").baseQueryForTesting()
 

@@ -95,7 +95,6 @@ struct OpenKeyboardApp: App {
 
         AppConfig.clearSharedConfig()
         let environment = ProcessInfo.processInfo.environment
-        let requiresFunctionalCredentials = arguments.contains("--seed-functional-gateway-config")
         let apiKey = environment["OPEN_KEYBOARD_TEST_API_KEY"]
         let gatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]
         let selectedModel = environment["OPEN_KEYBOARD_TEST_MODEL"]
@@ -116,12 +115,13 @@ struct OpenKeyboardApp: App {
         )
         config.save()
 
-#if DEBUG
-        if requiresFunctionalCredentials, let sharedDefaults = AppConfig.sharedDefaults() {
+        if let sharedDefaults = AppConfig.sharedDefaults() {
+            // Keep UI-test placeholder config visible to the keyboard extension even when
+            // the simulator proof configuration does not define DEBUG for the app target.
+            sharedDefaults.set(apiKey, forKey: AppConfig.apiKeyKey)
             sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             sharedDefaults.synchronize()
         }
-#endif
     }
 
     private static func seedUITestGatewayErrorAtLaunchIfNeeded() {
