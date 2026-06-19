@@ -167,7 +167,9 @@ extension AppConfig {
             structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
         )
 
-        if loadedConfig.isKnownTestPlaceholderConfig, !ProcessInfo.processInfo.arguments.contains("--uitesting") {
+        if loadedConfig.isKnownTestPlaceholderConfig,
+           !ProcessInfo.processInfo.arguments.contains("--uitesting"),
+           !isUITestDebugStateEnabled(in: defaults) {
             clear(from: defaults)
             return .default
         }
@@ -268,6 +270,10 @@ extension AppConfig {
         gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(AppConfig.testPlaceholderGatewayURL) == .orderedSame
             || selectedModel.trimmingCharacters(in: .whitespacesAndNewlines) == AppConfig.testPlaceholderModel
             || apiKey.trimmingCharacters(in: .whitespacesAndNewlines) == AppConfig.testPlaceholderAPIKey
+    }
+
+    static func isUITestDebugStateEnabled(in defaults: UserDefaults) -> Bool {
+        defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled")
     }
 
     static func clear(from defaults: UserDefaults) {
