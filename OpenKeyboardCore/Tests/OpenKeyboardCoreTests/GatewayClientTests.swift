@@ -3,32 +3,31 @@ import XCTest
 
 final class GatewayClientTests: XCTestCase {
     func testHealthBuildsAuthorizedRequest() async throws {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 200, data: #"{"status":"ok"}"#.data(using: .utf8)!))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.healthOK)
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         let result = try await client.checkHealth()
 
         XCTAssertTrue(result)
-        XCTAssertEqual(http.requests.first?.url.absoluteString, "https://gateway.example/health")
-        XCTAssertEqual(http.requests.first?.headers["Authorization"], "Bearer test-key")
-        XCTAssertEqual(http.requests.first?.method, "GET")
+        XCTAssertEqual(server.requests.first?.url.absoluteString, "https://gateway.example/health")
+        XCTAssertEqual(server.requests.first?.headers["Authorization"], "Bearer test-key")
+        XCTAssertEqual(server.requests.first?.method, "GET")
     }
 
     func testFetchModelsParsesOpenAICompatibleResponse() async throws {
-        let body = #"{"data":[{"id":"gpt-oss:120b"},{"id":"llama3.2"}]}"#.data(using: .utf8)!
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 200, data: body))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.models(["gpt-oss:120b", "llama3.2"]))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         let models = try await client.fetchModels()
 
         XCTAssertEqual(models, ["gpt-oss:120b", "llama3.2"])
-        XCTAssertEqual(http.requests.first?.url.absoluteString, "https://gateway.example/v1/models")
-        XCTAssertEqual(http.requests.first?.headers["Authorization"], "Bearer test-key")
+        XCTAssertEqual(server.requests.first?.url.absoluteString, "https://gateway.example/v1/models")
+        XCTAssertEqual(server.requests.first?.headers["Authorization"], "Bearer test-key")
     }
 
     func testUnauthorizedMapsToTypedError() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 401, data: Data()))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.status(401))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .unauthorized)
@@ -36,8 +35,8 @@ final class GatewayClientTests: XCTestCase {
     }
 
     func testRateLimitMapsToTypedError() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 429, data: Data()))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.status(429))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .rateLimited)
@@ -45,8 +44,8 @@ final class GatewayClientTests: XCTestCase {
     }
 
     func testServerErrorIncludesStatusCode() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 503, data: Data()))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.status(503))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .serverError(statusCode: 503))
@@ -54,18 +53,17 @@ final class GatewayClientTests: XCTestCase {
     }
 
     func testInvalidModelsJSONMapsToDecodingError() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 200, data: #"{"data":123}"#.data(using: .utf8)!))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.malformedModels)
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
     }
 
-
     func testForbiddenMapsToTypedError() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 403, data: Data()))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.status(403))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .forbidden)
@@ -73,8 +71,8 @@ final class GatewayClientTests: XCTestCase {
     }
 
     func testUnexpectedStatusIncludesStatusCode() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 418, data: Data()))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.status(418))
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.fetchModels()) { error in
             XCTAssertEqual(error as? GatewayClientError, .unexpectedStatus(statusCode: 418))
@@ -82,31 +80,13 @@ final class GatewayClientTests: XCTestCase {
     }
 
     func testHealthInvalidJSONMapsToInvalidResponse() async {
-        let http = MockHTTPClient(response: HTTPResponse(statusCode: 200, data: #"{"status":123}"#.data(using: .utf8)!))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+        let server = DummyGatewayServer(.healthMalformed)
+        let client = GatewayClient(config: validConfig, httpClient: server)
 
         await XCTAssertThrowsErrorAsync(try await client.checkHealth()) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
     }
 
-
-    private var validConfig: GatewayConfig {
-        GatewayConfig(gatewayURL: URL(string: "https://gateway.example")!, apiKey: "test-key")
-    }
+    private var validConfig: GatewayConfig { DummyGatewayServer.validConfig }
 }
-
-private final class MockHTTPClient: HTTPClient, @unchecked Sendable {
-    private let response: HTTPResponse
-    private(set) var requests: [HTTPRequest] = []
-
-    init(response: HTTPResponse) {
-        self.response = response
-    }
-
-    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-        requests.append(request)
-        return response
-    }
-}
-
