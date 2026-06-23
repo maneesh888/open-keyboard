@@ -41,7 +41,7 @@ final class PromptEvaluationFixturesTests: XCTestCase {
                 name: "fix grammar",
                 action: .fixGrammar,
                 input: "i has a apple",
-                requiredPhrases: ["fix grammar", "preserve the original meaning", "return only"]
+                requiredPhrases: ["fix_grammar", "structured JSON", "results array", "preserve the original meaning"]
             ),
             PromptFixture(
                 name: "rewrite",

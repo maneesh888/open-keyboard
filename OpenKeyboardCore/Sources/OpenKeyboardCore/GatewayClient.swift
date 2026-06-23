@@ -24,6 +24,68 @@ public struct HTTPResponse: Equatable, Sendable {
     }
 }
 
+
+public struct WritingActionResult: Equatable, Sendable {
+    public var operation: String
+    public var items: [WritingActionResultItem]
+    public var summary: String?
+    public var correctedText: String?
+
+    public init(operation: String, items: [WritingActionResultItem], summary: String? = nil, correctedText: String? = nil) {
+        self.operation = operation
+        self.items = items
+        self.summary = summary
+        self.correctedText = correctedText
+    }
+
+    public var displayText: String {
+        if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return correctedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let replacement = items.first(where: { ($0.replacement ?? "").isEmpty == false })?.replacement {
+            return replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let text = items.first(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.text {
+            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}
+
+public struct WritingActionResultItem: Equatable, Sendable, Identifiable {
+    public var id: String
+    public var type: String
+    public var title: String
+    public var text: String
+    public var original: String?
+    public var replacement: String?
+    public var range: WritingActionTextRange?
+    public var confidence: Double?
+    public var explanation: String?
+
+    public init(id: String, type: String, title: String, text: String, original: String? = nil, replacement: String? = nil, range: WritingActionTextRange? = nil, confidence: Double? = nil, explanation: String? = nil) {
+        self.id = id
+        self.type = type
+        self.title = title
+        self.text = text
+        self.original = original
+        self.replacement = replacement
+        self.range = range
+        self.confidence = confidence
+        self.explanation = explanation
+    }
+}
+
+public struct WritingActionTextRange: Equatable, Sendable {
+    public var start: Int
+    public var end: Int
+
+    public init(start: Int, end: Int) {
+        self.start = start
+        self.end = end
+    }
+}
+
 public protocol HTTPClient: Sendable {
     func send(_ request: HTTPRequest) async throws -> HTTPResponse
 }
@@ -63,10 +125,22 @@ public final class GatewayClient: Sendable {
     }
 
     public func performWritingAction(_ action: WritingAction, text: String, model: String) async throws -> String {
+        let result = try await performWritingActionResult(action, text: text, model: model)
+        let displayText = result.displayText
+        guard !displayText.isEmpty else { throw GatewayClientError.invalidResponse }
+        return displayText
+    }
+
+    public func performWritingActionResult(_ action: WritingAction, text: String, model: String) async throws -> WritingActionResult {
         let prompt = WritingPromptBuilder.prompt(for: action, text: text)
         let payload = ChatCompletionRequest(
             model: model,
-            messages: [ChatMessage(role: "user", content: prompt)],
+            operation: action.operationName,
+            inputText: String(text.prefix(500)),
+            messages: [
+                ChatMessage(role: "system", content: Self.structuredResultSystemPrompt),
+                ChatMessage(role: "user", content: prompt)
+            ],
             stream: false
         )
 
@@ -85,12 +159,76 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
 
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            throw GatewayClientError.invalidResponse
-        }
+        return try Self.parseWritingActionResult(content, operation: action.operationName, fallbackText: text)
+    }
 
-        return trimmed
+    private static let structuredResultSystemPrompt = """
+    You are an iOS keyboard writing assistant. Return strict JSON only.
+    Contract: {"operation":"fix_grammar|summarize|rewrite|...","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Use the requested operation and current text only. Unknown fields are allowed. Do not include markdown.
+    """
+
+    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
+        let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw GatewayClientError.invalidResponse }
+        if let data = trimmed.data(using: .utf8), let decoded = try? JSONDecoder().decode(RawWritingActionResult.self, from: data) {
+            let items = decoded.decodedItems.enumerated().compactMap { index, raw -> WritingActionResultItem? in
+                let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
+                let title = clean(raw.title) ?? Self.defaultTitle(for: raw.type, operation: decoded.operation ?? operation)
+                guard let text, !text.isEmpty, !Self.isNestedJSONLike(text) else { return nil }
+                return WritingActionResultItem(
+                    id: clean(raw.id) ?? "item-\(index + 1)",
+                    type: clean(raw.type) ?? "suggestion",
+                    title: title,
+                    text: text,
+                    original: clean(raw.original),
+                    replacement: clean(raw.replacement),
+                    range: raw.range,
+                    confidence: raw.confidence,
+                    explanation: clean(raw.explanation)
+                )
+            }
+            let correctedText = clean(decoded.correctedText)
+            let summary = clean(decoded.summary)
+            if items.isEmpty, correctedText == nil, summary == nil { throw GatewayClientError.invalidResponse }
+            return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: items, summary: summary, correctedText: correctedText)
+        }
+        let legacy = trimmed
+        guard !legacy.isEmpty, legacy != fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) else { throw GatewayClientError.invalidResponse }
+        return WritingActionResult(
+            operation: operation,
+            items: [WritingActionResultItem(id: "legacy-1", type: "correction", title: defaultTitle(for: "correction", operation: operation), text: legacy, original: fallbackText, replacement: legacy)],
+            correctedText: legacy
+        )
+    }
+
+    private static func clean(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func isNestedJSONLike(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
+            return false
+        }
+        return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil
+    }
+
+    private static func defaultTitle(for type: String?, operation: String) -> String {
+        if operation == "fix_grammar" { return "Grammar correction" }
+        if operation == "summarize" || type == "summary" { return "Summary" }
+        if operation == "rewrite" { return "Rewrite" }
+        return "Writing result"
+    }
+
+    private static func stripMarkdownFence(_ value: String) -> String {
+        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.hasPrefix("```") else { return value }
+        trimmed = trimmed.replacingOccurrences(of: "```json", with: "")
+        trimmed = trimmed.replacingOccurrences(of: "```JSON", with: "")
+        trimmed = trimmed.replacingOccurrences(of: "```", with: "")
+        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -195,8 +333,18 @@ private struct HealthResponse: Decodable {
 
 private struct ChatCompletionRequest: Encodable {
     let model: String
+    let operation: String
+    let inputText: String
     let messages: [ChatMessage]
     let stream: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case operation
+        case inputText = "input_text"
+        case messages
+        case stream
+    }
 }
 
 private struct ChatMessage: Codable {
@@ -215,6 +363,38 @@ private struct ChatCompletionResponse: Decodable {
         let content: String
     }
 }
+
+private struct RawWritingActionResult: Decodable {
+    let operation: String?
+    let results: [RawWritingActionResultItem]?
+    let rawItems: [RawWritingActionResultItem]?
+    let summary: String?
+    let correctedText: String?
+
+    enum CodingKeys: String, CodingKey {
+        case operation
+        case results
+        case rawItems = "items"
+        case summary
+        case correctedText = "corrected_text"
+    }
+
+    var decodedItems: [RawWritingActionResultItem] { results ?? rawItems ?? [] }
+}
+
+private struct RawWritingActionResultItem: Decodable {
+    let id: String?
+    let type: String?
+    let title: String?
+    let text: String?
+    let original: String?
+    let replacement: String?
+    let range: WritingActionTextRange?
+    let confidence: Double?
+    let explanation: String?
+}
+
+extension WritingActionTextRange: Decodable {}
 
 private struct ModelsResponse: Decodable {
     let data: [Model]
