@@ -1,6 +1,6 @@
 # Open Keyboard Release Hardening
 
-Last updated: 2026-06-10
+Last updated: 2026-06-19
 
 This checklist tracks the release-risk items that must be solved before Open Keyboard is treated as production-ready.
 
@@ -60,5 +60,6 @@ Release copy direction:
 - [x] Add a visible Full Access/network permission state in the app/keyboard UI.
 - [x] Wire the privacy copy into onboarding/settings/error states.
 - [x] Make UI-test typed/composing debug persistence production-impossible with a DEBUG-build gate.
-- [ ] Keep UI-test env injection documented in the local CI guide once the host `.xctestrun` command is finalized.
-- [ ] Run host-side Xcode verification for shared Keychain/app group behavior on simulator before release.
+- [x] Keep local/remote CI entry points documented for deterministic core tests and app/extension build.
+- [ ] Run host-side Xcode verification for shared Keychain/app group behavior on simulator before release. Current real-extension smoke still shows `Gateway not configured`; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+- [ ] Add DEBUG-only extension-side config probe before retrying logo/action-menu proof, so failures report exact App Group/Keychain/defaults state without exposing secrets.

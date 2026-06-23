@@ -1,0 +1,34 @@
+name: OpenKeyboard CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: openkeyboard-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-tests:
+    name: OpenKeyboardCore tests
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run core Swift package tests
+        run: ./scripts/ios/test.sh core
+
+  ios-build:
+    name: iOS app + keyboard extension build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build OpenKeyboard app and extension
+        run: ./scripts/ios/test.sh build

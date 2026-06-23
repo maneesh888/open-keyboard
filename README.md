@@ -159,7 +159,7 @@ Recent local verification:
 - `swift test --package-path OpenKeyboardCore`: passed, with live tests skipped unless configured
 - `./scripts/ios/test.sh build`: passed for the iOS app and keyboard extension
 
-The project still needs broader UI, real-device, live-gateway, and prompt-quality verification before release.
+The project still needs broader UI, real-device, live-gateway, prompt-quality verification, and a passing real-keyboard extension smoke before release. The current real-extension smoke reaches the actual keyboard/QWERTY UI but is blocked because the extension still reports `Gateway not configured`; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 
 ## Roadmap
 
@@ -179,7 +179,7 @@ The project still needs broader UI, real-device, live-gateway, and prompt-qualit
 - [x] Model discovery
 - [x] Shared App Group config for non-sensitive settings
 - [x] Shared Keychain storage for gateway API key
-- [ ] Runtime verification for shared Keychain/App Group behavior on simulator and device
+- [ ] Runtime verification for shared Keychain/App Group behavior on simulator and device; current real-extension smoke is blocked on extension config visibility (`Gateway not configured`).
 
 ### AI Writing
 
@@ -196,6 +196,7 @@ The project still needs broader UI, real-device, live-gateway, and prompt-qualit
 - [x] Full Access and network privacy copy in onboarding/settings/keyboard states
 - [x] API key migration away from App Group `UserDefaults`
 - [x] App icon asset
+- [x] Minimal GitHub Actions for core Swift tests and app/extension build
 - [ ] TestFlight-ready signing and build pipeline
 - [ ] App Store privacy details
 - [ ] Real-device testing

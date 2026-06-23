@@ -231,3 +231,12 @@ Recommended next order:
 5. Live prompt eval opt-in tests
 6. Timeout/cancellation/network resilience
 7. Wire core into app/extension UI
+
+
+## Real-extension config visibility probe
+
+- Priority: high
+- Status: blocked/follow-up needed
+- Context: real keyboard extension smoke reaches the actual OpenKeyboard QWERTY UI, but the toolbar remains `Gateway not configured` and `ai_sparkle_action` is absent.
+- Next action: add DEBUG-only extension-side config-state attachment/probe for App Group and Keychain presence, then rerun the focused smoke once.
+- Reference: `docs/REAL_EXTENSION_SMOKE_PLAN.md` and `.agent/reports/20260619T1212-real-extension-gateway-config-seed/report.md`.

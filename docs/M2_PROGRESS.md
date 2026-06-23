@@ -1,6 +1,6 @@
 # Open Keyboard M2 Progress Tracker
 
-Last updated: 2026-06-09 00:23 Asia/Dubai
+Last updated: 2026-06-19 12:55 Asia/Dubai
 
 ## Goal
 Make Open Keyboard feel closer to iOS keyboard + Grammarly UX while preserving the verified M1 gateway Fix Grammar path.
@@ -9,7 +9,7 @@ Make Open Keyboard feel closer to iOS keyboard + Grammarly UX while preserving t
 
 Status: In progress, not committed.
 
-Current working tree has M2 changes and design references. Do not push/commit until build, tests, screenshots, and review pass.
+Current working tree has broad dirty changes across product, proof routes, CI/docs, and generated artifacts. Do not push/commit until the dirty tree is split into scoped branches and each lane has verification evidence.
 
 ## Completed
 
@@ -48,9 +48,10 @@ Current working tree has M2 changes and design references. Do not push/commit un
 
 ## Active blockers / issues
 
-- Current uncommitted compact toolbar still shows `Fix / Rewrite / Summarize` directly in the top bar. This is not final and should be changed.
-- Telegram proactive image send is still unreliable from Coder despite earlier patch; use `MEDIA:` fallback or verify `message media` before relying on it.
-- Real keyboard UI switching tests are flaky on iPhone 17 Pro due to XCTest globe-switcher issues; needs deterministic helper later.
+- Real keyboard switcher helper is narrowed: host proof can activate the real OpenKeyboard extension and QWERTY keys are visible.
+- Real logo/action-menu acceptance is still blocked because the real extension reports `Gateway not configured`, so `ai_sparkle_action` is absent.
+- Next diagnostic is extension-side config-state instrumentation; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+- Dirty default worktree is broad; use scoped branches/commits only after lane split.
 
 ## Next implementation slice
 
