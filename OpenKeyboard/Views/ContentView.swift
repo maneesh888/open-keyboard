@@ -10,7 +10,6 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
-    @State private var showingKeyboardPreviewLab = false
 
     var body: some View {
         NavigationView {
@@ -36,41 +35,25 @@ struct ContentView: View {
 
                         StatusCard(config: settingsViewModel.config)
 
-                        VStack(spacing: 12) {
-                            PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
-                                settingsViewModel.openKeyboardSettings()
+                        if settingsViewModel.config.isConfigured {
+                            NavigationLink(destination: PlaygroundView()) {
+                                PlaygroundEntryCard()
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("playground_entry_button")
+                            .padding(.horizontal, 20)
+                        }
 
-                            if settingsViewModel.config.isConfigured {
-                                NavigationLink(destination: KeyboardPreviewLabView(), isActive: $showingKeyboardPreviewLab) {
-                                    Button(action: { showingKeyboardPreviewLab = true }) {
-                                        HStack(spacing: 12) {
-                                            OpenKeyboardBrandMark(size: 34, symbolSize: 14)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text("Keyboard Preview Lab")
-                                                    .font(.headline.weight(.semibold))
-                                                Text("Test zero-issue, issue count, correction cards, and AI actions.")
-                                                    .font(.caption)
-                                                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                                                    .lineLimit(2)
-                                            }
-                                            Spacer()
-                                            Image(systemName: "chevron.right")
-                                                .font(.caption.weight(.bold))
-                                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                                        }
-                                        .foregroundColor(.primary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                        .padding(14)
-                                        .background(OpenKeyboardTheme.Surface.brandPanelBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.55), lineWidth: 1.2)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
+                        VStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
+                                    settingsViewModel.openKeyboardSettings()
                                 }
-                                .accessibilityIdentifier("keyboard_preview_lab_entry")
+
+                                Text(settingsViewModel.keyboardSettingsInstructions)
+                                    .font(.footnote)
+                                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
 
                             Button(action: {
@@ -121,23 +104,14 @@ struct StatusCard: View {
                     .background((config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
+                    Text(config.isConfigured ? "Ready to Type" : "Setup Required")
                         .font(.headline)
-                    Text(config.isConfigured ? "Your gateway is ready." : "Add your API key to unlock AI features.")
+                    Text(config.isConfigured ? "Open Keyboard is connected. Switch to the keyboard from any text field to use AI actions." : "Connect your AI service in App Settings to unlock writing actions.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                        .lineLimit(2)
+                        .lineLimit(3)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-
-            if config.isConfigured {
-                VStack(alignment: .leading, spacing: 8) {
-                    InfoRow(label: "Gateway", value: config.gatewayURL)
-                    InfoRow(label: "Model", value: config.selectedModel)
-                    InfoRow(label: "API Key", value: config.apiKey.isEmpty ? "Not set" : "Configured")
-                }
-                .padding(.top, 2)
             }
         }
         .padding(16)
@@ -149,6 +123,40 @@ struct StatusCard: View {
         )
         .shadow(color: OpenKeyboardTheme.Shadow.card, radius: 14, x: 0, y: 8)
         .padding(.horizontal, 20)
+    }
+}
+
+struct PlaygroundEntryCard: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "text.cursor")
+                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+                .font(.title3)
+                .frame(width: 34, height: 34)
+                .background(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Open Playground")
+                    .font(.headline)
+                Text("Try Open Keyboard AI in a real text field.")
+                    .font(.footnote)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+            }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(OpenKeyboardTheme.Surface.brandCardBackground, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: OpenKeyboardTheme.Shadow.card, radius: 14, x: 0, y: 8)
     }
 }
 

@@ -56,7 +56,7 @@ case "$MODE" in
     ;;
 
   --screenshots)
-    run_step "OpenKeyboard screenshot UI tests" "$SCRIPT_DIR/ios/test.sh" screenshots
+    run_step "OpenKeyboard acceptance screenshot UI tests" "$SCRIPT_DIR/ios/test.sh" screenshots
     ;;
 
   --help|-h)
@@ -67,7 +67,7 @@ case "$MODE" in
     echo "  --ios-build   Build OpenKeyboard app/extension only"
     echo "  --ui          Run OpenKeyboardUITests on iPhone 16"
     echo "  --live-ui     Run opt-in live gateway AI UI tests on iPhone 16"
-    echo "  --screenshots Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
+    echo "  --screenshots Run acceptance screenshot UI tests with named XCTAttachments; real extension blockers fail explicitly"
     ;;
 
   *)

@@ -101,12 +101,12 @@ struct GatewaySetupPage: View {
             icon: "link.badge.plus",
             eyebrow: "Step 1",
             title: "Connect your gateway",
-            subtitle: "Use an API key from your LLM Gateway admin panel."
+            subtitle: "Connect a compatible gateway using your gateway URL and API key."
         ) {
             VStack(spacing: 10) {
-                SetupStep(number: "1", text: "Run LLM Gateway on your Mac")
-                SetupStep(number: "2", text: "Create or copy an API key")
-                SetupStep(number: "3", text: "Paste it in Open Keyboard")
+                SetupStep(number: "1", text: "Prepare your compatible gateway")
+                SetupStep(number: "2", text: "Copy your gateway URL and API key")
+                SetupStep(number: "3", text: "Paste them in Open Keyboard")
             }
         } footer: {
             PrimaryButton(
@@ -136,7 +136,12 @@ struct KeyboardSetupPage: View {
             }
         } footer: {
             PrimaryButton(title: "Open Keyboard Settings", systemImage: "gearshape.fill") {
-                if let url = URL(string: "App-Prefs:root=General&path=Keyboard") {
+                let candidates = [
+                    "App-Prefs:root=General&path=Keyboard/KEYBOARDS",
+                    "App-Prefs:root=General&path=Keyboard",
+                    UIApplication.openSettingsURLString
+                ].compactMap(URL.init(string:))
+                if let url = candidates.first {
                     UIApplication.shared.open(url)
                 }
             }

@@ -1,161 +1,644 @@
 // !$*UTF8*$!
 {
 	archiveVersion = 1;
-	classes = {};
+	classes = {
+	};
 	objectVersion = 56;
 	objects = {
+
 /* Begin PBXBuildFile section */
-		OKSUGMODELAPP0002 /* KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* KeyboardSuggestionModels.swift */; };
-		OKSUGMODELEXT0002 /* KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* KeyboardSuggestionModels.swift */; };
-		OKSUGMODELTEST0002 /* KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* KeyboardSuggestionModels.swift */; };
-		OKSUGMODELTESTCASE2 /* KeyboardSuggestionModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODELTESTCASE1 /* KeyboardSuggestionModelsTests.swift */; };
-		OKLABSTATE000000002 /* KeyboardPreviewLabState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATE000000001 /* KeyboardPreviewLabState.swift */; };
-		OKLABSTATEUITEST002 /* KeyboardPreviewLabState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATE000000001 /* KeyboardPreviewLabState.swift */; };
-		OKLABSTATETEST0002 /* KeyboardPreviewLabStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATETEST0001 /* KeyboardPreviewLabStateTests.swift */; };
-		OKDEBUGPOLICY0000002 /* KeyboardDebugStatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKDEBUGPOLICY000000001 /* KeyboardDebugStatePolicy.swift */; };
-		OKDEBUGPOLICYTEST0002 /* KeyboardDebugStatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKDEBUGPOLICY000000001 /* KeyboardDebugStatePolicy.swift */; };
-		OKASSETSAPP0000000002 /* OpenKeyboardAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = OKASSETS00000000000001 /* OpenKeyboardAssets.xcassets */; };
-		OKASSETSEXT0000000002 /* OpenKeyboardAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = OKASSETS00000000000001 /* OpenKeyboardAssets.xcassets */; };
-		OKLIVEUI000000000000002 /* LiveGatewayAIUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLIVEUI000000000000001 /* LiveGatewayAIUITests.swift */; };
-		OKLIVE000000000000000002 /* LiveAITestHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLIVE000000000000000001 /* LiveAITestHarnessView.swift */; };
-		OKHOST000000000000000002 /* KeyboardExtensionHostTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKHOST000000000000000001 /* KeyboardExtensionHostTestView.swift */; };
-		OKVISPREV000000000002 /* KeyboardVisualPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKVISPREV000000000001 /* KeyboardVisualPreviewView.swift */; };
-		OKEDITORHOST0000002 /* KeyboardEditorHostPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKEDITORHOST0000001 /* KeyboardEditorHostPreviewView.swift */; };
-		OKPRODSTATEHOST0002 /* ProductionKeyboardStateHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPRODSTATEHOST0001 /* ProductionKeyboardStateHostView.swift */; };
-		OKPLAYGROUND0000002 /* PlaygroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAYGROUND0000001 /* PlaygroundView.swift */; };
-		OKLS00000000000000000002 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = OKLS00000000000000000001 /* LaunchScreen.storyboard */; };
-		5BD7666BECBD76E9791FCCB7B /* OpenKeyboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD7666BECBD76E9791FCCB7; };
-		B4B9DFC292831B136A20EC6DB /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B9DFC292831B136A20EC6D; };
-		833D81870E9009BD3DD6669EB /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833D81870E9009BD3DD6669E; };
-		F86D05867CF16CCF5D03F55DB /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86D05867CF16CCF5D03F55D; };
-		64D79951F7327AC0D1CA1BDAB /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D79951F7327AC0D1CA1BDA; };
-		582E49DC7350041B2D2D135DB /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D; };
-		972B832BB4490EB9A8C5CA2CB /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B832BB4490EB9A8C5CA2C; };
-		4AA7F5EC8066C0C5DAC5080AB /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA7F5EC8066C0C5DAC5080A; };
-		572626087CD519914B6B58B5B /* KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572626087CD519914B6B58B5; };
-		39D261B1DB017C6BA7680468B /* KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468; };
-		OKAI000000000000000002 /* KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* KeyboardAIService.swift */; };
-		OKPLAN0000000000000002 /* KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* KeyboardReplacementPlanner.swift */; };
-		2012167C7CC2E3BB270F0D60B /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D; };
-		87224365CBBE99FADBBBAB47 /* OpenKeyboardExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DB6DC819E4A61132A86EEAE8; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		AB0000000000000000000005 /* BaseOpenKeyboardUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002; };
-		AB0000000000000000000006 /* OpenKeyboardUITestDataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000003; };
-		AB0000000000000000000007 /* OnboardingScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000004; };
-		OKCFGTEST00000000000002 /* SharedAppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKCFGTEST00000000000001 /* SharedAppConfigTests.swift */; };
-		OKEXTUITEST000000000002 /* KeyboardExtensionConfiguredUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKEXTUITEST000000000001 /* KeyboardExtensionConfiguredUITests.swift */; };
-		OKAPPCFGUITEST000000002 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* AppConfig.swift */; };
-		OKPLANUITEST0000000002 /* KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* KeyboardReplacementPlanner.swift */; };
-		OKPLANTEST000000000002 /* KeyboardReplacementPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLANTEST000000000001 /* KeyboardReplacementPlannerTests.swift */; };
-		OKTOOLBAR000000000002 /* KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* KeyboardToolbarState.swift */; };
-		OKTOOLBARUITEST000002 /* KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* KeyboardToolbarState.swift */; };
-		OKTOOLBARTEST0000002 /* KeyboardToolbarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBARTEST0000001 /* KeyboardToolbarStateTests.swift */; };
-		OKPANELTEST00000002 /* KeyboardPanelModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPANELTEST00000001 /* KeyboardPanelModeTests.swift */; };
+		OKKBVMUITEST0002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
+		OKKBAIUITEST0002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */; };
+		OKPRODSTATEHOST0002 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPRODSTATEHOST0001 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift */; };
+		OKKBVIEWAPP0000002 /* OpenKeyboardExtension/KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */; };
+		OKKBVMAPP00000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
+		OKKBAIAPP00000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */; };
+		OKKBPLANAPP000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */; };
+		OKKBTOOLAPP000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */; };
+		OKKBDEBUGAPP0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */; };
+		OKSETVMUITEST0002 /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D79951F7327AC0D1CA1BDA /* OpenKeyboard/ViewModels/SettingsViewModel.swift */; };
+		OKSETVMTEST000002 /* OpenKeyboardUITests/SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSETVMTEST000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */; };
+		OKNETWORKUITEST0002 /* NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B832BB4490EB9A8C5CA2C /* OpenKeyboard/Services/NetworkManager.swift */; };
+		2012167C7CC2E3BB270F0D60B /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
+		39D261B1DB017C6BA7680468B /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
+		4AA7F5EC8066C0C5DAC5080AB /* OpenKeyboardExtension/KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */; };
+		572626087CD519914B6B58B5B /* OpenKeyboardExtension/KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */; };
+		582E49DC7350041B2D2D135DB /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
+		5BD7666BECBD76E9791FCCB7B /* OpenKeyboard/OpenKeyboardApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BD7666BECBD76E9791FCCB7 /* OpenKeyboard/OpenKeyboardApp.swift */; };
+		64D79951F7327AC0D1CA1BDAB /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D79951F7327AC0D1CA1BDA /* OpenKeyboard/ViewModels/SettingsViewModel.swift */; };
+		833D81870E9009BD3DD6669EB /* OpenKeyboard/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 833D81870E9009BD3DD6669E /* OpenKeyboard/Views/SettingsView.swift */; };
+		87224365CBBE99FADBBBAB47 /* OpenKeyboardExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		972B832BB4490EB9A8C5CA2CB /* OpenKeyboard/Services/NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B832BB4490EB9A8C5CA2C /* OpenKeyboard/Services/NetworkManager.swift */; };
+		AB0000000000000000000005 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000002 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift */; };
+		AB0000000000000000000006 /* OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000003 /* OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift */; };
+		AB0000000000000000000007 /* OpenKeyboardUITests/OnboardingScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000000000000000000004 /* OpenKeyboardUITests/OnboardingScreenshotUITests.swift */; };
+		B4B9DFC292831B136A20EC6DB /* OpenKeyboard/Views/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B9DFC292831B136A20EC6D /* OpenKeyboard/Views/ContentView.swift */; };
+		F86D05867CF16CCF5D03F55DB /* OpenKeyboard/Views/OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86D05867CF16CCF5D03F55D /* OpenKeyboard/Views/OnboardingView.swift */; };
+		OKACCEPTSHOT0000002 /* OpenKeyboardUITests/AcceptanceScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKACCEPTSHOT0000001 /* OpenKeyboardUITests/AcceptanceScreenshotUITests.swift */; };
+		OKAI000000000000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */; };
+		OKAPPCFGUITEST000000002 /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
+		OKASSETSAPP0000000002 /* OpenKeyboard/OpenKeyboardAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */; };
+		OKASSETSEXT0000000002 /* OpenKeyboard/OpenKeyboardAssets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */; };
+		OKCFGTEST00000000000002 /* OpenKeyboardUITests/SharedAppConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKCFGTEST00000000000001 /* OpenKeyboardUITests/SharedAppConfigTests.swift */; };
+		OKDEBUGPOLICY0000002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */; };
+		OKDEBUGPOLICYTEST0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */; };
+		OKEDITORHOST0000002 /* OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKEDITORHOST0000001 /* OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift */; };
+		OKEXTUITEST000000000002 /* OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKEXTUITEST000000000001 /* OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift */; };
+		OKHOST000000000000000002 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKHOST000000000000000001 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift */; };
+		OKLABSTATE000000002 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATE000000001 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift */; };
+		OKLABSTATETEST0002 /* OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATETEST0001 /* OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift */; };
+		OKLABSTATEUITEST002 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLABSTATE000000001 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift */; };
+		OKLIVE000000000000000002 /* OpenKeyboard/Views/LiveAITestHarnessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLIVE000000000000000001 /* OpenKeyboard/Views/LiveAITestHarnessView.swift */; };
+		OKLIVEUI000000000000002 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLIVEUI000000000000001 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift */; };
+		OKLS00000000000000000002 /* OpenKeyboard/LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */; };
+		OKPANELTEST00000002 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPANELTEST00000001 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift */; };
+		OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */; };
+		OKPLANTEST000000000002 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLANTEST000000000001 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift */; };
+		OKPLANUITEST0000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */; };
+		OKPLAYGROUND0000002 /* OpenKeyboard/Views/PlaygroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAYGROUND0000001 /* OpenKeyboard/Views/PlaygroundView.swift */; };
+		OKSUGMODELAPP0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
+		OKSUGMODELEXT0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
+		OKSUGMODELTEST0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
+		OKSUGMODELTESTCASE2 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODELTESTCASE1 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift */; };
 		OKTHEME000000000000002 /* OpenKeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTHEME000000000000001 /* OpenKeyboardTheme.swift */; };
 		OKTHEMEEXT000000000002 /* OpenKeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTHEME000000000000001 /* OpenKeyboardTheme.swift */; };
+		OKTHEMETEST000000002 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTHEMETEST000000001 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift */; };
 		OKTHEMEUITEST00000002 /* OpenKeyboardTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTHEME000000000000001 /* OpenKeyboardTheme.swift */; };
-		OKTHEMETEST000000002 /* OpenKeyboardThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTHEMETEST000000001 /* OpenKeyboardThemeTests.swift */; };
+		OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */; };
+		OKTOOLBARTEST0000002 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBARTEST0000001 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift */; };
+		OKTOOLBARUITEST000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */; };
+		OKVISPREV000000000002 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */; };
 /* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
-		D0A642A5DDFBC919F2DC5695 = {isa = PBXContainerItemProxy; containerPortal = 6D9882797250F9A619D27D03; proxyType = 1; remoteGlobalIDString = 1DBA88FA4203F880F8410F13; remoteInfo = OpenKeyboardExtension; };
-		AB0000000000000000000010 = {isa = PBXContainerItemProxy; containerPortal = 6D9882797250F9A619D27D03; proxyType = 1; remoteGlobalIDString = 6969AE0C0DACA9F77BE12409; remoteInfo = OpenKeyboard; };
+		AB0000000000000000000010 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6D9882797250F9A619D27D03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6969AE0C0DACA9F77BE12409;
+			remoteInfo = OpenKeyboard;
+		};
+		D0A642A5DDFBC919F2DC5695 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6D9882797250F9A619D27D03 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1DBA88FA4203F880F8410F13;
+			remoteInfo = OpenKeyboardExtension;
+		};
 /* End PBXContainerItemProxy section */
+
 /* Begin PBXCopyFilesBuildPhase section */
-		429A1EC1379593EF1FF5148A /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (87224365CBBE99FADBBBAB47,); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+		429A1EC1379593EF1FF5148A /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				87224365CBBE99FADBBBAB47 /* OpenKeyboardExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
-		OKSUGMODEL000000001 /* KeyboardSuggestionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/KeyboardSuggestionModels.swift; sourceTree = SOURCE_ROOT; };
-		OKSUGMODELTESTCASE1 /* KeyboardSuggestionModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift; sourceTree = SOURCE_ROOT; };
-		OKLABSTATE000000001 /* KeyboardPreviewLabState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/KeyboardPreviewLabState.swift; sourceTree = SOURCE_ROOT; };
-		OKLABSTATETEST0001 /* KeyboardPreviewLabStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift; sourceTree = SOURCE_ROOT; };
-		OKDEBUGPOLICY000000001 /* KeyboardDebugStatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardDebugStatePolicy.swift; sourceTree = SOURCE_ROOT; };
-		OKASSETS00000000000001 /* OpenKeyboardAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OpenKeyboard/OpenKeyboardAssets.xcassets; sourceTree = SOURCE_ROOT; };
-		OKLIVEUI000000000000001 /* LiveGatewayAIUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/LiveGatewayAIUITests.swift; sourceTree = SOURCE_ROOT; };
-		OKLIVE000000000000000001 /* LiveAITestHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/LiveAITestHarnessView.swift; sourceTree = SOURCE_ROOT; };
-		OKHOST000000000000000001 /* KeyboardExtensionHostTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardExtensionHostTestView.swift; sourceTree = SOURCE_ROOT; };
-		OKVISPREV000000000001 /* KeyboardVisualPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardVisualPreviewView.swift; sourceTree = SOURCE_ROOT; };
-		OKEDITORHOST0000001 /* KeyboardEditorHostPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift; sourceTree = SOURCE_ROOT; };
-		OKPRODSTATEHOST0001 /* ProductionKeyboardStateHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ProductionKeyboardStateHostView.swift; sourceTree = SOURCE_ROOT; };
-		OKPLAYGROUND0000001 /* PlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/PlaygroundView.swift; sourceTree = SOURCE_ROOT; };
-		OKLS00000000000000000001 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = OpenKeyboard/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
-		DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		703438C4D3A1836F6B202DA7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboard/Info.plist; sourceTree = SOURCE_ROOT; };
-		807C41B5A20BFF253A7A6DAD /* OpenKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboard/OpenKeyboard.entitlements; sourceTree = SOURCE_ROOT; };
-		DA9DFCAF73CAE0F983350CE5 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboardExtension/Info.plist; sourceTree = SOURCE_ROOT; };
-		00925BF528988C8F99265380 /* OpenKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; sourceTree = SOURCE_ROOT; };
-		5BD7666BECBD76E9791FCCB7 /* OpenKeyboardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/OpenKeyboardApp.swift; sourceTree = SOURCE_ROOT; };
-		B4B9DFC292831B136A20EC6D /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ContentView.swift; sourceTree = SOURCE_ROOT; };
-		833D81870E9009BD3DD6669E /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/SettingsView.swift; sourceTree = SOURCE_ROOT; };
-		F86D05867CF16CCF5D03F55D /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
-		64D79951F7327AC0D1CA1BDA /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/ViewModels/SettingsViewModel.swift; sourceTree = SOURCE_ROOT; };
-		582E49DC7350041B2D2D135D /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/AppConfig.swift; sourceTree = SOURCE_ROOT; };
-		972B832BB4490EB9A8C5CA2C /* NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/NetworkManager.swift; sourceTree = SOURCE_ROOT; };
-		4AA7F5EC8066C0C5DAC5080A /* KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
-		572626087CD519914B6B58B5 /* KeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardView.swift; sourceTree = SOURCE_ROOT; };
-		39D261B1DB017C6BA7680468 /* KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
-		OKAI000000000000000001 /* KeyboardAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardAIService.swift; sourceTree = SOURCE_ROOT; };
-		OKPLAN0000000000000001 /* KeyboardReplacementPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardReplacementPlanner.swift; sourceTree = SOURCE_ROOT; };
-		OKTOOLBAR000000000001 /* KeyboardToolbarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardToolbarState.swift; sourceTree = SOURCE_ROOT; };
+		00925BF528988C8F99265380 /* OpenKeyboardExtension/OpenKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; sourceTree = SOURCE_ROOT; };
+		39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
+		4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
+		572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardView.swift; sourceTree = SOURCE_ROOT; };
+		582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/AppConfig.swift; sourceTree = SOURCE_ROOT; };
+		5BD7666BECBD76E9791FCCB7 /* OpenKeyboard/OpenKeyboardApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/OpenKeyboardApp.swift; sourceTree = SOURCE_ROOT; };
+		64D79951F7327AC0D1CA1BDA /* OpenKeyboard/ViewModels/SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/ViewModels/SettingsViewModel.swift; sourceTree = SOURCE_ROOT; };
+		703438C4D3A1836F6B202DA7 /* OpenKeyboard/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboard/Info.plist; sourceTree = SOURCE_ROOT; };
+		807C41B5A20BFF253A7A6DAD /* OpenKeyboard/OpenKeyboard.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboard/OpenKeyboard.entitlements; sourceTree = SOURCE_ROOT; };
+		833D81870E9009BD3DD6669E /* OpenKeyboard/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/SettingsView.swift; sourceTree = SOURCE_ROOT; };
+		OKPRODSTATEHOST0001 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ProductionKeyboardStateHostView.swift; sourceTree = SOURCE_ROOT; };
+		972B832BB4490EB9A8C5CA2C /* OpenKeyboard/Services/NetworkManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/NetworkManager.swift; sourceTree = SOURCE_ROOT; };
 		AB0000000000000000000001 /* OpenKeyboardUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenKeyboardUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		AB0000000000000000000002 /* BaseOpenKeyboardUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift; sourceTree = SOURCE_ROOT; };
-		AB0000000000000000000003 /* OpenKeyboardUITestDataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift; sourceTree = SOURCE_ROOT; };
-		AB0000000000000000000004 /* OnboardingScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OnboardingScreenshotUITests.swift; sourceTree = SOURCE_ROOT; };
-		OKCFGTEST00000000000001 /* SharedAppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/SharedAppConfigTests.swift; sourceTree = SOURCE_ROOT; };
-		OKEXTUITEST000000000001 /* KeyboardExtensionConfiguredUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift; sourceTree = SOURCE_ROOT; };
-		OKPLANTEST000000000001 /* KeyboardReplacementPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift; sourceTree = SOURCE_ROOT; };
-		OKTOOLBARTEST0000001 /* KeyboardToolbarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardToolbarStateTests.swift; sourceTree = SOURCE_ROOT; };
-		OKPANELTEST00000001 /* KeyboardPanelModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardPanelModeTests.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000002 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000003 /* OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift; sourceTree = SOURCE_ROOT; };
+		AB0000000000000000000004 /* OpenKeyboardUITests/OnboardingScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OnboardingScreenshotUITests.swift; sourceTree = SOURCE_ROOT; };
+		B4B9DFC292831B136A20EC6D /* OpenKeyboard/Views/ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ContentView.swift; sourceTree = SOURCE_ROOT; };
+		DA9DFCAF73CAE0F983350CE5 /* OpenKeyboardExtension/Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = OpenKeyboardExtension/Info.plist; sourceTree = SOURCE_ROOT; };
+		DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OpenKeyboardExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F86D05867CF16CCF5D03F55D /* OpenKeyboard/Views/OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
+		OKACCEPTSHOT0000001 /* OpenKeyboardUITests/AcceptanceScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/AcceptanceScreenshotUITests.swift; sourceTree = SOURCE_ROOT; };
+		OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardAIService.swift; sourceTree = SOURCE_ROOT; };
+		OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OpenKeyboard/OpenKeyboardAssets.xcassets; sourceTree = SOURCE_ROOT; };
+		OKCFGTEST00000000000001 /* OpenKeyboardUITests/SharedAppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/SharedAppConfigTests.swift; sourceTree = SOURCE_ROOT; };
+		OKSETVMTEST000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/SettingsViewModelTests.swift; sourceTree = SOURCE_ROOT; };
+		OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardDebugStatePolicy.swift; sourceTree = SOURCE_ROOT; };
+		OKEDITORHOST0000001 /* OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift; sourceTree = SOURCE_ROOT; };
+		OKEXTUITEST000000000001 /* OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift; sourceTree = SOURCE_ROOT; };
+		OKHOST000000000000000001 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardExtensionHostTestView.swift; sourceTree = SOURCE_ROOT; };
+		OKLABSTATE000000001 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/KeyboardPreviewLabState.swift; sourceTree = SOURCE_ROOT; };
+		OKLABSTATETEST0001 /* OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift; sourceTree = SOURCE_ROOT; };
+		OKLIVE000000000000000001 /* OpenKeyboard/Views/LiveAITestHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/LiveAITestHarnessView.swift; sourceTree = SOURCE_ROOT; };
+		OKLIVEUI000000000000001 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/LiveGatewayAIUITests.swift; sourceTree = SOURCE_ROOT; };
+		OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = OpenKeyboard/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
+		OKPANELTEST00000001 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardPanelModeTests.swift; sourceTree = SOURCE_ROOT; };
+		OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardReplacementPlanner.swift; sourceTree = SOURCE_ROOT; };
+		OKPLANTEST000000000001 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift; sourceTree = SOURCE_ROOT; };
+		OKPLAYGROUND0000001 /* OpenKeyboard/Views/PlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/PlaygroundView.swift; sourceTree = SOURCE_ROOT; };
+		OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/KeyboardSuggestionModels.swift; sourceTree = SOURCE_ROOT; };
+		OKSUGMODELTESTCASE1 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift; sourceTree = SOURCE_ROOT; };
 		OKTHEME000000000000001 /* OpenKeyboardTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardTheme.swift; sourceTree = SOURCE_ROOT; };
-		OKTHEMETEST000000001 /* OpenKeyboardThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardThemeTests.swift; sourceTree = SOURCE_ROOT; };
+		OKTHEMETEST000000001 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardThemeTests.swift; sourceTree = SOURCE_ROOT; };
+		OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardToolbarState.swift; sourceTree = SOURCE_ROOT; };
+		OKTOOLBARTEST0000001 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardToolbarStateTests.swift; sourceTree = SOURCE_ROOT; };
+		OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardVisualPreviewView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
+
 /* Begin PBXFrameworksBuildPhase section */
-		DD684E1831AD60E76CDC5FEA /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		27D6499381ABC205D16C80A7 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
-		AB0000000000000000000008 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		27D6499381ABC205D16C80A7 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000008 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DD684E1831AD60E76CDC5FEA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
-		1907F0F8DF9C0B5C3BCFA307 = {isa = PBXGroup; children = (OKDEBUGPOLICY000000001,OKASSETS00000000000001,OKTHEME000000000000001,OKLIVE000000000000000001,OKHOST000000000000000001,OKVISPREV000000000001,OKEDITORHOST0000001,OKPRODSTATEHOST0001,OKPLAYGROUND0000001,OKLABSTATE000000001,OKSUGMODEL000000001,703438C4D3A1836F6B202DA7,OKLS00000000000000000001,807C41B5A20BFF253A7A6DAD,5BD7666BECBD76E9791FCCB7,B4B9DFC292831B136A20EC6D,833D81870E9009BD3DD6669E,F86D05867CF16CCF5D03F55D,64D79951F7327AC0D1CA1BDA,582E49DC7350041B2D2D135D,972B832BB4490EB9A8C5CA2C,DA9DFCAF73CAE0F983350CE5,00925BF528988C8F99265380,4AA7F5EC8066C0C5DAC5080A,572626087CD519914B6B58B5,39D261B1DB017C6BA7680468,OKAI000000000000000001,OKPLAN0000000000000001,OKTOOLBAR000000000001,AB000000000000000000000F,31FF30F881C179EC5AEBB66C,); sourceTree = "<group>"; };
-		31FF30F881C179EC5AEBB66C /* Products */ = {isa = PBXGroup; children = (DDD0DF4B54E56F178EE967CC,DB6DC819E4A61132A86EEAE8,AB0000000000000000000001,); name = Products; sourceTree = "<group>"; };
-		AB000000000000000000000F /* OpenKeyboardUITests */ = {isa = PBXGroup; children = (OKLIVEUI000000000000001,AB0000000000000000000002,AB0000000000000000000003,AB0000000000000000000004,OKCFGTEST00000000000001,OKEXTUITEST000000000001,OKPLANTEST000000000001,OKTOOLBARTEST0000001,OKPANELTEST00000001,OKLABSTATETEST0001,OKSUGMODELTESTCASE1,OKTHEMETEST000000001,); name = OpenKeyboardUITests; sourceTree = "<group>"; };
+		1907F0F8DF9C0B5C3BCFA307 = {
+			isa = PBXGroup;
+			children = (
+				OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */,
+				OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */,
+				OKTHEME000000000000001 /* OpenKeyboardTheme.swift */,
+				OKLIVE000000000000000001 /* OpenKeyboard/Views/LiveAITestHarnessView.swift */,
+				OKHOST000000000000000001 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift */,
+				OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */,
+				OKEDITORHOST0000001 /* OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift */,
+				OKLABSTATE000000001 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift */,
+				OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */,
+				703438C4D3A1836F6B202DA7 /* OpenKeyboard/Info.plist */,
+				OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */,
+				807C41B5A20BFF253A7A6DAD /* OpenKeyboard/OpenKeyboard.entitlements */,
+				5BD7666BECBD76E9791FCCB7 /* OpenKeyboard/OpenKeyboardApp.swift */,
+				B4B9DFC292831B136A20EC6D /* OpenKeyboard/Views/ContentView.swift */,
+				833D81870E9009BD3DD6669E /* OpenKeyboard/Views/SettingsView.swift */,
+				OKPRODSTATEHOST0001 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift */,
+				F86D05867CF16CCF5D03F55D /* OpenKeyboard/Views/OnboardingView.swift */,
+				64D79951F7327AC0D1CA1BDA /* OpenKeyboard/ViewModels/SettingsViewModel.swift */,
+				582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */,
+				972B832BB4490EB9A8C5CA2C /* OpenKeyboard/Services/NetworkManager.swift */,
+				DA9DFCAF73CAE0F983350CE5 /* OpenKeyboardExtension/Info.plist */,
+				00925BF528988C8F99265380 /* OpenKeyboardExtension/OpenKeyboardExtension.entitlements */,
+				4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */,
+				572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */,
+				39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */,
+				OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */,
+				OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */,
+				OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */,
+				AB000000000000000000000F /* OpenKeyboardUITests */,
+				31FF30F881C179EC5AEBB66C /* Products */,
+				9FC3934C2FDD3D3600B3B0BB /* Recovered References */,
+			);
+			sourceTree = "<group>";
+		};
+		31FF30F881C179EC5AEBB66C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */,
+				DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */,
+				AB0000000000000000000001 /* OpenKeyboardUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		9FC3934C2FDD3D3600B3B0BB /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				OKPLAYGROUND0000001 /* OpenKeyboard/Views/PlaygroundView.swift */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		AB000000000000000000000F /* OpenKeyboardUITests */ = {
+			isa = PBXGroup;
+			children = (
+				OKACCEPTSHOT0000001 /* OpenKeyboardUITests/AcceptanceScreenshotUITests.swift */,
+				OKLIVEUI000000000000001 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift */,
+				AB0000000000000000000002 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift */,
+				AB0000000000000000000003 /* OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift */,
+				AB0000000000000000000004 /* OpenKeyboardUITests/OnboardingScreenshotUITests.swift */,
+				OKCFGTEST00000000000001 /* OpenKeyboardUITests/SharedAppConfigTests.swift */,
+				OKSETVMTEST000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */,
+				OKEXTUITEST000000000001 /* OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift */,
+				OKPLANTEST000000000001 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift */,
+				OKTOOLBARTEST0000001 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift */,
+				OKPANELTEST00000001 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift */,
+				OKLABSTATETEST0001 /* OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift */,
+				OKSUGMODELTESTCASE1 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift */,
+				OKTHEMETEST000000001 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift */,
+			);
+			name = OpenKeyboardUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
+
 /* Begin PBXNativeTarget section */
-		6969AE0C0DACA9F77BE12409 /* OpenKeyboard */ = {isa = PBXNativeTarget; buildConfigurationList = AD68C5BFA78393E20996BDA3; buildPhases = (02021F3DA6D315C6903BEA79,DD684E1831AD60E76CDC5FEA,C9A5745812E6FCEA649C7E0B,429A1EC1379593EF1FF5148A,); buildRules = (); dependencies = (68DEE20203FED99CE9C62661,); name = OpenKeyboard; productName = OpenKeyboard; productReference = DDD0DF4B54E56F178EE967CC; productType = "com.apple.product-type.application"; };
-		1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */ = {isa = PBXNativeTarget; buildConfigurationList = FA961B9D5EBBF2ACCF1F38BE; buildPhases = (C3B61026B4B857CF532189C5,27D6499381ABC205D16C80A7,3DDA42D724FCBBBA2C59D1B7,); buildRules = (); dependencies = (); name = OpenKeyboardExtension; productName = OpenKeyboardExtension; productReference = DB6DC819E4A61132A86EEAE8; productType = "com.apple.product-type.app-extension"; };
-		AB000000000000000000000B /* OpenKeyboardUITests */ = {isa = PBXNativeTarget; buildConfigurationList = AB000000000000000000000E; buildPhases = (AB000000000000000000000A,AB0000000000000000000008,AB0000000000000000000009,); buildRules = (); dependencies = (AB0000000000000000000011,); name = OpenKeyboardUITests; productName = OpenKeyboardUITests; productReference = AB0000000000000000000001; productType = "com.apple.product-type.bundle.ui-testing"; };
+		1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FA961B9D5EBBF2ACCF1F38BE /* Build configuration list for PBXNativeTarget "OpenKeyboardExtension" */;
+			buildPhases = (
+				C3B61026B4B857CF532189C5 /* Sources */,
+				27D6499381ABC205D16C80A7 /* Frameworks */,
+				3DDA42D724FCBBBA2C59D1B7 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OpenKeyboardExtension;
+			productName = OpenKeyboardExtension;
+			productReference = DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		6969AE0C0DACA9F77BE12409 /* OpenKeyboard */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */;
+			buildPhases = (
+				02021F3DA6D315C6903BEA79 /* Sources */,
+				DD684E1831AD60E76CDC5FEA /* Frameworks */,
+				C9A5745812E6FCEA649C7E0B /* Resources */,
+				429A1EC1379593EF1FF5148A /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				68DEE20203FED99CE9C62661 /* PBXTargetDependency */,
+			);
+			name = OpenKeyboard;
+			productName = OpenKeyboard;
+			productReference = DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AB000000000000000000000B /* OpenKeyboardUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AB000000000000000000000E /* Build configuration list for PBXNativeTarget "OpenKeyboardUITests" */;
+			buildPhases = (
+				AB000000000000000000000A /* Sources */,
+				AB0000000000000000000008 /* Frameworks */,
+				AB0000000000000000000009 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AB0000000000000000000011 /* PBXTargetDependency */,
+			);
+			name = OpenKeyboardUITests;
+			productName = OpenKeyboardUITests;
+			productReference = AB0000000000000000000001 /* OpenKeyboardUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
+
 /* Begin PBXProject section */
-		6D9882797250F9A619D27D03 /* Project object */ = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1540; LastUpgradeCheck = 1540; TargetAttributes = {6969AE0C0DACA9F77BE12409 = {CreatedOnToolsVersion = 15.4; }; 1DBA88FA4203F880F8410F13 = {CreatedOnToolsVersion = 15.4; }; AB000000000000000000000B = {CreatedOnToolsVersion = 15.4; TestTargetID = 6969AE0C0DACA9F77BE12409; }; }; }; buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = 1907F0F8DF9C0B5C3BCFA307; productRefGroup = 31FF30F881C179EC5AEBB66C; projectDirPath = ""; projectRoot = ""; targets = (6969AE0C0DACA9F77BE12409,1DBA88FA4203F880F8410F13,AB000000000000000000000B,); };
+		6D9882797250F9A619D27D03 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1540;
+				LastUpgradeCheck = 1540;
+				TargetAttributes = {
+					1DBA88FA4203F880F8410F13 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+					6969AE0C0DACA9F77BE12409 = {
+						CreatedOnToolsVersion = 15.4;
+					};
+					AB000000000000000000000B = {
+						CreatedOnToolsVersion = 15.4;
+						TestTargetID = 6969AE0C0DACA9F77BE12409;
+					};
+				};
+			};
+			buildConfigurationList = 7114CF5E6C5CB6284A8BF5F4 /* Build configuration list for PBXProject "OpenKeyboard" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 1907F0F8DF9C0B5C3BCFA307;
+			productRefGroup = 31FF30F881C179EC5AEBB66C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				6969AE0C0DACA9F77BE12409 /* OpenKeyboard */,
+				1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */,
+				AB000000000000000000000B /* OpenKeyboardUITests */,
+			);
+		};
 /* End PBXProject section */
+
 /* Begin PBXResourcesBuildPhase section */
-		C9A5745812E6FCEA649C7E0B /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (OKASSETSAPP0000000002 /* OpenKeyboardAssets.xcassets in Resources */,OKLS00000000000000000002 /* LaunchScreen.storyboard in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
-		3DDA42D724FCBBBA2C59D1B7 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (OKASSETSEXT0000000002 /* OpenKeyboardAssets.xcassets in Resources */,); runOnlyForDeploymentPostprocessing = 0; };
-		AB0000000000000000000009 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		3DDA42D724FCBBBA2C59D1B7 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				OKASSETSEXT0000000002 /* OpenKeyboard/OpenKeyboardAssets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB0000000000000000000009 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C9A5745812E6FCEA649C7E0B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				OKASSETSAPP0000000002 /* OpenKeyboard/OpenKeyboardAssets.xcassets in Resources */,
+				OKLS00000000000000000002 /* OpenKeyboard/LaunchScreen.storyboard in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
-		02021F3DA6D315C6903BEA79 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (OKLIVE000000000000000002 /* LiveAITestHarnessView.swift in Sources */,OKHOST000000000000000002 /* KeyboardExtensionHostTestView.swift in Sources */,OKVISPREV000000000002 /* KeyboardVisualPreviewView.swift in Sources */,OKEDITORHOST0000002 /* KeyboardEditorHostPreviewView.swift in Sources */,OKPRODSTATEHOST0002 /* ProductionKeyboardStateHostView.swift in Sources */,OKPLAYGROUND0000002 /* PlaygroundView.swift in Sources */,OKLABSTATE000000002 /* KeyboardPreviewLabState.swift in Sources */,OKSUGMODELAPP0002 /* KeyboardSuggestionModels.swift in Sources */,OKTHEME000000000000002 /* OpenKeyboardTheme.swift in Sources */,5BD7666BECBD76E9791FCCB7B,B4B9DFC292831B136A20EC6DB,833D81870E9009BD3DD6669EB,F86D05867CF16CCF5D03F55DB,64D79951F7327AC0D1CA1BDAB,582E49DC7350041B2D2D135DB,972B832BB4490EB9A8C5CA2CB,); runOnlyForDeploymentPostprocessing = 0; };
-		C3B61026B4B857CF532189C5 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (OKDEBUGPOLICY0000002 /* KeyboardDebugStatePolicy.swift in Sources */,4AA7F5EC8066C0C5DAC5080AB,572626087CD519914B6B58B5B,39D261B1DB017C6BA7680468B,OKAI000000000000000002 /* KeyboardAIService.swift in Sources */,OKSUGMODELEXT0002 /* KeyboardSuggestionModels.swift in Sources */,OKPLAN0000000000000002 /* KeyboardReplacementPlanner.swift in Sources */,OKTOOLBAR000000000002 /* KeyboardToolbarState.swift in Sources */,OKTHEMEEXT000000000002 /* OpenKeyboardTheme.swift in Sources */,2012167C7CC2E3BB270F0D60B,); runOnlyForDeploymentPostprocessing = 0; };
-		AB000000000000000000000A /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (OKDEBUGPOLICYTEST0002 /* KeyboardDebugStatePolicy.swift in Sources */,OKLIVEUI000000000000002 /* LiveGatewayAIUITests.swift in Sources */,AB0000000000000000000005,AB0000000000000000000006,AB0000000000000000000007,OKCFGTEST00000000000002 /* SharedAppConfigTests.swift in Sources */,OKEXTUITEST000000000002 /* KeyboardExtensionConfiguredUITests.swift in Sources */,OKAPPCFGUITEST000000002 /* AppConfig.swift in Sources */,OKPLANUITEST0000000002 /* KeyboardReplacementPlanner.swift in Sources */,OKTOOLBARUITEST000002 /* KeyboardToolbarState.swift in Sources */,OKPLANTEST000000000002 /* KeyboardReplacementPlannerTests.swift in Sources */,OKTOOLBARTEST0000002 /* KeyboardToolbarStateTests.swift in Sources */,OKPANELTEST00000002 /* KeyboardPanelModeTests.swift in Sources */,OKLABSTATEUITEST002 /* KeyboardPreviewLabState.swift in Sources */,OKLABSTATETEST0002 /* KeyboardPreviewLabStateTests.swift in Sources */,OKSUGMODELTEST0002 /* KeyboardSuggestionModels.swift in Sources */,OKSUGMODELTESTCASE2 /* KeyboardSuggestionModelsTests.swift in Sources */,OKTHEMEUITEST00000002 /* OpenKeyboardTheme.swift in Sources */,OKTHEMETEST000000002 /* OpenKeyboardThemeTests.swift in Sources */,); runOnlyForDeploymentPostprocessing = 0; };
+		02021F3DA6D315C6903BEA79 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				OKLIVE000000000000000002 /* OpenKeyboard/Views/LiveAITestHarnessView.swift in Sources */,
+				OKHOST000000000000000002 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift in Sources */,
+				OKPLAYGROUND0000002 /* OpenKeyboard/Views/PlaygroundView.swift in Sources */,
+				OKPRODSTATEHOST0002 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift in Sources */,
+				OKKBVIEWAPP0000002 /* OpenKeyboardExtension/KeyboardView.swift in Sources */,
+				OKKBVMAPP00000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
+				OKKBAIAPP00000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
+				OKKBPLANAPP000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
+				OKKBTOOLAPP000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
+				OKKBDEBUGAPP0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
+				OKVISPREV000000000002 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift in Sources */,
+				OKEDITORHOST0000002 /* OpenKeyboard/Views/KeyboardEditorHostPreviewView.swift in Sources */,
+				OKLABSTATE000000002 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift in Sources */,
+				OKSUGMODELAPP0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
+				OKTHEME000000000000002 /* OpenKeyboardTheme.swift in Sources */,
+				5BD7666BECBD76E9791FCCB7B /* OpenKeyboard/OpenKeyboardApp.swift in Sources */,
+				B4B9DFC292831B136A20EC6DB /* OpenKeyboard/Views/ContentView.swift in Sources */,
+				833D81870E9009BD3DD6669EB /* OpenKeyboard/Views/SettingsView.swift in Sources */,
+				F86D05867CF16CCF5D03F55DB /* OpenKeyboard/Views/OnboardingView.swift in Sources */,
+				64D79951F7327AC0D1CA1BDAB /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */,
+				582E49DC7350041B2D2D135DB /* OpenKeyboard/Models/AppConfig.swift in Sources */,
+				972B832BB4490EB9A8C5CA2CB /* OpenKeyboard/Services/NetworkManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AB000000000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				OKNETWORKUITEST0002 /* NetworkManager.swift in Sources */,
+				OKKBVMUITEST0002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
+				OKKBAIUITEST0002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
+				OKSETVMUITEST0002 /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */,
+				OKSETVMTEST000002 /* OpenKeyboardUITests/SettingsViewModelTests.swift in Sources */,
+				OKACCEPTSHOT0000002 /* OpenKeyboardUITests/AcceptanceScreenshotUITests.swift in Sources */,
+				OKDEBUGPOLICYTEST0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
+				OKLIVEUI000000000000002 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift in Sources */,
+				AB0000000000000000000005 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift in Sources */,
+				AB0000000000000000000006 /* OpenKeyboardUITests/OpenKeyboardUITestDataHelper.swift in Sources */,
+				AB0000000000000000000007 /* OpenKeyboardUITests/OnboardingScreenshotUITests.swift in Sources */,
+				OKCFGTEST00000000000002 /* OpenKeyboardUITests/SharedAppConfigTests.swift in Sources */,
+				OKEXTUITEST000000000002 /* OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift in Sources */,
+				OKAPPCFGUITEST000000002 /* OpenKeyboard/Models/AppConfig.swift in Sources */,
+				OKPLANUITEST0000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
+				OKTOOLBARUITEST000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
+				OKPLANTEST000000000002 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift in Sources */,
+				OKTOOLBARTEST0000002 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift in Sources */,
+				OKPANELTEST00000002 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift in Sources */,
+				OKLABSTATEUITEST002 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift in Sources */,
+				OKLABSTATETEST0002 /* OpenKeyboardUITests/KeyboardPreviewLabStateTests.swift in Sources */,
+				OKSUGMODELTEST0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
+				OKSUGMODELTESTCASE2 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift in Sources */,
+				OKTHEMEUITEST00000002 /* OpenKeyboardTheme.swift in Sources */,
+				OKTHEMETEST000000002 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C3B61026B4B857CF532189C5 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				OKDEBUGPOLICY0000002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
+				4AA7F5EC8066C0C5DAC5080AB /* OpenKeyboardExtension/KeyboardViewController.swift in Sources */,
+				572626087CD519914B6B58B5B /* OpenKeyboardExtension/KeyboardView.swift in Sources */,
+				39D261B1DB017C6BA7680468B /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
+				OKAI000000000000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
+				OKSUGMODELEXT0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
+				OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
+				OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
+				OKTHEMEEXT000000000002 /* OpenKeyboardTheme.swift in Sources */,
+				2012167C7CC2E3BB270F0D60B /* OpenKeyboard/Models/AppConfig.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
 /* Begin PBXTargetDependency section */
-		68DEE20203FED99CE9C62661 = {isa = PBXTargetDependency; target = 1DBA88FA4203F880F8410F13; targetProxy = D0A642A5DDFBC919F2DC5695; };
-		AB0000000000000000000011 = {isa = PBXTargetDependency; target = 6969AE0C0DACA9F77BE12409; targetProxy = AB0000000000000000000010; };
+		68DEE20203FED99CE9C62661 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 1DBA88FA4203F880F8410F13 /* OpenKeyboardExtension */;
+			targetProxy = D0A642A5DDFBC919F2DC5695 /* PBXContainerItemProxy */;
+		};
+		AB0000000000000000000011 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6969AE0C0DACA9F77BE12409 /* OpenKeyboard */;
+			targetProxy = AB0000000000000000000010 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		65DE611B6C93116CD30615EC /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GCC_OPTIMIZATION_LEVEL = 0; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; VERSIONING_SYSTEM = "apple-generic"; }; name = Debug; };
-		80718C4429A5D9A9C293E13E /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; IPHONEOS_DEPLOYMENT_TARGET = 17.0; SDKROOT = iphoneos; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_VERSION = 5.0; VERSIONING_SYSTEM = "apple-generic"; }; name = Release; };
-		B011A32F83834FF145F800A1 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboard/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard; PRODUCT_NAME = OpenKeyboard; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		F233DA21B620DFC23AA4B5A0 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboard/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard; PRODUCT_NAME = OpenKeyboard; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
-		DF069D110E5FA9C63B288E72 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
-		2A078DB6E5281664BDF4EE74 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = OpenKeyboardExtension/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard; PRODUCT_NAME = OpenKeyboardExtension; SKIP_INSTALL = YES; SWIFT_EMIT_LOC_STRINGS = YES; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
-		AB000000000000000000000C /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = OpenKeyboard; }; name = Debug; };
-		AB000000000000000000000D /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CODE_SIGN_STYLE = Automatic; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; TEST_TARGET_NAME = OpenKeyboard; }; name = Release; };
+		2A078DB6E5281664BDF4EE74 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3VSNLS7N3U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenKeyboardExtension/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard;
+				PRODUCT_NAME = OpenKeyboardExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		65DE611B6C93116CD30615EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Debug;
+		};
+		80718C4429A5D9A9C293E13E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		AB000000000000000000000C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenKeyboard;
+			};
+			name = Debug;
+		};
+		AB000000000000000000000D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = OpenKeyboardUITests;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = OpenKeyboard;
+			};
+			name = Release;
+		};
+		B011A32F83834FF145F800A1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3VSNLS7N3U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenKeyboard/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard;
+				PRODUCT_NAME = OpenKeyboard;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		DF069D110E5FA9C63B288E72 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenKeyboardExtension/OpenKeyboardExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3VSNLS7N3U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenKeyboardExtension/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard.keyboard;
+				PRODUCT_NAME = OpenKeyboardExtension;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F233DA21B620DFC23AA4B5A0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = OpenKeyboard/OpenKeyboard.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 3VSNLS7N3U;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = OpenKeyboard/Info.plist;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maneesh.openkeyboard;
+				PRODUCT_NAME = OpenKeyboard;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
+
 /* Begin XCConfigurationList section */
-		7114CF5E6C5CB6284A8BF5F4 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (65DE611B6C93116CD30615EC,80718C4429A5D9A9C293E13E,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-		AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */ = {isa = XCConfigurationList; buildConfigurations = (B011A32F83834FF145F800A1,F233DA21B620DFC23AA4B5A0,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-		FA961B9D5EBBF2ACCF1F38BE /* Build configuration list for PBXNativeTarget "OpenKeyboardExtension" */ = {isa = XCConfigurationList; buildConfigurations = (DF069D110E5FA9C63B288E72,2A078DB6E5281664BDF4EE74,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
-		AB000000000000000000000E /* Build configuration list for PBXNativeTarget "OpenKeyboardUITests" */ = {isa = XCConfigurationList; buildConfigurations = (AB000000000000000000000C,AB000000000000000000000D,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Debug; };
+		7114CF5E6C5CB6284A8BF5F4 /* Build configuration list for PBXProject "OpenKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				65DE611B6C93116CD30615EC /* Debug */,
+				80718C4429A5D9A9C293E13E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AB000000000000000000000E /* Build configuration list for PBXNativeTarget "OpenKeyboardUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AB000000000000000000000C /* Debug */,
+				AB000000000000000000000D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B011A32F83834FF145F800A1 /* Debug */,
+				F233DA21B620DFC23AA4B5A0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		FA961B9D5EBBF2ACCF1F38BE /* Build configuration list for PBXNativeTarget "OpenKeyboardExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DF069D110E5FA9C63B288E72 /* Debug */,
+				2A078DB6E5281664BDF4EE74 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 	};
-	rootObject = 6D9882797250F9A619D27D03;
+	rootObject = 6D9882797250F9A619D27D03 /* Project object */;
 }
