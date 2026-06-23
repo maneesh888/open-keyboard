@@ -136,7 +136,7 @@ struct PlaygroundView: View {
         }
         """
         do {
-            let response = try KeyboardSuggestionParser.parseAssistantContent(content, sourceContext: text)
+            let response = try KeyboardSuggestionParser.parseAssistantContent(content)
             let cards = response.corrections.map(KeyboardCorrectionCard.init(correction:))
             regressionResult = cards.isEmpty ? .failure("Analysis failed. No usable suggestions were returned for broken input.") : .suggestions(cards)
         } catch {
@@ -170,6 +170,26 @@ struct PlaygroundView: View {
             let message = NetworkManager.userFacingSmokeErrorMessage(for: error, model: model)
             gatewayProofStatus = "Analysis failed. \(message)"
         }
+    }
+}
+
+private struct KeyboardCorrectionCard: Equatable, Identifiable {
+    let id: String
+    let categoryTitle: String
+    let original: String
+    let replacement: String
+    let explanation: String
+
+    init(correction: KeyboardCorrectionSuggestion) {
+        id = correction.id
+        categoryTitle = correction.category?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? correction.category!.capitalized
+            : correction.label
+        original = correction.original
+        replacement = correction.replacement
+        explanation = correction.explanation?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            ? correction.explanation!
+            : correction.label
     }
 }
 
