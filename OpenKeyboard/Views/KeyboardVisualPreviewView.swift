@@ -75,7 +75,7 @@ struct KeyboardPreviewLabView: View {
         case .predictionOnly:
             return "Prediction-only compact state with no correction count confusion."
         case .correctionDetail:
-            return "Detail panel shown after tapping the issue count/card; this is where apply/dismiss can wire into the replacement planner later."
+            return "Grammarly-style detail panel with category, has → have diff, explanation, and Apply/Dismiss actions."
         case .actions:
             return "Right sparkle assistant panel with Improve, Rephrase, and Summarize actions."
         case .correctionComplete:
@@ -132,7 +132,7 @@ struct KeyboardVisualPreviewView: View {
         case .issue:
             return PreviewToolbarDisplay(title: "2 writing suggestions", subtitle: "Spelling and grammar suggestions", issueCount: 2)
         case .correctionCard, .correctionCardNext, .correctionOnly, .correctionDetail:
-            return PreviewToolbarDisplay(title: "1 writing suggestion", subtitle: panel == .correctionCardNext ? "Next grammar suggestion" : "Subject-verb agreement", issueCount: 1)
+            return PreviewToolbarDisplay(title: "1 writing suggestion", subtitle: "Subject-verb agreement", issueCount: 1)
         case .predictionOnly:
             return PreviewToolbarDisplay(title: "Open Keyboard AI", subtitle: "Suggestion", issueCount: 0)
         }
@@ -153,18 +153,22 @@ struct KeyboardVisualPreviewView: View {
         }
     }
 
+    private var isCompactSuggestionPanel: Bool {
+        panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly
+    }
+
     private var previewToolbar: some View {
         HStack(spacing: 8) {
             previewStatusIcon
 
             previewToolbarContent
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Surface.overlayBackground : OpenKeyboardTheme.Surface.brandPanelBackground)
+                .padding(.horizontal, isCompactSuggestionPanel ? 0 : 10)
+                .padding(.vertical, isCompactSuggestionPanel ? 0 : 5)
+                .background(isCompactSuggestionPanel ? Color.clear : OpenKeyboardTheme.Surface.brandPanelBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Semantic.error.opacity(0.42) : Color.clear, lineWidth: 1)
+                        .stroke(Color.clear, lineWidth: 1)
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
@@ -186,7 +190,7 @@ struct KeyboardVisualPreviewView: View {
 
     @ViewBuilder
     private var previewToolbarContent: some View {
-        if (panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) {
+        if isCompactSuggestionPanel {
             HStack(spacing: 7) {
                 if panel != .predictionOnly {
                     compactSuggestionBlock(
@@ -251,18 +255,33 @@ struct KeyboardVisualPreviewView: View {
     }
 
     private var previewStatusIcon: some View {
-        ZStack {
+        Group {
             if toolbarState.showsIssueCount {
-                Circle().fill(OpenKeyboardTheme.Semantic.error)
                 Text("\(toolbarState.issueCount)")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                    .frame(width: 36, height: 36)
+                    .background(OpenKeyboardTheme.Semantic.error)
+                    .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             } else {
-                OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+                previewToolbarLogoIcon
             }
         }
         .frame(width: 36, height: 36)
         .accessibilityIdentifier(toolbarState.showsIssueCount ? "preview_issue_count_badge" : "preview_openkeyboard_icon")
+    }
+
+    private var previewToolbarLogoIcon: some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+
+        return Image("OpenKeyboardToolbarIcon")
+            .resizable()
+            .scaledToFill()
+            .frame(width: 36, height: 36)
+            .clipShape(shape)
+            .overlay(
+                shape.stroke(OpenKeyboardTheme.Stroke.control.opacity(0.45), lineWidth: 1)
+            )
     }
 
     private var keyGrid: some View {
@@ -290,7 +309,7 @@ struct KeyboardVisualPreviewView: View {
     private var correctionDetailPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Correct grammar")
+                Text("Subject-verb agreement")
                     .font(.headline.weight(.bold))
                 Spacer()
                 Text("1 issue")
@@ -304,8 +323,8 @@ struct KeyboardVisualPreviewView: View {
                 Text("Problem")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                Text("i has a apple")
-                    .font(.body.weight(.semibold))
+                Text("has")
+                    .font(.title3.weight(.bold))
                     .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.9))
                     .strikethrough(color: OpenKeyboardTheme.Semantic.error)
             }
@@ -313,9 +332,17 @@ struct KeyboardVisualPreviewView: View {
                 Text("Suggestion")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                Text("I have an apple.")
+                Text("have")
                     .font(.title3.weight(.bold))
                     .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Why")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Text("Use “have” because the subject is plural.")
+                    .font(.caption)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
             }
             HStack(spacing: 10) {
                 detailButton("Apply", filled: true)

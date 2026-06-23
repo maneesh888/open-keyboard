@@ -49,6 +49,37 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.issueCount, 0)
     }
 
+    func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {
+        let state = KeyboardToolbarState.current(
+            hasFullAccess: true,
+            isConfigured: true,
+            selectedModel: "gemma4:latest",
+            isPerformingAIAction: false,
+            aiStatus: "AI ready · gemma4:latest"
+        )
+
+        XCTAssertEqual(state.kind, .actions(status: "AI ready · gemma4:latest"))
+        XCTAssertEqual(state.title, "Open Keyboard AI")
+        XCTAssertEqual(state.subtitle, "AI ready · gemma4:latest")
+        XCTAssertTrue(state.isActionEnabled)
+        XCTAssertTrue(state.showsBrandMark)
+    }
+
+    func testKnownZeroIssueStateKeepsLogoButUsesAllGoodStatus() {
+        let state = KeyboardToolbarState.current(
+            hasFullAccess: true,
+            isConfigured: true,
+            selectedModel: "gemma4:latest",
+            isPerformingAIAction: false,
+            aiStatus: "No issues found"
+        )
+
+        XCTAssertEqual(state.kind, .actions(status: "No issues found"))
+        XCTAssertTrue(state.showsBrandMark)
+        XCTAssertTrue(state.isZeroIssueLogoState)
+        XCTAssertTrue(state.isActionEnabled)
+    }
+
     func testLoadingStateBlocksActions() {
         let state = KeyboardToolbarState.current(
             hasFullAccess: true,
@@ -61,6 +92,9 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.kind, .loading(title: "Fix Grammar…"))
         XCTAssertEqual(state.title, "Fix Grammar…")
         XCTAssertEqual(state.subtitle, "Checking…")
+        XCTAssertTrue(state.showsBrandMark)
+        XCTAssertFalse(state.showsIssueCount)
+        XCTAssertEqual(state.leadingSystemImage, "keyboard")
         XCTAssertFalse(state.isActionEnabled)
     }
 
@@ -69,7 +103,8 @@ final class KeyboardToolbarStateTests: XCTestCase {
             count: 1,
             explanation: "",
             replacement: "I have an apple.",
-            original: "i has a apple"
+            original: "i has a apple",
+            prediction: nil
         ))
 
         XCTAssertEqual(state.title, "1 writing suggestion")
@@ -85,11 +120,15 @@ final class KeyboardToolbarStateTests: XCTestCase {
             count: 3,
             explanation: "Spelling and grammar suggestions",
             replacement: "I have an apple.",
-            original: "i has a apple"
+            original: "i has a apple",
+            prediction: "apple"
         ))
 
         XCTAssertEqual(state.title, "3 writing suggestions")
         XCTAssertTrue(state.showsIssueCount)
         XCTAssertEqual(state.issueCount, 3)
+        XCTAssertEqual(state.compactCorrection?.label, "Spelling and grammar suggestions")
+        XCTAssertEqual(state.compactCorrection?.value, "i has a apple → I have an apple.")
+        XCTAssertEqual(state.compactPrediction, "apple")
     }
 }
