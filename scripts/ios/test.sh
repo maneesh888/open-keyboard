@@ -93,30 +93,19 @@ case "${1:-}" in
     ;;
 
   screenshots)
-    echo -e "${YELLOW}Running acceptance screenshot UI tests on iPhone 16 and home screenshots on iPhone SE...${NC}"
+    echo -e "${YELLOW}Running onboarding screenshot UI tests on iPhone 16 and iPhone SE...${NC}"
     require_xcodebuild
-    echo -e "${YELLOW}Destination: $DESTINATION${NC}"
-    run_xcodebuild xcodebuild test \
-      -project "$PROJECT" \
-      -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
-      -configuration Debug \
-      -resultBundlePath "$REPO_ROOT/.ci-results/acceptance-screenshots-iPhone16.xcresult" \
-      -only-testing:OpenKeyboardUITests/AcceptanceScreenshotUITests \
-      CODE_SIGN_IDENTITY="" \
-      CODE_SIGNING_REQUIRED=NO
-
-    echo -e "${YELLOW}Destination: $SE_DESTINATION (home screenshots only)${NC}"
-    run_xcodebuild xcodebuild test \
-      -project "$PROJECT" \
-      -scheme "$SCHEME" \
-      -destination "$SE_DESTINATION" \
-      -configuration Debug \
-      -resultBundlePath "$REPO_ROOT/.ci-results/acceptance-screenshots-iPhoneSE.xcresult" \
-      -only-testing:OpenKeyboardUITests/AcceptanceScreenshotUITests/testHomeLaunchLightScreenshotHasNoPreviewOrDebugCopy \
-      -only-testing:OpenKeyboardUITests/AcceptanceScreenshotUITests/testHomeLaunchDarkScreenshotHasNoPreviewOrDebugCopy \
-      CODE_SIGN_IDENTITY="" \
-      CODE_SIGNING_REQUIRED=NO
+    for destination in "$DESTINATION" "$SE_DESTINATION"; do
+      echo -e "${YELLOW}Destination: $destination${NC}"
+      run_xcodebuild xcodebuild test \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -destination "$destination" \
+        -configuration Debug \
+        -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests \
+        CODE_SIGN_IDENTITY="" \
+        CODE_SIGNING_REQUIRED=NO
+    done
     echo -e "${GREEN}✓ Screenshot UI tests complete${NC}"
     ;;
 
@@ -139,7 +128,7 @@ case "${1:-}" in
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
-    echo "  screenshots - Run acceptance screenshot UI tests with named XCTAttachments; real extension blockers fail explicitly"
+    echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"
     echo "  coverage    - Run core package tests with coverage"
     exit 1

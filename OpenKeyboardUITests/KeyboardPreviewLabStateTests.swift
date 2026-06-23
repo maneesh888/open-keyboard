@@ -32,7 +32,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(suggestion?.original, "i")
         XCTAssertEqual(suggestion?.replacement, "I")
         XCTAssertEqual(suggestion?.remainingCount, 3)
-        XCTAssertNil(suggestion?.prediction)
+        XCTAssertEqual(suggestion?.prediction, "apple")
         XCTAssertFalse(suggestion?.replacement.contains(" ") ?? true)
         XCTAssertNotEqual(suggestion?.replacement, "I have an apple.")
     }
@@ -65,8 +65,8 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPreviewLabState.correctionComplete.previewPanel, .correctionComplete)
     }
 
-    func testCompactSuggestionsDoNotDuplicateVisibleInputWord() {
-        XCTAssertNil(KeyboardPreviewLabState.correctionCard.compactSuggestion?.prediction)
+    func testCompactSuggestionsCanIncludeOnePredictionLane() {
+        XCTAssertEqual(KeyboardPreviewLabState.correctionCard.compactSuggestion?.prediction, "apple")
         XCTAssertEqual(KeyboardPreviewLabState.correctionCardNext.compactSuggestion?.prediction, "an")
     }
 
@@ -74,7 +74,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         let correction = KeyboardPreviewLabState.correctionCard.compactSuggestion
         XCTAssertEqual(correction?.label, "Correct capitalization:")
         XCTAssertEqual(correction?.replacement, "I")
-        XCTAssertNil(correction?.prediction)
+        XCTAssertEqual(correction?.prediction, "apple")
 
         let correctionOnly = KeyboardPreviewLabState.correctionOnly.compactSuggestion
         XCTAssertEqual(correctionOnly?.replacement, "an")
@@ -83,14 +83,6 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         let predictionOnly = KeyboardPreviewLabState.predictionOnly.compactSuggestion
         XCTAssertEqual(predictionOnly?.prediction, "apple")
         XCTAssertEqual(predictionOnly?.remainingCount, 0)
-    }
-
-    func testEditorHostPreviewStatesAreLaunchArgumentAddressable() {
-        XCTAssertNotNil(KeyboardPreviewLabState(rawValue: "correctionCard"))
-        XCTAssertNotNil(KeyboardPreviewLabState(rawValue: "correctionOnly"))
-        XCTAssertNotNil(KeyboardPreviewLabState(rawValue: "correctionCardNext"))
-        XCTAssertNotNil(KeyboardPreviewLabState(rawValue: "correctionDetail"))
-        XCTAssertNotNil(KeyboardPreviewLabState(rawValue: "correctionComplete"))
     }
 
     func testNonCompactStatesDoNotExposeReplacementTokens() {

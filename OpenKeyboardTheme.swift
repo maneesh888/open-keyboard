@@ -72,14 +72,10 @@ struct OpenKeyboardBrandMark: View {
     var symbolSize: CGFloat = 32
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-
         Image("OpenKeyboardBrandIcon")
             .resizable()
             .scaledToFit()
             .frame(width: size, height: size)
-            .clipShape(shape)
-            .contentShape(shape)
             .shadow(color: OpenKeyboardTheme.Surface.brandGlow, radius: size * 0.10, x: 0, y: size * 0.05)
             .accessibilityLabel("Open Keyboard app icon")
     }
