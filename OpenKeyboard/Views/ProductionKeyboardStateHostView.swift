@@ -2,45 +2,47 @@
 //  ProductionKeyboardStateHostView.swift
 //  OpenKeyboard
 //
-//  UI-test-only host for rendering the actual production KeyboardView states.
-//  This is not Preview Lab and should only be reachable with --uitesting.
+//  UI-test-only host for deterministic production-state routing.
+//  This app-target view must stay self-contained; the real keyboard extension
+//  UI lives in the extension target and is covered by real-extension smoke tests.
 //
 
 import SwiftUI
-import UIKit
 
 struct ProductionKeyboardStateHostView: View {
     let state: String
-    @StateObject private var viewModel: KeyboardViewModel
 
     init(state: String) {
         self.state = state
         Self.seedProductionKeyboardState(state)
-        _viewModel = StateObject(wrappedValue: KeyboardViewModel(
-            textDocumentProxy: HostKeyboardTextDocumentProxy(initialText: "i has a apple"),
-            advanceToNextInputMode: {},
-            productionTestState: state,
-            productionTestFullAccess: true
-        ))
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
+        VStack(spacing: 14) {
+            Image(systemName: "keyboard")
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
                 .accessibilityHidden(true)
 
-            KeyboardView(viewModel: viewModel)
-                .frame(height: 350)
-                .accessibilityIdentifier("production_keyboard_state_view")
+            Text("Keyboard state route")
+                .font(.headline.weight(.bold))
+
+            Text(state)
+                .font(.subheadline.monospaced().weight(.semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .accessibilityIdentifier("production_keyboard_state_value")
+
+            Text("This deterministic app-target route seeds debug state for tests. Real extension UI acceptance still requires the focused keyboard-extension smoke.")
+                .font(.footnote)
+                .multilineTextAlignment(.center)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenKeyboardTheme.Surface.panelBackground)
-        .ignoresSafeArea(.keyboard)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("production_keyboard_state_host_\(state)")
-        .onAppear {
-            viewModel.updateFullAccess(true)
-        }
     }
 
     private static func seedProductionKeyboardState(_ state: String) {
@@ -58,37 +60,4 @@ struct ProductionKeyboardStateHostView: View {
         sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
         sharedDefaults.synchronize()
     }
-}
-
-private final class HostKeyboardTextDocumentProxy: NSObject, UITextDocumentProxy {
-    private var storage: String
-    let documentIdentifier = UUID()
-
-    init(initialText: String) {
-        self.storage = initialText
-        super.init()
-    }
-
-    var documentContextBeforeInput: String? { storage }
-    var documentContextAfterInput: String? { nil }
-    var selectedText: String? { nil }
-    var documentInputMode: UITextInputMode? { nil }
-    var hasText: Bool { !storage.isEmpty }
-
-    func insertText(_ text: String) {
-        storage.append(text)
-    }
-
-    func deleteBackward() {
-        guard !storage.isEmpty else { return }
-        storage.removeLast()
-    }
-
-    func adjustTextPosition(byCharacterOffset offset: Int) {}
-
-    func setMarkedText(_ markedText: String, selectedRange: NSRange) {
-        storage.append(markedText)
-    }
-
-    func unmarkText() {}
 }
