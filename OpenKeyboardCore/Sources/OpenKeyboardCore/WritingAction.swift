@@ -8,23 +8,6 @@ public enum WritingAction: Equatable, Sendable {
     case translate(language: String)
     case custom(id: String, title: String, promptTemplate: String)
 
-    public var operationName: String {
-        switch self {
-        case .continueWriting:
-            return "continue_writing"
-        case .rewrite:
-            return "rewrite"
-        case .fixGrammar:
-            return "fix_grammar"
-        case .summarize:
-            return "summarize"
-        case .translate:
-            return "translate"
-        case .custom(let id, _, _):
-            return id
-        }
-    }
-
     public var title: String {
         switch self {
         case .continueWriting:
@@ -62,10 +45,7 @@ public enum WritingPromptBuilder {
             """
         case .fixGrammar:
             return """
-            Operation: fix_grammar
-            Analyze the text below and return structured JSON with a results array.
-            Each result item should include type, title, text, replacement, explanation, range, and confidence when applicable.
-            Preserve the original meaning and tone.
+            Fix grammar and spelling in the text below. preserve the original meaning and tone. Return only the corrected text.
 
             Text:
             \(text)

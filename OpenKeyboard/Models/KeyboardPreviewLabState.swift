@@ -2,7 +2,7 @@
 //  KeyboardPreviewLabState.swift
 //  OpenKeyboard
 //
-//  Deterministic preview states for hidden debug-reference-only previews. Acceptance screenshots must come from named XCUITests, not direct preview routes.
+//  Deterministic preview states for app lab and screenshot harness.
 //
 
 import Foundation
@@ -76,19 +76,19 @@ enum KeyboardPreviewLabState: String, CaseIterable, Identifiable {
         switch self {
         case .correctionCard:
             return KeyboardPreviewSuggestion(
-                label: "Subject-verb agreement:",
-                replacement: "have",
-                original: "has",
-                remainingCount: 1,
-                prediction: nil
+                label: "Correct capitalization:",
+                replacement: "I",
+                original: "i",
+                remainingCount: 3,
+                prediction: "apple"
             )
         case .correctionCardNext:
             return KeyboardPreviewSuggestion(
-                label: "Correctness:",
-                replacement: "There have been no apples",
-                original: "There has been no apples",
-                remainingCount: 1,
-                prediction: nil
+                label: "Correct verb:",
+                replacement: "have",
+                original: "has",
+                remainingCount: 2,
+                prediction: "an"
             )
         case .correctionOnly:
             return KeyboardPreviewSuggestion(

@@ -9,22 +9,11 @@ final class WritingActionTests: XCTestCase {
         XCTAssertEqual(WritingAction.summarize.title, "Summarize")
     }
 
-    func testBuiltInActionsHaveStableOperationNames() {
-        XCTAssertEqual(WritingAction.continueWriting.operationName, "continue_writing")
-        XCTAssertEqual(WritingAction.rewrite.operationName, "rewrite")
-        XCTAssertEqual(WritingAction.fixGrammar.operationName, "fix_grammar")
-        XCTAssertEqual(WritingAction.summarize.operationName, "summarize")
-        XCTAssertEqual(WritingAction.translate(language: "Arabic").operationName, "translate")
-        XCTAssertEqual(WritingAction.custom(id: "friendly", title: "Make Friendly", promptTemplate: "{{text}}").operationName, "friendly")
-    }
-
-    func testPromptForFixGrammarRequestsStructuredResultsAndPreservesMeaningInstruction() {
+    func testPromptForFixGrammarPreservesMeaningInstruction() {
         let prompt = WritingPromptBuilder.prompt(for: .fixGrammar, text: "i has a apple")
 
-        XCTAssertTrue(prompt.contains("Operation: fix_grammar"))
-        XCTAssertTrue(prompt.contains("structured JSON"))
-        XCTAssertTrue(prompt.contains("results array"))
-        XCTAssertTrue(prompt.contains("Preserve the original meaning"))
+        XCTAssertTrue(prompt.contains("Fix grammar and spelling"))
+        XCTAssertTrue(prompt.contains("preserve the original meaning"))
         XCTAssertTrue(prompt.contains("i has a apple"))
     }
 
