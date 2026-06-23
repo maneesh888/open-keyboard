@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  KeyboardPreviewLabState.swift
 //  OpenKeyboard
@@ -115,3 +116,4 @@ enum KeyboardPreviewLabState: String, CaseIterable, Identifiable {
         compactSuggestion?.nextState ?? self
     }
 }
+#endif
