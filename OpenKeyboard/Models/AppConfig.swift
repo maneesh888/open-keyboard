@@ -189,12 +189,57 @@ extension AppConfig {
         if AppConfig.secretStore.saveAPIKey(apiKey) {
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
         }
+        saveNonSecretValues(to: defaults)
+    }
+
+    @discardableResult
+    func saveTestSeed(
+        to defaults: UserDefaults,
+        overwriteExistingRealConfig: Bool = false,
+        mirrorAPIKeyToDefaultsForUITest: Bool = false
+    ) -> Bool {
+        guard overwriteExistingRealConfig || !AppConfig.hasExistingRealConfig(in: defaults) else {
+            return false
+        }
+
+        if AppConfig.secretStore.saveAPIKey(apiKey) {
+            defaults.removeObject(forKey: AppConfig.apiKeyKey)
+        }
+        if mirrorAPIKeyToDefaultsForUITest {
+            defaults.set(apiKey, forKey: AppConfig.apiKeyKey)
+        }
+        saveNonSecretValues(to: defaults)
+        return true
+    }
+
+    private func saveNonSecretValues(to defaults: UserDefaults) {
         defaults.set(gatewayURL, forKey: AppConfig.gatewayURLKey)
         defaults.set(selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(isConfigured, forKey: AppConfig.isConfiguredKey)
         defaults.set(supportsStructuredCorrections, forKey: AppConfig.supportsStructuredCorrectionsKey)
         defaults.set(structuredCorrectionSchemaVersion, forKey: AppConfig.structuredCorrectionSchemaVersionKey)
         defaults.synchronize()
+    }
+
+    static func hasExistingRealConfig(in defaults: UserDefaults) -> Bool {
+        let keychainAPIKey = secretStore.loadAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let legacyDefaultsAPIKey = defaults.string(forKey: AppConfig.apiKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let gatewayURL = defaults.string(forKey: AppConfig.gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let selectedModel = defaults.string(forKey: AppConfig.selectedModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let candidate = AppConfig(
+            apiKey: keychainAPIKey.isEmpty ? legacyDefaultsAPIKey : keychainAPIKey,
+            gatewayURL: gatewayURL,
+            selectedModel: selectedModel,
+            isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
+            supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
+            structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
+        )
+
+        return candidate.isConfigured
+            && !candidate.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !candidate.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !candidate.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !candidate.isKnownTestPlaceholderConfig
     }
 
     static func clearSharedConfig() {
