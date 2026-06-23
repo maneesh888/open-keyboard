@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  KeyboardVisualPreviewView.swift
 //  OpenKeyboard
@@ -501,3 +502,4 @@ struct KeyboardVisualPreviewView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
+#endif

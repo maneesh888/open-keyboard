@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  KeyboardEditorHostPreviewView.swift
 //  OpenKeyboard
@@ -70,3 +71,4 @@ struct KeyboardEditorHostPreviewView: View {
         }
     }
 }
+#endif

@@ -38,7 +38,11 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowPlaygroundDirectly: Bool {
-        isUITesting && (launchArguments.contains("--playground-all-good-regression-proof") || launchArguments.contains("--playground-direct"))
+        #if DEBUG
+        return isUITesting && (launchArguments.contains("--playground-all-good-regression-proof") || launchArguments.contains("--playground-direct"))
+        #else
+        return false
+        #endif
     }
 
     private var productionKeyboardState: String? {
@@ -49,6 +53,7 @@ struct OpenKeyboardApp: App {
         return argument.replacingOccurrences(of: "--production-keyboard-state=", with: "")
     }
 
+    #if DEBUG
     private var editorHostPreviewState: KeyboardPreviewLabState? {
         guard isUITesting,
               let argument = launchArguments.first(where: { $0.hasPrefix("--editor-host-preview=") }) else {
@@ -61,6 +66,7 @@ struct OpenKeyboardApp: App {
     private var keyboardPreviewPanel: KeyboardVisualPreviewPanel? {
         nil
     }
+    #endif
 
     private var shouldShowOnboarding: Bool {
         guard isUITesting else {
@@ -196,6 +202,7 @@ struct OpenKeyboardApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
+                #if DEBUG
                 if let editorHostPreviewState {
                     KeyboardEditorHostPreviewView(state: editorHostPreviewState)
                 } else if let keyboardPreviewPanel {
@@ -221,6 +228,24 @@ struct OpenKeyboardApp: App {
                     ContentView()
                         .environmentObject(settingsViewModel)
                 }
+                #else
+                if shouldShowLiveAITestHarness {
+                    LiveAITestHarnessView()
+                } else if let productionKeyboardState {
+                    ProductionKeyboardStateHostView(state: productionKeyboardState)
+                } else if shouldShowKeyboardHostTest {
+                    KeyboardExtensionHostTestView()
+                } else if shouldShowOnboarding {
+                    OnboardingView(
+                        hasCompletedOnboarding: $hasCompletedOnboarding,
+                        initialPage: onboardingInitialPage
+                    )
+                    .environmentObject(settingsViewModel)
+                } else {
+                    ContentView()
+                        .environmentObject(settingsViewModel)
+                }
+                #endif
             }
             .onAppear {
                 refreshUITestGatewayConfigIfNeeded()
