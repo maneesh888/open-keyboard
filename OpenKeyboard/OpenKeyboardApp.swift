@@ -93,7 +93,6 @@ struct OpenKeyboardApp: App {
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("--uitesting"), arguments.contains("--seed-gateway-config") || arguments.contains("--seed-functional-gateway-config") else { return }
 
-        AppConfig.clearSharedConfig()
         let environment = ProcessInfo.processInfo.environment
         let apiKey = environment["OPEN_KEYBOARD_TEST_API_KEY"]
         let gatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]
@@ -113,14 +112,18 @@ struct OpenKeyboardApp: App {
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
-        config.save()
-
         if let sharedDefaults = AppConfig.sharedDefaults() {
-            // Keep UI-test placeholder config visible to the keyboard extension even when
-            // the simulator proof configuration does not define DEBUG for the app target.
-            sharedDefaults.set(apiKey, forKey: AppConfig.apiKeyKey)
-            sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
-            sharedDefaults.synchronize()
+            let didSeed = config.saveTestSeed(
+                to: sharedDefaults,
+                overwriteExistingRealConfig: arguments.contains("--clear-gateway-config"),
+                mirrorAPIKeyToDefaultsForUITest: true
+            )
+            if didSeed {
+                // Keep UI-test placeholder config visible to the keyboard extension even when
+                // the simulator proof configuration does not define DEBUG for the app target.
+                sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+                sharedDefaults.synchronize()
+            }
         }
     }
 

@@ -31,3 +31,7 @@ Carthage/Build/
 # Generated reports and verification artifacts
 reports/
 *.xcresult
+
+# Local simulator gateway seed files (real API keys; never commit)
+.agent/local-seeds/
+*.seed.local.env
