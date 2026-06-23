@@ -7,7 +7,7 @@ final class UserFlowTests: XCTestCase {
             action: .fixGrammar,
             typedText: "i has a apple",
             modelResponse: "I have an apple.",
-            expectedPromptFragments: ["Fix grammar and spelling", "i has a apple"],
+            expectedPromptFragments: ["Operation: fix_grammar", "structured JSON", "results array", "i has a apple"],
             replacementStrategy: .replaceAll
         )
 
@@ -69,11 +69,11 @@ final class UserFlowTests: XCTestCase {
         ).normalized()
         XCTAssertNoThrow(try config.validate(), file: file, line: line)
 
-        let http = SequencedMockHTTPClient(responses: [
-            HTTPResponse(statusCode: 200, data: #"{"data":[{"id":"local-llm"},{"id":"cloud-llm"}]}"#.data(using: .utf8)!),
-            HTTPResponse(statusCode: 200, data: chatCompletionData(content: modelResponse))
+        let server = DummyGatewayServer([
+            .models(["local-llm", "cloud-llm"]),
+            .chatPlainText(modelResponse)
         ])
-        let client = GatewayClient(config: config, httpClient: http)
+        let client = GatewayClient(config: config, httpClient: server)
 
         let models = try await client.fetchModels()
         let selectedModel = try XCTUnwrap(models.first, file: file, line: line)
@@ -81,13 +81,13 @@ final class UserFlowTests: XCTestCase {
         let output = try await client.performWritingAction(action, text: typedText, model: selectedModel)
         let finalText = replacementStrategy.apply(original: typedText, replacement: output)
 
-        XCTAssertEqual(http.requests.map(\.url.absoluteString), [
+        XCTAssertEqual(server.requestedURLs, [
             "https://gateway.example/v1/models",
             "https://gateway.example/v1/chat/completions"
         ], file: file, line: line)
-        XCTAssertEqual(http.requests.map(\.headers["Authorization"]), ["Bearer test-key", "Bearer test-key"], file: file, line: line)
+        XCTAssertEqual(server.authorizationHeaders, ["Bearer test-key", "Bearer test-key"], file: file, line: line)
 
-        let chatRequest = try XCTUnwrap(http.requests.last, file: file, line: line)
+        let chatRequest = try XCTUnwrap(server.requests.last, file: file, line: line)
         XCTAssertEqual(chatRequest.method, "POST", file: file, line: line)
         XCTAssertEqual(chatRequest.headers["Content-Type"], "application/json", file: file, line: line)
 
@@ -107,30 +107,4 @@ private struct WritingFlowResult {
     let models: [String]
     let selectedModel: String
     let finalText: String
-}
-
-private final class SequencedMockHTTPClient: HTTPClient, @unchecked Sendable {
-    private var responses: [HTTPResponse]
-    private(set) var requests: [HTTPRequest] = []
-
-    init(responses: [HTTPResponse]) {
-        self.responses = responses
-    }
-
-    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
-        requests.append(request)
-        guard !responses.isEmpty else {
-            return HTTPResponse(statusCode: 500, data: Data())
-        }
-        return responses.removeFirst()
-    }
-}
-
-private func chatCompletionData(content: String) -> Data {
-    let escapedContent = content
-        .replacingOccurrences(of: #"\"#, with: #"\\"#)
-        .replacingOccurrences(of: #""#, with: #"\"#)
-        .replacingOccurrences(of: "\n", with: #"\n"#)
-
-    return #"{"choices":[{"message":{"content":"\#(escapedContent)"}}]}"#.data(using: .utf8)!
 }
