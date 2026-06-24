@@ -19,7 +19,13 @@ struct KeyboardView: View {
 
             switch viewModel.panelMode {
             case .keyboard:
-                if let correction = viewModel.currentCorrection {
+                if let error = viewModel.actionError {
+                    KeyboardActionErrorPanel(
+                        error: error,
+                        onDismiss: { viewModel.clearActionError() },
+                        onRetry: { viewModel.showActionPanel() }
+                    )
+                } else if let correction = viewModel.currentCorrection {
                     CorrectionDetailPanel(
                         correction: correction,
                         onApply: { viewModel.applyCurrentCorrection() },
@@ -293,6 +299,71 @@ private struct AIActionPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .disabled(!actionsEnabled)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
+    }
+}
+
+private struct KeyboardActionErrorPanel: View {
+    let error: KeyboardActionErrorState
+    let onDismiss: () -> Void
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                    .frame(width: 38, height: 38)
+                    .background(OpenKeyboardTheme.Surface.warningBackground, in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(error.title)
+                        .font(.headline.weight(.semibold))
+                    Text(error.message)
+                        .font(.caption)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        .lineLimit(3)
+                        .accessibilityIdentifier("ai_error_message")
+                }
+                Spacer()
+            }
+
+            HStack(spacing: 10) {
+                Button(action: onRetry) {
+                    Text("Try Again")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                .background(OpenKeyboardTheme.Semantic.primaryAction)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("ai_error_retry")
+
+                Button(action: onDismiss) {
+                    Text("Dismiss")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(OpenKeyboardTheme.Semantic.error, lineWidth: 1.2)
+                )
+                .accessibilityIdentifier("ai_error_dismiss")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+        .background(KeyboardColors.overlayBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.warning.opacity(0.6), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_error_panel")
     }
 }
 
