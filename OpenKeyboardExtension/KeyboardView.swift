@@ -19,7 +19,15 @@ struct KeyboardView: View {
 
             switch viewModel.panelMode {
             case .keyboard:
-                keyGrid
+                if let correction = viewModel.currentCorrection {
+                    CorrectionDetailPanel(
+                        correction: correction,
+                        onApply: { viewModel.applyCurrentCorrection() },
+                        onDismiss: { viewModel.dismissCurrentCorrection() }
+                    )
+                } else {
+                    keyGrid
+                }
             case .actions:
                 AIActionPanel(
                     actionsEnabled: viewModel.canRunAIAction,
@@ -285,6 +293,94 @@ private struct AIActionPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .disabled(!actionsEnabled)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
+    }
+}
+
+private struct CorrectionDetailPanel: View {
+    let correction: KeyboardCorrectionSuggestion
+    let onApply: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text(correction.label.isEmpty ? "Correct grammar" : correction.label)
+                    .font(.headline.weight(.bold))
+                    .lineLimit(1)
+                Spacer()
+                Text("1 issue")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(OpenKeyboardTheme.Semantic.error, in: Capsule())
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Replace")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Text(correction.original)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.9))
+                    .strikethrough(color: OpenKeyboardTheme.Semantic.error)
+                    .accessibilityIdentifier("ai_correction_original")
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("With")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                Text(correction.replacement)
+                    .font(.title3.weight(.bold))
+                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+                    .accessibilityIdentifier("ai_correction_replacement")
+            }
+
+            if let explanation = correction.explanation, !explanation.isEmpty {
+                Text(explanation)
+                    .font(.caption)
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("ai_correction_explanation")
+            }
+
+            HStack(spacing: 10) {
+                Button(action: onApply) {
+                    Text("Apply")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                .background(OpenKeyboardTheme.Semantic.primaryAction)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .accessibilityIdentifier("ai_correction_apply")
+
+                Button(action: onDismiss) {
+                    Text("Dismiss")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(OpenKeyboardTheme.Semantic.error, lineWidth: 1.2)
+                )
+                .accessibilityIdentifier("ai_correction_dismiss")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
+        .background(KeyboardColors.overlayBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.error.opacity(0.55), lineWidth: 1.2)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_correction_panel")
     }
 }
 
