@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  KeyboardExtensionHostTestView.swift
 //  OpenKeyboard
@@ -75,3 +76,4 @@ private struct KeyboardHostTextView: UIViewRepresentable {
         }
     }
 }
+#endif

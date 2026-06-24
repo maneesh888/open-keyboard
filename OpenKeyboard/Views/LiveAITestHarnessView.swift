@@ -1,3 +1,4 @@
+#if DEBUG
 import SwiftUI
 
 struct LiveAITestHarnessView: View {
@@ -188,3 +189,4 @@ private struct ChatResponse: Decodable {
 private struct ChatChoice: Decodable {
     let message: ChatMessage
 }
+#endif
