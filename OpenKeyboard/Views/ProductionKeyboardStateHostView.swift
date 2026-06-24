@@ -1,3 +1,4 @@
+#if DEBUG
 //
 //  ProductionKeyboardStateHostView.swift
 //  OpenKeyboard
@@ -61,3 +62,4 @@ struct ProductionKeyboardStateHostView: View {
         sharedDefaults.synchronize()
     }
 }
+#endif

@@ -36,11 +36,19 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowLiveAITestHarness: Bool {
-        isUITesting && launchArguments.contains("--live-ai-test-harness")
+        #if DEBUG
+        return isUITesting && launchArguments.contains("--live-ai-test-harness")
+        #else
+        return false
+        #endif
     }
 
     private var shouldShowKeyboardHostTest: Bool {
-        isUITesting && launchArguments.contains("--keyboard-host-test")
+        #if DEBUG
+        return isUITesting && launchArguments.contains("--keyboard-host-test")
+        #else
+        return false
+        #endif
     }
 
     private var shouldShowPlaygroundDirectly: Bool {
@@ -52,11 +60,15 @@ struct OpenKeyboardApp: App {
     }
 
     private var productionKeyboardState: String? {
+        #if DEBUG
         guard isUITesting,
               let argument = launchArguments.first(where: { $0.hasPrefix("--production-keyboard-state=") }) else {
             return nil
         }
         return argument.replacingOccurrences(of: "--production-keyboard-state=", with: "")
+        #else
+        return nil
+        #endif
     }
 
     #if DEBUG
@@ -240,13 +252,7 @@ struct OpenKeyboardApp: App {
                         .environmentObject(settingsViewModel)
                 }
                 #else
-                if shouldShowLiveAITestHarness {
-                    LiveAITestHarnessView()
-                } else if let productionKeyboardState {
-                    ProductionKeyboardStateHostView(state: productionKeyboardState)
-                } else if shouldShowKeyboardHostTest {
-                    KeyboardExtensionHostTestView()
-                } else if shouldShowOnboarding {
+                if shouldShowOnboarding {
                     OnboardingView(
                         hasCompletedOnboarding: $hasCompletedOnboarding,
                         initialPage: onboardingInitialPage
