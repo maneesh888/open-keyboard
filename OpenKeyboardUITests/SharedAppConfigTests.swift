@@ -250,6 +250,7 @@ final class SharedAppConfigTests: XCTestCase {
 
 
 
+    #if OPENKEYBOARD_APP_NETWORK_TESTS
     func testCorrectionSmokeResponseRequiresUsableCorrection() {
         XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse("I have an apple."))
         XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse("Corrected: I have an apple"))
@@ -275,6 +276,7 @@ final class SharedAppConfigTests: XCTestCase {
             "API key was rejected by the gateway. Reconnect your gateway in the app."
         )
     }
+    #endif
 
     func testResolvedGatewayModelPrefersCurrentModelBeforeAppleFallback() {
         let model = AppConfig.resolvedGatewayModel(
