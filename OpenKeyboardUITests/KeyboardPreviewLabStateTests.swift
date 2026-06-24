@@ -1,3 +1,4 @@
+#if DEBUG
 import XCTest
 
 final class KeyboardPreviewLabStateTests: XCTestCase {
@@ -92,3 +93,4 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertNil(KeyboardPreviewLabState.correctionComplete.compactSuggestion)
     }
 }
+#endif
