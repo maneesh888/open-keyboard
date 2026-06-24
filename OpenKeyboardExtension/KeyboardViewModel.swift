@@ -10,15 +10,17 @@ import UIKit
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
     private let advanceToNextInputMode: () -> Void
-    private let aiService = KeyboardAIService()
+    private let aiService: KeyboardAIServiceProviding
+    private let loadConfig: () -> AppConfig
 
     @Published var isShiftEnabled = false
     @Published var isNumbersEnabled = false
-    @Published private(set) var config = AppConfig.load()
+    @Published private(set) var config = AppConfig.default
     @Published private(set) var hasFullAccess = false
     @Published private(set) var aiStatus = "Ready"
     @Published private(set) var isPerformingAIAction = false
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
+    @Published private(set) var suggestionState: KeyboardSuggestionState?
     private var composingBuffer = ""
 
     private enum Keys {
@@ -29,8 +31,22 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess && config.isConfigured && !config.apiKey.isEmpty && !isPerformingAIAction
     }
 
+    var currentCorrection: KeyboardCorrectionSuggestion? {
+        suggestionState?.currentCorrection
+    }
+
     var toolbarState: KeyboardToolbarState {
-        KeyboardToolbarState.current(
+        if let suggestionState,
+           let correction = suggestionState.currentCorrection {
+            return KeyboardToolbarState(kind: .correctionPreview(
+                count: suggestionState.remainingCorrectionCount,
+                explanation: correction.explanation ?? correction.label,
+                replacement: correction.replacement,
+                original: correction.original
+            ))
+        }
+
+        return KeyboardToolbarState.current(
             hasFullAccess: hasFullAccess,
             isConfigured: config.isConfigured,
             selectedModel: config.selectedModel,
@@ -41,12 +57,19 @@ final class KeyboardViewModel: ObservableObject {
 
     init(
         textDocumentProxy: UITextDocumentProxy,
-        advanceToNextInputMode: @escaping () -> Void
+        advanceToNextInputMode: @escaping () -> Void,
+        aiService: KeyboardAIServiceProviding = KeyboardAIService(),
+        loadConfig: @escaping () -> AppConfig = AppConfig.load,
+        productionTestFullAccess: Bool = false
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.advanceToNextInputMode = advanceToNextInputMode
+        self.aiService = aiService
+        self.loadConfig = loadConfig
+        self.config = loadConfig()
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
         self.panelMode = Self.consumeInitialPanelModeSeed()
+        self.hasFullAccess = productionTestFullAccess
     }
 
     func insert(_ character: String) {
@@ -101,13 +124,42 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .keyboard
     }
 
+    func applyCurrentCorrection() {
+        guard var state = suggestionState,
+              let updatedText = state.textByApplyingCurrentCorrection(to: currentEditableText()) else {
+            dismissCurrentCorrection()
+            return
+        }
+        replaceEditableText(with: updatedText)
+        state.applyCurrentCorrection()
+        finishCorrectionStep(state)
+    }
+
+    func dismissCurrentCorrection() {
+        guard var state = suggestionState else { return }
+        state.dismissCurrentCorrection()
+        finishCorrectionStep(state)
+    }
+
+    private func finishCorrectionStep(_ state: KeyboardSuggestionState) {
+        suggestionState = state
+        if state.currentCorrection == nil {
+            suggestionState = nil
+            aiStatus = "No more suggestions"
+            panelMode = .correctionComplete
+        } else {
+            aiStatus = "Suggestions ready"
+            panelMode = .keyboard
+        }
+    }
+
     func updateFullAccess(_ value: Bool) {
         hasFullAccess = value
         reloadConfig()
     }
 
     func reloadConfig() {
-        config = AppConfig.load()
+        config = loadConfig()
         if !hasFullAccess {
             aiStatus = "Enable Allow Full Access"
         } else {
@@ -126,7 +178,7 @@ final class KeyboardViewModel: ObservableObject {
             recordDebugEvent("action_blocked_no_full_access")
             return
         }
-        config = AppConfig.load()
+        config = loadConfig()
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
         if composingBuffer.isEmpty, Self.debugStateEnabled {
             composingBuffer = Self.loadPersistedComposingBuffer()
@@ -149,13 +201,24 @@ final class KeyboardViewModel: ObservableObject {
 
         Task {
             do {
-                let output = try await aiService.perform(action: action, on: replacementPlan.textForAI, config: currentConfig)
+                let result = try await aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
                 await MainActor.run {
-                    recordDebugEvent("action_request_success output=\(output.count)")
-                    replace(plan: replacementPlan, with: output)
-                    aiStatus = "No more suggestions"
-                    isPerformingAIAction = false
-                    panelMode = .correctionComplete
+                    recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
+                    switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result) {
+                    case .showCorrections(let response):
+                        suggestionState = KeyboardSuggestionState(response: response)
+                        aiStatus = "Suggestions ready"
+                        isPerformingAIAction = false
+                        panelMode = .keyboard
+                    case .replaceText(let output):
+                        replace(plan: replacementPlan, with: output)
+                        aiStatus = action == .summarize ? "Summary ready" : "No more suggestions"
+                        isPerformingAIAction = false
+                        panelMode = .correctionComplete
+                    case .noUsableResult:
+                        aiStatus = "No AI response"
+                        isPerformingAIAction = false
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -175,7 +238,28 @@ final class KeyboardViewModel: ObservableObject {
             textDocumentProxy.deleteBackward()
         }
         textDocumentProxy.insertText(finalReplacement)
-        clearComposingBuffer()
+        composingBuffer = finalReplacement
+        persistComposingBuffer()
+    }
+
+    private func currentEditableText() -> String {
+        if let context = textDocumentProxy.documentContextBeforeInput, !context.isEmpty {
+            return context
+        }
+        if composingBuffer.isEmpty, Self.debugStateEnabled {
+            composingBuffer = Self.loadPersistedComposingBuffer()
+        }
+        return composingBuffer
+    }
+
+    private func replaceEditableText(with replacement: String) {
+        let currentText = currentEditableText()
+        for _ in currentText {
+            textDocumentProxy.deleteBackward()
+        }
+        textDocumentProxy.insertText(replacement)
+        composingBuffer = replacement
+        persistComposingBuffer()
     }
 
     private func persistComposingBuffer() {

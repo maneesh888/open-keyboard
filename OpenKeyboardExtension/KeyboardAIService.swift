@@ -12,6 +12,14 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    var operationName: String {
+        switch self {
+        case .fixGrammar: return "fix_grammar"
+        case .rewrite: return "rewrite"
+        case .summarize: return "summarize"
+        }
+    }
+
     var title: String {
         switch self {
         case .fixGrammar: return "Fix Grammar"
@@ -31,13 +39,37 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     func prompt(for text: String) -> String {
         switch self {
         case .fixGrammar:
-            return "Correct the grammar of this text. Return only the corrected text, no explanation:\n\n\(text)"
+            return """
+            Operation: fix_grammar
+            Analyze this text and return structured JSON with a results array of correction items. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+
+            Text:
+            \(text)
+            """
         case .rewrite:
-            return "Rewrite this text in a clear, friendly tone. Return only the rewritten text, no explanation:\n\n\(text)"
+            return """
+            Operation: rewrite
+            Rewrite this text in a clear, friendly tone. Return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
+
+            Text:
+            \(text)
+            """
         case .summarize:
-            return "Summarize this text concisely. Return only the summary, no explanation:\n\n\(text)"
+            return """
+            Operation: summarize
+            Summarize this text concisely. Return structured JSON with a summary item.
+
+            Text:
+            \(text)
+            """
         }
     }
+}
+
+protocol KeyboardAIServiceProviding: AnyObject {
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult
 }
 
 enum KeyboardAIError: LocalizedError {
@@ -66,7 +98,7 @@ enum KeyboardAIError: LocalizedError {
     }
 }
 
-final class KeyboardAIService {
+final class KeyboardAIService: KeyboardAIServiceProviding {
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
         let output = try await performRawSuggestionRequest(prompt: KeyboardSuggestionParser.prompt(for: text), config: config)
         return try KeyboardSuggestionParser.parseAssistantContent(output)
@@ -77,10 +109,35 @@ final class KeyboardAIService {
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
-        return try await performRequest(systemPrompt: "You are an iOS keyboard text editing assistant. Return only the replacement text.", userPrompt: action.prompt(for: text), maxTokens: 180, config: config)
+        let result = try await performResult(action: action, on: text, config: config)
+        let output = result.displayText
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw KeyboardAIError.invalidResponse }
+        return output
     }
 
-    private func performRequest(systemPrompt: String, userPrompt: String, maxTokens: Int, config: AppConfig) async throws -> String {
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        let output = try await performRequest(
+            systemPrompt: Self.structuredOperationSystemPrompt,
+            userPrompt: action.prompt(for: text),
+            operation: action.operationName,
+            inputText: text,
+            maxTokens: 320,
+            config: config
+        )
+        do {
+            return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
+        } catch {
+            throw KeyboardAIError.invalidResponse
+        }
+    }
+
+    private static let structuredOperationSystemPrompt = """
+    You are an iOS keyboard text editing assistant. Return strict JSON only.
+    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
+    """
+
+    private func performRequest(systemPrompt: String, userPrompt: String, operation: String? = nil, inputText: String? = nil, maxTokens: Int, config: AppConfig) async throws -> String {
         let trimmed = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         var gatewayURL = config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,6 +158,8 @@ final class KeyboardAIService {
 
         let body = ChatRequest(
             model: config.selectedModel,
+            operation: operation,
+            inputText: inputText.map { String($0.prefix(500)) },
             messages: [
                 ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: trimmed)
@@ -127,10 +186,22 @@ final class KeyboardAIService {
 
 private struct ChatRequest: Encodable {
     let model: String
+    let operation: String?
+    let inputText: String?
     let messages: [ChatMessage]
     let maxTokens: Int
     let temperature: Double
     let stream: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case operation
+        case inputText = "input_text"
+        case messages
+        case maxTokens = "max_tokens"
+        case temperature
+        case stream
+    }
 }
 
 private struct ChatMessage: Codable {

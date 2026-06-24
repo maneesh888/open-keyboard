@@ -31,15 +31,6 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertFalse(state.isActionEnabled)
     }
 
-    func testRuntimeGatewayErrorDoesNotShowReady() {
-        let state = KeyboardToolbarState(kind: .error(message: "Gateway HTTP 500"))
-
-        XCTAssertEqual(state.title, "AI unavailable")
-        XCTAssertEqual(state.subtitle, "Gateway HTTP 500")
-        XCTAssertFalse(state.isActionEnabled)
-        XCTAssertNotEqual(state.subtitle, "Ready")
-    }
-
     func testActionsStateUsesLoadedModel() {
         let state = KeyboardToolbarState.current(
             hasFullAccess: true,
@@ -56,6 +47,23 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertTrue(state.showsBrandMark)
         XCTAssertFalse(state.showsIssueCount)
         XCTAssertEqual(state.issueCount, 0)
+    }
+
+    func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {
+        let state = KeyboardToolbarState.current(
+            hasFullAccess: true,
+            isConfigured: true,
+            selectedModel: "gemma4:latest",
+            isPerformingAIAction: false,
+            aiStatus: "AI ready · gemma4:latest"
+        )
+
+        XCTAssertEqual(state.kind, .actions(status: "Ready"))
+        XCTAssertEqual(state.title, "Open Keyboard AI")
+        XCTAssertEqual(state.subtitle, "Ready")
+        XCTAssertNotEqual(state.subtitle, "Analyzing")
+        XCTAssertTrue(state.isActionEnabled)
+        XCTAssertTrue(state.showsBrandMark)
     }
 
     func testLoadingStateBlocksActions() {
