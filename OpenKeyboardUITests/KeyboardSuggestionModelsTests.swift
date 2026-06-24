@@ -1,6 +1,16 @@
 import XCTest
 
 final class KeyboardSuggestionModelsTests: XCTestCase {
+    func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
+        let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
+
+        XCTAssertEqual(error.title, "Gateway error")
+        XCTAssertFalse(error.message.contains("{"))
+        XCTAssertFalse(error.message.localizedCaseInsensitiveContains("api_key"))
+        XCTAssertFalse(error.message.localizedCaseInsensitiveContains("token"))
+        XCTAssertLessThanOrEqual(error.message.count, 140)
+    }
+
     func testParsesCorrectionsAndPredictions() throws {
         let json = """
         {"corrections":[{"label":"Correct capitalization","original":" i ","replacement":" I ","explanation":"Capitalize I.","category":"capitalization"}],"predictions":[{"label":"Suggestion","text":" apple ","kind":"nextWord"}]}

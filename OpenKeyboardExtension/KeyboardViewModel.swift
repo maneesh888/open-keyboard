@@ -21,6 +21,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var isPerformingAIAction = false
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
     @Published private(set) var suggestionState: KeyboardSuggestionState?
+    @Published private(set) var actionError: KeyboardActionErrorState?
     private var composingBuffer = ""
 
     private enum Keys {
@@ -36,6 +37,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     var toolbarState: KeyboardToolbarState {
+        if let actionError {
+            return KeyboardToolbarState(kind: .error(message: actionError.message))
+        }
         if let suggestionState,
            let correction = suggestionState.currentCorrection {
             return KeyboardToolbarState(kind: .correctionPreview(
@@ -124,6 +128,20 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .keyboard
     }
 
+    func clearActionError() {
+        actionError = nil
+        aiStatus = config.isConfigured ? "Ready" : "Pair gateway in app"
+        panelMode = .keyboard
+    }
+
+    private func showActionError(_ message: String) {
+        let error = KeyboardActionErrorState(message: message)
+        actionError = error
+        aiStatus = error.message
+        isPerformingAIAction = false
+        panelMode = .keyboard
+    }
+
     func applyCurrentCorrection() {
         guard var state = suggestionState,
               let updatedText = state.textByApplyingCurrentCorrection(to: currentEditableText()) else {
@@ -192,6 +210,7 @@ final class KeyboardViewModel: ObservableObject {
         }
 
         let currentConfig = config
+        actionError = nil
         panelMode = .keyboard
         isPerformingAIAction = true
         aiStatus = "\(action.title)…"
@@ -216,15 +235,14 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noUsableResult:
-                        aiStatus = "No AI response"
-                        isPerformingAIAction = false
+                        showActionError("No AI response")
                     }
                 }
             } catch {
                 await MainActor.run {
-                    recordDebugEvent("action_request_failed:\((error as? LocalizedError)?.errorDescription ?? error.localizedDescription)")
-                    aiStatus = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    isPerformingAIAction = false
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    recordDebugEvent("action_request_failed:\(KeyboardActionErrorState.sanitized(message))")
+                    showActionError(message)
                 }
             }
         }
