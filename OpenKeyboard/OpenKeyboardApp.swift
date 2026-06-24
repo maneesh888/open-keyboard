@@ -14,11 +14,13 @@ struct OpenKeyboardApp: App {
     private var hasCompletedOnboarding = false
     
     init() {
+        #if DEBUG
         Self.clearUITestConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayErrorAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
         Self.seedUITestKeyboardSuggestionStateAtLaunchIfNeeded()
+        #endif
     }
 
     private var launchArguments: [String] {
@@ -26,7 +28,11 @@ struct OpenKeyboardApp: App {
     }
 
     private var isUITesting: Bool {
-        launchArguments.contains("--uitesting")
+        #if DEBUG
+        return launchArguments.contains("--uitesting")
+        #else
+        return false
+        #endif
     }
 
     private var shouldShowLiveAITestHarness: Bool {
@@ -89,6 +95,7 @@ struct OpenKeyboardApp: App {
         return min(max(value, 0), 3)
     }
 
+    #if DEBUG
     private static func clearUITestConfigAtLaunchIfNeeded() {
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("--uitesting"), arguments.contains("--clear-gateway-config") else { return }
@@ -192,11 +199,15 @@ struct OpenKeyboardApp: App {
         return trimmed
     }
 
+    #endif
+
     private func refreshUITestGatewayConfigIfNeeded() {
+        #if DEBUG
         guard isUITesting, launchArguments.contains("--seed-gateway-config") || launchArguments.contains("--seed-functional-gateway-config") else { return }
 
         settingsViewModel.applyConfig(AppConfig.load())
         hasCompletedOnboarding = true
+        #endif
     }
 
     var body: some Scene {
