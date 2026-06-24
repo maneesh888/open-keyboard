@@ -299,7 +299,7 @@ interface ClientConfig {
 - [ ] Stream response
 - [ ] Replace text or append to cursor
 
-**Deliverable:** Full Grammarly-like AI interaction mode
+**Deliverable:** Full high-quality writing-assistant interaction mode
 
 ---
 

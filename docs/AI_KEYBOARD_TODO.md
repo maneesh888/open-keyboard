@@ -350,7 +350,7 @@
 ## Product/Architecture Decisions Added 2026-05-18
 
 ### Product Target
-- [ ] Target a Grammarly-level or better AI writing assistant, not just a basic AI keyboard.
+- [ ] Target a polished, high-quality AI writing assistant, not just a basic AI keyboard.
 - [ ] Pair Open Keyboard with LLM Gateway as the required backend for auth, rate limits, model routing, and LLM access.
 - [ ] Keep the public positioning privacy-first: user-owned gateway, keys, logs, and model backend.
 
@@ -377,7 +377,7 @@
 - [ ] If iOS requires `UIInputViewController` for the keyboard extension lifecycle, keep it as a minimal hosting bridge only; product UI should remain SwiftUI.
 - [ ] Reference Allora Keyboard only for behavioral/UX inspiration where useful; do not copy code blindly and do not treat it as our project.
 
-### Grammarly-Class Feature Roadmap
+### High-Quality Writing Assistant Feature Roadmap
 - [ ] Grammar and spelling fixes.
 - [ ] Clarity improvements.
 - [ ] Tone transforms: professional, friendly, concise, assertive, polished.
@@ -388,8 +388,8 @@
 - [ ] Preview before replacing long text; avoid destructive auto-replace.
 - [ ] Fast, cancellable LLM calls with graceful fallback UI.
 
-### Keyboard UI Reference: Grammarly Keyboard
-- [ ] Use Grammarly keyboard screenshot as UX reference for first visual target.
+### Keyboard UI Reference: Neutral Writing Assistant Benchmarks
+- [ ] Use neutral, original UX references for the first visual target.
 - [ ] Dark keyboard surface with rounded top container.
 - [ ] Top assistant/suggestion row:
   - [ ] Left brand/logo button.
@@ -404,14 +404,14 @@
   - [ ] Bottom utility row with globe/next keyboard and microphone.
 - [ ] Support dark mode first; add light mode later.
 - [ ] Keep UI SwiftUI-first; any `UIInputViewController` should only host SwiftUI.
-- [ ] Avoid exact Grammarly branding/copying; use it as layout/quality benchmark only.
+- [ ] Avoid third-party branding/copying; use original layout and quality benchmarks only.
 - [ ] Suggestion row must support inline correction cards, not only plain word predictions:
   - [ ] Correction card shows action label such as "Correct spelling".
   - [ ] Correction card shows replacement text with accent color.
   - [ ] Logo badge can indicate number of issues/actions available.
   - [ ] Remaining row slots can still show predictive words/quoted replacements.
   - [ ] Tapping correction card should preview/apply fix safely depending on text length.
-- [ ] Use standard iOS keyboard colors/materials for light/dark mode instead of hardcoding Grammarly screenshot colors.
+- [ ] Use standard iOS keyboard colors/materials for light/dark mode instead of hardcoding third-party screenshot colors.
 - [ ] Top-left icon opens an in-keyboard AI/issues UI panel.
 - [ ] Top-right assistant icon opens the main AI interaction UI inside the keyboard.
 - [ ] Treat these icon-triggered panels as primary AI interaction surfaces; Maneesh will provide more UI references after basic setup is complete.

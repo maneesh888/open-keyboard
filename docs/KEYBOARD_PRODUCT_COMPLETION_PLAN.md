@@ -119,13 +119,13 @@ Operating rule:
 - If a host request has no result for ~30–60 minutes, re-read it, report stale state, and queue a narrower continuation/fallback request.
 - Keep code changes small and verified.
 
-## M2 direction — iOS-like keyboard + Grammarly-style AI UX
+## M2 direction — iOS-like keyboard + compact AI writing UX
 
 Decision: after M1 proved the real Fix Grammar path end-to-end, the next product track is to fine-tune features and improve the keyboard experience.
 
 Goals:
 - Keep base typing UX visually and behaviorally close to Apple's iOS keyboard.
-- Keep AI UX closer to Grammarly: helpful, compact, and contextual rather than large app-style buttons.
+- Keep AI UX helpful, compact, and contextual rather than large app-style buttons.
 - Preserve the verified M1 path: app config → extension config → gateway POST → text replacement.
 
 M2 acceptance criteria:
@@ -151,15 +151,14 @@ Next safe implementation slice:
 1. First patch current settings/status polish and commit if clean.
 2. Then start M2 keyboard layout redesign behind small, testable changes.
 
-### Reference: Grammarly keyboard screenshot 2026-06-08
+### Reference: Neutral keyboard layout benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-keyboard-reference-20260608.jpg`
 
 Observed UX details to mimic/adapt:
 - Overall keyboard container is iOS-like light gray with rounded top corners.
 - Top strip is compact, not tall:
-  - Grammarly logo button on left.
+  - Product icon button on left.
   - Prediction/suggestion words in the middle.
   - AI/sparkle action button on right.
 - AI controls are not giant app buttons; they are integrated into a suggestion strip.
@@ -175,10 +174,9 @@ M2 implication:
 - Replace current large magenta action buttons with a compact suggestion/action strip.
 - Build an iOS-like key grid with row offsets and functional modifier keys before adding more AI features.
 
-### Reference: Grammarly keyboard dark mode screenshot 2026-06-08
+### Reference: Neutral keyboard dark-mode benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-keyboard-dark-reference-20260608.jpg`
 
 Observed dark-mode details:
 - Keyboard container is near-black/dark gray, still with rounded top corners.
@@ -192,10 +190,9 @@ M2 implication:
 - Implement light/dark adaptive colors explicitly.
 - Keep the same geometry across modes; only tokens/colors change.
 
-### Reference: Grammarly suggestion-state toolbar 2026-06-08
+### Reference: Neutral suggestion-state toolbar benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-keyboard-suggestion-state-20260608.jpg`
 
 Observed dynamic toolbar behavior:
 - The same compact toolbar changes state based on context/API suggestions.
@@ -238,16 +235,15 @@ Toolbar direction:
 Rule:
 - No giant buttons.
 - No fake prediction words.
-- Keep a compact, polished Grammarly-style bar above the keyboard.
+- Keep a compact, polished writing-assistant bar above the keyboard.
 
-### Reference: Grammarly correction-card toolbar 2026-06-08
+### Reference: Neutral correction-card toolbar benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-correction-card-toolbar-20260608.jpg`
 
 Observed correction toolbar layout:
 - Left issue-count badge:
-  - Rounded Grammarly-style badge showing `1` correction.
+  - Rounded badge showing `1` correction.
 - Primary correction card:
   - Compact rounded rectangle.
   - Top line is short explanation/truncated rule, e.g. `Correct subject-verb...`.
@@ -271,10 +267,9 @@ M2 correction-state model:
   - original: current buffer/current line
   - count: `1`
 
-### Reference: Grammarly correction detail overlay 2026-06-08
+### Reference: Neutral correction detail overlay benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-correction-detail-overlay-20260608.jpg`
 
 Observed expanded issue-count behavior:
 - Tapping the issue count opens an expanded correction detail surface that replaces the key grid area.
@@ -304,10 +299,9 @@ Scope decision:
 - First M2 slice can implement compact toolbar only.
 - Expanded correction detail is M2.2 after compact toolbar + iOS-like key grid compile and screenshot cleanly.
 
-### Reference: Grammarly correction-complete state 2026-06-08
+### Reference: Neutral correction-complete benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-correction-complete-state-20260608.jpg`
 
 Observed post-correction behavior:
 - After the correction is applied and no suggestions remain, the keyboard area is replaced by a completion state.
@@ -317,7 +311,7 @@ Observed post-correction behavior:
 - Primary action:
   - `Back to Keyboard`
 - Globe and microphone remain in the bottom safe-area row.
-- This confirms Grammarly treats correction flow as a set of keyboard-panel states, not just a top toolbar.
+- This confirms the correction flow should be treated as a set of keyboard-panel states, not just a top toolbar.
 
 Priority adjustment:
 - Implement/test this correction-complete state before broader M2 polish.
@@ -334,10 +328,9 @@ Tests required:
 - Host screenshot verification of the completion panel.
 - Real Fix Grammar functional test still passes and can return to keyboard.
 
-### Reference: Grammarly sparkle action panel 2026-06-08
+### Reference: Neutral sparkle action panel benchmark
 
 Artifact:
-- `docs/design/artifacts/grammarly-sparkle-action-panel-20260608.jpg`
 
 Observed sparkle behavior:
 - Tapping sparkle opens an AI action panel that replaces the key grid.
