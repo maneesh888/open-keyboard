@@ -13,8 +13,8 @@ struct PlaygroundView: View {
     @State private var isCheckingGateway = false
     @State private var regressionResult: PlaygroundAnalysisResult?
 
-    private static var isGrammarlyProofMode: Bool {
-        ProcessInfo.processInfo.arguments.contains("--playground-grammarly-proof")
+    private static var isWritingAssistantProofMode: Bool {
+        ProcessInfo.processInfo.arguments.contains("--playground-writing-assistant-proof")
     }
 
     private static var isGatewayProofMode: Bool {
@@ -26,7 +26,7 @@ struct PlaygroundView: View {
     }
 
     private static var initialText: String {
-        if isGrammarlyProofMode { return "There has been no apples" }
+        if isWritingAssistantProofMode { return "There has been no apples" }
         if isGatewayProofMode || isRegressionProofMode { return "i has a apple,ths is nt sound sound" }
         return "i has a apple,ths is nt sound sound"
     }
@@ -94,9 +94,9 @@ struct PlaygroundView: View {
                             .accessibilityIdentifier("playground_analysis_result")
                     }
 
-                    if Self.isGrammarlyProofMode {
+                    if Self.isWritingAssistantProofMode {
                         PlaygroundCorrectionProofCard(card: proofCard)
-                            .accessibilityIdentifier("playground_grammarly_correction_card")
+                            .accessibilityIdentifier("playground_writing_assistant_correction_card")
                     }
 
                     Text("Tip: if the standard keyboard appears, switch keyboards from the globe key and choose Open Keyboard.")

@@ -17,7 +17,7 @@ struct KeyboardPreviewLabView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Keyboard Preview Lab")
                             .font(.largeTitle.weight(.bold))
-                        Text("Safe deterministic previews for the future Grammarly-style correction flow. No private typed text or live debug internals are exposed here.")
+                        Text("Safe deterministic previews for the future compact correction flow. No private typed text or live debug internals are exposed here.")
                             .font(.subheadline)
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }

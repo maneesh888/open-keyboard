@@ -3,7 +3,7 @@
 Last updated: 2026-06-19 12:55 Asia/Dubai
 
 ## Goal
-Make Open Keyboard feel closer to iOS keyboard + Grammarly UX while preserving the verified M1 gateway Fix Grammar path.
+Make Open Keyboard feel closer to a polished iOS keyboard plus high-quality writing-assistant UX while preserving the verified M1 gateway Fix Grammar path.
 
 ## Current status
 
@@ -20,7 +20,7 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
   - Commit: `7a3438d Document Open Keyboard release hardening`
 - iPhone 17 Pro simulator App Group entitlement issue diagnosed and fixed by reinstall.
   - Request: `/app/workspace/clawd-coder/requests/clawmaster/20260608T132414-openkeyboard-iphone17-entitlements-reinstall.md`
-- Grammarly/iOS keyboard references saved under:
+- Private third-party/iOS keyboard references were removed from repo tracking; use only neutral local references outside git:
   - `docs/design/artifacts/`
 - M2 design notes appended to:
   - `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md`
@@ -43,7 +43,7 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
 - Do not fake iOS predictive text.
 - Top keyboard bar should be AI-only.
 - Existing actions should move out of the top bar and into sparkle overlay.
-- Use Grammarly references closely for UX.
+- Use original, neutral writing-assistant UX references.
 - Write tests for all behavior slices.
 
 ## Active blockers / issues
@@ -97,7 +97,7 @@ Planned:
   - `You did it!`
   - `There are no more suggestions.`
   - `Back to Keyboard`
-- Keyboard panel state replaces key grid, matching Grammarly reference.
+- Keyboard panel state replaces key grid, matching the compact writing-assistant target.
 
 ### M2.3 — Correction detail overlay
 
