@@ -122,6 +122,7 @@ private struct KeyboardAIToolbar: View {
         .padding(.vertical, 6)
         .background(KeyboardColors.toolbarBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai_toolbar")
     }
 
