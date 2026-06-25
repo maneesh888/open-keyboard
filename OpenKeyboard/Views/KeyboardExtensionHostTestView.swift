@@ -10,6 +10,7 @@ import UIKit
 struct KeyboardExtensionHostTestView: View {
     @State private var text = ""
     private let autoFocusEditor = ProcessInfo.processInfo.arguments.contains("--keyboard-host-autofocus")
+    private let preferOpenKeyboardInputMode = ProcessInfo.processInfo.arguments.contains("--keyboard-host-prefer-openkeyboard")
 
     var body: some View {
         VStack(spacing: 16) {
@@ -22,7 +23,7 @@ struct KeyboardExtensionHostTestView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
-            KeyboardHostTextView(text: $text, autoFocus: autoFocusEditor)
+            KeyboardHostTextView(text: $text, autoFocus: autoFocusEditor, preferOpenKeyboardInputMode: preferOpenKeyboardInputMode)
                 .frame(minHeight: 180)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(
@@ -40,9 +41,11 @@ struct KeyboardExtensionHostTestView: View {
 private struct KeyboardHostTextView: UIViewRepresentable {
     @Binding var text: String
     let autoFocus: Bool
+    let preferOpenKeyboardInputMode: Bool
 
     func makeUIView(context: Context) -> UITextView {
-        let textView = UITextView()
+        let textView = KeyboardHostUITextView()
+        textView.preferOpenKeyboardInputMode = preferOpenKeyboardInputMode
         textView.delegate = context.coordinator
         textView.font = .preferredFont(forTextStyle: .body)
         textView.adjustsFontForContentSizeCategory = true
@@ -70,6 +73,20 @@ private struct KeyboardHostTextView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(text: $text)
     }
+
+private final class KeyboardHostUITextView: UITextView {
+    var preferOpenKeyboardInputMode = false
+
+    override var textInputMode: UITextInputMode? {
+        guard preferOpenKeyboardInputMode else {
+            return super.textInputMode
+        }
+
+        return UITextInputMode.activeInputModes.first(where: { inputMode in
+            inputMode.primaryLanguage == "en-US"
+        }) ?? super.textInputMode
+    }
+}
 
     final class Coordinator: NSObject, UITextViewDelegate {
         @Binding private var text: String
