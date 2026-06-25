@@ -15,7 +15,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     }
 
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {
-        let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus"])
+        let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"])
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
 
@@ -53,7 +53,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     }
 
     func testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured() throws {
-        let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus"], requiresInjectedGatewayCredentials: true)
+        let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"], requiresInjectedGatewayCredentials: true)
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
 
