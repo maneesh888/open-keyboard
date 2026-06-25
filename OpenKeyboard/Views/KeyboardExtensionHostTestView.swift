@@ -9,6 +9,7 @@ import UIKit
 
 struct KeyboardExtensionHostTestView: View {
     @State private var text = ""
+    private let autoFocusEditor = ProcessInfo.processInfo.arguments.contains("--keyboard-host-autofocus")
 
     var body: some View {
         VStack(spacing: 16) {
@@ -21,7 +22,7 @@ struct KeyboardExtensionHostTestView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
 
-            KeyboardHostTextView(text: $text)
+            KeyboardHostTextView(text: $text, autoFocus: autoFocusEditor)
                 .frame(minHeight: 180)
                 .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14))
                 .overlay(
@@ -38,6 +39,7 @@ struct KeyboardExtensionHostTestView: View {
 
 private struct KeyboardHostTextView: UIViewRepresentable {
     @Binding var text: String
+    let autoFocus: Bool
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -51,6 +53,11 @@ private struct KeyboardHostTextView: UIViewRepresentable {
         textView.spellCheckingType = .no
         textView.keyboardType = .default
         textView.accessibilityIdentifier = "keyboard_host_text_editor"
+        if autoFocus {
+            DispatchQueue.main.async {
+                textView.becomeFirstResponder()
+            }
+        }
         return textView
     }
 
