@@ -10,6 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
+    @State private var showingPlayground = false
 
     var body: some View {
         NavigationView {
@@ -40,6 +41,38 @@ struct ContentView: View {
                                 settingsViewModel.openKeyboardSettings()
                             }
 
+                            if settingsViewModel.config.isConfigured {
+                                Button(action: {
+                                    showingPlayground = true
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "sparkles")
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Open Playground")
+                                                .font(.headline)
+                                            Text("Try AI writing actions in a real text field")
+                                                .font(.caption)
+                                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                                .lineLimit(1)
+                                        }
+                                        Spacer(minLength: 8)
+                                        Image(systemName: "chevron.right")
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    }
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(OpenKeyboardTheme.Brand.cyan.opacity(0.45), lineWidth: 1.2)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier("playground_entry_button")
+                            }
 
                             Button(action: {
                                 showingSettings = true
@@ -70,6 +103,12 @@ struct ContentView: View {
             .sheet(isPresented: $showingSettings) {
                 SettingsView()
                     .environmentObject(settingsViewModel)
+            }
+            .sheet(isPresented: $showingPlayground) {
+                NavigationView {
+                    PlaygroundView()
+                }
+                .environmentObject(settingsViewModel)
             }
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
