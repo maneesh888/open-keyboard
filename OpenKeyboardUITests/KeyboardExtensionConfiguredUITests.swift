@@ -14,6 +14,25 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts[Self.placeholderModel].waitForExistence(timeout: 5))
     }
 
+
+    func testConfiguredHomeOpensPlaygroundAndFocusesInput() throws {
+        let app = configuredContainingApp(extraArguments: ["--skip-onboarding"])
+        app.launch()
+
+        let entry = app.buttons["playground_entry_button"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5), "Configured home should expose the Playground entry")
+        XCTAssertFalse(app.staticTexts["Keyboard Preview Lab"].exists, "Normal home must not expose Preview Lab")
+
+        entry.tap()
+
+        XCTAssertTrue(app.staticTexts["playground_title"].waitForExistence(timeout: 5), "Playground title should be visible after tapping entry")
+        let input = app.textViews["playground_text_input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5), "Playground text input should be available")
+        input.tap()
+        input.typeText(" hello")
+        XCTAssertTrue((input.value as? String)?.contains("hello") == true, "Playground input should accept typed text")
+    }
+
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {
         let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"])
         app.launch()
