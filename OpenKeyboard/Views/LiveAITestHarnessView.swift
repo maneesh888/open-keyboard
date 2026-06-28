@@ -35,6 +35,16 @@ struct LiveAITestHarnessView: View {
                     .accessibilityIdentifier("live_ai_fix_grammar_button")
 
                     Button {
+                        run(action: "improve")
+                    } label: {
+                        Label("Improve", systemImage: "sparkles")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(isLoading)
+                    .accessibilityIdentifier("live_ai_improve_button")
+
+                    Button {
                         run(action: "summarize")
                     } label: {
                         Label("Summarize", systemImage: "text.alignleft")
@@ -103,19 +113,15 @@ struct LiveAITestHarnessView: View {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 45
 
-        let prompt: String
-        switch action {
-        case "fix_grammar":
-            prompt = "Fix grammar and spelling. Return only the corrected text, no explanation. Text:\n\(text)"
-        case "summarize":
-            prompt = "Summarize this text concisely. Return only the summary, no explanation. Text:\n\(text)"
-        default:
-            throw LiveAITestHarnessError.unsupportedAction
-        }
-
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: model,
-            messages: [ChatMessage(role: "user", content: prompt)],
+            operation: action,
+            inputText: String(text.prefix(500)),
+            messages: [
+                ChatMessage(role: "system", content: Self.structuredOperationSystemPrompt),
+                ChatMessage(role: "user", content: prompt(for: action, text: text))
+            ],
+            maxTokens: 320,
             temperature: 0.1,
             stream: false
         ))
@@ -133,7 +139,50 @@ struct LiveAITestHarnessView: View {
               !content.isEmpty else {
             throw LiveAITestHarnessError.invalidResponse
         }
-        return content
+
+        let result = try KeyboardActionOperationResult.parse(content, operation: action, fallbackText: text)
+        let output = result.displayText
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw LiveAITestHarnessError.invalidResponse
+        }
+        return output
+    }
+
+    private static let structuredOperationSystemPrompt = """
+    You are an iOS keyboard text editing assistant. Return strict JSON only.
+    Contract: {"operation":"fix_grammar|summarize|improve","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
+    """
+
+    private func prompt(for action: String, text: String) throws -> String {
+        switch action {
+        case "fix_grammar":
+            return """
+            Operation: fix_grammar
+            Analyze this text and return structured JSON with a results array of correction items. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+
+            Text:
+            \(text)
+            """
+        case "improve":
+            return """
+            Operation: improve
+            Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a suggestion item and corrected_text for the full replacement.
+
+            Text:
+            \(text)
+            """
+        case "summarize":
+            return """
+            Operation: summarize
+            Summarize this text concisely. Return structured JSON with a summary item.
+
+            Text:
+            \(text)
+            """
+        default:
+            throw LiveAITestHarnessError.unsupportedAction
+        }
     }
 
     private func userMessage(for error: Error) -> String {
@@ -172,9 +221,22 @@ private enum LiveAITestHarnessError: Error {
 
 private struct ChatRequest: Encodable {
     let model: String
+    let operation: String
+    let inputText: String
     let messages: [ChatMessage]
+    let maxTokens: Int
     let temperature: Double
     let stream: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case model
+        case operation
+        case inputText = "input_text"
+        case messages
+        case maxTokens = "max_tokens"
+        case temperature
+        case stream
+    }
 }
 
 private struct ChatMessage: Codable {

@@ -34,6 +34,24 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
     }
 
+    func testImproveWithRealGatewayUsesStructuredResultContract() throws {
+        let editor = app.textViews["live_ai_text_editor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.tap()
+        editor.typeText("this message sound rough and unclear")
+
+        app.buttons["live_ai_improve_button"].tap()
+
+        let status = app.staticTexts["live_ai_status"]
+        XCTAssertTrue(status.waitForText("Success", timeout: 60))
+
+        let value = (editor.value as? String) ?? ""
+        XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertNotEqual(value, "this message sound rough and unclear")
+        XCTAssertFalse(value.contains("{\"operation\""), "Output should not display raw structured JSON: \(value)")
+        XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
+    }
+
     func testInvalidAPIKeyShowsErrorAndPreservesTypedText() throws {
         app.terminate()
         app = XCUIApplication()
