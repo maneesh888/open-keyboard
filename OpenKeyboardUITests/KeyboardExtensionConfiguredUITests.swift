@@ -25,7 +25,8 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         entry.tap()
 
-        XCTAssertTrue(app.staticTexts["playground_title"].waitForExistence(timeout: 5), "Playground title should be visible after tapping entry")
+        XCTAssertTrue(app.navigationBars["Playground"].waitForExistence(timeout: 5), "Playground navigation title should be visible after tapping entry")
+        XCTAssertEqual(app.staticTexts.matching(identifier: "Playground").count, 1, "Playground should only render one visible title")
         let input = app.textViews["playground_text_input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5), "Playground text input should be available")
         input.tap()

@@ -28,7 +28,7 @@ struct PlaygroundView: View {
     private static var initialText: String {
         if isWritingAssistantProofMode { return "There has been no apples" }
         if isGatewayProofMode || isRegressionProofMode { return "i has a apple,ths is nt sound sound" }
-        return "i has a apple,ths is nt sound sound"
+        return "Although the meeting ran longer than expected, the team still managed to refine the proposal before the deadline."
     }
 
     private var proofCard: KeyboardCorrectionCard {
@@ -47,16 +47,10 @@ struct PlaygroundView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 18) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Playground")
-                            .font(.largeTitle.weight(.bold))
-                            .accessibilityIdentifier("playground_title")
-
-                        Text("Type here with Open Keyboard selected to try your AI writing actions in a real text field.")
-                            .font(.subheadline)
-                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                    Text("Type here with Open Keyboard selected to try your AI writing actions in a real text field.")
+                        .font(.subheadline)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     if Self.isGatewayProofMode {
                         PlaygroundGatewayProofCard(
