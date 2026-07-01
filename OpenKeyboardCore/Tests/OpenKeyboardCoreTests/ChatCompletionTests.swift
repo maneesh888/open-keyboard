@@ -250,6 +250,71 @@ final class ChatCompletionTests: XCTestCase {
         }
     }
 
+
+    func testStructuredOperationResultParsesCommonDisplayAliases() async throws {
+        let scenarios: [(String, WritingAction, String)] = [
+            (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, .rewrite, "This is clearer."),
+            (#"{"operation":"fix_grammar","correctedText":"I have an apple."}"#, .fixGrammar, "I have an apple."),
+            (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, .rewrite, "Clearer text."),
+            (#"{"operation":"fix_grammar","improved_text":"I have an apple."}"#, .fixGrammar, "I have an apple."),
+            (#"{"operation":"rewrite","replacement":"Replacement text."}"#, .rewrite, "Replacement text."),
+            (#"{"operation":"rewrite","text":"Top-level text."}"#, .rewrite, "Top-level text."),
+            (#"{"operation":"rewrite","output":"Output text."}"#, .rewrite, "Output text.")
+        ]
+
+        for (content, action, expectedDisplayText) in scenarios {
+            let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
+
+            let result = try await client.performWritingActionResult(action, text: "i has a apple", model: "test-model")
+
+            XCTAssertEqual(result.displayText, expectedDisplayText)
+            XCTAssertTrue(result.isStructuredResponse)
+        }
+    }
+
+    func testStructuredJSONStringPayloadIsParsedInsteadOfReturnedAsRawText() async throws {
+        let payload = #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Subject-verb agreement","text":"Use have.","original":"has","replacement":"have"}],"summary":"One issue found."}"#
+        let encodedPayload = String(data: try JSONEncoder().encode(payload), encoding: .utf8)!
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(encodedPayload)))
+
+        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(result.items.count, 1)
+        XCTAssertEqual(result.items.first?.replacement, "have")
+        XCTAssertFalse(result.displayText.contains("\"operation\""), "Raw JSON string must not become display text")
+    }
+
+    func testMalformedJSONLikeWritingActionResponseIsInvalidNotLegacyReplacement() async {
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(#"{"operation":"fix_grammar","results":["#)))
+
+        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "i has a apple", model: "test-model")) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+    }
+
+    func testPerformWritingActionDoesNotReplaceTextWithStructuredNoIssueSummary() async {
+        let content = #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
+
+        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "The app works well.", model: "test-model")) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+    }
+
+    func testPerformWritingActionDoesNotReplaceCleanTextWithSameCorrectedText() async throws {
+        let content = #"{"operation":"fix_grammar","results":[],"corrected_text":"The app works well today."}"#
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
+
+        let result = try await client.performWritingActionResult(.fixGrammar, text: "The app works well today.", model: "test-model")
+
+        XCTAssertTrue(result.isStructuredGrammarNoChange)
+        let actionClient = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
+        await XCTAssertThrowsErrorAsync(try await actionClient.performWritingAction(.fixGrammar, text: "The app works well today.", model: "test-model")) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+    }
+
     private var validConfig: GatewayConfig {
         DummyGatewayServer.validConfig
     }
