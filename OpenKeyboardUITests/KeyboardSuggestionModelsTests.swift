@@ -51,6 +51,44 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertThrowsError(try KeyboardSuggestionParser.parseAssistantContent("not json"))
     }
 
+    func testLongPhraseCorrectionsApplyAfterEarlierLengthChangesAndDismissal() {
+        let original = "Yesterday I has a apple before the meeting, and ths message still sound wrong when I send it to the client."
+        XCTAssertGreaterThanOrEqual(original.count, 80)
+        let response = KeyboardSuggestionResponse(
+            corrections: [
+                KeyboardCorrectionSuggestion(label: "Verb tense", original: "has", replacement: "had"),
+                KeyboardCorrectionSuggestion(label: "Article", original: "a apple", replacement: "an apple"),
+                KeyboardCorrectionSuggestion(label: "Spelling", original: "ths", replacement: "this"),
+                KeyboardCorrectionSuggestion(label: "Subject-verb agreement", original: "sound", replacement: "sounds"),
+                KeyboardCorrectionSuggestion(label: "Verb tense", original: "send", replacement: "sent")
+            ],
+            predictions: []
+        )
+        var state = KeyboardSuggestionState(response: response)
+        var text = original
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "Yesterday I had a apple before the meeting, and ths message still sound wrong when I send it to the client.")
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "Yesterday I had an apple before the meeting, and ths message still sound wrong when I send it to the client.")
+
+        state.dismissCurrentCorrection()
+        XCTAssertEqual(text, "Yesterday I had an apple before the meeting, and ths message still sound wrong when I send it to the client.")
+        XCTAssertEqual(state.currentCorrection?.original, "sound")
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "Yesterday I had an apple before the meeting, and ths message still sounds wrong when I send it to the client.")
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "Yesterday I had an apple before the meeting, and ths message still sounds wrong when I sent it to the client.")
+        XCTAssertTrue(state.isComplete)
+    }
+
     func testAppliesAndDismissesStructuredCorrectionsInSequence() {
         let response = KeyboardSuggestionResponse(
             corrections: [
