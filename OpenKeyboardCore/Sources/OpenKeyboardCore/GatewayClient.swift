@@ -30,12 +30,16 @@ public struct WritingActionResult: Equatable, Sendable {
     public var items: [WritingActionResultItem]
     public var summary: String?
     public var correctedText: String?
+    public var isStructuredResponse: Bool
+    public var isNoChangeResult: Bool
 
-    public init(operation: String, items: [WritingActionResultItem], summary: String? = nil, correctedText: String? = nil) {
+    public init(operation: String, items: [WritingActionResultItem], summary: String? = nil, correctedText: String? = nil, isStructuredResponse: Bool = false, isNoChangeResult: Bool = false) {
         self.operation = operation
         self.items = items
         self.summary = summary
         self.correctedText = correctedText
+        self.isStructuredResponse = isStructuredResponse
+        self.isNoChangeResult = isNoChangeResult
     }
 
     public var displayText: String {
@@ -49,6 +53,10 @@ public struct WritingActionResult: Equatable, Sendable {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    public var isStructuredGrammarNoChange: Bool {
+        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
     }
 }
 
@@ -126,6 +134,9 @@ public final class GatewayClient: Sendable {
 
     public func performWritingAction(_ action: WritingAction, text: String, model: String) async throws -> String {
         let result = try await performWritingActionResult(action, text: text, model: model)
+        if action == .fixGrammar, result.isStructuredGrammarNoChange {
+            throw GatewayClientError.invalidResponse
+        }
         let displayText = result.displayText
         guard !displayText.isEmpty else { throw GatewayClientError.invalidResponse }
         return displayText
@@ -171,28 +182,10 @@ public final class GatewayClient: Sendable {
     private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
         let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw GatewayClientError.invalidResponse }
-        if let data = trimmed.data(using: .utf8), let decoded = try? JSONDecoder().decode(RawWritingActionResult.self, from: data) {
-            let items = decoded.decodedItems.enumerated().compactMap { index, raw -> WritingActionResultItem? in
-                let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
-                let title = clean(raw.title) ?? Self.defaultTitle(for: raw.type, operation: decoded.operation ?? operation)
-                guard let text, !text.isEmpty, !Self.isNestedJSONLike(text) else { return nil }
-                return WritingActionResultItem(
-                    id: clean(raw.id) ?? "item-\(index + 1)",
-                    type: clean(raw.type) ?? "suggestion",
-                    title: title,
-                    text: text,
-                    original: clean(raw.original),
-                    replacement: clean(raw.replacement),
-                    range: raw.range,
-                    confidence: raw.confidence,
-                    explanation: clean(raw.explanation)
-                )
-            }
-            let correctedText = clean(decoded.correctedText)
-            let summary = clean(decoded.summary)
-            if items.isEmpty, correctedText == nil, summary == nil { throw GatewayClientError.invalidResponse }
-            return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: items, summary: summary, correctedText: correctedText)
+        if let structuredContent = try normalizedStructuredContent(from: trimmed) {
+            return try parseStructuredWritingActionResult(structuredContent, operation: operation, fallbackText: fallbackText)
         }
+        guard !isJSONLike(trimmed) else { throw GatewayClientError.invalidResponse }
         let legacy = trimmed
         guard !legacy.isEmpty, legacy != fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) else { throw GatewayClientError.invalidResponse }
         return WritingActionResult(
@@ -202,6 +195,64 @@ public final class GatewayClient: Sendable {
         )
     }
 
+    private static func parseStructuredWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
+        guard let data = content.data(using: .utf8), let decoded = try? JSONDecoder().decode(RawWritingActionResult.self, from: data) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let items = decoded.decodedItems.enumerated().compactMap { index, raw -> WritingActionResultItem? in
+            let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
+            let title = clean(raw.title) ?? Self.defaultTitle(for: raw.type, operation: decoded.operation ?? operation)
+            guard let text, !text.isEmpty, !Self.isNestedJSONLike(text) else { return nil }
+            return WritingActionResultItem(
+                id: clean(raw.id) ?? "item-\(index + 1)",
+                type: clean(raw.type) ?? "suggestion",
+                title: title,
+                text: text,
+                original: clean(raw.original),
+                replacement: clean(raw.replacement),
+                range: raw.range,
+                confidence: raw.confidence,
+                explanation: clean(raw.explanation)
+            )
+        }
+        let correctedText = clean(decoded.correctedText)
+        let summary = clean(decoded.summary)
+        let topLevelDisplayText = clean(decoded.topLevelDisplayText)
+        if items.isEmpty, correctedText == nil, summary == nil, topLevelDisplayText == nil { throw GatewayClientError.invalidResponse }
+
+        var canonicalItems = items
+        if canonicalItems.isEmpty, let topLevelDisplayText {
+            canonicalItems = [WritingActionResultItem(
+                id: "result-1",
+                type: operation == "summarize" ? "summary" : "suggestion",
+                title: Self.defaultTitle(for: operation == "summarize" ? "summary" : "suggestion", operation: operation),
+                text: topLevelDisplayText,
+                replacement: topLevelDisplayText
+            )]
+        }
+
+        let finalCorrectedText = correctedText ?? topLevelDisplayText
+        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
+        let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
+
+        return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
+    }
+
+    private static func normalizedStructuredContent(from trimmed: String) throws -> String? {
+        if isJSONObjectLike(trimmed) { return trimmed }
+        guard let data = trimmed.data(using: .utf8),
+              let decodedString = try? JSONDecoder().decode(String.self, from: data) else {
+            return nil
+        }
+        let nested = stripMarkdownFence(decodedString).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !nested.isEmpty else { throw GatewayClientError.invalidResponse }
+        if isJSONObjectLike(nested) { return nested }
+        if isJSONLike(nested) { throw GatewayClientError.invalidResponse }
+        return nil
+    }
+
     private static func clean(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
@@ -209,10 +260,18 @@ public final class GatewayClient: Sendable {
 
     private static func isNestedJSONLike(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
-            return false
-        }
+        guard isJSONLike(trimmed) else { return false }
         return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil
+    }
+
+    private static func isJSONObjectLike(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{") && trimmed.hasSuffix("}")
+    }
+
+    private static func isJSONLike(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
     }
 
     private static func defaultTitle(for type: String?, operation: String) -> String {
@@ -368,18 +427,47 @@ private struct RawWritingActionResult: Decodable {
     let operation: String?
     let results: [RawWritingActionResultItem]?
     let rawItems: [RawWritingActionResultItem]?
+    let rawResult: RawWritingActionResultItem?
     let summary: String?
     let correctedText: String?
+    let topLevelDisplayText: String?
 
     enum CodingKeys: String, CodingKey {
         case operation
         case results
         case rawItems = "items"
+        case rawResult = "result"
         case summary
         case correctedText = "corrected_text"
+        case correctedTextCamel = "correctedText"
+        case rewrittenText = "rewritten_text"
+        case rewrittenTextCamel = "rewrittenText"
+        case improvedText = "improved_text"
+        case improvedTextCamel = "improvedText"
+        case replacement
+        case text
+        case output
     }
 
-    var decodedItems: [RawWritingActionResultItem] { results ?? rawItems ?? [] }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        operation = try container.decodeIfPresent(String.self, forKey: .operation)
+        results = try container.decodeIfPresent([RawWritingActionResultItem].self, forKey: .results)
+        rawItems = try container.decodeIfPresent([RawWritingActionResultItem].self, forKey: .rawItems)
+        rawResult = try? container.decodeIfPresent(RawWritingActionResultItem.self, forKey: .rawResult)
+        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        correctedText = Self.firstString(in: container, keys: [.correctedText, .correctedTextCamel])
+        topLevelDisplayText = Self.firstString(in: container, keys: [.rawResult, .rewrittenText, .rewrittenTextCamel, .improvedText, .improvedTextCamel, .replacement, .text, .output])
+    }
+
+    var decodedItems: [RawWritingActionResultItem] { results ?? rawItems ?? rawResult.map { [$0] } ?? [] }
+
+    private static func firstString(in container: KeyedDecodingContainer<CodingKeys>, keys: [CodingKeys]) -> String? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key) { return value }
+        }
+        return nil
+    }
 }
 
 private struct RawWritingActionResultItem: Decodable {

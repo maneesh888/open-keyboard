@@ -148,6 +148,17 @@ struct KeyboardActionOperationResult: Equatable {
     let items: [Item]
     let summary: String?
     let correctedText: String?
+    let isStructuredResponse: Bool
+    let isNoChangeResult: Bool
+
+    init(operation: String, items: [Item], summary: String? = nil, correctedText: String? = nil, isStructuredResponse: Bool = false, isNoChangeResult: Bool = false) {
+        self.operation = operation
+        self.items = items
+        self.summary = summary
+        self.correctedText = correctedText
+        self.isStructuredResponse = isStructuredResponse
+        self.isNoChangeResult = isNoChangeResult
+    }
 
     func suggestionResponse() -> KeyboardSuggestionResponse {
         KeyboardSuggestionResponse(
@@ -170,33 +181,17 @@ struct KeyboardActionOperationResult: Equatable {
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    var isStructuredGrammarNoChange: Bool {
+        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
+    }
+
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
-        let stripped = try normalizedStructuredContent(from: content).trimmingCharacters(in: .whitespacesAndNewlines)
+        let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !stripped.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
-        if let data = stripped.data(using: .utf8), let decoded = try? JSONDecoder().decode(Raw.self, from: data) {
-            let items = decoded.decodedItems.enumerated().compactMap { index, raw -> Item? in
-                let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
-                guard let text, !text.isEmpty, !isNestedJSONLike(text) else { return nil }
-                let replacement = clean(raw.replacement)
-                return Item(
-                    id: clean(raw.id) ?? "item-\(index + 1)",
-                    type: clean(raw.type) ?? "suggestion",
-                    title: clean(raw.title) ?? defaultTitle(for: raw.type, operation: decoded.operation ?? operation),
-                    text: text,
-                    original: clean(raw.original),
-                    replacement: replacement.flatMap { isNestedJSONLike($0) ? nil : $0 },
-                    range: raw.range,
-                    confidence: raw.confidence,
-                    explanation: clean(raw.explanation),
-                    category: clean(raw.category)
-                )
-            }
-            let correctedText = clean(decoded.correctedText).flatMap { isNestedJSONLike($0) ? nil : $0 }
-            let summary = clean(decoded.summary).flatMap { isNestedJSONLike($0) ? nil : $0 }
-            if items.isEmpty, correctedText == nil, summary == nil { throw KeyboardActionOperationResultError.invalidResponse }
-            return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: items, summary: summary, correctedText: correctedText)
+        if let structuredContent = try normalizedStructuredContent(from: stripped) {
+            return try parseStructuredContent(structuredContent, operation: operation, fallbackText: fallbackText)
         }
-        guard !isNestedJSONLike(stripped) else { throw KeyboardActionOperationResultError.invalidResponse }
+        guard !isJSONLike(stripped) else { throw KeyboardActionOperationResultError.invalidResponse }
         let legacy = stripped
         guard !legacy.isEmpty, legacy != fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) else { throw KeyboardActionOperationResultError.invalidResponse }
         return KeyboardActionOperationResult(
@@ -207,20 +202,69 @@ struct KeyboardActionOperationResult: Equatable {
         )
     }
 
-    private static func normalizedStructuredContent(from content: String, depth: Int = 0) throws -> String {
-        let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !stripped.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
-        guard depth < 4 else { return stripped }
-        guard let data = stripped.data(using: .utf8) else { return stripped }
+    private static func parseStructuredContent(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
+        guard let data = content.data(using: .utf8), let decoded = try? JSONDecoder().decode(Raw.self, from: data) else {
+            throw KeyboardActionOperationResultError.invalidResponse
+        }
+        let items = decoded.decodedItems.enumerated().compactMap { index, raw -> Item? in
+            let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
+            guard let text, !text.isEmpty, !isNestedJSONLike(text) else { return nil }
+            return Item(
+                id: clean(raw.id) ?? "item-\(index + 1)",
+                type: clean(raw.type) ?? "suggestion",
+                title: clean(raw.title) ?? defaultTitle(for: raw.type, operation: decoded.operation ?? operation),
+                text: text,
+                original: clean(raw.original),
+                replacement: clean(raw.replacement).flatMap { isNestedJSONLike($0) ? nil : $0 },
+                range: raw.range,
+                confidence: raw.confidence,
+                explanation: clean(raw.explanation),
+                category: clean(raw.category)
+            )
+        }
+        let correctedText = clean(decoded.correctedText).flatMap { isNestedJSONLike($0) ? nil : $0 }
+        let summary = clean(decoded.summary).flatMap { isNestedJSONLike($0) ? nil : $0 }
+        let topLevelDisplayText = clean(decoded.topLevelDisplayText).flatMap { isNestedJSONLike($0) ? nil : $0 }
+        if items.isEmpty, correctedText == nil, summary == nil, topLevelDisplayText == nil { throw KeyboardActionOperationResultError.invalidResponse }
+
+        var canonicalItems = items
+        if canonicalItems.isEmpty, let topLevelDisplayText {
+            canonicalItems = [Item(
+                id: "result-1",
+                type: operation == "summarize" ? "summary" : "suggestion",
+                title: defaultTitle(for: operation == "summarize" ? "summary" : "suggestion", operation: operation),
+                text: topLevelDisplayText,
+                replacement: topLevelDisplayText
+            )]
+        }
+
+        let finalCorrectedText = correctedText ?? topLevelDisplayText
+        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
+        let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
+
+        return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
+    }
+
+    private static func normalizedStructuredContent(from stripped: String, depth: Int = 0) throws -> String? {
+        guard depth < 4 else { return nil }
+        if isJSONObjectLike(stripped) { return stripped }
+        guard let data = stripped.data(using: .utf8) else { return nil }
         if let jsonString = try? JSONDecoder().decode(String.self, from: data) {
-            return try normalizedStructuredContent(from: jsonString, depth: depth + 1)
+            let nested = stripMarkdownFence(jsonString).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !nested.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
+            if isJSONObjectLike(nested) { return nested }
+            if isJSONLike(nested) { throw KeyboardActionOperationResultError.invalidResponse }
+            return try normalizedStructuredContent(from: nested, depth: depth + 1)
         }
         if let wrapped = try? JSONDecoder().decode(ChatCompletionWrapper.self, from: data),
            let content = wrapped.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines),
            !content.isEmpty {
-            return try normalizedStructuredContent(from: content, depth: depth + 1)
+            let nested = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
+            return try normalizedStructuredContent(from: nested, depth: depth + 1)
         }
-        return stripped
+        return nil
     }
 
     private static func clean(_ value: String?) -> String? {
@@ -230,10 +274,18 @@ struct KeyboardActionOperationResult: Equatable {
 
     private static func isNestedJSONLike(_ value: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard (trimmed.hasPrefix("{") && trimmed.hasSuffix("}")) || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]")) else {
-            return false
-        }
+        guard isJSONLike(trimmed) else { return false }
         return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil
+    }
+
+    private static func isJSONObjectLike(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{") && trimmed.hasSuffix("}")
+    }
+
+    private static func isJSONLike(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
     }
 
     private static func defaultTitle(for type: String?, operation: String) -> String {
@@ -317,18 +369,47 @@ struct KeyboardActionOperationResult: Equatable {
         let operation: String?
         let results: [RawItem]?
         let rawItems: [RawItem]?
+        let rawResult: RawItem?
         let summary: String?
         let correctedText: String?
+        let topLevelDisplayText: String?
 
         enum CodingKeys: String, CodingKey {
             case operation
             case results
             case rawItems = "items"
+            case rawResult = "result"
             case summary
             case correctedText = "corrected_text"
+            case correctedTextCamel = "correctedText"
+            case rewrittenText = "rewritten_text"
+            case rewrittenTextCamel = "rewrittenText"
+            case improvedText = "improved_text"
+            case improvedTextCamel = "improvedText"
+            case replacement
+            case text
+            case output
         }
 
-        var decodedItems: [RawItem] { results ?? rawItems ?? [] }
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            operation = try container.decodeIfPresent(String.self, forKey: .operation)
+            results = try container.decodeIfPresent([RawItem].self, forKey: .results)
+            rawItems = try container.decodeIfPresent([RawItem].self, forKey: .rawItems)
+            rawResult = try? container.decodeIfPresent(RawItem.self, forKey: .rawResult)
+            summary = try container.decodeIfPresent(String.self, forKey: .summary)
+            correctedText = Self.firstString(in: container, keys: [.correctedText, .correctedTextCamel])
+            topLevelDisplayText = Self.firstString(in: container, keys: [.rawResult, .rewrittenText, .rewrittenTextCamel, .improvedText, .improvedTextCamel, .replacement, .text, .output])
+        }
+
+        var decodedItems: [RawItem] { results ?? rawItems ?? rawResult.map { [$0] } ?? [] }
+
+        private static func firstString(in container: KeyedDecodingContainer<CodingKeys>, keys: [CodingKeys]) -> String? {
+            for key in keys {
+                if let value = try? container.decodeIfPresent(String.self, forKey: key) { return value }
+            }
+            return nil
+        }
     }
 
     private struct RawItem: Decodable {
@@ -348,6 +429,7 @@ struct KeyboardActionOperationResult: Equatable {
 enum KeyboardActionProductOutcome: Equatable {
     case showCorrections(KeyboardSuggestionResponse)
     case replaceText(String)
+    case noChanges
     case noUsableResult
 }
 
@@ -358,6 +440,9 @@ enum KeyboardActionResultHandler {
             let response = result.suggestionResponse()
             if !response.corrections.isEmpty {
                 return .showCorrections(response)
+            }
+            if result.isStructuredGrammarNoChange {
+                return .noChanges
             }
         }
 

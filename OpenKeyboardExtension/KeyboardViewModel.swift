@@ -234,6 +234,11 @@ final class KeyboardViewModel: ObservableObject {
                         aiStatus = action == .summarize ? "Summary ready" : "No more suggestions"
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
+                    case .noChanges:
+                        suggestionState = nil
+                        aiStatus = "No changes needed"
+                        isPerformingAIAction = false
+                        panelMode = .correctionComplete
                     case .noUsableResult:
                         showActionError("No AI response")
                     }
