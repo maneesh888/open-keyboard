@@ -22,8 +22,9 @@ struct KeyboardView: View {
                 if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
-                        onDismiss: { viewModel.clearActionError() },
-                        onRetry: { viewModel.showActionPanel() }
+                        onBackToTyping: { viewModel.retryAfterActionError() },
+                        onCopyDetails: { viewModel.copyActionErrorDetails() },
+                        onDismiss: { viewModel.clearActionError() }
                     )
                 } else if let correction = viewModel.currentCorrection {
                     CorrectionDetailPanel(
@@ -304,8 +305,9 @@ private struct AIActionPanel: View {
 
 private struct KeyboardActionErrorPanel: View {
     let error: KeyboardActionErrorState
+    let onBackToTyping: () -> Void
+    let onCopyDetails: () -> Void
     let onDismiss: () -> Void
-    let onRetry: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -329,8 +331,8 @@ private struct KeyboardActionErrorPanel: View {
             }
 
             HStack(spacing: 10) {
-                Button(action: onRetry) {
-                    Text("Try Again")
+                Button(action: onBackToTyping) {
+                    Text("Back to Typing")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 42)
                 }
@@ -338,10 +340,10 @@ private struct KeyboardActionErrorPanel: View {
                 .foregroundColor(OpenKeyboardTheme.Text.inverse)
                 .background(OpenKeyboardTheme.Semantic.primaryAction)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .accessibilityIdentifier("ai_error_retry")
+                .accessibilityIdentifier("ai_error_back_to_typing")
 
-                Button(action: onDismiss) {
-                    Text("Dismiss")
+                Button(action: onCopyDetails) {
+                    Text("Copy Details")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 42)
                 }
@@ -351,7 +353,7 @@ private struct KeyboardActionErrorPanel: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(OpenKeyboardTheme.Semantic.error, lineWidth: 1.2)
                 )
-                .accessibilityIdentifier("ai_error_dismiss")
+                .accessibilityIdentifier("ai_error_copy_details")
             }
         }
         .padding(16)
