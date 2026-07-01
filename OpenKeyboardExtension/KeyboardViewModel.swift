@@ -134,6 +134,17 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .keyboard
     }
 
+    func retryAfterActionError() {
+        actionError = nil
+        aiStatus = config.isConfigured ? "Ready" : "Pair gateway in app"
+        panelMode = .actions
+    }
+
+    func copyActionErrorDetails() {
+        guard let actionError else { return }
+        UIPasteboard.general.string = "\(actionError.title): \(actionError.message)"
+    }
+
     private func showActionError(_ message: String) {
         let error = KeyboardActionErrorState(message: message)
         actionError = error
