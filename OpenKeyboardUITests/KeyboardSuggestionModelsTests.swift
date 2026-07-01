@@ -256,6 +256,58 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(KeyboardActionResultHandler.outcome(operation: "rewrite", result: rewrite), .replaceText("Clearer text."))
     }
 
+
+    func testNoIssueStructuredGrammarResultDoesNotReplaceTextWithSummary() throws {
+        let result = try KeyboardActionOperationResult.parse(#"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#, operation: "fix_grammar", fallbackText: "The app works well.")
+
+        let outcome = KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result)
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(outcome, .noChanges)
+        XCTAssertNotEqual(outcome, .replaceText("No issues found."))
+    }
+
+    func testNoIssueStructuredGrammarWithSameCorrectedTextDoesNotApplyReplacement() throws {
+        let result = try KeyboardActionOperationResult.parse(#"{"operation":"fix_grammar","results":[],"corrected_text":"The app works well today."}"#, operation: "fix_grammar", fallbackText: "The app works well today.")
+
+        let outcome = KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result)
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertTrue(result.isStructuredGrammarNoChange)
+        XCTAssertEqual(outcome, .noChanges)
+        XCTAssertNotEqual(outcome, .replaceText("The app works well today."))
+    }
+
+    func testMalformedJSONLikeResponseDoesNotBecomeLegacyReplacementText() {
+        XCTAssertThrowsError(try KeyboardActionOperationResult.parse(#"{"operation":"fix_grammar","results": ["#, operation: "fix_grammar", fallbackText: "i has a apple")) { error in
+            XCTAssertEqual(error as? KeyboardActionOperationResultError, .invalidResponse)
+        }
+    }
+
+    func testStructuredOperationParsesCommonDisplayAliases() throws {
+        let scenarios: [(String, String, String)] = [
+            (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, "rewrite", "This is clearer."),
+            (#"{"operation":"fix_grammar","correctedText":"I have an apple."}"#, "fix_grammar", "I have an apple."),
+            (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, "rewrite", "Clearer text."),
+            (#"{"operation":"fix_grammar","improved_text":"I have an apple."}"#, "fix_grammar", "I have an apple."),
+            (#"{"operation":"rewrite","replacement":"Replacement text."}"#, "rewrite", "Replacement text."),
+            (#"{"operation":"rewrite","text":"Top-level text."}"#, "rewrite", "Top-level text."),
+            (#"{"operation":"rewrite","output":"Output text."}"#, "rewrite", "Output text.")
+        ]
+
+        for (json, operation, expectedDisplayText) in scenarios {
+            let result = try KeyboardActionOperationResult.parse(json, operation: operation, fallbackText: "i has a apple")
+
+            XCTAssertEqual(result.displayText, expectedDisplayText)
+            XCTAssertTrue(result.isStructuredResponse)
+        }
+    }
+
+    func testCorrectionSmokeAcceptsStructuredJSONResponses() {
+        XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse(#"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#))
+        XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse(#"{"operation":"fix_grammar","results":[{"type":"correction","original":"has","replacement":"have"},{"type":"correction","original":"a apple","replacement":"an apple"}]}"#))
+    }
+
     private static func canonicalGrammarJSON(correctedText: String?) -> String {
         let correctedTextField = correctedText.map { #", "corrected_text": "\#($0)""# } ?? ""
         return #"{"operation":"fix_grammar","results":[{"id":"subject-verb","type":"correction","title":"Subject-verb agreement","text":"Use have.","original":"has","replacement":"have","category":"grammar","explanation":"Use have for first-person agreement."},{"id":"article","type":"correction","title":"Article","text":"Use an.","original":"a apple","replacement":"an apple","explanation":"Use an before a vowel sound."},{"id":"spelling-this","type":"correction","title":"Spelling","text":"Fix typo.","original":"ths","replacement":"this","category":"spelling","explanation":"Correct the misspelling."}], "summary":"Three issues found."\#(correctedTextField)}"#
