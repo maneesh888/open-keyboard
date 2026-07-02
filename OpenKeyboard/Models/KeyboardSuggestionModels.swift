@@ -277,19 +277,19 @@ struct KeyboardActionOperationResult: Equatable {
 
     private static func normalizedStructuredContent(from stripped: String, depth: Int = 0) throws -> String? {
         guard depth < 4 else { return nil }
-        if isJSONObjectLike(stripped) { return stripped }
         guard let data = stripped.data(using: .utf8) else { return nil }
+        if let wrapped = try? JSONDecoder().decode(ChatCompletionWrapper.self, from: data),
+           let content = wrapped.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !content.isEmpty {
+            let nested = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
+            return try normalizedStructuredContent(from: nested, depth: depth + 1)
+        }
+        if isJSONObjectLike(stripped) { return stripped }
         if let jsonString = try? JSONDecoder().decode(String.self, from: data) {
             let nested = stripMarkdownFence(jsonString).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !nested.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
             if isJSONObjectLike(nested) { return nested }
             if isJSONLike(nested) { throw KeyboardActionOperationResultError.invalidResponse }
-            return try normalizedStructuredContent(from: nested, depth: depth + 1)
-        }
-        if let wrapped = try? JSONDecoder().decode(ChatCompletionWrapper.self, from: data),
-           let content = wrapped.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !content.isEmpty {
-            let nested = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
             return try normalizedStructuredContent(from: nested, depth: depth + 1)
         }
         return nil

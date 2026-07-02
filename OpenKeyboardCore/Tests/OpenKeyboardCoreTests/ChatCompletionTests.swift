@@ -49,6 +49,23 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(result.correctedText, "i has an apple, this is not sound good")
     }
 
+    func testMockGatewayComplexSpellFixResponseParsesThroughClient() async throws {
+        let server = DummyGatewayServer(.chatComplexSpellFix)
+        let client = GatewayClient(config: validConfig, httpClient: server)
+
+        let result = try await client.performWritingActionResult(.fixGrammar, text: DummyGatewayServer.complexSpellFixOriginalText, model: "test-model")
+
+        XCTAssertEqual(server.requestedURLs, ["https://gateway.example/v1/chat/completions"])
+        XCTAssertEqual(result.operation, "fix_grammar")
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(result.items.count, 12)
+        XCTAssertEqual(result.items.filter { $0.type == "correction" }.map(\.replacement), DummyGatewayServer.complexSpellFixReplacements)
+        XCTAssertEqual(result.items.last?.type, "warning")
+        XCTAssertEqual(result.items[9].range, WritingActionTextRange(start: 84, end: 91))
+        XCTAssertEqual(result.correctedText, DummyGatewayServer.complexSpellFixCorrectedText)
+        XCTAssertEqual(result.displayText, DummyGatewayServer.complexSpellFixCorrectedText)
+    }
+
 
     func testStructuredOperationResultScenarios() async throws {
         struct Scenario {

@@ -227,6 +227,96 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(state.currentCorrection?.replacement, "have")
     }
 
+    func testParsesComplexGatewaySpellFixResponseIntoCorrectionCards() throws {
+        let original = "i definately recieve teh adress tomorow, and seperate files wont upload because its recieve limit is to low."
+        let assistantContent = """
+        ```json
+        {
+          "operation": "fix_grammar",
+          "results": [
+            {"id":"cap-i","type":"correction","title":"Capitalization","text":"Capitalize the pronoun.","original":"i","replacement":"I","range":{"start":0,"end":1},"confidence":0.99,"category":"capitalization","explanation":"Capitalize the standalone pronoun I."},
+            {"id":"spell-definitely","type":"correction","title":"Spelling","text":"Correct definitely.","original":"definately","replacement":"definitely","range":{"start":2,"end":12},"confidence":0.99,"category":"spelling","explanation":"Correct the misspelling."},
+            {"id":"spell-receive-1","type":"correction","title":"Spelling","text":"Correct receive.","original":"recieve","replacement":"receive","range":{"start":13,"end":20},"confidence":0.98,"category":"spelling","explanation":"Use receive after c."},
+            {"id":"spell-the","type":"correction","title":"Spelling","text":"Correct the.","original":"teh","replacement":"the","range":{"start":21,"end":24},"confidence":0.97,"category":"spelling"},
+            {"id":"spell-address","type":"correction","title":"Spelling","text":"Correct address.","original":"adress","replacement":"address","range":{"start":25,"end":31},"confidence":0.98,"category":"spelling"},
+            {"id":"spell-tomorrow","type":"correction","title":"Spelling","text":"Correct tomorrow.","original":"tomorow","replacement":"tomorrow","range":{"start":32,"end":39},"confidence":0.97,"category":"spelling"},
+            {"id":"spell-separate","type":"correction","title":"Spelling","text":"Correct separate.","original":"seperate","replacement":"separate","range":{"start":45,"end":53},"confidence":0.95,"category":"spelling"},
+            {"id":"contract-wont","type":"correction","title":"Contraction","text":"Add apostrophe.","original":"wont","replacement":"won't","range":{"start":60,"end":64},"confidence":0.93,"category":"grammar"},
+            {"id":"pronoun-its","type":"correction","title":"Pronoun agreement","text":"Use a plural possessive pronoun.","original":"its","replacement":"their","range":{"start":80,"end":83},"confidence":0.88,"category":"grammar","explanation":"Files is plural."},
+            {"id":"spell-receive-2","type":"correction","title":"Spelling","text":"Correct the second receive.","original":"recieve","replacement":"receive","range":{"start":84,"end":91},"confidence":0.98,"category":"spelling"},
+            {"id":"too-low","type":"correction","title":"Word choice","text":"Use too for degree.","original":"to low","replacement":"too low","range":{"start":101,"end":107},"confidence":0.94,"category":"grammar"},
+            {"id":"warning-domain","type":"warning","title":"Ambiguity","text":"The phrase receive limit may be domain-specific."}
+          ],
+          "summary": "Eleven corrections found.",
+          "corrected_text": "I definitely receive the address tomorrow, and separate files won't upload because their receive limit is too low."
+        }
+        ```
+        """
+        let gatewayData = try JSONSerialization.data(withJSONObject: [
+            "id": "chatcmpl-open-keyboard-spell-fix",
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "content": assistantContent
+                    ]
+                ]
+            ]
+        ])
+        let gatewayResponse = String(data: gatewayData, encoding: .utf8)!
+
+        let result = try KeyboardActionOperationResult.parse(gatewayResponse, operation: "fix_grammar", fallbackText: original)
+        let response = result.suggestionResponse()
+        let outcome = KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result)
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(result.operation, "fix_grammar")
+        XCTAssertEqual(result.items.count, 12)
+        XCTAssertEqual(result.items.last?.type, "warning")
+        XCTAssertEqual(response.correctedText, "I definitely receive the address tomorrow, and separate files won't upload because their receive limit is too low.")
+        XCTAssertEqual(response.corrections.count, 11)
+        XCTAssertEqual(response.corrections.map(\.id), [
+            "cap-i",
+            "spell-definitely",
+            "spell-receive-1",
+            "spell-the",
+            "spell-address",
+            "spell-tomorrow",
+            "spell-separate",
+            "contract-wont",
+            "pronoun-its",
+            "spell-receive-2",
+            "too-low"
+        ])
+        XCTAssertEqual(response.corrections.map(\.replacement), [
+            "I",
+            "definitely",
+            "receive",
+            "the",
+            "address",
+            "tomorrow",
+            "separate",
+            "won't",
+            "their",
+            "receive",
+            "too low"
+        ])
+        XCTAssertEqual(response.corrections[9].range, KeyboardTextRange(start: 84, end: 91))
+        guard case .showCorrections(let routedResponse) = outcome else {
+            return XCTFail("Expected product path to show correction cards, got \(outcome)")
+        }
+        XCTAssertEqual(routedResponse.corrections.count, 11)
+
+        var state = KeyboardSuggestionState(response: response)
+        var text = original
+        while state.currentCorrection != nil {
+            text = state.textByApplyingCurrentCorrection(to: text) ?? text
+            state.applyCurrentCorrection()
+        }
+        XCTAssertEqual(text, response.correctedText)
+        XCTAssertTrue(state.isComplete)
+    }
+
     func testStructuredResultWithCorrectedTextDoesNotDropCorrections() throws {
         let result = try KeyboardActionOperationResult.parse(Self.canonicalGrammarJSON(correctedText: "I have an apple this"), operation: "fix_grammar", fallbackText: "i has a apple ths")
 
