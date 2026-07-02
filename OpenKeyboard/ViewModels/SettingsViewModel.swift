@@ -31,12 +31,14 @@ class SettingsViewModel: ObservableObject {
     
     enum ConnectionStatus: Equatable {
         case unknown
+        case checking
         case success
         case failure
     }
     
     private let gatewayTester: GatewayConnectionTesting
     private let defaults: UserDefaults?
+    private var hasValidatedSavedGatewayThisLaunch = false
 
     init(
         config: AppConfig = AppConfig.load(),
@@ -51,8 +53,8 @@ class SettingsViewModel: ObservableObject {
         self.apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         self.errorMessage = sharedError
-        self.connectionStatus = sharedError == nil ? (displayConfig.isConfigured ? .success : .unknown) : .failure
-        self.showsValidatedGatewayDetails = displayConfig.isConfigured && sharedError == nil
+        self.connectionStatus = sharedError == nil ? .unknown : .failure
+        self.showsValidatedGatewayDetails = false
     }
     
     func saveSettings() {
@@ -70,8 +72,9 @@ class SettingsViewModel: ObservableObject {
         apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         errorMessage = sharedError
-        showsValidatedGatewayDetails = displayConfig.isConfigured && sharedError == nil
-        connectionStatus = sharedError == nil ? (displayConfig.isConfigured ? .success : .unknown) : .failure
+        showsValidatedGatewayDetails = false
+        connectionStatus = sharedError == nil ? .unknown : .failure
+        hasValidatedSavedGatewayThisLaunch = false
     }
 
     private static func settingsDisplayConfig(from config: AppConfig, defaults: UserDefaults?) -> AppConfig {
@@ -91,6 +94,16 @@ class SettingsViewModel: ObservableObject {
 
     var hasConnectionError: Bool {
         connectionStatus == .failure || errorMessage != nil
+    }
+
+    var hasSavedGatewayConfig: Bool {
+        config.isConfigured
+            && !config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var shouldShowGatewayValidationPending: Bool {
+        hasSavedGatewayConfig && !showsValidatedGatewayDetails && !hasConnectionError
     }
 
     var shouldShowConnectionActions: Bool {
@@ -146,13 +159,26 @@ class SettingsViewModel: ObservableObject {
         let draftAPIKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftGatewayURL != config.gatewayURL || draftAPIKey != config.apiKey else { return }
         showsValidatedGatewayDetails = false
-        if connectionStatus == .success { connectionStatus = .unknown }
+        if connectionStatus == .success || connectionStatus == .checking { connectionStatus = .unknown }
+    }
+
+    func validateSavedGatewayOnceOnLaunch() async {
+        guard hasSavedGatewayConfig else { return }
+        guard !hasValidatedSavedGatewayThisLaunch else { return }
+        hasValidatedSavedGatewayThisLaunch = true
+        await testConnection()
+    }
+
+    func retrySavedGatewayValidation() async {
+        hasValidatedSavedGatewayThisLaunch = false
+        await validateSavedGatewayOnceOnLaunch()
     }
 
     func testConnection() async {
+        guard !isTestingConnection else { return }
         showsValidatedGatewayDetails = false
         isTestingConnection = true
-        connectionStatus = .unknown
+        connectionStatus = .checking
         errorMessage = nil
         await Task.yield()
 

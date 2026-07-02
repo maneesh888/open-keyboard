@@ -90,9 +90,9 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.gatewayURLInput, "https://gateway.example")
         XCTAssertEqual(viewModel.apiKeyInput, "working-key")
         XCTAssertFalse(viewModel.isEditingGatewayDraft)
-        XCTAssertFalse(viewModel.shouldShowConnectionActions)
-        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertTrue(viewModel.shouldShowConnectionActions)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
     }
 
     func testCleanValidatedSettingsHideConnectionActionsAndShowTrustedDetails() {
@@ -107,11 +107,12 @@ final class SettingsViewModelTests: XCTestCase {
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
         XCTAssertFalse(viewModel.isEditingGatewayDraft)
-        XCTAssertFalse(viewModel.shouldShowConnectionActions)
+        XCTAssertTrue(viewModel.shouldShowConnectionActions)
         XCTAssertTrue(viewModel.canTestConnection)
-        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "openkeyboard.structured-corrections.v1")
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
+        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
     }
 
     func testEditingValidatedGatewayHidesTrustedDetailsAndShowsConnectionActions() {
@@ -215,6 +216,76 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
+    }
+
+
+    func testSavedConfigStartsUnverifiedUntilLaunchValidationSucceeds() async {
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertTrue(viewModel.shouldShowGatewayValidationPending)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
+    }
+
+    func testSavedConfigLaunchValidationFailureKeepsCachedValuesButNotReady() async {
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(healthSucceeds: false)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
+        XCTAssertEqual(viewModel.config.apiKey, "working-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertTrue(viewModel.config.isConfigured)
+    }
+
+    func testSavedConfigLaunchValidationRunsOnlyOnceAndGuardsConcurrentCalls() async {
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { await viewModel.validateSavedGatewayOnceOnLaunch() }
+            group.addTask { await viewModel.validateSavedGatewayOnceOnLaunch() }
+        }
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.modelFetches, 1)
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
     }
 
     func testBareGatewayHostNormalizesToHTTPSBeforeSaving() async {
@@ -589,6 +660,8 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
+    private(set) var healthChecks = 0
+    private(set) var modelFetches = 0
     var fetchedGatewayURL: String? { testedGatewayURLs.last }
 
     init(healthSucceeds: Bool = true, models: [String] = [], smokeSucceeds: Bool = true, failingSmokeModels: Set<String> = []) {
@@ -599,11 +672,13 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     }
 
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
+        healthChecks += 1
         testedGatewayURLs.append(gatewayURL)
         return healthSucceeds
     }
 
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
+        modelFetches += 1
         testedGatewayURLs.append(gatewayURL)
         return models
     }

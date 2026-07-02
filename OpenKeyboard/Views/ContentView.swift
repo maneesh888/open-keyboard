@@ -34,7 +34,7 @@ struct ContentView: View {
                                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         }
 
-                        StatusCard(config: settingsViewModel.config)
+                        StatusCard(viewModel: settingsViewModel)
 
                         VStack(spacing: 12) {
                             PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
@@ -112,25 +112,68 @@ struct ContentView: View {
             }
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
+        .task {
+            await settingsViewModel.validateSavedGatewayOnceOnLaunch()
+        }
     }
 }
 
 struct StatusCard: View {
-    let config: AppConfig
+    @ObservedObject var viewModel: SettingsViewModel
+
+    private var config: AppConfig { viewModel.config }
+
+    private var isReady: Bool { viewModel.showsValidatedGatewayDetails && viewModel.connectionStatus == .success }
+    private var isChecking: Bool { viewModel.isTestingConnection || viewModel.connectionStatus == .checking || viewModel.shouldShowGatewayValidationPending }
+    private var isFailure: Bool { viewModel.connectionStatus == .failure }
+
+    private var statusTitle: String {
+        if isReady { return "Gateway Ready" }
+        if isChecking { return "Checking gateway…" }
+        if isFailure { return "Gateway needs attention" }
+        return "Setup Required"
+    }
+
+    private var statusMessage: String {
+        if isReady { return "Connection verified just now." }
+        if isChecking { return "Testing your saved gateway before enabling AI features." }
+        if isFailure { return viewModel.errorMessage ?? "Connection failed. Open Settings to retry." }
+        return "Add your API key to unlock AI features."
+    }
+
+    private var statusImage: String {
+        if isReady { return "checkmark.circle.fill" }
+        if isChecking { return "arrow.triangle.2.circlepath" }
+        if isFailure { return "xmark.circle.fill" }
+        return "exclamationmark.triangle.fill"
+    }
+
+    private var statusColor: Color {
+        if isReady { return OpenKeyboardTheme.Semantic.success }
+        if isFailure { return OpenKeyboardTheme.Semantic.error }
+        return OpenKeyboardTheme.Semantic.warning
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                Image(systemName: config.isConfigured ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundColor(config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning)
-                    .font(.title3)
-                    .frame(width: 34, height: 34)
-                    .background((config.isConfigured ? OpenKeyboardTheme.Semantic.success : OpenKeyboardTheme.Semantic.warning).opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                ZStack {
+                    Image(systemName: statusImage)
+                        .foregroundColor(statusColor)
+                        .font(.title3)
+                    if isChecking {
+                        ProgressView()
+                            .scaleEffect(0.72)
+                            .accessibilityIdentifier("gateway_status_progress")
+                    }
+                }
+                .frame(width: 34, height: 34)
+                .background(statusColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(config.isConfigured ? "Keyboard Configured" : "Setup Required")
+                    Text(statusTitle)
                         .font(.headline)
-                    Text(config.isConfigured ? "Your gateway is ready." : "Add your API key to unlock AI features.")
+                    Text(statusMessage)
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(2)
@@ -145,6 +188,14 @@ struct StatusCard: View {
                     InfoRow(label: "API Key", value: config.apiKey.isEmpty ? "Not set" : "Configured")
                 }
                 .padding(.top, 2)
+            }
+
+            if isFailure, viewModel.hasSavedGatewayConfig {
+                Button("Retry gateway check") {
+                    Task { await viewModel.retrySavedGatewayValidation() }
+                }
+                .font(.footnote.weight(.semibold))
+                .accessibilityIdentifier("gateway_status_retry")
             }
         }
         .padding(16)

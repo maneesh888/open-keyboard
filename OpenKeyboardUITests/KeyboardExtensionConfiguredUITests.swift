@@ -9,8 +9,8 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let app = configuredContainingApp()
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Keyboard Configured"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.staticTexts["Setup Required"].exists)
+        XCTAssertTrue(app.staticTexts["Checking gateway…"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Gateway Ready"].exists)
         XCTAssertTrue(app.staticTexts[Self.mockModel].waitForExistence(timeout: 5))
     }
 
@@ -167,7 +167,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     ) -> XCUIApplication {
         let app = XCUIApplication()
         let seedArgument = requiresInjectedGatewayCredentials ? "--seed-functional-gateway-config" : "--seed-gateway-config"
-        app.launchArguments = ["--uitesting", seedArgument] + extraArguments
+        app.launchArguments = ["--uitesting", "--clear-gateway-config", seedArgument] + extraArguments
 
         let environment = ProcessInfo.processInfo.environment
         let injectedGatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]
