@@ -26,9 +26,9 @@ struct PlaygroundView: View {
     }
 
     private static var initialText: String {
-        if isWritingAssistantProofMode { return "There has been no apples" }
-        if isGatewayProofMode || isRegressionProofMode { return "i has a apple,ths is nt sound sound" }
-        return "Me and my team was trying to finish the report yesterday, but it have too many mistake and the deadline is coming fast."
+        if isWritingAssistantProofMode { return "Yesterday I has a apple before the meeting, and ths message still sound wrong when I send it to the client." }
+        if isGatewayProofMode || isRegressionProofMode { return "Yesterday I has a apple before the meeting, and ths message still sound wrong when I send it to the client." }
+        return "Yesterday I has a apple before the meeting, and ths message still sound wrong when I send it to the client."
     }
 
     private var proofCard: KeyboardCorrectionCard {
