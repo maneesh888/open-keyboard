@@ -1,9 +1,9 @@
 import XCTest
 
 final class KeyboardExtensionConfiguredUITests: XCTestCase {
-    private static let placeholderGatewayURL = "https://gateway.example.invalid"
-    private static let placeholderAPIKey = "test-placeholder-key"
-    private static let placeholderModel = "test-placeholder-model"
+    private static let mockGatewayURL = "https://mock.local.invalid"
+    private static let mockAPIKey = "mock-ui-test-key"
+    private static let mockModel = "mock-ui-test-model"
 
     func testContainingAppSeedsSharedGatewayConfigForKeyboardExtension() {
         let app = configuredContainingApp()
@@ -11,7 +11,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Keyboard Configured"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Setup Required"].exists)
-        XCTAssertTrue(app.staticTexts[Self.placeholderModel].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[Self.mockModel].waitForExistence(timeout: 5))
     }
 
 
@@ -180,9 +180,15 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             XCTAssertNotNil(injectedModel, "OPEN_KEYBOARD_TEST_MODEL must be injected for functional gateway tests", file: file, line: line)
         }
 
-        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = injectedGatewayURL ?? Self.placeholderGatewayURL
-        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = injectedAPIKey ?? Self.placeholderAPIKey
-        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = injectedModel ?? Self.placeholderModel
+        if requiresInjectedGatewayCredentials {
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = injectedGatewayURL ?? ""
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = injectedAPIKey ?? ""
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = injectedModel ?? ""
+        } else {
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = injectedGatewayURL ?? Self.mockGatewayURL
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = injectedAPIKey ?? Self.mockAPIKey
+            app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = injectedModel ?? Self.mockModel
+        }
         return app
     }
 

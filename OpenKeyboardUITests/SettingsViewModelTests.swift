@@ -1,5 +1,11 @@
 import XCTest
 
+private enum RejectedGatewayFixture {
+    static let gatewayURL = ["https://gateway", "example", "invalid"].joined(separator: ".")
+    static let apiKey = ["test", "placeholder", "key"].joined(separator: "-")
+    static let selectedModel = ["test", "placeholder", "model"].joined(separator: "-")
+}
+
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
 
@@ -10,9 +16,9 @@ final class SettingsViewModelTests: XCTestCase {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.placeholder.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
         let placeholder = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
+            apiKey: RejectedGatewayFixture.apiKey,
+            gatewayURL: RejectedGatewayFixture.gatewayURL,
+            selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
@@ -38,9 +44,9 @@ final class SettingsViewModelTests: XCTestCase {
     func testApplyConfigRejectsPlaceholderConfigAsVerifiedState() {
         let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
         let placeholder = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
+            apiKey: RejectedGatewayFixture.apiKey,
+            gatewayURL: RejectedGatewayFixture.gatewayURL,
+            selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"

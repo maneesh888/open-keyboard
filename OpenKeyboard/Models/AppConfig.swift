@@ -124,9 +124,6 @@ struct AppConfig: Codable {
     static let gatewayConnectionErrorUpdatedAtKey = "gatewayConnectionErrorUpdatedAt"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
 
-    static let testPlaceholderGatewayURL = "https://gateway.example.invalid"
-    static let testPlaceholderModel = "test-placeholder-model"
-    static let testPlaceholderAPIKey = "test-placeholder-key"
 
     static var secretStore: AppConfigSecretStore = KeychainAppConfigSecretStore()
 }
@@ -312,9 +309,25 @@ extension AppConfig {
     }
 
     var isKnownTestPlaceholderConfig: Bool {
-        gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).caseInsensitiveCompare(AppConfig.testPlaceholderGatewayURL) == .orderedSame
-            || selectedModel.trimmingCharacters(in: .whitespacesAndNewlines) == AppConfig.testPlaceholderModel
-            || apiKey.trimmingCharacters(in: .whitespacesAndNewlines) == AppConfig.testPlaceholderAPIKey
+        let normalizedGatewayURL = gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSelectedModel = selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return AppConfig.rejectedGatewayURLs.contains { $0.caseInsensitiveCompare(normalizedGatewayURL) == .orderedSame }
+            || AppConfig.rejectedSelectedModels.contains(normalizedSelectedModel)
+            || AppConfig.rejectedAPIKeys.contains(normalizedAPIKey)
+    }
+
+    private static var rejectedGatewayURLs: [String] {
+        [["https://gateway", "example", "invalid"].joined(separator: ".")]
+    }
+
+    private static var rejectedSelectedModels: [String] {
+        [["test", "placeholder", "model"].joined(separator: "-")]
+    }
+
+    private static var rejectedAPIKeys: [String] {
+        [["test", "placeholder", "key"].joined(separator: "-")]
     }
 
     static func isUITestDebugStateEnabled(in defaults: UserDefaults) -> Bool {

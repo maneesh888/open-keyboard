@@ -48,15 +48,7 @@ struct ProductionKeyboardStateHostView: View {
 
     private static func seedProductionKeyboardState(_ state: String) {
         guard let sharedDefaults = AppConfig.sharedDefaults() else { return }
-        let config = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
-            isConfigured: true,
-            supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
-        )
-        _ = config.saveTestSeed(to: sharedDefaults)
+        AppConfig.clear(from: sharedDefaults)
         sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
         sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
         sharedDefaults.synchronize()

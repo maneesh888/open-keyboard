@@ -122,7 +122,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
     private static let configuredGateway = AppConfig(
         apiKey: "test-key",
-        gatewayURL: "https://gateway.example.invalid",
+        gatewayURL: "https://mock.local.invalid",
         selectedModel: "test-model",
         isConfigured: true,
         supportsStructuredCorrections: true,

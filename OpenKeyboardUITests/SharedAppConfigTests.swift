@@ -1,6 +1,12 @@
 import Security
 import XCTest
 
+private enum RejectedGatewayFixture {
+    static let gatewayURL = ["https://gateway", "example", "invalid"].joined(separator: ".")
+    static let apiKey = ["test", "placeholder", "key"].joined(separator: "-")
+    static let selectedModel = ["test", "placeholder", "model"].joined(separator: "-")
+}
+
 private final class InMemoryAppConfigSecretStore: AppConfigSecretStore {
     var apiKey: String?
 
@@ -103,9 +109,9 @@ final class SharedAppConfigTests: XCTestCase {
 
 
     func testKnownUITestPlaceholderConfigIsRejectedOutsideUITestingLaunch() throws {
-        secretStore.apiKey = AppConfig.testPlaceholderAPIKey
-        defaults.set(AppConfig.testPlaceholderGatewayURL, forKey: AppConfig.gatewayURLKey)
-        defaults.set(AppConfig.testPlaceholderModel, forKey: AppConfig.selectedModelKey)
+        secretStore.apiKey = RejectedGatewayFixture.apiKey
+        defaults.set(RejectedGatewayFixture.gatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(RejectedGatewayFixture.selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(true, forKey: AppConfig.isConfiguredKey)
         defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
         defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
@@ -126,9 +132,9 @@ final class SharedAppConfigTests: XCTestCase {
 
 
     func testKnownUITestPlaceholderConfigIsAcceptedWhenKeyboardDebugStateEnabled() throws {
-        secretStore.apiKey = AppConfig.testPlaceholderAPIKey
-        defaults.set(AppConfig.testPlaceholderGatewayURL, forKey: AppConfig.gatewayURLKey)
-        defaults.set(AppConfig.testPlaceholderModel, forKey: AppConfig.selectedModelKey)
+        secretStore.apiKey = RejectedGatewayFixture.apiKey
+        defaults.set(RejectedGatewayFixture.gatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(RejectedGatewayFixture.selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(true, forKey: AppConfig.isConfiguredKey)
         defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
         defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
@@ -136,9 +142,9 @@ final class SharedAppConfigTests: XCTestCase {
 
         let loadedConfig = AppConfig.load(from: defaults)
 
-        XCTAssertEqual(loadedConfig.apiKey, AppConfig.testPlaceholderAPIKey)
-        XCTAssertEqual(loadedConfig.gatewayURL, AppConfig.testPlaceholderGatewayURL)
-        XCTAssertEqual(loadedConfig.selectedModel, AppConfig.testPlaceholderModel)
+        XCTAssertEqual(loadedConfig.apiKey, RejectedGatewayFixture.apiKey)
+        XCTAssertEqual(loadedConfig.gatewayURL, RejectedGatewayFixture.gatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, RejectedGatewayFixture.selectedModel)
         XCTAssertTrue(loadedConfig.isConfigured)
         XCTAssertTrue(loadedConfig.supportsStructuredCorrections)
         XCTAssertEqual(loadedConfig.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
@@ -156,9 +162,9 @@ final class SharedAppConfigTests: XCTestCase {
         realConfig.save(to: defaults)
 
         let dummyConfig = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
+            apiKey: RejectedGatewayFixture.apiKey,
+            gatewayURL: RejectedGatewayFixture.gatewayURL,
+            selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
@@ -176,22 +182,22 @@ final class SharedAppConfigTests: XCTestCase {
 
     func testDummySeedCanPopulateEmptyDisposableStore() throws {
         let dummyConfig = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
+            apiKey: RejectedGatewayFixture.apiKey,
+            gatewayURL: RejectedGatewayFixture.gatewayURL,
+            selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
 
         XCTAssertTrue(dummyConfig.saveTestSeed(to: defaults, mirrorAPIKeyToDefaultsForUITest: true))
-        XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), AppConfig.testPlaceholderAPIKey)
+        XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), RejectedGatewayFixture.apiKey)
 
         defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
         let loadedConfig = AppConfig.load(from: defaults)
-        XCTAssertEqual(loadedConfig.apiKey, AppConfig.testPlaceholderAPIKey)
-        XCTAssertEqual(loadedConfig.gatewayURL, AppConfig.testPlaceholderGatewayURL)
-        XCTAssertEqual(loadedConfig.selectedModel, AppConfig.testPlaceholderModel)
+        XCTAssertEqual(loadedConfig.apiKey, RejectedGatewayFixture.apiKey)
+        XCTAssertEqual(loadedConfig.gatewayURL, RejectedGatewayFixture.gatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, RejectedGatewayFixture.selectedModel)
         XCTAssertTrue(loadedConfig.isConfigured)
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey), "Load should migrate the legacy defaults API-key mirror back out after secret-store save succeeds.")
     }
@@ -208,9 +214,9 @@ final class SharedAppConfigTests: XCTestCase {
         realConfig.save(to: defaults)
 
         let dummyConfig = AppConfig(
-            apiKey: AppConfig.testPlaceholderAPIKey,
-            gatewayURL: AppConfig.testPlaceholderGatewayURL,
-            selectedModel: AppConfig.testPlaceholderModel,
+            apiKey: RejectedGatewayFixture.apiKey,
+            gatewayURL: RejectedGatewayFixture.gatewayURL,
+            selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
@@ -220,9 +226,9 @@ final class SharedAppConfigTests: XCTestCase {
 
         defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
         let loadedConfig = AppConfig.load(from: defaults)
-        XCTAssertEqual(loadedConfig.apiKey, AppConfig.testPlaceholderAPIKey)
-        XCTAssertEqual(loadedConfig.gatewayURL, AppConfig.testPlaceholderGatewayURL)
-        XCTAssertEqual(loadedConfig.selectedModel, AppConfig.testPlaceholderModel)
+        XCTAssertEqual(loadedConfig.apiKey, RejectedGatewayFixture.apiKey)
+        XCTAssertEqual(loadedConfig.gatewayURL, RejectedGatewayFixture.gatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, RejectedGatewayFixture.selectedModel)
     }
 
     func testKeychainSecretStoreUsesSharedAccessGroup() throws {

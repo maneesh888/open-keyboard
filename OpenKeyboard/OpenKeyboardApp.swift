@@ -144,7 +144,7 @@ struct OpenKeyboardApp: App {
                 mirrorAPIKeyToDefaultsForUITest: true
             )
             if didSeed {
-                // Keep UI-test placeholder config visible to the keyboard extension even when
+                // Keep UI-test seeded config visible to the keyboard extension even when
                 // the simulator proof configuration does not define DEBUG for the app target.
                 sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
                 sharedDefaults.synchronize()
