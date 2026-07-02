@@ -257,6 +257,15 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     }
 
 
+    func testErrorCopyStructuredResultDoesNotBecomeReplacementText() throws {
+        let result = try KeyboardActionOperationResult.parse(#"{"operation":"rewrite","results":[{"id":"error-1","type":"warning","title":"Error","text":"The model returned malformed JSON and no safe keyboard text could be extracted.","replacement":"The model returned malformed JSON and no safe keyboard text could be extracted."}]}"#, operation: "rewrite", fallbackText: "Keep my original words.")
+
+        let outcome = KeyboardActionResultHandler.outcome(operation: "rewrite", result: result)
+
+        XCTAssertEqual(outcome, .noUsableResult)
+        XCTAssertNotEqual(outcome, .replaceText("The model returned malformed JSON and no safe keyboard text could be extracted."))
+    }
+
     func testNoIssueStructuredGrammarResultDoesNotReplaceTextWithSummary() throws {
         let result = try KeyboardActionOperationResult.parse(#"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#, operation: "fix_grammar", fallbackText: "The app works well.")
 

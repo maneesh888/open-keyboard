@@ -80,6 +80,29 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(UIPasteboard.general.string, "Gateway error: Gateway returned an invalid response.")
     }
 
+    func testErrorTextOperationResultShowsErrorAndNeverReplacesDocumentText() async {
+        let original = "Keep my original words."
+        let proxy = FakeTextDocumentProxy(text: original)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: ErrorTextResultKeyboardAIService(),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await Task.yield()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertEqual(viewModel.actionError?.message, "No AI response")
+        XCTAssertEqual(viewModel.toolbarState.title, "AI unavailable")
+        XCTAssertNotEqual(viewModel.toolbarState.subtitle, "Ready")
+        XCTAssertFalse(proxy.text.contains("no safe keyboard text could be extracted"))
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+    }
+
     func testKnownGatewayErrorsDoNotUseGenericAnalysisFailedCopy() {
         let cases: [NetworkError] = [
             .unauthorized,
@@ -128,6 +151,26 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         supportsStructuredCorrections: true,
         structuredCorrectionSchemaVersion: "test"
     )
+}
+
+private final class ErrorTextResultKeyboardAIService: KeyboardAIServiceProviding {
+    private let errorText = "The model returned malformed JSON and no safe keyboard text could be extracted."
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        throw KeyboardAIError.invalidResponse
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        errorText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: action.operationName,
+            items: [KeyboardActionOperationResult.Item(id: "error-1", type: "warning", title: "Error", text: errorText, replacement: errorText)],
+            isStructuredResponse: true
+        )
+    }
 }
 
 private final class InvalidRawResponseKeyboardAIService: KeyboardAIServiceProviding {

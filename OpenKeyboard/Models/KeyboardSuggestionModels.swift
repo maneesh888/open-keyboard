@@ -448,7 +448,28 @@ enum KeyboardActionResultHandler {
 
         let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !displayText.isEmpty else { return .noUsableResult }
+        guard isSafeReplacementText(displayText) else { return .noUsableResult }
         return .replaceText(displayText)
+    }
+
+    private static func isSafeReplacementText(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !normalized.isEmpty else { return false }
+
+        let unsafeErrorFragments = [
+            "malformed json",
+            "no safe keyboard text",
+            "could be extracted",
+            "gateway returned an invalid response",
+            "invalid response",
+            "gateway error",
+            "network error",
+            "server error",
+            "unauthorized",
+            "api key",
+            "stack trace"
+        ]
+        return !unsafeErrorFragments.contains { normalized.contains($0) }
     }
 }
 
