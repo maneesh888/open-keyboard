@@ -259,7 +259,6 @@ private struct AIActionPanel: View {
                 .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.55), lineWidth: 1.2)
         )
         .padding(.horizontal, 2)
-        .accessibilityIdentifier("ai_action_panel")
     }
 
     private func overlayAction(_ action: KeyboardAIAction, title: String, subtitle: String, systemImage: String) -> some View {

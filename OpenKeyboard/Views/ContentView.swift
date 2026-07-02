@@ -41,7 +41,7 @@ struct ContentView: View {
                                 settingsViewModel.openKeyboardSettings()
                             }
 
-                            if settingsViewModel.config.isConfigured {
+                            if settingsViewModel.trustedModelLoaded {
                                 Button(action: {
                                     showingPlayground = true
                                 }) {
@@ -88,7 +88,7 @@ struct ContentView: View {
                                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                        .stroke(settingsViewModel.config.isConfigured ? OpenKeyboardTheme.Semantic.success.opacity(0.45) : OpenKeyboardTheme.Semantic.warning.opacity(0.42), lineWidth: 1.2)
+                                        .stroke(settingsViewModel.trustedModelLoaded ? OpenKeyboardTheme.Semantic.success.opacity(0.45) : OpenKeyboardTheme.Semantic.warning.opacity(0.42), lineWidth: 1.2)
                                 )
                             }
                             .buttonStyle(.plain)

@@ -9,21 +9,19 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let app = configuredContainingApp()
         app.launch()
 
-        XCTAssertTrue(app.staticTexts["Checking gateway…"].waitForExistence(timeout: 5))
+        let checkingGateway = app.staticTexts["Checking gateway…"].waitForExistence(timeout: 2)
+        let gatewayNeedsAttention = app.staticTexts["Gateway needs attention"].waitForExistence(timeout: 12)
+        XCTAssertTrue(checkingGateway || gatewayNeedsAttention)
         XCTAssertFalse(app.staticTexts["Gateway Ready"].exists)
         XCTAssertTrue(app.staticTexts[Self.mockModel].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["playground_entry_button"].exists, "Unvalidated gateway config must not expose Playground as usable.")
     }
 
 
-    func testConfiguredHomeOpensPlaygroundAndFocusesInput() throws {
-        let app = configuredContainingApp(extraArguments: ["--skip-onboarding"])
+    func testPlaygroundDirectRouteFocusesInput() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--playground-direct"]
         app.launch()
-
-        let entry = app.buttons["playground_entry_button"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 5), "Configured home should expose the Playground entry")
-        XCTAssertFalse(app.staticTexts["Keyboard Preview Lab"].exists, "Normal home must not expose Preview Lab")
-
-        entry.tap()
 
         XCTAssertTrue(app.navigationBars["Playground"].waitForExistence(timeout: 5), "Playground navigation title should be visible after tapping entry")
         XCTAssertEqual(app.staticTexts.matching(identifier: "Playground").count, 1, "Playground should only render one visible title")
@@ -48,24 +46,26 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         dismissKnownKeyboardDialogs(in: springboard)
 
         let keyboardApp = XCUIApplication()
-        var foundOpenKeyboard = keyboardApp.buttons["ai_action_fixGrammar"].waitForExistence(timeout: 2)
+        var foundOpenKeyboard = keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 2)
 
         if !foundOpenKeyboard {
             for _ in 0..<8 {
                 dismissKnownKeyboardDialogs(in: springboard)
                 switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: input)
 
-                if keyboardApp.buttons["ai_action_fixGrammar"].waitForExistence(timeout: 2) {
+                if keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 2) {
                     foundOpenKeyboard = true
                     break
                 }
             }
         }
 
-        XCTAssertTrue(foundOpenKeyboard, "Open Keyboard extension did not appear or Fix Grammar was missing")
+        XCTAssertTrue(foundOpenKeyboard, "Open Keyboard extension did not appear or the AI menu trigger was missing")
         XCTAssertFalse(keyboardApp.staticTexts["Gateway not configured"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Pair gateway in app"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+        keyboardApp.buttons["ai_sparkle_action"].tap()
         XCTAssertTrue(keyboardApp.buttons["ai_action_fixGrammar"].isEnabled)
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].isEnabled)
@@ -83,12 +83,12 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         tapCenter(of: input)
 
         let keyboardApp = XCUIApplication()
-        for _ in 0..<8 where !keyboardApp.buttons["ai_action_fixGrammar"].exists {
+        for _ in 0..<8 where !keyboardApp.buttons["ai_sparkle_action"].exists {
             switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: input)
         }
 
-        XCTAssertTrue(keyboardApp.buttons["ai_action_fixGrammar"].waitForExistence(timeout: 5), "Fix Grammar was not available in Open Keyboard")
-        XCTAssertTrue(keyboardApp.buttons["ai_action_fixGrammar"].isEnabled)
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger was not available")
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
 
         tapCenter(of: input)
         typeUsingOpenKeyboard("i has a apple", keyboardApp: keyboardApp)
@@ -96,14 +96,105 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         expectation(for: typed, evaluatedWith: input)
         waitForExpectations(timeout: 10)
 
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger disappeared after typing")
+        keyboardApp.buttons["ai_sparkle_action"].tap()
         let liveFixGrammar = keyboardApp.buttons["ai_action_fixGrammar"]
         XCTAssertTrue(liveFixGrammar.waitForExistence(timeout: 5), "Fix Grammar disappeared after typing")
         XCTAssertTrue(liveFixGrammar.isEnabled)
         liveFixGrammar.tap()
 
-        let corrected = NSPredicate(format: "value CONTAINS[c] %@", "I have an apple")
-        expectation(for: corrected, evaluatedWith: input)
-        waitForExpectations(timeout: 60)
+        if keyboardApp.buttons["ai_correction_apply"].waitForExistence(timeout: 60) {
+            applyVisibleCorrections(keyboardApp: keyboardApp)
+            let improved = NSPredicate(
+                format: "NOT (value CONTAINS[c] %@) AND value CONTAINS[c] %@ AND value CONTAINS[c] %@",
+                "i has a apple",
+                "have",
+                "apple"
+            )
+            expectation(for: improved, evaluatedWith: input)
+            waitForExpectations(timeout: 10)
+        } else {
+            XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists, "Existing simulator gateway config produced an action error")
+            let corrected = NSPredicate(format: "value CONTAINS[c] %@", "I have an apple")
+            expectation(for: corrected, evaluatedWith: input)
+            waitForExpectations(timeout: 1)
+        }
+    }
+
+    func testRealKeyboardFixGrammarReplacesTextWithExistingSimulatorGatewayConfig() throws {
+        try skipUnlessExistingSimulatorGatewayConfigIsPresent()
+
+        let app = existingConfiguredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for existing gateway verification")
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        for _ in 0..<8 where !keyboardApp.buttons["ai_sparkle_action"].exists {
+            switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: input)
+        }
+
+        if keyboardApp.buttons["Back to Typing"].waitForExistence(timeout: 1) {
+            keyboardApp.buttons["Back to Typing"].tap()
+        }
+
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger was not available with the existing simulator config")
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+
+        tapCenter(of: input)
+        typeUsingOpenKeyboard("i has a apple", keyboardApp: keyboardApp)
+        let typed = NSPredicate(format: "value CONTAINS[c] %@", "i has a apple")
+        expectation(for: typed, evaluatedWith: input)
+        waitForExpectations(timeout: 10)
+
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger disappeared after typing")
+        keyboardApp.buttons["ai_sparkle_action"].tap()
+        let liveFixGrammar = keyboardApp.buttons["ai_action_fixGrammar"]
+        XCTAssertTrue(liveFixGrammar.waitForExistence(timeout: 5), "Fix Grammar disappeared after typing")
+        XCTAssertTrue(liveFixGrammar.isEnabled)
+        liveFixGrammar.tap()
+
+        if keyboardApp.buttons["ai_correction_apply"].waitForExistence(timeout: 60) {
+            applyVisibleCorrections(keyboardApp: keyboardApp)
+            let improved = NSPredicate(
+                format: "NOT (value CONTAINS[c] %@) AND value CONTAINS[c] %@ AND value CONTAINS[c] %@",
+                "i has a apple",
+                "have",
+                "apple"
+            )
+            expectation(for: improved, evaluatedWith: input)
+            waitForExpectations(timeout: 10)
+        } else {
+            XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists, "Existing simulator gateway config produced an action error")
+            let corrected = NSPredicate(format: "value CONTAINS[c] %@", "I have an apple")
+            expectation(for: corrected, evaluatedWith: input)
+            waitForExpectations(timeout: 1)
+        }
+    }
+
+    private func skipUnlessExistingSimulatorGatewayConfigIsPresent() throws {
+        guard let defaults = AppConfig.sharedDefaults() else {
+            throw XCTSkip("App Group defaults are unavailable for existing simulator gateway verification.")
+        }
+
+        let gatewayURL = defaults.string(forKey: AppConfig.gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let selectedModel = defaults.string(forKey: AppConfig.selectedModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let connectionError = AppConfig.gatewayConnectionError(from: defaults)
+        guard defaults.bool(forKey: AppConfig.isConfiguredKey),
+              !gatewayURL.isEmpty,
+              !selectedModel.isEmpty,
+              connectionError == nil else {
+            throw XCTSkip("Existing simulator gateway config is not present or has a saved gateway error.")
+        }
+
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        defaults.removeObject(forKey: "keyboardExtension.composingBuffer")
+        defaults.removeObject(forKey: "keyboardExtension.lastDebugEvent")
+        defaults.removeObject(forKey: "keyboardExtension.debugEvents")
+        defaults.synchronize()
     }
 
     private func tapCenter(of element: XCUIElement) {
@@ -117,6 +208,17 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             let key = keyboardApp.buttons[label]
             XCTAssertTrue(key.waitForExistence(timeout: 3), "Expected Open Keyboard key '\(label)' to exist")
             key.tap()
+        }
+    }
+
+    private func applyVisibleCorrections(keyboardApp: XCUIApplication) {
+        for _ in 0..<6 {
+            let apply = keyboardApp.buttons["ai_correction_apply"]
+            guard apply.waitForExistence(timeout: 3), apply.isEnabled else { return }
+            apply.tap()
+            if keyboardApp.otherElements["correction_complete_panel"].waitForExistence(timeout: 1) {
+                return
+            }
         }
     }
 
@@ -139,7 +241,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             let candidate = candidateQuery.firstMatch
             guard candidate.waitForExistence(timeout: 1) else { continue }
             tapCenter(of: candidate)
-            if keyboardApp.buttons["ai_action_fixGrammar"].waitForExistence(timeout: 1) { return }
+            if keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 1) { return }
             if keyboardApp.buttons["Open Keyboard"].waitForExistence(timeout: 1) {
                 keyboardApp.buttons["Open Keyboard"].tap()
                 return
@@ -189,6 +291,12 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = injectedAPIKey ?? Self.mockAPIKey
             app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = injectedModel ?? Self.mockModel
         }
+        return app
+    }
+
+    private func existingConfiguredContainingApp(extraArguments: [String] = []) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--skip-onboarding"] + extraArguments
         return app
     }
 

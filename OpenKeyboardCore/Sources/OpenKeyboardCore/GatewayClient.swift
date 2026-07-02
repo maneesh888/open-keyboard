@@ -146,8 +146,6 @@ public final class GatewayClient: Sendable {
         let prompt = WritingPromptBuilder.prompt(for: action, text: text)
         let payload = ChatCompletionRequest(
             model: model,
-            operation: action.operationName,
-            inputText: String(text.prefix(500)),
             messages: [
                 ChatMessage(role: "system", content: Self.structuredResultSystemPrompt),
                 ChatMessage(role: "user", content: prompt)
@@ -392,15 +390,11 @@ private struct HealthResponse: Decodable {
 
 private struct ChatCompletionRequest: Encodable {
     let model: String
-    let operation: String
-    let inputText: String
     let messages: [ChatMessage]
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
         case model
-        case operation
-        case inputText = "input_text"
         case messages
         case stream
     }

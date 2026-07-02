@@ -27,15 +27,22 @@ struct KeyboardCorrectionSuggestion: Equatable, Identifiable {
     let replacement: String
     let explanation: String?
     let category: String?
+    let range: KeyboardTextRange?
 
-    init(id: String = UUID().uuidString, label: String, original: String, replacement: String, explanation: String? = nil, category: String? = nil) {
+    init(id: String = UUID().uuidString, label: String, original: String, replacement: String, explanation: String? = nil, category: String? = nil, range: KeyboardTextRange? = nil) {
         self.id = id
         self.label = label
         self.original = original
         self.replacement = replacement
         self.explanation = explanation
         self.category = category
+        self.range = range
     }
+}
+
+struct KeyboardTextRange: Equatable, Decodable {
+    let start: Int
+    let end: Int
 }
 
 struct KeyboardPredictionSuggestion: Equatable, Identifiable {
@@ -111,8 +118,29 @@ struct KeyboardSuggestionState: Equatable {
 extension KeyboardCorrectionSuggestion {
     func applying(to text: String) -> String? {
         guard !original.isEmpty, !replacement.isEmpty else { return nil }
-        guard let range = text.range(of: original) else { return nil }
+        let range = range.flatMap { text.range(of: original, near: $0.start) } ?? text.range(of: original)
+        guard let range else { return nil }
         return text.replacingCharacters(in: range, with: replacement)
+    }
+}
+
+private extension String {
+    func range(of target: String, near offset: Int) -> Range<String.Index>? {
+        guard !target.isEmpty else { return nil }
+        var closest: (range: Range<String.Index>, distance: Int)?
+        var searchStart = startIndex
+
+        while searchStart < endIndex,
+              let candidate = range(of: target, range: searchStart..<endIndex) {
+            let candidateOffset = distance(from: startIndex, to: candidate.lowerBound)
+            let distance = abs(candidateOffset - offset)
+            if closest == nil || distance < closest!.distance {
+                closest = (candidate, distance)
+            }
+            searchStart = candidate.upperBound
+        }
+
+        return closest?.range
     }
 }
 
@@ -312,12 +340,12 @@ struct KeyboardActionOperationResult: Equatable {
         let text: String
         let original: String?
         let replacement: String?
-        let range: TextRange?
+        let range: KeyboardTextRange?
         let confidence: Double?
         let explanation: String?
         let category: String?
 
-        init(id: String, type: String, title: String, text: String, original: String? = nil, replacement: String? = nil, range: TextRange? = nil, confidence: Double? = nil, explanation: String? = nil, category: String? = nil) {
+        init(id: String, type: String, title: String, text: String, original: String? = nil, replacement: String? = nil, range: KeyboardTextRange? = nil, confidence: Double? = nil, explanation: String? = nil, category: String? = nil) {
             self.id = id
             self.type = type
             self.title = title
@@ -343,14 +371,10 @@ struct KeyboardActionOperationResult: Equatable {
                 original: cleanOriginal,
                 replacement: String(cleanReplacement.prefix(32)),
                 explanation: explanation?.trimmingCharacters(in: .whitespacesAndNewlines),
-                category: cleanCategory?.isEmpty == false ? cleanCategory : type
+                category: cleanCategory?.isEmpty == false ? cleanCategory : type,
+                range: range
             )
         }
-    }
-
-    struct TextRange: Equatable, Decodable {
-        let start: Int
-        let end: Int
     }
 
     private struct ChatCompletionWrapper: Decodable {
@@ -419,7 +443,7 @@ struct KeyboardActionOperationResult: Equatable {
         let text: String?
         let original: String?
         let replacement: String?
-        let range: TextRange?
+        let range: KeyboardTextRange?
         let confidence: Double?
         let explanation: String?
         let category: String?

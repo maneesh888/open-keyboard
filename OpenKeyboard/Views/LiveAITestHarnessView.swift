@@ -121,7 +121,7 @@ struct LiveAITestHarnessView: View {
                 ChatMessage(role: "system", content: Self.structuredOperationSystemPrompt),
                 ChatMessage(role: "user", content: prompt(for: action, text: text))
             ],
-            maxTokens: 320,
+            maxTokens: 1600,
             temperature: 0.1,
             stream: false
         ))

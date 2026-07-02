@@ -12,11 +12,13 @@ final class KeyboardViewModel: ObservableObject {
     private let advanceToNextInputMode: () -> Void
     private let aiService: KeyboardAIServiceProviding
     private let loadConfig: () -> AppConfig
+    private let loadGatewayConnectionError: () -> String?
 
     @Published var isShiftEnabled = false
     @Published var isNumbersEnabled = false
     @Published private(set) var config = AppConfig.default
     @Published private(set) var hasFullAccess = false
+    @Published private(set) var gatewayConnectionError: String?
     @Published private(set) var aiStatus = "Ready"
     @Published private(set) var isPerformingAIAction = false
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
@@ -29,7 +31,11 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     var canRunAIAction: Bool {
-        hasFullAccess && config.isConfigured && !config.apiKey.isEmpty && !isPerformingAIAction
+        hasFullAccess
+            && gatewayConnectionError == nil
+            && config.isConfigured
+            && !config.apiKey.isEmpty
+            && !isPerformingAIAction
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -49,6 +55,9 @@ final class KeyboardViewModel: ObservableObject {
                 original: correction.original
             ))
         }
+        if let gatewayConnectionError {
+            return KeyboardToolbarState(kind: .error(message: gatewayConnectionError))
+        }
 
         return KeyboardToolbarState.current(
             hasFullAccess: hasFullAccess,
@@ -64,13 +73,16 @@ final class KeyboardViewModel: ObservableObject {
         advanceToNextInputMode: @escaping () -> Void,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
+        loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
         productionTestFullAccess: Bool = false
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.advanceToNextInputMode = advanceToNextInputMode
         self.aiService = aiService
         self.loadConfig = loadConfig
+        self.loadGatewayConnectionError = loadGatewayConnectionError
         self.config = loadConfig()
+        self.gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
         self.panelMode = Self.consumeInitialPanelModeSeed()
         self.hasFullAccess = productionTestFullAccess
@@ -189,8 +201,11 @@ final class KeyboardViewModel: ObservableObject {
 
     func reloadConfig() {
         config = loadConfig()
+        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
         if !hasFullAccess {
             aiStatus = "Enable Allow Full Access"
+        } else if let gatewayConnectionError {
+            aiStatus = gatewayConnectionError
         } else {
             aiStatus = config.isConfigured ? "AI ready · \(config.selectedModel)" : "Pair gateway in app"
         }
@@ -208,6 +223,12 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         config = loadConfig()
+        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        if let gatewayConnectionError {
+            aiStatus = gatewayConnectionError
+            recordDebugEvent("action_blocked_gateway_error")
+            return
+        }
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
         if composingBuffer.isEmpty, Self.debugStateEnabled {
             composingBuffer = Self.loadPersistedComposingBuffer()
@@ -342,5 +363,10 @@ final class KeyboardViewModel: ObservableObject {
     private static var debugStateEnabled: Bool {
         guard KeyboardDebugStatePolicy.isPersistenceAvailable else { return false }
         return AppConfig.sharedDefaults()?.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") ?? false
+    }
+
+    private static func normalizedGatewayConnectionError(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 }

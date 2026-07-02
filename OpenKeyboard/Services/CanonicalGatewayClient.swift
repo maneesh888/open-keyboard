@@ -106,8 +106,6 @@ struct CanonicalGatewayClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
-            operation: operation,
-            inputText: inputText.map { String($0.prefix(500)) },
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)
@@ -174,16 +172,13 @@ struct CanonicalGatewayClient {
 
 private struct CanonicalChatCompletionRequest: Encodable {
     let model: String
-    let operation: String?
-    let inputText: String?
     let messages: [CanonicalChatMessage]
     let maxTokens: Int
     let temperature: Double
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
-        case model, operation, messages, temperature, stream
-        case inputText = "input_text"
+        case model, messages, temperature, stream
         case maxTokens = "max_tokens"
     }
 }

@@ -121,7 +121,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             userPrompt: action.prompt(for: text),
             operation: action.operationName,
             inputText: text,
-            maxTokens: 320,
+            maxTokens: 1600,
             config: config
         )
         do {
@@ -158,8 +158,6 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
         let body = ChatRequest(
             model: config.selectedModel,
-            operation: operation,
-            inputText: inputText.map { String($0.prefix(500)) },
             messages: [
                 ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: trimmed)
@@ -186,8 +184,6 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
 private struct ChatRequest: Encodable {
     let model: String
-    let operation: String?
-    let inputText: String?
     let messages: [ChatMessage]
     let maxTokens: Int
     let temperature: Double
@@ -195,8 +191,6 @@ private struct ChatRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case model
-        case operation
-        case inputText = "input_text"
         case messages
         case maxTokens = "max_tokens"
         case temperature

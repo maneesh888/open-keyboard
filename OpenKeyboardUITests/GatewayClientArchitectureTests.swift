@@ -36,8 +36,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["model"] as? String, "test-model")
-        XCTAssertEqual(json["operation"] as? String, "fix_grammar")
-        XCTAssertEqual(json["input_text"] as? String, "i has a apple,ths is nt sound god")
+        XCTAssertNil(json["operation"])
+        XCTAssertNil(json["input_text"])
         XCTAssertEqual(json["max_tokens"] as? Int, 256)
         XCTAssertEqual(json["stream"] as? Bool, false)
     }

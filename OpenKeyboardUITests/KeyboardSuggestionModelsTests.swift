@@ -89,6 +89,33 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(state.isComplete)
     }
 
+    func testRangeAwareSingleCharacterCorrectionUsesNearestOriginalAfterEarlierEdits() {
+        let response = KeyboardSuggestionResponse(
+            corrections: [
+                KeyboardCorrectionSuggestion(label: "Capitalization", original: "i", replacement: "I", range: KeyboardTextRange(start: 0, end: 1)),
+                KeyboardCorrectionSuggestion(label: "Verb agreement", original: "has", replacement: "have", range: KeyboardTextRange(start: 2, end: 5)),
+                KeyboardCorrectionSuggestion(label: "Article", original: "a", replacement: "an", range: KeyboardTextRange(start: 6, end: 7))
+            ],
+            predictions: [],
+            correctedText: "I have an apple."
+        )
+        var state = KeyboardSuggestionState(response: response)
+        var text = "i has a apple"
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "I has a apple")
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "I have a apple")
+
+        text = state.textByApplyingCurrentCorrection(to: text) ?? text
+        state.applyCurrentCorrection()
+        XCTAssertEqual(text, "I have an apple")
+        XCTAssertTrue(state.isComplete)
+    }
+
     func testAppliesAndDismissesStructuredCorrectionsInSequence() {
         let response = KeyboardSuggestionResponse(
             corrections: [
@@ -173,6 +200,17 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(response.corrections.map(\.label), ["Subject-verb agreement", "Article", "Spelling"])
         XCTAssertEqual(response.corrections.map(\.category), ["grammar", "correction", "spelling"])
         XCTAssertEqual(response.corrections[1].explanation, "Use an before a vowel sound.")
+    }
+
+    func testStructuredCorrectionRangeMapsToSuggestion() throws {
+        let json = """
+        {"operation":"fix_grammar","results":[{"id":"article","type":"correction","title":"Article","text":"Use an.","original":"a","replacement":"an","range":{"start":6,"end":7}}],"corrected_text":"I have an apple."}
+        """
+        let result = try KeyboardActionOperationResult.parse(json, operation: "fix_grammar", fallbackText: "i has a apple")
+
+        let correction = try XCTUnwrap(result.suggestionResponse().corrections.first)
+
+        XCTAssertEqual(correction.range, KeyboardTextRange(start: 6, end: 7))
     }
 
     func testStructuredResultWithoutCorrectedTextStillCreatesCorrections() throws {

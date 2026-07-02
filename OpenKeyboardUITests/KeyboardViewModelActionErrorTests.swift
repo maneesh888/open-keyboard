@@ -118,6 +118,28 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testPersistedGatewayConnectionErrorBlocksKeyboardActions() {
+        let proxy = FakeTextDocumentProxy(text: "please make this better")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: FailingKeyboardAIService(),
+            loadConfig: { Self.configuredGateway },
+            loadGatewayConnectionError: { "Gateway timed out. Open the app to retry." },
+            productionTestFullAccess: true
+        )
+
+        XCTAssertFalse(viewModel.canRunAIAction)
+        XCTAssertEqual(viewModel.toolbarState.title, "AI unavailable")
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "Gateway timed out. Open the app to retry.")
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+
+        viewModel.showActionPanel()
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(proxy.text, "please make this better")
+    }
+
     private func assertGatewayFailureShowsErrorAndPreservesText(for action: KeyboardAIAction, file: StaticString = #filePath, line: UInt = #line) async {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
