@@ -7,6 +7,12 @@
 
 import Foundation
 
+protocol NetworkManagerTransporting: AnyObject {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse)
+}
+
+extension URLSession: NetworkManagerTransporting {}
+
 enum NetworkError: Error {
     case invalidURL
     case noData
@@ -42,7 +48,11 @@ enum NetworkError: Error {
 class NetworkManager {
     static let shared = NetworkManager()
 
-    private init() {}
+    private let transport: NetworkManagerTransporting
+
+    init(transport: NetworkManagerTransporting = URLSession.shared) {
+        self.transport = transport
+    }
 
     /// Test connection to gateway with given API key. Uses the authenticated
     /// models endpoint so gateways that do not expose unauthenticated /health
@@ -74,7 +84,7 @@ class NetworkManager {
         ))
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await transport.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.noData }
             if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw NetworkError.unauthorized }
             guard httpResponse.statusCode == 200 else {
@@ -188,13 +198,13 @@ class NetworkManager {
         request.timeoutInterval = 10
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await transport.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 throw NetworkError.noData
             }
 
-            if httpResponse.statusCode == 401 {
+            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 throw NetworkError.unauthorized
             }
 
@@ -202,13 +212,11 @@ class NetworkManager {
                 throw NetworkError.serverError("HTTP \(httpResponse.statusCode)")
             }
 
-            // Parse models response
-            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let dataArray = json["data"] as? [[String: Any]] {
-                return dataArray.compactMap { $0["id"] as? String }
+            guard let decoded = try? JSONDecoder().decode(ModelsResponse.self, from: data) else {
+                throw NetworkError.noData
             }
 
-            return []
+            return decoded.data.map(\.id)
         } catch let error as NetworkError {
             throw error
         } catch {
@@ -231,6 +239,14 @@ private struct ChatCompletionRequest: Encodable {
         case maxTokens = "max_tokens"
         case temperature
         case stream
+    }
+}
+
+private struct ModelsResponse: Decodable {
+    let data: [Model]
+
+    struct Model: Decodable {
+        let id: String
     }
 }
 

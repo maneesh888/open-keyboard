@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|real-keyboard-live|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -194,6 +194,46 @@ case "${1:-}" in
     echo -e "${GREEN}✓ Live gateway AI UI tests complete${NC}"
     ;;
 
+  live-gateway-smoke)
+    echo -e "${YELLOW}Running opt-in live gateway Test Connection smoke on iPhone 16...${NC}"
+    require_xcodebuild
+    seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+
+    if [[ ! -f "$seed_file" ]]; then
+      echo -e "${RED}✗ Seed file not found: $seed_file${NC}"
+      echo "Copy scripts/ios/openkeyboard-gateway.seed.env.example to .agent/local-seeds/openkeyboard-gateway.env and fill it locally."
+      exit 1
+    fi
+
+    case "$seed_file" in
+      .agent/local-seeds/*|*/.agent/local-seeds/*) ;;
+      *)
+        echo -e "${RED}✗ Refusing seed file outside ignored .agent/local-seeds/: $seed_file${NC}" >&2
+        exit 2
+        ;;
+    esac
+
+    load_simulator_gateway_seed "$seed_file"
+    if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
+      echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
+      exit 1
+    fi
+
+    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
+    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
+    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
+    run_xcodebuild xcodebuild test \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "$DESTINATION" \
+      -configuration Debug \
+      -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
+      CODE_SIGN_IDENTITY="" \
+      CODE_SIGNING_REQUIRED=NO
+    echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
+    ;;
+
   real-keyboard-live)
     echo -e "${YELLOW}Running seeded real keyboard extension live test...${NC}"
     require_xcodebuild
@@ -286,11 +326,12 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|real-keyboard-live|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
+    echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"
     echo "  real-keyboard-live - Seed ignored local gateway credentials, then run real keyboard extension live test"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"
