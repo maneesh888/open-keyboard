@@ -5,6 +5,59 @@ final class SettingsViewModelTests: XCTestCase {
 
 
 
+
+    func testSettingsViewModelRejectsPlaceholderConfigAsVerifiedState() {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.placeholder.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let placeholder = AppConfig(
+            apiKey: AppConfig.testPlaceholderAPIKey,
+            gatewayURL: AppConfig.testPlaceholderGatewayURL,
+            selectedModel: AppConfig.testPlaceholderModel,
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+
+        let viewModel = SettingsViewModel(config: placeholder, gatewayTester: FakeGatewayTester(), defaults: defaults)
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://")
+        XCTAssertEqual(viewModel.apiKeyInput, "")
+        XCTAssertEqual(viewModel.config.gatewayURL, "")
+        XCTAssertEqual(viewModel.config.apiKey, "")
+        XCTAssertEqual(viewModel.config.selectedModel, "")
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertFalse(viewModel.trustedModelLoaded)
+        XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
+    }
+
+    func testApplyConfigRejectsPlaceholderConfigAsVerifiedState() {
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
+        let placeholder = AppConfig(
+            apiKey: AppConfig.testPlaceholderAPIKey,
+            gatewayURL: AppConfig.testPlaceholderGatewayURL,
+            selectedModel: AppConfig.testPlaceholderModel,
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        viewModel.applyConfig(placeholder)
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://")
+        XCTAssertEqual(viewModel.config.gatewayURL, "")
+        XCTAssertEqual(viewModel.config.apiKey, "")
+        XCTAssertEqual(viewModel.config.selectedModel, "")
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertFalse(viewModel.trustedModelLoaded)
+    }
+
     func testDocumentationLinkUsesPublicPortfolioProjectURL() {
         let url = SettingsDocumentationLink.url
 

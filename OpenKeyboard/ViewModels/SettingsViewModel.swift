@@ -43,15 +43,16 @@ class SettingsViewModel: ObservableObject {
         gatewayTester: GatewayConnectionTesting = NetworkManager.shared,
         defaults: UserDefaults? = AppConfig.sharedDefaults()
     ) {
-        self.config = config
-        self.gatewayURLInput = config.gatewayURL.isEmpty ? "https://" : config.gatewayURL
-        self.apiKeyInput = config.apiKey
         self.gatewayTester = gatewayTester
         self.defaults = defaults
+        let displayConfig = Self.settingsDisplayConfig(from: config, defaults: defaults)
+        self.config = displayConfig
+        self.gatewayURLInput = displayConfig.gatewayURL.isEmpty ? "https://" : displayConfig.gatewayURL
+        self.apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         self.errorMessage = sharedError
-        self.connectionStatus = sharedError == nil ? (config.isConfigured ? .success : .unknown) : .failure
-        self.showsValidatedGatewayDetails = config.isConfigured && sharedError == nil
+        self.connectionStatus = sharedError == nil ? (displayConfig.isConfigured ? .success : .unknown) : .failure
+        self.showsValidatedGatewayDetails = displayConfig.isConfigured && sharedError == nil
     }
     
     func saveSettings() {
@@ -63,13 +64,24 @@ class SettingsViewModel: ObservableObject {
     }
 
     func applyConfig(_ newConfig: AppConfig) {
-        config = newConfig
-        gatewayURLInput = newConfig.gatewayURL.isEmpty ? "https://" : newConfig.gatewayURL
-        apiKeyInput = newConfig.apiKey
+        let displayConfig = Self.settingsDisplayConfig(from: newConfig, defaults: defaults)
+        config = displayConfig
+        gatewayURLInput = displayConfig.gatewayURL.isEmpty ? "https://" : displayConfig.gatewayURL
+        apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         errorMessage = sharedError
-        showsValidatedGatewayDetails = newConfig.isConfigured && sharedError == nil
-        connectionStatus = sharedError == nil ? (newConfig.isConfigured ? .success : .unknown) : .failure
+        showsValidatedGatewayDetails = displayConfig.isConfigured && sharedError == nil
+        connectionStatus = sharedError == nil ? (displayConfig.isConfigured ? .success : .unknown) : .failure
+    }
+
+    private static func settingsDisplayConfig(from config: AppConfig, defaults: UserDefaults?) -> AppConfig {
+        guard config.isKnownTestPlaceholderConfig else { return config }
+        if let defaults {
+            AppConfig.clear(from: defaults)
+        } else {
+            AppConfig.clearSharedConfig()
+        }
+        return .default
     }
 
     var isEditingGatewayDraft: Bool {
