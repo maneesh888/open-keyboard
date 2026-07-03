@@ -1,464 +1,104 @@
-# AI Keyboard Project - TODO List
+# AI Keyboard Project - Current TODO
 
-**Last Updated:** 2026-04-20 18:51 UTC
+**Last Updated:** 2026-07-03
 
----
-
-## ✅ **COMPLETED**
-
-### Phase 1: Gateway (100%)
-- [x] Admin Authentication (bcrypt + JWT)
-- [x] API Key CRUD operations
-- [x] Per-Client Configuration
-- [x] Token Bucket Rate Limiting
-- [x] Comprehensive Unit Tests (59/59 passing)
-- [x] Security Enhancements
-- [x] Documentation
-- [x] **Admin Web UI** (just completed!)
-
-### Infrastructure
-- [x] SSH Remote Execution (Docker → Mac)
-- [x] Restricted command whitelist
-- [x] Test execution from container
-- [x] Gateway runs at http://localhost:8080
+This file is a current-state guide for choosing the next OpenKeyboard implementation slice. It replaces the older April phase checklist; items are marked from repo/docs inspection only. Anything not proven by current docs/source is labeled **needs verification** rather than complete.
 
 ---
 
-## 📋 **TODO - Phase 2: iOS Main App**
+## Current repo state
 
-### Project Setup
-- [ ] Decide project name
-- [ ] Check bundle identifier availability on App Store
-- [ ] Choose license (Apache 2.0, MIT, GPL?)
-- [ ] Create Xcode project structure
-  - [ ] Main app target
-  - [ ] Keyboard extension target
-  - [ ] Configure App Groups
-  - [ ] Set up signing & capabilities
+### Main app
 
-### Main App UI
-- [ ] Settings screen
-  - [ ] API key input field (secure text entry)
-  - [ ] Save to App Group storage
-  - [ ] Test connection button
-  - [ ] Server status indicator
-- [ ] Onboarding flow
-  - [ ] Welcome screen
-  - [ ] Step-by-step keyboard setup instructions
-  - [ ] Screenshots for "Enable Full Access"
-  - [ ] Completion checklist
-- [ ] "Open Keyboard Settings" button with deep link
-- [ ] App icon design
+- [x] Xcode project exists with main app and keyboard extension targets.
+- [x] Main SwiftUI app shell exists (`OpenKeyboardApp`, `ContentView`, `SettingsView`, `OnboardingView`).
+- [x] Gateway settings screen exists with gateway URL/API-key entry, connection test, model loading, onboarding reset, and setup/status copy.
+- [x] Onboarding flow exists with UI-test launch arguments and stable accessibility identifiers.
+- [x] App Group entitlements are present for app and extension.
+- [x] Gateway config moved toward shared Keychain/App Group storage; legacy App Group API-key fallback is tracked for compatibility.
+- [ ] App icon / release media — needs verification.
+- [ ] App Store bundle/license/release metadata — needs verification.
 
-### Code
-- [ ] Create ContentView.swift (main UI)
-- [ ] Create SettingsView.swift
-- [ ] Create OnboardingView.swift
-- [ ] Implement App Group data sharing
-- [ ] Network manager for testing gateway connection
-- [ ] UserDefaults wrapper for API key storage
+### Keyboard extension
 
-### Testing
-- [ ] Unit tests for settings logic
-- [ ] UI tests for onboarding flow
-- [ ] Integration with local-ci.sh
-- [ ] Manual testing on Simulator
-- [ ] Manual testing on physical device
+- [x] Keyboard extension target and SwiftUI/UIKit bridge exist.
+- [x] QWERTY-style key grid exists with shift, delete, return, space, globe/next-keyboard behavior, and toolbar state.
+- [x] Basic typing reducer/context logic exists in `OpenKeyboardCore` with tests for character input, shift, delete, grapheme-safe context, and replacement strategies.
+- [x] AI toolbar/action panel exists with compact sparkle entry and Improve/Rephrase/Summarize actions.
+- [x] Real keyboard Fix Grammar path was previously verified end-to-end through host UI proof.
+- [ ] Rewrite and Summarize end-to-end in the actual keyboard — needs verification.
+- [ ] Suggestions while typing / suggestion chips — not implemented as a verified product feature.
+- [ ] Polished correction preview / accept-dismiss UX — pending.
+- [ ] Full release-quality iOS keyboard polish across small/large devices — in progress, not complete.
+
+### AI integration
+
+- [x] Gateway client/config core exists (`GatewayClient`, `GatewayConfig`, `GatewayConfigStore`, `URLSessionHTTPClient`).
+- [x] Main app connection testing and model loading exist.
+- [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
+- [x] Structured suggestion/action result parsing exists.
+- [x] Offline prompt/user-flow tests and opt-in live gateway tests exist.
+- [ ] Streaming/SSE responses — needs verification; do not assume complete.
+- [ ] Debounced suggestions while typing — pending.
+- [ ] Timeout/cancellation/network resilience coverage — next queue item, partially present in tests but needs current verification before marking complete.
+- [ ] Shared Keychain release hardening and privacy copy — in progress; see `docs/RELEASE_HARDENING.md` and `docs/TDD_STATUS.md`.
+
+### Testing and verification
+
+- [x] Swift package core tests exist under `OpenKeyboardCore/Tests/OpenKeyboardCoreTests`.
+- [x] Xcode UI test target exists under `OpenKeyboardUITests`.
+- [x] Onboarding screenshot/UI harness exists.
+- [x] Real keyboard extension smoke plan exists.
+- [x] Local CI/test scripts are documented in repo docs.
+- [ ] Current full quick CI/build status — needs fresh verification before release or code work; this doc refresh intentionally ran static inspection only.
+- [ ] Real extension logo/action-menu smoke is currently blocked by extension config visibility (`Gateway not configured`), per `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 
 ### Documentation
-- [ ] README.md for iOS project
-- [ ] Setup instructions
-- [ ] Screenshots
-- [ ] Troubleshooting guide
 
-**Estimated Time:** 1-2 days
-
----
-
-## 📋 **TODO - Phase 3: Keyboard Extension - Core**
-
-### Project Structure
-- [ ] Create keyboard extension target
-- [ ] KeyboardViewController.swift (UIKit)
-- [ ] SwiftUI views for keyboard UI
-- [ ] ViewModel (ObservableObject)
-- [ ] Repository pattern for data
-
-### QWERTY Keyboard Layout
-- [ ] Letter keys (a-z, A-Z)
-- [ ] Number row (0-9)
-- [ ] Symbol keys (!, @, #, etc.)
-- [ ] Special keys:
-  - [ ] Shift key (capitalization)
-  - [ ] Delete/backspace
-  - [ ] Return/enter
-  - [ ] Space bar
-  - [ ] Globe (keyboard switcher)
-  - [ ] Emoji picker
-- [ ] Key rendering (iOS-style rounded rectangles)
-- [ ] Touch handling & gestures
-- [ ] Haptic feedback
-- [ ] Dark mode support
-- [ ] Auto-capitalization
-- [ ] Key press animations
-
-### Text Input Integration
-- [ ] Connect to textDocumentProxy
-- [ ] Insert characters
-- [ ] Delete characters
-- [ ] Handle return key
-- [ ] Handle special keys
-- [ ] Cursor movement (if possible)
-
-### Testing
-- [ ] Unit tests for keyboard logic
-- [ ] UI tests for key presses
-- [ ] Test on different text fields
-- [ ] Test in different apps (Notes, Messages, etc.)
-
-**Estimated Time:** 3-4 days
+- [x] TDD/backend status docs exist (`docs/TDD_STATUS.md`).
+- [x] Product completion plan exists (`docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md`).
+- [x] Work queue exists (`docs/WORK_QUEUE.md`).
+- [x] Release hardening doc exists.
+- [x] Prompt eval doc exists.
+- [ ] README/setup/troubleshooting/release docs — needs current verification before marking complete.
 
 ---
 
-## 📋 **TODO - Phase 4: AI Suggestion Bar**
+## Current next recommended slice
 
-### UI Components
-- [ ] Top suggestion bar above keyboard
-- [ ] Horizontal scroll for suggestions
-- [ ] Suggestion chips/buttons
-- [ ] Tap to insert suggestion
-- [ ] Loading indicator
+**Next slice: add DEBUG-only real-extension config-state instrumentation, then rerun the focused real-extension smoke once.**
 
-### AI Integration
-- [ ] NetworkManager for gateway API calls
-- [ ] Load API key from App Group
-- [ ] POST to /v1/completions endpoint
-- [ ] Handle streaming responses (SSE)
-- [ ] Debouncing (wait 500ms after typing)
-- [ ] Cancel in-flight requests
+Why this is the smallest safe next step:
 
-### Features
-- [ ] Real-time suggestions as user types
-- [ ] Context-aware completions
-- [ ] Show 3-5 suggestions at a time
-- [ ] Smooth animations
+- The current product blocker is narrow: the real extension can activate and show QWERTY keys, but the AI action menu proof is blocked because the extension reports `Gateway not configured`.
+- Product code already has the app/extension config pipeline, shared Keychain/App Group pieces, and UI tests; another broad UI redesign or blind smoke retry would not isolate the failure.
+- A redacted DEBUG-only config probe can distinguish wrong App Group suite, seed cleanup, Keychain access failure, legacy fallback failure, or stale in-memory config without exposing secrets.
+- This directly unblocks the next meaningful product proof: real extension lifecycle + configured AI action menu, not a preview/component route.
 
-### Error Handling
-- [ ] No internet connection UI
-- [ ] Invalid API key message
-- [ ] Rate limit exceeded (with retry timer)
-- [ ] Server down fallback
-- [ ] Full Access permission check
-
-### Testing
-- [ ] Unit tests for network layer
-- [ ] Mock API responses
-- [ ] Test with real gateway
-- [ ] Performance testing (response time)
-
-**Estimated Time:** 2-3 days
+Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 
 ---
 
-## 📋 **TODO - Phase 5: AI Interaction Mode**
+## Useful source/docs inspected for this refresh
 
-### UI
-- [ ] ✨ Sparkle button in toolbar
-- [ ] Toggle to AI mode view
-- [ ] Back button to return to typing mode
-- [ ] Vertical list of AI actions
-- [ ] Icons for each action
-- [ ] Loading states during AI processing
-
-### AI Actions
-- [ ] Continue Writing
-- [ ] Rewrite
-- [ ] Fix Grammar & Spelling
-- [ ] Summarize
-- [ ] Translate
-- [ ] Custom actions (from server config)
-
-### Functionality
-- [ ] Read current text from textDocumentProxy
-- [ ] Send text + action to gateway
-- [ ] Stream response
-- [ ] Replace text or append to cursor
-- [ ] Show progress indicator
-- [ ] Cancel ongoing requests
-
-### Server Integration
-- [ ] Fetch custom actions from gateway (per API key)
-- [ ] Dynamic action list based on client config
-- [ ] Handle different prompt templates
-
-### Testing
-- [ ] Test each AI action
-- [ ] Test with different text lengths
-- [ ] Test cancellation
-- [ ] Test error scenarios
-
-**Estimated Time:** 2-3 days
-
----
-
-## 📋 **TODO - Phase 6: Polish & Optimization**
-
-### Performance
-- [ ] Optimize keyboard rendering
-- [ ] Reduce API payload size
-- [ ] Cache suggestions (30 seconds)
-- [ ] Measure response times
-- [ ] Memory usage optimization (Apple's 50MB limit)
-- [ ] Reduce app size
-
-### UX Improvements
-- [ ] Keyboard sound effects (optional)
-- [ ] Better animations
-- [ ] Smooth transitions between modes
-- [ ] Keyboard height adjustments
-- [ ] Landscape mode support
-- [ ] iPad support
-
-### Accessibility
-- [ ] VoiceOver support
-- [ ] Dynamic Type (text size)
-- [ ] High Contrast mode
-- [ ] Reduce Motion support
-
-### Error Handling
-- [ ] Comprehensive error messages
-- [ ] Retry mechanisms
-- [ ] Offline mode (graceful degradation)
-- [ ] Logging for debugging
-
-### Testing
-- [ ] Full regression suite
-- [ ] Performance profiling (Instruments)
-- [ ] Battery usage testing
-- [ ] Network efficiency
-- [ ] Test on iOS 16, 17, 18
-
-**Estimated Time:** 2-3 days
-
----
-
-## 📋 **TODO - Phase 7: Documentation & Release Prep**
-
-### Documentation
-- [ ] Complete README.md
-- [ ] Architecture documentation
-- [ ] API integration guide
-- [ ] Gateway setup guide
-- [ ] iOS build instructions
-- [ ] Deployment guide
-- [ ] Contributing guidelines
-- [ ] Code of conduct
-- [ ] License file
-
-### Media
-- [ ] App screenshots
-- [ ] Demo video/GIF
-- [ ] App Store screenshots (if publishing)
-- [ ] Marketing materials
-
-### Open Source Prep
-- [ ] Clean up code comments
-- [ ] Remove hardcoded secrets
-- [ ] Example configurations
-- [ ] GitHub repository setup
-- [ ] Issue templates
-- [ ] PR templates
-- [ ] CI/CD workflows (GitHub Actions)
-
-### Testing
-- [ ] Final QA pass
-- [ ] Test on multiple devices
-- [ ] Beta testing (TestFlight if applicable)
-- [ ] Security audit
-- [ ] Privacy review
-
-**Estimated Time:** 1-2 days
-
----
-
-## 📋 **TODO - Future Enhancements (Optional)**
-
-### Gateway
-- [ ] Usage analytics dashboard
-- [ ] API key rotation
-- [ ] Webhooks for events
-- [ ] Multiple LLM provider support (OpenAI, Anthropic, etc.)
-- [ ] Caching layer (Redis)
-- [ ] Rate limit tiers (free/pro)
-
-### iOS Keyboard
-- [ ] Swipe typing
-- [ ] Word predictions
-- [ ] Autocorrect
-- [ ] Custom themes
-- [ ] Multilingual support
-- [ ] Voice input
-- [ ] GIF/sticker support
-- [ ] Cloud sync for settings
-
-### Infrastructure
-- [ ] Android keyboard (separate project)
-- [ ] Desktop extension (Chrome/Firefox)
-- [ ] Subscription/monetization (if applicable)
-
----
-
-## 🎯 **Current Priority: Phase 2 (iOS Main App)**
-
-**Next Steps:**
-1. Decide project name & bundle ID
-2. Create Xcode project
-3. Build settings screen
-4. Implement onboarding
-5. Test on Simulator
-
----
-
-## 📊 **Overall Progress**
-
-- **Phase 1 (Gateway):** ✅ 100% Complete
-- **Phase 2 (iOS Main App):** ⏳ 0% (Not Started)
-- **Phase 3 (Keyboard Core):** ⏳ 0% (Not Started)
-- **Phase 4 (AI Suggestions):** ⏳ 0% (Not Started)
-- **Phase 5 (AI Mode):** ⏳ 0% (Not Started)
-- **Phase 6 (Polish):** ⏳ 0% (Not Started)
-- **Phase 7 (Docs):** ⏳ 0% (Not Started)
-
-**Total Project:** ~15-20% Complete
-
----
-
-## 🔥 **Tonight's Work Plan**
-
-**Option A:** Start Phase 2 (iOS project setup + main app)
-**Option B:** Add more gateway features (analytics, etc.)
-**Option C:** Prepare documentation for what's completed
-
-**Decision needed from Maneesh!**
-
----
-
-**Last Updated:** 2026-04-20 18:51 UTC by Coder Bot
-
----
-
-## Product/Architecture Decisions Added 2026-05-18
-
-### Product Target
-- [ ] Target a polished, high-quality AI writing assistant, not just a basic AI keyboard.
-- [ ] Pair Open Keyboard with LLM Gateway as the required backend for auth, rate limits, model routing, and LLM access.
-- [ ] Keep the public positioning privacy-first: user-owned gateway, keys, logs, and model backend.
-
-### Backend Pairing UX
-- [ ] Configure backend in the main Open Keyboard app, not inside the keyboard UI.
-- [ ] Settings/onboarding should collect:
-  - [ ] LLM Gateway URL
-  - [ ] API key
-  - [ ] Connection status
-  - [ ] Full Access/network permission guidance
-- [ ] Add a "Test Connection" flow:
-  - [ ] Check gateway health.
-  - [ ] Validate API key with an authenticated lightweight request or chat/completion test.
-  - [ ] Show safe errors: invalid key, gateway offline, rate limited, Full Access required.
-- [ ] Store gateway URL/API key in shared App Group config so the keyboard extension can read it.
-- [ ] Keyboard extension should consume saved pairing and call:
-  - [ ] `POST {gatewayURL}/v1/chat/completions`
-  - [ ] `Authorization: Bearer {apiKey}`
-
-### UI/Implementation Constraints
-- [ ] Use SwiftUI for Open Keyboard UI.
-- [ ] Use SwiftUI for keyboard views/components.
-- [ ] Avoid UIKit UI implementation.
-- [ ] If iOS requires `UIInputViewController` for the keyboard extension lifecycle, keep it as a minimal hosting bridge only; product UI should remain SwiftUI.
-- [ ] Reference Allora Keyboard only for behavioral/UX inspiration where useful; do not copy code blindly and do not treat it as our project.
-
-### High-Quality Writing Assistant Feature Roadmap
-- [ ] Grammar and spelling fixes.
-- [ ] Clarity improvements.
-- [ ] Tone transforms: professional, friendly, concise, assertive, polished.
-- [ ] Rewrite variants: shorter, longer, simpler, more formal.
-- [ ] Smart replies for messages/email.
-- [ ] Summarize selected/recent text where iOS context allows.
-- [ ] Context-aware autocomplete/suggestion bar.
-- [ ] Preview before replacing long text; avoid destructive auto-replace.
-- [ ] Fast, cancellable LLM calls with graceful fallback UI.
-
-### Keyboard UI Reference: Neutral Writing Assistant Benchmarks
-- [ ] Use neutral, original UX references for the first visual target.
-- [ ] Dark keyboard surface with rounded top container.
-- [ ] Top assistant/suggestion row:
-  - [ ] Left brand/logo button.
-  - [ ] 3 predictive suggestions separated by vertical dividers.
-  - [ ] Right AI assistant/action button.
-- [ ] QWERTY layout with large rounded dark-gray keys and white labels.
-- [ ] Rows:
-  - [ ] QWERTY row.
-  - [ ] ASDF row with horizontal inset.
-  - [ ] Shift + ZXCV row + backspace.
-  - [ ] 123 + emoji + wide space + return.
-  - [ ] Bottom utility row with globe/next keyboard and microphone.
-- [ ] Support dark mode first; add light mode later.
-- [ ] Keep UI SwiftUI-first; any `UIInputViewController` should only host SwiftUI.
-- [ ] Avoid third-party branding/copying; use original layout and quality benchmarks only.
-- [ ] Suggestion row must support inline correction cards, not only plain word predictions:
-  - [ ] Correction card shows action label such as "Correct spelling".
-  - [ ] Correction card shows replacement text with accent color.
-  - [ ] Logo badge can indicate number of issues/actions available.
-  - [ ] Remaining row slots can still show predictive words/quoted replacements.
-  - [ ] Tapping correction card should preview/apply fix safely depending on text length.
-- [ ] Use standard iOS keyboard colors/materials for light/dark mode instead of hardcoding third-party screenshot colors.
-- [ ] Top-left icon opens an in-keyboard AI/issues UI panel.
-- [ ] Top-right assistant icon opens the main AI interaction UI inside the keyboard.
-- [ ] Treat these icon-triggered panels as primary AI interaction surfaces; Maneesh will provide more UI references after basic setup is complete.
-- [ ] Basic setup milestone should prioritize project/buildability and shell keyboard first; detailed AI panels come after.
-
----
-
-## POC Architecture Decisions Added 2026-05-18
-
-### Profiles and Gateway Configuration
-- [ ] Treat Open Keyboard profiles as user-friendly saved connections to LLM Gateway API keys.
-- [ ] Backend/Gateway key configuration owns AI behavior:
-  - [ ] model routing: Private local vs Ollama Cloud
-  - [ ] temperature
-  - [ ] max tokens
-  - [ ] rate limits
-  - [ ] enabled features/actions
-  - [ ] base system behavior/prompt
-  - [ ] key enabled/disabled state
-- [ ] Open Keyboard client owns UX intent only:
-  - [ ] selected profile/key
-  - [ ] action type such as fix grammar, rewrite, shorten, reply
-  - [ ] selected/current text and nearby context
-  - [ ] optional user tone/intention when explicitly chosen
-  - [ ] preview vs replace behavior
-- [ ] Do not fully configure model/temp/system prompts client-side for POC.
-- [ ] POC should start with one default profile in the UI, but storage should support multiple profiles.
-- [ ] Later add profile switching in the keyboard UI.
-
-### Server-Driven Configuration, Native UI
-- [ ] Use server-driven configuration/capabilities, not server-driven layout.
-- [ ] Gateway should eventually expose a safe metadata endpoint, e.g. `GET /v1/profile` or `GET /v1/capabilities`, authenticated by API key.
-- [ ] Endpoint should return safe profile metadata only, such as:
-  - [ ] profile name/label
-  - [ ] model label: Private or Ollama Cloud
-  - [ ] enabled actions
-  - [ ] default tone
-  - [ ] capabilities such as rewrite/suggestions/streaming
-  - [ ] limits useful for UX
-- [ ] Open Keyboard should render all UI with native SwiftUI components.
-- [ ] Gateway decides what is available; Open Keyboard decides how it looks.
-
-### POC Request Flow
-- [ ] User pairs Open Keyboard with Gateway URL + API key.
-- [ ] App stores profile in App Group storage.
-- [ ] Keyboard extension reads selected profile.
-- [ ] Keyboard sends action + text/context to Gateway using the selected profile key.
-- [ ] Gateway applies key-level model/temp/system behavior.
-- [ ] Gateway returns improved text/suggestions.
-- [ ] Keyboard previews result before replacing longer text.
+- `OpenKeyboard/OpenKeyboardApp.swift`
+- `OpenKeyboard/Models/AppConfig.swift`
+- `OpenKeyboard/ViewModels/SettingsViewModel.swift`
+- `OpenKeyboard/Views/ContentView.swift`
+- `OpenKeyboard/Views/OnboardingView.swift`
+- `OpenKeyboard/Views/SettingsView.swift`
+- `OpenKeyboardExtension/KeyboardView.swift`
+- `OpenKeyboardExtension/KeyboardViewController.swift`
+- `OpenKeyboardExtension/KeyboardViewModel.swift`
+- `OpenKeyboardExtension/KeyboardAIService.swift`
+- `OpenKeyboardExtension/KeyboardToolbarState.swift`
+- `OpenKeyboardCore/Sources/OpenKeyboardCore/*`
+- `OpenKeyboardCore/Tests/OpenKeyboardCoreTests/*`
+- `OpenKeyboardUITests/*`
+- `docs/TDD_STATUS.md`
+- `docs/WORK_QUEUE.md`
+- `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md`
+- `docs/M2_PROGRESS.md`
+- `docs/REAL_EXTENSION_SMOKE_PLAN.md`
+- `docs/RELEASE_HARDENING.md`
+- `docs/CI_LOG_INDEX.md`
