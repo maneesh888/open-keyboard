@@ -57,9 +57,12 @@ The keyboard extension currently includes:
 - SwiftUI keyboard UI
 - basic letter, number, symbol, space, return, delete, shift, and globe-key behavior
 - Full Access and gateway-configuration state in the toolbar
-- AI action panel
-- Fix Grammar, Rewrite, and Summarize actions
-- replacement of the current line/context before the cursor with the AI result
+- separate toolbar workflows for correction review and generative actions:
+  - the left toolbar status/logo area is for grammar and typo correction results. When automatic analysis finds issues, the badge opens the correction review flow.
+  - the right sparkle button is for generative actions such as Improve, Rephrase, and Summarize. Future generative actions such as Translate belong in this sparkle workflow, not in the correction badge flow.
+- an AI action panel opened from the sparkle button, with source text, selectable actions, and explicit Apply/back controls
+- rewrite/improvement options that are shown before replacement, with selected option state
+- replacement of the current line/context before the cursor through the replacement planner after the user applies a selected correction or rewrite
 - debug-only state persistence for UI tests
 
 Current limitation: the active extension path uses the last line before the cursor as the main replacement unit. Broader selected-text, paragraph, and multi-action workflows are still being developed.

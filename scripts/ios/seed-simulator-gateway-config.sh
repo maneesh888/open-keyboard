@@ -3,11 +3,16 @@ set -euo pipefail
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/ios/seed-simulator-gateway-config.sh --seed-file <path> [--simulator <name-or-udid>]
+Usage: scripts/ios/seed-simulator-gateway-config.sh --seed-file <path> [--simulator <name-or-udid>] [--replace-existing-config]
 
 Explicitly seeds a booted iOS Simulator OpenKeyboard install with real gateway
 configuration for local actual-keyboard testing. This is a developer-only flow;
 unit/core tests must keep using DummyGatewayServer.
+
+By default, existing real simulator gateway config is preserved and the app only
+uses the seed when no complete config is available. Pass
+--replace-existing-config only for disposable simulators where clearing first is
+intended.
 
 Required seed file variables:
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=https://your-gateway.example
@@ -85,6 +90,7 @@ load_seed_file() {
 
 seed_file=""
 simulator="booted"
+replace_existing_config=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -95,6 +101,10 @@ while [[ $# -gt 0 ]]; do
     --simulator)
       simulator="${2:-}"
       shift 2
+      ;;
+    --replace-existing-config|--clear-existing-config)
+      replace_existing_config=true
+      shift
       ;;
     --help|-h)
       usage
@@ -155,17 +165,34 @@ echo "Simulator: $simulator"
 echo "Gateway URL: $OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
 echo "Model: $OPEN_KEYBOARD_SIMULATOR_MODEL"
 echo "API key: <redacted length=$api_key_length>"
+if [[ "$replace_existing_config" == true ]]; then
+  echo "Existing simulator config: replace requested; app will clear before seeding."
+else
+  echo "Existing simulator config: preserve; seed is used only when config is unavailable."
+fi
+
+launch_arguments=(
+  --uitesting
+  --seed-functional-gateway-config
+  --skip-onboarding
+)
+if [[ "$replace_existing_config" == true ]]; then
+  launch_arguments=(
+    --uitesting
+    --clear-gateway-config
+    --seed-functional-gateway-config
+    --skip-onboarding
+  )
+fi
 
 OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" \
 OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY" \
 OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL" \
+OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG="$([[ "$replace_existing_config" == true ]] && printf '1' || printf '0')" \
 xcrun simctl launch \
   "$simulator" \
   "$bundle_id" \
-  --uitesting \
-  --clear-gateway-config \
-  --seed-gateway-config \
-  --skip-onboarding \
+  "${launch_arguments[@]}" \
   >/tmp/openkeyboard-simulator-seed.log
 
 echo "Seed launch completed. Simulator launch output: /tmp/openkeyboard-simulator-seed.log"

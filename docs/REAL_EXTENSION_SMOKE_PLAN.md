@@ -1,6 +1,6 @@
 # Real Keyboard Extension Smoke Plan
 
-Last updated: 2026-06-19
+Last updated: 2026-07-03
 
 ## Goal
 
@@ -9,10 +9,20 @@ Keep one focused host-side smoke route that proves the real iOS keyboard extensi
 1. install/enable Open Keyboard in the simulator;
 2. focus a real host-app text input;
 3. switch from the system keyboard/Emoji keyboard to the real OpenKeyboard extension;
-4. open the real AI logo/action menu;
-5. capture screenshot proof from the real extension, not Preview Lab or a component harness.
+4. verify the left correction status/logo lane and the right sparkle action lane independently;
+5. open the real sparkle action menu;
+6. capture screenshot proof from the real extension, not Preview Lab or a component harness.
 
-This is not a broad screenshot suite. It is the release-readiness guardrail for third-party keyboard lifecycle, App Group/Keychain config visibility, Full Access behavior, and AI action menu availability.
+This is not a broad screenshot suite. It is the release-readiness guardrail for third-party keyboard lifecycle, App Group/Keychain config visibility, Full Access behavior, correction status availability, and sparkle action menu availability.
+
+## Toolbar workflow contract
+
+The keyboard toolbar has two independent workflows:
+
+- Left status/logo lane: grammar and typo correction review. The OpenKeyboard logo, issue count badge, and correction status belong to this lane. When correction results exist, tapping it opens the correction review/details flow.
+- Right sparkle lane: generative writing actions. Improve, Rephrase, Summarize, and future Translate actions belong here. This lane opens the action/options panel and should not immediately replace text without an explicit user Apply step.
+
+Real-extension proof should keep these lanes separate: a sparkle workflow pass does not prove correction review, and a correction badge pass does not prove Improve/Rephrase actions.
 
 ## Current command
 
@@ -36,28 +46,19 @@ acceptance-ui-test-logo-action-menu-real-extension
 
 ## Current state
 
-The switcher blocker has been narrowed:
+The real-extension route should now prove these visible states independently:
 
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - QWERTY keys are visible in the real extension hierarchy.
-- `ai_toolbar` appears as disabled Button elements in current failing proof runs.
+- In configured state, the left `keyboard_openkeyboard_icon` status/logo lane is present and enabled.
+- The right `ai_sparkle_action` lane is present and opens the generative action panel.
+- The sparkle action panel exposes source text plus selectable Improve/Rephrase/Summarize actions.
 
-Current blocker:
-
-```text
-The real extension still reports `Gateway not configured`; `ai_sparkle_action` is absent, so the logo/action menu cannot open.
-```
-
-Latest evidence:
+Historical config-visibility evidence remains useful when diagnosing App Group or gateway seeding regressions:
 
 ```text
 reports/real-extension-config-seed-legacy-key-20260619T1235/summary.md
 reports/real-extension-config-seed-legacy-key-20260619T1235/logs/xcodebuild-real-extension-config-seed-legacy-key.log
-```
-
-Coder report:
-
-```text
 .agent/reports/20260619T1212-real-extension-gateway-config-seed/report.md
 ```
 
@@ -69,8 +70,9 @@ A pass requires all of the following:
 - focused host text input is active;
 - OpenKeyboard extension process is active;
 - seeded gateway config is visible to the extension;
-- `ai_sparkle_action` or the intended real action/menu trigger is available;
-- action menu opens;
+- the left correction status/logo lane is present and not visually disabled in normal configured state;
+- `ai_sparkle_action` or the intended real sparkle action/menu trigger is available;
+- sparkle action menu opens with source text and selectable generative actions;
 - screenshot attachment `acceptance-ui-test-logo-action-menu-real-extension` is exported.
 
 ## What does not count
