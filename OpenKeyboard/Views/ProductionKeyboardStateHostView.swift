@@ -51,6 +51,8 @@ struct ProductionKeyboardStateHostView: View {
         AppConfig.clear(from: sharedDefaults)
         sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
         sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
+        sharedDefaults.set(UUID().uuidString, forKey: "keyboardExtension.suggestionStateSeedID")
+        sharedDefaults.set(Date().timeIntervalSince1970, forKey: "keyboardExtension.suggestionStateSeededAt")
         sharedDefaults.synchronize()
     }
 }

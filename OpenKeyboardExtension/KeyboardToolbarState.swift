@@ -8,6 +8,7 @@ import Foundation
 enum KeyboardPanelMode: Equatable {
     case keyboard
     case actions
+    case rewriteOptions
     case correctionDetail
     case correctionComplete
 }
@@ -24,6 +25,16 @@ struct KeyboardCompletionPanelState: Equatable {
     static let noIssues = KeyboardCompletionPanelState(
         title: "No issues found",
         message: "There are no grammar or spelling suggestions."
+    )
+
+    static let rewriteApplied = KeyboardCompletionPanelState(
+        title: "Rewrite applied",
+        message: "The selected rewrite replaced the original text."
+    )
+
+    static let improvementApplied = KeyboardCompletionPanelState(
+        title: "Improvement applied",
+        message: "The selected improvement replaced the original text."
     )
 }
 

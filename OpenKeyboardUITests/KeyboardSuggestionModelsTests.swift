@@ -116,6 +116,24 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(state.isComplete)
     }
 
+    func testSingleCharacterCorrectionDoesNotApplyInsideAlreadyCorrectedReplacement() {
+        let response = KeyboardSuggestionResponse(
+            corrections: [
+                KeyboardCorrectionSuggestion(
+                    label: "Article",
+                    original: "a",
+                    replacement: "an",
+                    range: KeyboardTextRange(start: 16, end: 17)
+                )
+            ],
+            predictions: []
+        )
+        let state = KeyboardSuggestionState(response: response)
+        let text = "Yesterday I has an apple before the meeting."
+
+        XCTAssertNil(state.textByApplyingCurrentCorrection(to: text))
+    }
+
     func testAppliesAndDismissesStructuredCorrectionsInSequence() {
         let response = KeyboardSuggestionResponse(
             corrections: [
@@ -489,12 +507,47 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(response.corrections.count, 3)
     }
 
-    func testSummarizeOrRewriteStructuredResultStillProducesExpectedReplacement() throws {
+    func testSummarizeStillReplacesButRewriteReturnsOptions() throws {
         let summary = try KeyboardActionOperationResult.parse(#"{"operation":"summarize","results":[{"id":"summary-1","type":"summary","title":"Summary","text":"The keyboard helps with writing."}],"summary":"The keyboard helps with writing."}"#, operation: "summarize", fallbackText: "Long source text")
         let rewrite = try KeyboardActionOperationResult.parse(#"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","title":"Rewrite","text":"Clearer text.","replacement":"Clearer text."}]}"#, operation: "rewrite", fallbackText: "bad text")
 
         XCTAssertEqual(KeyboardActionResultHandler.outcome(operation: "summarize", result: summary), .replaceText("The keyboard helps with writing."))
-        XCTAssertEqual(KeyboardActionResultHandler.outcome(operation: "rewrite", result: rewrite), .replaceText("Clearer text."))
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "rewrite", result: rewrite, sourceText: "bad text"),
+            .showRewriteOptions([KeyboardRewriteOption(id: "rewrite-option-1", title: "Rewrite", text: "Clearer text.")])
+        )
+    }
+
+    func testRewriteOptionsDeduplicateTrimAndFilterUnsafeCandidates() throws {
+        let json = #"""
+        {
+          "operation": "rewrite",
+          "results": [
+            {"id": "same", "type": "suggestion", "title": "Same", "text": "  bad text  ", "replacement": "bad text"},
+            {"id": "clear", "type": "suggestion", "title": "Clearer", "text": "Clearer text.", "replacement": " Clearer text. "},
+            {"id": "safe", "type": "suggestion", "title": "Shorter", "text": "Short text.", "replacement": "Short text."},
+            {"id": "unsafe", "type": "warning", "title": "Error", "text": "The model returned malformed JSON and no safe keyboard text could be extracted.", "replacement": "The model returned malformed JSON and no safe keyboard text could be extracted."}
+          ],
+          "corrected_text": "Clearer text.",
+          "output": "Friendlier text."
+        }
+        """#
+        let result = try KeyboardActionOperationResult.parse(json, operation: "rewrite", fallbackText: "bad text")
+
+        let options = result.rewriteOptions(sourceText: "bad text")
+
+        XCTAssertEqual(options, [
+            KeyboardRewriteOption(id: "rewrite-option-1", title: "Clearer", text: "Clearer text."),
+            KeyboardRewriteOption(id: "rewrite-option-2", title: "Shorter", text: "Short text.")
+        ])
+    }
+
+    func testRewriteOptionsWorkWithSingleTopLevelRewrite() throws {
+        let result = try KeyboardActionOperationResult.parse(#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, operation: "rewrite", fallbackText: "This bad")
+
+        XCTAssertEqual(result.rewriteOptions(sourceText: "This bad"), [
+            KeyboardRewriteOption(id: "rewrite-option-1", title: "Rewrite", text: "This is clearer.")
+        ])
     }
 
 

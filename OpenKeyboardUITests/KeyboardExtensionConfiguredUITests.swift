@@ -34,7 +34,14 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     }
 
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {
-        let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"])
+        let sourceText = "All of these are no bulb in the universe."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)"
+        ])
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
 
@@ -67,13 +74,25 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertFalse(keyboardApp.staticTexts["Gateway not configured"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Pair gateway in app"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
+        XCTAssertTrue(
+            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 2),
+            "Left correction/status lane should stay enabled while the sparkle action is available"
+        )
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
         keyboardApp.buttons["ai_sparkle_action"].tap()
-        XCTAssertTrue(keyboardApp.buttons["ai_action_fixGrammar"].isEnabled)
+        XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 2))
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 2))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].isEnabled)
         XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].waitForExistence(timeout: 2))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].isEnabled)
+
+        let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
+        XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))
+        backToKeyboard.tap()
+        XCTAssertTrue(
+            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 5),
+            "Left correction/status lane was not enabled after returning from the sparkle action panel"
+        )
     }
 
     func testSeededRealKeyboardCorrectionCarouselCanNavigateCards() throws {
@@ -120,7 +139,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         add(attachment)
     }
 
-    func testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured() throws {
+    func testRealKeyboardImproveReplacesTextWhenGatewayConfigured() throws {
         let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"], requiresInjectedGatewayCredentials: true)
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
@@ -145,35 +164,20 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger disappeared after typing")
         keyboardApp.buttons["ai_sparkle_action"].tap()
-        let liveFixGrammar = keyboardApp.buttons["ai_action_fixGrammar"]
-        XCTAssertTrue(liveFixGrammar.waitForExistence(timeout: 5), "Fix Grammar disappeared after typing")
-        XCTAssertTrue(liveFixGrammar.isEnabled)
-        liveFixGrammar.tap()
+        let liveImprove = keyboardApp.buttons["ai_action_improve"]
+        XCTAssertTrue(liveImprove.waitForExistence(timeout: 5), "Improve disappeared after typing")
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_result_text"].waitForExistence(timeout: 60), "Generated improvement text did not appear in the top-right sparkle panel")
+        let applyAction = keyboardApp.buttons["ai_action_apply"]
+        XCTAssertTrue(applyAction.waitForExistence(timeout: 5), "Accept was missing from the AI action panel")
+        XCTAssertTrue(applyAction.isEnabled)
+        applyAction.tap()
 
-        if keyboardApp.buttons["ai_correction_apply"].waitForExistence(timeout: 60) {
-            let carouselAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-            carouselAttachment.name = "live-gateway-real-keyboard-correction-carousel"
-            carouselAttachment.lifetime = .keepAlways
-            add(carouselAttachment)
-
-            applyVisibleCorrections(keyboardApp: keyboardApp)
-            let improved = NSPredicate(
-                format: "NOT (value CONTAINS[c] %@) AND value CONTAINS[c] %@ AND value CONTAINS[c] %@",
-                "i has a apple",
-                "have",
-                "apple"
-            )
-            expectation(for: improved, evaluatedWith: input)
-            waitForExpectations(timeout: 10)
-        } else {
-            XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists, "Existing simulator gateway config produced an action error")
-            let corrected = NSPredicate(format: "value CONTAINS[c] %@", "I have an apple")
-            expectation(for: corrected, evaluatedWith: input)
-            waitForExpectations(timeout: 1)
-        }
+        let improved = NSPredicate(format: "NOT (value CONTAINS[c] %@)", "i has a apple")
+        expectation(for: improved, evaluatedWith: input)
+        waitForExpectations(timeout: 10)
 
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "live-gateway-real-keyboard-corrected-text"
+        attachment.name = "live-gateway-real-keyboard-improved-text"
         attachment.lifetime = .keepAlways
         add(attachment)
     }
@@ -256,7 +260,121 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         }
     }
 
-    func testRealKeyboardFixGrammarReplacesTextWithExistingSimulatorGatewayConfig() throws {
+    func testRealKeyboardSparkleImproveModeScreenshotWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard sparkle Improve screenshots.")
+        }
+
+        let sourceText = "All of these are no bulb in the universe."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard sparkle screenshots")
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
+
+        keyboardApp.buttons["ai_sparkle_action"].tap()
+        XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["back_to_keyboard"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_rerun"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_toggle_carousel"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_copy"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_apply"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("02-real-keyboard-sparkle-improve-mode")
+    }
+
+    func testRealKeyboardRewriteOptionsWorkflowScreenshotsWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard rewrite screenshots.")
+        }
+
+        let sourceText = "All of these are no bulb in the universe."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let hostArguments = [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)"
+        ]
+
+        let app = configuredContainingApp(extraArguments: hostArguments)
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard rewrite screenshots")
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
+
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForEnabledAITrigger(keyboardApp: keyboardApp, timeout: 10))
+        keyboardApp.buttons["ai_sparkle_action"].tap()
+        XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("02-real-keyboard-ai-action-screen")
+        app.terminate()
+
+        let seededArguments = hostArguments + [
+            "--keyboard-suggestion-state=rewriteOptions",
+            "--keyboard-initial-panel=rewriteOptions"
+        ]
+        let seededApp = configuredContainingApp(extraArguments: seededArguments)
+        seededApp.launch()
+        XCTAssertTrue(seededApp.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let seededInput = seededApp.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(seededInput.waitForExistence(timeout: 10), "Seeded host app text editor was not available")
+        tapCenter(of: seededInput)
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: seededInput, springboard: springboard),
+            "Open Keyboard extension did not appear for seeded rewrite options"
+        )
+        XCTAssertTrue(keyboardApp.buttons["ai_rewrite_option_1"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("03-real-keyboard-rewrite-options-carousel")
+
+        let secondOption = keyboardApp.buttons["ai_rewrite_option_1"]
+        XCTAssertTrue(secondOption.waitForExistence(timeout: 5))
+        secondOption.tap()
+
+        let apply = keyboardApp.buttons["ai_rewrite_apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        apply.tap()
+
+        let rewritten = NSPredicate(format: "value CONTAINS[c] %@", "There are no bulbs anywhere in the universe.")
+        expectation(for: rewritten, evaluatedWith: seededInput)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(keyboardApp.staticTexts["Rewrite applied"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("04-real-keyboard-rewrite-applied")
+    }
+
+    func testRealKeyboardImproveReplacesTextWithExistingSimulatorGatewayConfig() throws {
         try skipUnlessExistingSimulatorGatewayConfigIsPresent()
 
         let app = existingConfiguredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"])
@@ -287,27 +405,17 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5), "Open Keyboard AI trigger disappeared after typing")
         keyboardApp.buttons["ai_sparkle_action"].tap()
-        let liveFixGrammar = keyboardApp.buttons["ai_action_fixGrammar"]
-        XCTAssertTrue(liveFixGrammar.waitForExistence(timeout: 5), "Fix Grammar disappeared after typing")
-        XCTAssertTrue(liveFixGrammar.isEnabled)
-        liveFixGrammar.tap()
+        let liveImprove = keyboardApp.buttons["ai_action_improve"]
+        XCTAssertTrue(liveImprove.waitForExistence(timeout: 5), "Improve disappeared after typing")
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_result_text"].waitForExistence(timeout: 60), "Generated improvement text did not appear in the top-right sparkle panel")
+        let applyAction = keyboardApp.buttons["ai_action_apply"]
+        XCTAssertTrue(applyAction.waitForExistence(timeout: 5), "Accept was missing from the AI action panel")
+        XCTAssertTrue(applyAction.isEnabled)
+        applyAction.tap()
 
-        if keyboardApp.buttons["ai_correction_apply"].waitForExistence(timeout: 60) {
-            applyVisibleCorrections(keyboardApp: keyboardApp)
-            let improved = NSPredicate(
-                format: "NOT (value CONTAINS[c] %@) AND value CONTAINS[c] %@ AND value CONTAINS[c] %@",
-                "i has a apple",
-                "have",
-                "apple"
-            )
-            expectation(for: improved, evaluatedWith: input)
-            waitForExpectations(timeout: 10)
-        } else {
-            XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists, "Existing simulator gateway config produced an action error")
-            let corrected = NSPredicate(format: "value CONTAINS[c] %@", "I have an apple")
-            expectation(for: corrected, evaluatedWith: input)
-            waitForExpectations(timeout: 1)
-        }
+        let improved = NSPredicate(format: "NOT (value CONTAINS[c] %@)", "i has a apple")
+        expectation(for: improved, evaluatedWith: input)
+        waitForExpectations(timeout: 10)
     }
 
     private func skipUnlessExistingSimulatorGatewayConfigIsPresent() throws {
@@ -455,6 +563,37 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         return false
     }
 
+    private func waitForEnabledAITrigger(keyboardApp: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let trigger = keyboardApp.buttons["ai_sparkle_action"]
+        while Date() < deadline {
+            if trigger.waitForExistence(timeout: 1),
+               trigger.isEnabled,
+               !keyboardApp.staticTexts["Analyzing..."].exists,
+               !keyboardApp.staticTexts["Checking..."].exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return false
+    }
+
+    private func waitForEnabledLeftStatusLane(keyboardApp: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let statusIcon = keyboardApp.buttons["keyboard_openkeyboard_icon"]
+        let issueBadge = keyboardApp.buttons["keyboard_issue_count_badge"]
+        while Date() < deadline {
+            if statusIcon.waitForExistence(timeout: 1), statusIcon.isEnabled {
+                return true
+            }
+            if issueBadge.waitForExistence(timeout: 1), issueBadge.isEnabled {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return false
+    }
+
     private func waitForIssueCountBadge(keyboardApp: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -478,7 +617,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     ) -> XCUIApplication {
         let app = XCUIApplication()
         let seedArgument = requiresInjectedGatewayCredentials ? "--seed-functional-gateway-config" : "--seed-gateway-config"
-        app.launchArguments = ["--uitesting", "--clear-gateway-config", seedArgument] + extraArguments
+        var launchArguments = ["--uitesting", seedArgument] + extraArguments
+        if !requiresInjectedGatewayCredentials {
+            launchArguments.insert("--clear-gateway-config", at: 1)
+        }
+        app.launchArguments = launchArguments
 
         let environment = ProcessInfo.processInfo.environment
         let injectedGatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]

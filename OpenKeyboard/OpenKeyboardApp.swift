@@ -111,7 +111,23 @@ struct OpenKeyboardApp: App {
     private static func clearUITestConfigAtLaunchIfNeeded() {
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("--uitesting"), arguments.contains("--clear-gateway-config") else { return }
-        AppConfig.clearSharedConfig()
+        guard let sharedDefaults = AppConfig.sharedDefaults() else { return }
+
+        let replacementRequested = isUITestConfigReplacementRequested(
+            arguments: arguments,
+            environment: ProcessInfo.processInfo.environment
+        )
+        guard replacementRequested || !AppConfig.hasExistingRealConfig(in: sharedDefaults) else { return }
+
+        AppConfig.clear(from: sharedDefaults)
+    }
+
+    private static func isUITestConfigReplacementRequested(
+        arguments: [String],
+        environment: [String: String]
+    ) -> Bool {
+        arguments.contains("--replace-existing-config")
+            || environment["OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG"] == "1"
     }
 
     private static func seedUITestGatewayConfigAtLaunchIfNeeded() {
@@ -122,6 +138,12 @@ struct OpenKeyboardApp: App {
         let apiKey = environment["OPEN_KEYBOARD_TEST_API_KEY"]
         let gatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]
         let selectedModel = environment["OPEN_KEYBOARD_TEST_MODEL"]
+        let replacementRequested = isUITestConfigReplacementRequested(
+            arguments: arguments,
+            environment: environment
+        )
+        let shouldMirrorAPIKeyToDefaults = arguments.contains("--seed-gateway-config")
+            && !arguments.contains("--seed-functional-gateway-config")
 
         guard let apiKey, !apiKey.isEmpty,
               let gatewayURL, !gatewayURL.isEmpty,
@@ -140,8 +162,8 @@ struct OpenKeyboardApp: App {
         if let sharedDefaults = AppConfig.sharedDefaults() {
             let didSeed = config.saveTestSeed(
                 to: sharedDefaults,
-                overwriteExistingRealConfig: arguments.contains("--clear-gateway-config"),
-                mirrorAPIKeyToDefaultsForUITest: true
+                overwriteExistingRealConfig: replacementRequested,
+                mirrorAPIKeyToDefaultsForUITest: shouldMirrorAPIKeyToDefaults
             )
             if didSeed {
                 // Keep UI-test seeded config visible to the keyboard extension even when
@@ -173,10 +195,14 @@ struct OpenKeyboardApp: App {
 
         let panelMode = panelArgument.replacingOccurrences(of: "--keyboard-initial-panel=", with: "")
         switch panelMode {
-        case "actions", "correctionDetail", "correctionCarousel", "correctionComplete":
+        case "actions", "rewriteOptions", "correctionDetail", "correctionCarousel", "correctionComplete":
             sharedDefaults.set(panelMode, forKey: "keyboardExtension.initialPanelMode")
+            sharedDefaults.set(UUID().uuidString, forKey: "keyboardExtension.initialPanelModeSeedID")
+            sharedDefaults.set(Date().timeIntervalSince1970, forKey: "keyboardExtension.initialPanelModeSeededAt")
         default:
             sharedDefaults.removeObject(forKey: "keyboardExtension.initialPanelMode")
+            sharedDefaults.removeObject(forKey: "keyboardExtension.initialPanelModeSeedID")
+            sharedDefaults.removeObject(forKey: "keyboardExtension.initialPanelModeSeededAt")
         }
         sharedDefaults.synchronize()
     }
@@ -190,12 +216,16 @@ struct OpenKeyboardApp: App {
         }
 
         let state = stateArgument.replacingOccurrences(of: "--keyboard-suggestion-state=", with: "")
-        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "allGood", "analysisFailed", "analyzing"]
+        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "rewriteOptions", "allGood", "analysisFailed", "analyzing"]
         if allowedStates.contains(state) {
             sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
+            sharedDefaults.set(UUID().uuidString, forKey: "keyboardExtension.suggestionStateSeedID")
+            sharedDefaults.set(Date().timeIntervalSince1970, forKey: "keyboardExtension.suggestionStateSeededAt")
         } else {
             sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionState")
+            sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionStateSeedID")
+            sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionStateSeededAt")
         }
         sharedDefaults.synchronize()
     }

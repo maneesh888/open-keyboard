@@ -6,6 +6,170 @@
 import SwiftUI
 import UIKit
 
+enum KeyboardRewriteOptionsIntent: Equatable {
+    case improve
+    case rephrase
+
+    var headerTitle: String {
+        switch self {
+        case .improve: return "Choose an improvement"
+        case .rephrase: return "Choose a rephrase"
+        }
+    }
+
+    var sourceLabel: String {
+        switch self {
+        case .improve: return "Original"
+        case .rephrase: return "Original"
+        }
+    }
+
+    var toolbarStatusSingular: String {
+        switch self {
+        case .improve: return "1 improvement"
+        case .rephrase: return "1 rewrite option"
+        }
+    }
+
+    func toolbarStatus(count: Int) -> String {
+        switch self {
+        case .improve: return count == 1 ? toolbarStatusSingular : "\(count) improvements"
+        case .rephrase: return count == 1 ? toolbarStatusSingular : "\(count) rewrite options"
+        }
+    }
+
+    func readyStatus(count: Int) -> String {
+        switch self {
+        case .improve: return count == 1 ? "Improvement ready" : "\(count) improvements ready"
+        case .rephrase: return count == 1 ? "Rewrite ready" : "\(count) rewrites ready"
+        }
+    }
+
+    var completionState: KeyboardCompletionPanelState {
+        switch self {
+        case .improve: return .improvementApplied
+        case .rephrase: return .rewriteApplied
+        }
+    }
+
+    var appliedStatus: String {
+        switch self {
+        case .improve: return "Improvement applied"
+        case .rephrase: return "Rewrite applied"
+        }
+    }
+}
+
+struct KeyboardRewriteOptionsState: Equatable {
+    let intent: KeyboardRewriteOptionsIntent
+    let sourceText: String
+    let replacementPlan: KeyboardReplacementPlan
+    let options: [KeyboardRewriteOption]
+    var selectedOptionID: String
+    var isCarouselVisible: Bool
+
+    init(
+        intent: KeyboardRewriteOptionsIntent = .rephrase,
+        sourceText: String,
+        replacementPlan: KeyboardReplacementPlan,
+        options: [KeyboardRewriteOption],
+        isCarouselVisible: Bool = true
+    ) {
+        self.intent = intent
+        self.sourceText = sourceText
+        self.replacementPlan = replacementPlan
+        self.options = options
+        self.selectedOptionID = options.first?.id ?? ""
+        self.isCarouselVisible = isCarouselVisible
+    }
+
+    var selectedOption: KeyboardRewriteOption? {
+        options.first { $0.id == selectedOptionID } ?? options.first
+    }
+
+    mutating func selectOption(id: String) {
+        guard options.contains(where: { $0.id == id }) else { return }
+        selectedOptionID = id
+    }
+
+    mutating func toggleCarouselVisibility() {
+        isCarouselVisible.toggle()
+    }
+}
+
+struct KeyboardActionPanelState: Equatable {
+    let sourceText: String
+    let replacementPlan: KeyboardReplacementPlan
+    var selectedAction: KeyboardAIAction
+    var options: [KeyboardRewriteOption]
+    var selectedOptionID: String
+    var isCarouselVisible: Bool
+    var isLoading: Bool
+
+    static let availableActions: [KeyboardAIAction] = [.improve, .rewrite, .summarize]
+
+    init(
+        sourceText: String,
+        replacementPlan: KeyboardReplacementPlan,
+        selectedAction: KeyboardAIAction = .improve,
+        options: [KeyboardRewriteOption] = [],
+        isCarouselVisible: Bool = true,
+        isLoading: Bool = false
+    ) {
+        self.sourceText = sourceText
+        self.replacementPlan = replacementPlan
+        self.selectedAction = selectedAction
+        self.options = options
+        self.selectedOptionID = options.first?.id ?? ""
+        self.isCarouselVisible = isCarouselVisible
+        self.isLoading = isLoading
+    }
+
+    init(sourceText: String, selectedAction: KeyboardAIAction = .improve) {
+        self.init(
+            sourceText: sourceText,
+            replacementPlan: KeyboardReplacementPlan(
+                textToDelete: sourceText,
+                textForAI: sourceText,
+                leadingWhitespace: "",
+                trailingWhitespace: ""
+            ),
+            selectedAction: selectedAction
+        )
+    }
+
+    var selectedOption: KeyboardRewriteOption? {
+        options.first { $0.id == selectedOptionID } ?? options.first
+    }
+
+    mutating func selectAction(_ action: KeyboardAIAction) {
+        guard Self.availableActions.contains(action) else { return }
+        selectedAction = action
+        beginLoading()
+    }
+
+    mutating func beginLoading() {
+        options = []
+        selectedOptionID = ""
+        isLoading = true
+    }
+
+    mutating func finishLoading(options: [KeyboardRewriteOption]) {
+        self.options = options
+        selectedOptionID = options.first?.id ?? ""
+        isLoading = false
+    }
+
+    mutating func selectOption(id: String) {
+        guard options.contains(where: { $0.id == id }) else { return }
+        selectedOptionID = id
+    }
+
+    mutating func toggleCarouselVisibility() {
+        isCarouselVisible.toggle()
+    }
+}
+
 @MainActor
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
@@ -21,18 +185,34 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var aiStatus = "Ready"
     @Published private(set) var isPerformingAIAction = false
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
+    @Published private(set) var actionPanelState: KeyboardActionPanelState?
     @Published private(set) var suggestionState: KeyboardSuggestionState?
+    @Published private(set) var rewriteOptionsState: KeyboardRewriteOptionsState?
     @Published private(set) var actionError: KeyboardActionErrorState?
     @Published private(set) var completionPanelState = KeyboardCompletionPanelState.allDone
+    @Published private(set) var isGrammarCorrectionLoading = false
     @Published private var hasNoIssueAnalysisResult = false
     private var composingBuffer = ""
     private var automaticAnalysisTask: Task<Void, Never>?
+    private var grammarCorrectionTask: Task<Void, Never>?
+    private var grammarCorrectionRequestID: UUID?
+    private var actionPanelTask: Task<Void, Never>?
+    private var shouldResumeAutomaticAnalysisOnKeyboardReturn = false
     private let automaticAnalysisDelayNanoseconds: UInt64
     private var lastAnalyzedText: String?
 
     private enum Keys {
         static let composingBuffer = "keyboardExtension.composingBuffer"
+        static let initialPanelMode = "keyboardExtension.initialPanelMode"
+        static let initialPanelModeSeedID = "keyboardExtension.initialPanelModeSeedID"
+        static let initialPanelModeSeededAt = "keyboardExtension.initialPanelModeSeededAt"
+        static let suggestionState = "keyboardExtension.suggestionState"
+        static let suggestionStateSeedID = "keyboardExtension.suggestionStateSeedID"
+        static let suggestionStateSeededAt = "keyboardExtension.suggestionStateSeededAt"
+        static let uiTestDebugStateEnabled = "keyboardExtension.uiTestDebugStateEnabled"
     }
+
+    private static let uiTestSeedMaximumAge: TimeInterval = 30
 
     var canRunAIAction: Bool {
         hasFullAccess
@@ -41,12 +221,34 @@ final class KeyboardViewModel: ObservableObject {
             && !isPerformingAIAction
     }
 
+    var canOpenActionPanel: Bool {
+        hasFullAccess
+            && gatewayConnectionError == nil
+            && hasUsableGatewayConfig
+            && !isManualActionInFlight
+    }
+
     private var hasUsableGatewayConfig: Bool {
         config.isConfigured && config.hasCompleteGatewayRuntimeConfig
     }
 
+    private var isManualActionInFlight: Bool {
+        isPerformingAIAction && aiStatus != "Analyzing…"
+    }
+
     var canOpenAnalysisResult: Bool {
         currentCorrection != nil || hasNoIssueAnalysisResult
+    }
+
+    var canOpenGrammarCorrection: Bool {
+        !hasHardGrammarCorrectionBlocker
+    }
+
+    private var hasHardGrammarCorrectionBlocker: Bool {
+        !hasFullAccess
+            || gatewayConnectionError != nil
+            || !hasUsableGatewayConfig
+            || actionError != nil
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -56,6 +258,10 @@ final class KeyboardViewModel: ObservableObject {
     var toolbarState: KeyboardToolbarState {
         if let actionError {
             return KeyboardToolbarState(kind: .error(message: actionError.message))
+        }
+        if let rewriteOptionsState {
+            let status = rewriteOptionsState.intent.toolbarStatus(count: rewriteOptionsState.options.count)
+            return KeyboardToolbarState(kind: .actions(status: status))
         }
         if let suggestionState,
            let correction = suggestionState.currentCorrection,
@@ -98,6 +304,7 @@ final class KeyboardViewModel: ObservableObject {
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
         let seededSuggestionState = Self.loadSeededSuggestionState()
         self.suggestionState = seededSuggestionState?.suggestionState
+        self.rewriteOptionsState = seededSuggestionState?.rewriteOptionsState
         self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
         self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
         self.isPerformingAIAction = seededSuggestionState?.isPerformingAIAction ?? false
@@ -151,13 +358,105 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func showActionPanel() {
-        guard canRunAIAction else { return }
+        guard canOpenActionPanel else { return }
         automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        isGrammarCorrectionLoading = false
+        if isPerformingAIAction, aiStatus == "Analyzing…" {
+            isPerformingAIAction = false
+        }
+        rewriteOptionsState = nil
+        guard let replacementPlan = currentReplacementPlan() else {
+            aiStatus = "Type text first"
+            recordDebugEvent("action_panel_blocked_no_text")
+            return
+        }
+        actionPanelState = KeyboardActionPanelState(
+            sourceText: replacementPlan.textForAI,
+            replacementPlan: replacementPlan,
+            selectedAction: .improve,
+            isLoading: true
+        )
         panelMode = .actions
+        requestActionPanelResult(.improve, replacementPlan: replacementPlan)
     }
 
     func showKeyboardPanel() {
+        let previousPanelMode = panelMode
+        let hadActionPanelTask = actionPanelTask != nil
+        let hadGrammarCorrectionTask = isGrammarCorrectionLoading || grammarCorrectionTask != nil
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        if hadGrammarCorrectionTask {
+            grammarCorrectionTask?.cancel()
+            grammarCorrectionTask = nil
+            grammarCorrectionRequestID = nil
+            isGrammarCorrectionLoading = false
+        }
+        if hadActionPanelTask {
+            isPerformingAIAction = false
+            aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        }
+        if hadGrammarCorrectionTask {
+            isPerformingAIAction = false
+            aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        }
+        actionPanelState = nil
+        rewriteOptionsState = nil
         panelMode = .keyboard
+        let shouldResumeAnalysis = shouldResumeAutomaticAnalysisOnKeyboardReturn
+            || previousPanelMode == .actions
+            || previousPanelMode == .rewriteOptions
+        shouldResumeAutomaticAnalysisOnKeyboardReturn = false
+        if shouldResumeAnalysis {
+            resumeAutomaticAnalysisIfNeeded()
+        }
+    }
+
+    func selectActionPanelAction(_ action: KeyboardAIAction) {
+        guard var state = actionPanelState else { return }
+        guard !state.isLoading else { return }
+        state.selectAction(action)
+        actionPanelState = state
+        requestActionPanelResult(action, replacementPlan: state.replacementPlan)
+    }
+
+    func applySelectedActionPanelAction() {
+        guard let state = actionPanelState,
+              let selectedOption = state.selectedOption else {
+            return
+        }
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        replace(plan: state.replacementPlan, with: selectedOption.text)
+        actionPanelState = nil
+        rewriteOptionsState = nil
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        lastAnalyzedText = nil
+        shouldResumeAutomaticAnalysisOnKeyboardReturn = true
+        completionPanelState = state.selectedAction == .improve ? .improvementApplied : .rewriteApplied
+        aiStatus = state.selectedAction == .improve ? "Improvement applied" : "\(state.selectedAction.title) applied"
+        panelMode = .correctionComplete
+    }
+
+    func rerunSelectedActionPanelAction() {
+        guard let state = actionPanelState, !state.isLoading else { return }
+        requestActionPanelResult(state.selectedAction, replacementPlan: state.replacementPlan)
+    }
+
+    func toggleActionPanelCarousel() {
+        guard var state = actionPanelState else { return }
+        state.toggleCarouselVisibility()
+        actionPanelState = state
+    }
+
+    func copySelectedActionPanelSuggestion() {
+        guard let text = actionPanelState?.selectedOption?.text else { return }
+        UIPasteboard.general.string = text
     }
 
     func showAnalysisResult() {
@@ -169,16 +468,46 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
+    func openGrammarCorrection() {
+        recordDebugEvent("grammar_correction_open_tapped")
+        reloadConfig()
+        guard canOpenGrammarCorrection else {
+            recordDebugEvent("grammar_correction_blocked")
+            return
+        }
+
+        panelMode = .correctionDetail
+        if isGrammarCorrectionLoading {
+            return
+        }
+        requestGrammarCorrectionForCurrentText()
+    }
+
     func clearActionError() {
         actionError = nil
+        actionPanelState = nil
+        rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         panelMode = .keyboard
     }
 
     func retryAfterActionError() {
         actionError = nil
+        rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
-        panelMode = .actions
+        if canRunAIAction, let replacementPlan = currentReplacementPlan() {
+            actionPanelState = KeyboardActionPanelState(
+                sourceText: replacementPlan.textForAI,
+                replacementPlan: replacementPlan,
+                selectedAction: .improve,
+                isLoading: true
+            )
+            panelMode = .actions
+            requestActionPanelResult(.improve, replacementPlan: replacementPlan)
+        } else {
+            actionPanelState = nil
+            panelMode = .keyboard
+        }
     }
 
     func copyActionErrorDetails() {
@@ -186,10 +515,145 @@ final class KeyboardViewModel: ObservableObject {
         UIPasteboard.general.string = "\(actionError.title): \(actionError.message)"
     }
 
+    private func requestGrammarCorrectionForCurrentText() {
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        lastAnalyzedText = nil
+
+        guard let replacementPlan = currentReplacementPlan() else {
+            showActionError("Type text first")
+            return
+        }
+
+        actionError = nil
+        actionPanelState = nil
+        suggestionState = nil
+        rewriteOptionsState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        isGrammarCorrectionLoading = true
+        isPerformingAIAction = true
+        aiStatus = "Checking grammar…"
+        panelMode = .correctionDetail
+
+        let currentConfig = config
+        let sourceText = replacementPlan.textForAI
+        let requestID = UUID()
+        grammarCorrectionRequestID = requestID
+        recordDebugEvent("grammar_correction_request_start text=\(sourceText.count)")
+
+        grammarCorrectionTask = Task {
+            do {
+                let result = try await aiService.performResult(action: .fixGrammar, on: sourceText, config: currentConfig)
+                await MainActor.run {
+                    guard isGrammarCorrectionLoading,
+                          grammarCorrectionRequestID == requestID else {
+                        return
+                    }
+                    applyGrammarCorrectionResult(
+                        KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result),
+                        sourceText: sourceText
+                    )
+                    recordDebugEvent("grammar_correction_request_success")
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    guard grammarCorrectionRequestID == requestID else { return }
+                    grammarCorrectionTask = nil
+                    grammarCorrectionRequestID = nil
+                    isGrammarCorrectionLoading = false
+                    isPerformingAIAction = false
+                    aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+                }
+            } catch {
+                await MainActor.run {
+                    guard grammarCorrectionRequestID == requestID else { return }
+                    grammarCorrectionTask = nil
+                    grammarCorrectionRequestID = nil
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    recordDebugEvent("grammar_correction_request_failed:\(KeyboardActionErrorState.sanitized(message))")
+                    isGrammarCorrectionLoading = false
+                    showActionError(message)
+                }
+            }
+        }
+    }
+
+    private func applyGrammarCorrectionResult(_ outcome: KeyboardActionProductOutcome, sourceText: String) {
+        isGrammarCorrectionLoading = false
+        isPerformingAIAction = false
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+
+        switch outcome {
+        case .showCorrections(let response):
+            suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            rewriteOptionsState = nil
+            hasNoIssueAnalysisResult = false
+            completionPanelState = .allDone
+            aiStatus = "Suggestions ready"
+            panelMode = .correctionDetail
+        case .replaceText(let output):
+            let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if replacement.isEmpty || replacement.caseInsensitiveCompare(sourceText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame {
+                markGrammarCorrectionAllClear()
+            } else {
+                suggestionState = KeyboardSuggestionState(
+                    response: KeyboardSuggestionResponse(
+                        corrections: [
+                            KeyboardCorrectionSuggestion(
+                                label: "Correct text",
+                                original: sourceText,
+                                replacement: replacement,
+                                explanation: "Apply the suggested grammar and spelling correction.",
+                                category: "grammar"
+                            )
+                        ],
+                        predictions: [],
+                        correctedText: replacement
+                    ),
+                    sourceContext: sourceText
+                )
+                rewriteOptionsState = nil
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+                aiStatus = "Suggestions ready"
+                panelMode = .correctionDetail
+            }
+        case .noChanges:
+            markGrammarCorrectionAllClear()
+        case .showRewriteOptions, .noUsableResult:
+            showActionError("No AI response")
+        }
+    }
+
+    private func markGrammarCorrectionAllClear() {
+        actionPanelState = nil
+        suggestionState = nil
+        rewriteOptionsState = nil
+        hasNoIssueAnalysisResult = true
+        completionPanelState = .noIssues
+        aiStatus = "No issues found"
+        panelMode = .correctionComplete
+    }
+
     private func showActionError(_ message: String) {
         let error = KeyboardActionErrorState(message: message)
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
         actionError = error
+        actionPanelState = nil
+        rewriteOptionsState = nil
         aiStatus = error.message
+        isGrammarCorrectionLoading = false
         isPerformingAIAction = false
         panelMode = .keyboard
     }
@@ -209,6 +673,59 @@ final class KeyboardViewModel: ObservableObject {
         guard var state = suggestionState else { return }
         state.dismissCurrentCorrection()
         finishCorrectionStep(state)
+    }
+
+    func selectRewriteOption(_ optionID: String) {
+        guard var state = rewriteOptionsState else { return }
+        state.selectOption(id: optionID)
+        rewriteOptionsState = state
+    }
+
+    func applySelectedRewriteOption() {
+        guard let state = rewriteOptionsState,
+              let selectedOption = state.selectedOption else {
+            dismissRewriteOptions()
+            return
+        }
+        replace(plan: state.replacementPlan, with: selectedOption.text)
+        rewriteOptionsState = nil
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        lastAnalyzedText = nil
+        shouldResumeAutomaticAnalysisOnKeyboardReturn = true
+        completionPanelState = state.intent.completionState
+        aiStatus = state.intent.appliedStatus
+        panelMode = .correctionComplete
+    }
+
+    func dismissRewriteOptions() {
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        showKeyboardPanel()
+    }
+
+    func toggleRewriteOptionsCarousel() {
+        guard var state = rewriteOptionsState else { return }
+        state.toggleCarouselVisibility()
+        rewriteOptionsState = state
+    }
+
+    func rerunRewriteOptionsAction() {
+        guard let state = rewriteOptionsState else { return }
+        let selectedAction: KeyboardAIAction = state.intent == .improve ? .improve : .rewrite
+        actionPanelState = KeyboardActionPanelState(
+            sourceText: state.sourceText,
+            replacementPlan: state.replacementPlan,
+            selectedAction: selectedAction,
+            isLoading: true
+        )
+        rewriteOptionsState = nil
+        panelMode = .actions
+        requestActionPanelResult(selectedAction, replacementPlan: state.replacementPlan)
+    }
+
+    func copySelectedRewriteOption() {
+        guard let text = rewriteOptionsState?.selectedOption?.text else { return }
+        UIPasteboard.general.string = text
     }
 
     var currentCorrectionCard: KeyboardCorrectionCard? {
@@ -271,19 +788,27 @@ final class KeyboardViewModel: ObservableObject {
     func refreshSeededSuggestionStateForUITests() {
         guard let seededSuggestionState = Self.loadSeededSuggestionState() else { return }
         suggestionState = seededSuggestionState.suggestionState
+        rewriteOptionsState = seededSuggestionState.rewriteOptionsState
         panelMode = seededSuggestionState.panelMode
         aiStatus = seededSuggestionState.aiStatus
         isPerformingAIAction = seededSuggestionState.isPerformingAIAction
         hasNoIssueAnalysisResult = seededSuggestionState.hasNoIssueAnalysisResult
         completionPanelState = seededSuggestionState.completionPanelState
-        if seededSuggestionState.suggestionState != nil {
+        if seededSuggestionState.suggestionState != nil || seededSuggestionState.rewriteOptionsState != nil {
             hasFullAccess = true
         }
     }
 
     func performAIAction(_ action: KeyboardAIAction) {
         recordDebugEvent("action_tapped:\(action.rawValue)")
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
         automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        isGrammarCorrectionLoading = false
         guard !isPerformingAIAction else {
             recordDebugEvent("action_ignored_busy")
             return
@@ -306,12 +831,9 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
-        if composingBuffer.isEmpty, Self.debugStateEnabled {
-            composingBuffer = Self.loadPersistedComposingBuffer()
-        }
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
         recordDebugEvent("action_context context=\(contextBeforeInput?.count ?? 0) buffer=\(fallbackContext?.count ?? 0)")
-        guard let replacementPlan = KeyboardReplacementPlanner.plan(for: contextBeforeInput) ?? KeyboardReplacementPlanner.plan(for: fallbackContext) else {
+        guard let replacementPlan = currentReplacementPlan() else {
             aiStatus = "Type text first"
             recordDebugEvent("action_blocked_no_text")
             return
@@ -319,6 +841,8 @@ final class KeyboardViewModel: ObservableObject {
 
         let currentConfig = config
         actionError = nil
+        actionPanelState = nil
+        rewriteOptionsState = nil
         panelMode = .keyboard
         isPerformingAIAction = true
         aiStatus = "\(action.title)…"
@@ -331,22 +855,40 @@ final class KeyboardViewModel: ObservableObject {
                 let result = try await aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
                 await MainActor.run {
                     recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
-                    switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result) {
+                    switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result, sourceText: replacementPlan.textForAI) {
                     case .showCorrections(let response):
                         suggestionState = KeyboardSuggestionState(response: response, sourceContext: replacementPlan.textForAI)
+                        rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
                         aiStatus = "Suggestions ready"
                         isPerformingAIAction = false
                         panelMode = .correctionDetail
+                    case .showRewriteOptions(let options):
+                        suggestionState = nil
+                        rewriteOptionsState = KeyboardRewriteOptionsState(
+                            intent: action.rewriteOptionsIntent,
+                            sourceText: replacementPlan.textForAI,
+                            replacementPlan: replacementPlan,
+                            options: options
+                        )
+                        hasNoIssueAnalysisResult = false
+                        completionPanelState = .allDone
+                        aiStatus = action.rewriteOptionsIntent.readyStatus(count: options.count)
+                        isPerformingAIAction = false
+                        panelMode = .rewriteOptions
                     case .replaceText(let output):
                         replace(plan: replacementPlan, with: output)
+                        rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
+                        lastAnalyzedText = nil
+                        shouldResumeAutomaticAnalysisOnKeyboardReturn = true
                         completionPanelState = .allDone
                         aiStatus = action == .summarize ? "Summary ready" : "No more suggestions"
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noChanges:
                         suggestionState = nil
+                        rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = true
                         completionPanelState = .noIssues
                         aiStatus = "No changes needed"
@@ -367,16 +909,136 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
         automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        isGrammarCorrectionLoading = false
         if isPerformingAIAction, aiStatus == "Analyzing…" {
             isPerformingAIAction = false
             aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         }
+        actionPanelState = nil
         suggestionState = nil
+        rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
+        isGrammarCorrectionLoading = false
         completionPanelState = .allDone
         lastAnalyzedText = nil
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+    }
+
+    private func requestActionPanelResult(_ action: KeyboardAIAction, replacementPlan: KeyboardReplacementPlan) {
+        actionPanelTask?.cancel()
+        guard hasFullAccess else {
+            aiStatus = "Enable Allow Full Access"
+            return
+        }
+        config = loadConfig()
+        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        if let gatewayConnectionError {
+            aiStatus = gatewayConnectionError
+            return
+        }
+        guard hasUsableGatewayConfig else {
+            aiStatus = "Pair gateway in app"
+            return
+        }
+
+        var loadingState = actionPanelState ?? KeyboardActionPanelState(
+            sourceText: replacementPlan.textForAI,
+            replacementPlan: replacementPlan,
+            selectedAction: action
+        )
+        loadingState.selectedAction = action
+        loadingState.beginLoading()
+        actionPanelState = loadingState
+        actionError = nil
+        isPerformingAIAction = true
+        aiStatus = "\(action.title)…"
+
+        let currentConfig = config
+        recordDebugEvent("action_panel_request_start action=\(action.rawValue) text=\(replacementPlan.textForAI.count)")
+        actionPanelTask = Task { [weak self] in
+            do {
+                guard let self else { return }
+                let result = try await self.aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
+                await MainActor.run {
+                    guard self.panelMode == .actions,
+                          var state = self.actionPanelState,
+                          state.replacementPlan == replacementPlan,
+                          state.selectedAction == action else {
+                        self.isPerformingAIAction = false
+                        return
+                    }
+
+                    let outcome = KeyboardActionResultHandler.outcome(
+                        operation: action.operationName,
+                        result: result,
+                        sourceText: replacementPlan.textForAI
+                    )
+                    let options = self.actionPanelOptions(from: outcome, action: action)
+                    guard !options.isEmpty else {
+                        self.showActionError("No AI response")
+                        return
+                    }
+
+                    state.finishLoading(options: options)
+                    self.actionPanelState = state
+                    self.rewriteOptionsState = nil
+                    self.aiStatus = "\(action.title) ready"
+                    self.isPerformingAIAction = false
+                    self.actionPanelTask = nil
+                    self.recordDebugEvent("action_panel_request_success action=\(action.rawValue) options=\(options.count)")
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    if self?.panelMode == .actions {
+                        self?.isPerformingAIAction = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    self?.recordDebugEvent("action_panel_request_failed:\(KeyboardActionErrorState.sanitized(message))")
+                    self?.showActionError(message)
+                }
+            }
+        }
+    }
+
+    private func actionPanelOptions(from outcome: KeyboardActionProductOutcome, action: KeyboardAIAction) -> [KeyboardRewriteOption] {
+        switch outcome {
+        case .showRewriteOptions(let options):
+            return options
+        case .replaceText(let output):
+            let text = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard KeyboardReplacementTextSafety.isSafeReplacementText(text) else { return [] }
+            return [
+                KeyboardRewriteOption(
+                    id: "\(action.rawValue)-result-1",
+                    title: action.resultOptionTitle,
+                    text: text
+                )
+            ]
+        case .showCorrections(let response):
+            if let correctedText = response.correctedText,
+               KeyboardReplacementTextSafety.isSafeReplacementText(correctedText) {
+                return [
+                    KeyboardRewriteOption(
+                        id: "\(action.rawValue)-result-1",
+                        title: action.resultOptionTitle,
+                        text: correctedText
+                    )
+                ]
+            }
+            return []
+        case .noChanges, .noUsableResult:
+            return []
+        }
     }
 
     private func scheduleAutomaticAnalysis(delayNanoseconds: UInt64) {
@@ -399,6 +1061,18 @@ final class KeyboardViewModel: ObservableObject {
                 // A newer keystroke canceled this debounce window.
             }
         }
+    }
+
+    private func resumeAutomaticAnalysisIfNeeded() {
+        guard panelMode == .keyboard else { return }
+        guard actionError == nil else { return }
+        guard suggestionState == nil, !hasNoIssueAnalysisResult else { return }
+        guard currentReplacementPlan() != nil else {
+            clearAutomaticAnalysisState()
+            return
+        }
+
+        scheduleAutomaticAnalysis(delayNanoseconds: 0)
     }
 
     private func runAutomaticAnalysis() async {
@@ -427,6 +1101,10 @@ final class KeyboardViewModel: ObservableObject {
                 scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
                 return
             }
+            guard panelMode == .keyboard else {
+                isPerformingAIAction = false
+                return
+            }
             applyAutomaticAnalysisResult(
                 KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result),
                 sourceText: analysisText
@@ -434,7 +1112,7 @@ final class KeyboardViewModel: ObservableObject {
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
             recordDebugEvent("automatic_analysis_cancelled")
-            if lastAnalyzedText == analysisText {
+            if lastAnalyzedText == analysisText, !isGrammarCorrectionLoading {
                 isPerformingAIAction = false
                 aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
                 lastAnalyzedText = nil
@@ -442,6 +1120,7 @@ final class KeyboardViewModel: ObservableObject {
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             recordDebugEvent("automatic_analysis_failed:\(KeyboardActionErrorState.sanitized(message))")
+            guard !isGrammarCorrectionLoading else { return }
             aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
             suggestionState = nil
             hasNoIssueAnalysisResult = false
@@ -453,9 +1132,15 @@ final class KeyboardViewModel: ObservableObject {
         switch outcome {
         case .showCorrections(let response):
             suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
             aiStatus = "Suggestions ready"
+        case .showRewriteOptions:
+            suggestionState = nil
+            rewriteOptionsState = nil
+            hasNoIssueAnalysisResult = false
+            aiStatus = "Ready"
         case .replaceText(let output):
             let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
             if replacement.isEmpty || replacement.caseInsensitiveCompare(sourceText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame {
@@ -477,6 +1162,7 @@ final class KeyboardViewModel: ObservableObject {
                     ),
                     sourceContext: sourceText
                 )
+                rewriteOptionsState = nil
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
                 aiStatus = "Suggestions ready"
@@ -485,6 +1171,7 @@ final class KeyboardViewModel: ObservableObject {
             markAutomaticAnalysisAllClear()
         case .noUsableResult:
             suggestionState = nil
+            rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             aiStatus = "Ready"
         }
@@ -495,18 +1182,29 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func markAutomaticAnalysisAllClear() {
+        actionPanelState = nil
         suggestionState = nil
+        rewriteOptionsState = nil
         hasNoIssueAnalysisResult = true
         completionPanelState = .noIssues
         aiStatus = "No issues found"
     }
 
     private func clearAutomaticAnalysisState() {
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
         automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        actionPanelState = nil
         suggestionState = nil
+        rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         completionPanelState = .allDone
         lastAnalyzedText = nil
+        isGrammarCorrectionLoading = false
         isPerformingAIAction = false
     }
 
@@ -567,7 +1265,7 @@ final class KeyboardViewModel: ObservableObject {
     private func recordConfigVisibilityProbe(context: String) {
         guard Self.debugStateEnabled, let defaults = AppConfig.sharedDefaults() else { return }
         let diagnostic = AppConfig.redactedVisibilityDiagnostic(from: defaults).redactedDescription
-        let toolbar = "toolbar.canRunAIAction=\(canRunAIAction); toolbar.actionsEnabled=\(canRunAIAction); toolbar.title=\(toolbarState.title); toolbar.subtitle=\(toolbarState.subtitle); hasFullAccess=\(hasFullAccess); gatewayConnectionErrorPresent=\(gatewayConnectionError != nil)"
+        let toolbar = "toolbar.canRunAIAction=\(canRunAIAction); toolbar.actionsEnabled=\(canOpenActionPanel); toolbar.title=\(toolbarState.title); toolbar.subtitle=\(toolbarState.subtitle); hasFullAccess=\(hasFullAccess); gatewayConnectionErrorPresent=\(gatewayConnectionError != nil)"
         recordDebugEvent("configVisibilityProbe context=\(context); \(diagnostic); \(toolbar)")
     }
 
@@ -588,13 +1286,17 @@ final class KeyboardViewModel: ObservableObject {
     private static func consumeInitialPanelModeSeed() -> KeyboardPanelMode {
         guard debugStateEnabled,
               let defaults = AppConfig.sharedDefaults(),
-              let rawValue = defaults.string(forKey: "keyboardExtension.initialPanelMode") else {
+              let rawValue = consumeOneShotSeed(
+                valueKey: Keys.initialPanelMode,
+                seedIDKey: Keys.initialPanelModeSeedID,
+                seededAtKey: Keys.initialPanelModeSeededAt,
+                defaults: defaults
+              ) else {
             return .keyboard
         }
-        defaults.removeObject(forKey: "keyboardExtension.initialPanelMode")
-        defaults.synchronize()
 
         switch rawValue {
+        case "rewriteOptions": return .rewriteOptions
         case "actions": return .actions
         case "correctionDetail", "correctionCarousel": return .correctionDetail
         case "correctionComplete": return .correctionComplete
@@ -603,22 +1305,58 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private static func loadSeededSuggestionState() -> SeededKeyboardSuggestionState? {
-        seededSuggestionStateRawValue().flatMap(SeededKeyboardSuggestionState.init(rawValue:))
+        consumeSeededSuggestionStateRawValue().flatMap(SeededKeyboardSuggestionState.init(rawValue:))
     }
 
-    private static func seededSuggestionStateRawValue() -> String? {
+    private static func consumeSeededSuggestionStateRawValue() -> String? {
         guard KeyboardDebugStatePolicy.isPersistenceAvailable,
               let defaults = AppConfig.sharedDefaults(),
-              defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") else {
+              defaults.bool(forKey: Keys.uiTestDebugStateEnabled) else {
             return nil
         }
+
+        let rawValue = consumeOneShotSeed(
+            valueKey: Keys.suggestionState,
+            seedIDKey: Keys.suggestionStateSeedID,
+            seededAtKey: Keys.suggestionStateSeededAt,
+            defaults: defaults
+        )
+
+        if rawValue != nil {
+            defaults.removeObject(forKey: Keys.initialPanelMode)
+            defaults.removeObject(forKey: Keys.initialPanelModeSeedID)
+            defaults.removeObject(forKey: Keys.initialPanelModeSeededAt)
+            defaults.synchronize()
+        }
+
+        return rawValue
+    }
+
+    private static func consumeOneShotSeed(valueKey: String, seedIDKey: String, seededAtKey: String, defaults: UserDefaults) -> String? {
         defaults.synchronize()
-        return defaults.string(forKey: "keyboardExtension.suggestionState")
+        let rawValue = defaults.string(forKey: valueKey)
+        let seedID = defaults.string(forKey: seedIDKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let seededAt = defaults.object(forKey: seededAtKey) as? TimeInterval
+        defaults.removeObject(forKey: valueKey)
+        defaults.removeObject(forKey: seedIDKey)
+        defaults.removeObject(forKey: seededAtKey)
+        defaults.synchronize()
+
+        guard !seedID.isEmpty, let seededAt else {
+            return nil
+        }
+
+        let seedAge = Date().timeIntervalSince1970 - seededAt
+        guard seedAge >= 0, seedAge <= uiTestSeedMaximumAge else {
+            return nil
+        }
+        return rawValue
     }
 
     private struct SeededKeyboardSuggestionState {
         let panelMode: KeyboardPanelMode
         let suggestionState: KeyboardSuggestionState?
+        let rewriteOptionsState: KeyboardRewriteOptionsState?
         let aiStatus: String
         let isPerformingAIAction: Bool
         let hasNoIssueAnalysisResult: Bool
@@ -626,12 +1364,21 @@ final class KeyboardViewModel: ObservableObject {
 
         init?(rawValue: String) {
             switch rawValue {
+            case "rewriteOptions":
+                panelMode = .rewriteOptions
+                suggestionState = nil
+                rewriteOptionsState = Self.rewriteOptionsState
+                aiStatus = "3 rewrites ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "correctionCard", "correctionDetail", "correctionCarousel":
                 panelMode = .correctionDetail
                 suggestionState = KeyboardSuggestionState(
                     response: Self.carouselResponse,
                     sourceContext: "i has a apple and ths sentence"
                 )
+                rewriteOptionsState = nil
                 aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -639,6 +1386,7 @@ final class KeyboardViewModel: ObservableObject {
             case "correctionComplete":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                rewriteOptionsState = nil
                 aiStatus = "No more suggestions"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -646,6 +1394,7 @@ final class KeyboardViewModel: ObservableObject {
             case "allGood":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                rewriteOptionsState = nil
                 aiStatus = "No issues found"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = true
@@ -653,6 +1402,7 @@ final class KeyboardViewModel: ObservableObject {
             case "analyzing":
                 panelMode = .keyboard
                 suggestionState = nil
+                rewriteOptionsState = nil
                 aiStatus = "Analyzing your text..."
                 isPerformingAIAction = true
                 hasNoIssueAnalysisResult = false
@@ -693,15 +1443,49 @@ final class KeyboardViewModel: ObservableObject {
                 predictions: []
             )
         }
+
+        private static var rewriteOptionsState: KeyboardRewriteOptionsState {
+            let sourceText = "All of these are no bulb in the universe."
+            return KeyboardRewriteOptionsState(
+                intent: .rephrase,
+                sourceText: sourceText,
+                replacementPlan: KeyboardReplacementPlan(
+                    textToDelete: sourceText,
+                    textForAI: sourceText,
+                    leadingWhitespace: "",
+                    trailingWhitespace: ""
+                ),
+                options: [
+                    KeyboardRewriteOption(id: "rewrite-option-1", title: "Clearer", text: "None of these are bulbs in the universe."),
+                    KeyboardRewriteOption(id: "rewrite-option-2", title: "Natural", text: "There are no bulbs anywhere in the universe."),
+                    KeyboardRewriteOption(id: "rewrite-option-3", title: "Concise", text: "No bulbs exist in the universe.")
+                ]
+            )
+        }
     }
 
     private static var debugStateEnabled: Bool {
         guard KeyboardDebugStatePolicy.isPersistenceAvailable else { return false }
-        return AppConfig.sharedDefaults()?.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") ?? false
+        return AppConfig.sharedDefaults()?.bool(forKey: Keys.uiTestDebugStateEnabled) ?? false
     }
 
     private static func normalizedGatewayConnectionError(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+private extension KeyboardAIAction {
+    var rewriteOptionsIntent: KeyboardRewriteOptionsIntent {
+        self == .improve ? .improve : .rephrase
+    }
+
+    var resultOptionTitle: String {
+        switch self {
+        case .improve: return "Improved"
+        case .fixGrammar: return "Corrected"
+        case .rewrite: return "Rephrased"
+        case .summarize: return "Summary"
+        }
     }
 }

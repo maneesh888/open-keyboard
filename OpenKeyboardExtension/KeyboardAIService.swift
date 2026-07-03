@@ -6,6 +6,7 @@
 import Foundation
 
 enum KeyboardAIAction: String, CaseIterable, Identifiable {
+    case improve
     case fixGrammar
     case rewrite
     case summarize
@@ -14,6 +15,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var operationName: String {
         switch self {
+        case .improve: return "rewrite"
         case .fixGrammar: return "fix_grammar"
         case .rewrite: return "rewrite"
         case .summarize: return "summarize"
@@ -22,6 +24,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .improve: return "Improve"
         case .fixGrammar: return "Fix Grammar"
         case .rewrite: return "Rewrite"
         case .summarize: return "Summarize"
@@ -30,6 +33,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
 
     var iconName: String {
         switch self {
+        case .improve: return "sparkles"
         case .fixGrammar: return "checkmark.seal.fill"
         case .rewrite: return "wand.and.stars"
         case .summarize: return "text.bubble.fill"
@@ -41,7 +45,10 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
     }
 
     func prompt(for text: String) -> String {
-        KeyboardGatewayActionContract.prompt(operation: operationName, text: text)
+        if self == .improve {
+            return KeyboardGatewayActionContract.prompt(operation: "improve", text: text)
+        }
+        return KeyboardGatewayActionContract.prompt(operation: operationName, text: text)
     }
 }
 

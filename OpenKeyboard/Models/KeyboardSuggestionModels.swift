@@ -289,29 +289,66 @@ struct KeyboardSuggestionState: Equatable {
 extension KeyboardCorrectionSuggestion {
     func applying(to text: String) -> String? {
         guard !original.isEmpty, !replacement.isEmpty else { return nil }
-        let range = range.flatMap { text.range(of: original, near: $0.start) } ?? text.range(of: original)
+        let range = range.flatMap { text.correctionRange(of: original, near: $0.start) } ?? text.correctionRange(of: original)
         guard let range else { return nil }
         return text.replacingCharacters(in: range, with: replacement)
     }
 }
 
 private extension String {
-    func range(of target: String, near offset: Int) -> Range<String.Index>? {
-        guard !target.isEmpty else { return nil }
-        var closest: (range: Range<String.Index>, distance: Int)?
+    func correctionRange(of target: String) -> Range<String.Index>? {
+        correctionRanges(of: target).first
+    }
+
+    func correctionRange(of target: String, near offset: Int) -> Range<String.Index>? {
+        correctionRanges(of: target)
+            .map { range in
+                let candidateOffset = distance(from: startIndex, to: range.lowerBound)
+                return (range: range, distance: abs(candidateOffset - offset))
+            }
+            .min { lhs, rhs in lhs.distance < rhs.distance }?
+            .range
+    }
+
+    func correctionRanges(of target: String) -> [Range<String.Index>] {
+        guard !target.isEmpty else { return [] }
+        var matches: [Range<String.Index>] = []
         var searchStart = startIndex
 
         while searchStart < endIndex,
               let candidate = range(of: target, range: searchStart..<endIndex) {
-            let candidateOffset = distance(from: startIndex, to: candidate.lowerBound)
-            let distance = abs(candidateOffset - offset)
-            if closest == nil || distance < closest!.distance {
-                closest = (candidate, distance)
+            if isCorrectionTokenRange(candidate, target: target) {
+                matches.append(candidate)
             }
             searchStart = candidate.upperBound
         }
 
-        return closest?.range
+        return matches
+    }
+
+    func isCorrectionTokenRange(_ range: Range<String.Index>, target: String) -> Bool {
+        let firstTargetCharacter = target.first
+        let lastTargetCharacter = target.last
+
+        if firstTargetCharacter?.isCorrectionWordCharacter == true,
+           range.lowerBound > startIndex,
+           self[index(before: range.lowerBound)].isCorrectionWordCharacter {
+            return false
+        }
+
+        if lastTargetCharacter?.isCorrectionWordCharacter == true,
+           range.upperBound < endIndex,
+           self[range.upperBound].isCorrectionWordCharacter {
+            return false
+        }
+
+        return true
+    }
+}
+
+private extension Character {
+    var isCorrectionWordCharacter: Bool {
+        unicodeScalars.contains { CharacterSet.alphanumerics.contains($0) }
     }
 }
 
@@ -340,6 +377,12 @@ struct KeyboardActionErrorState: Equatable {
 
 enum KeyboardActionOperationResultError: Error, Equatable {
     case invalidResponse
+}
+
+struct KeyboardRewriteOption: Equatable, Identifiable {
+    let id: String
+    let title: String
+    let text: String
 }
 
 struct KeyboardActionOperationResult: Equatable {
@@ -378,6 +421,39 @@ struct KeyboardActionOperationResult: Equatable {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    func rewriteOptions(sourceText: String, maxOptions: Int = 5) -> [KeyboardRewriteOption] {
+        let normalizedSource = Self.normalizedCandidateKey(sourceText)
+        var seen = Set<String>()
+        var options: [KeyboardRewriteOption] = []
+
+        func append(_ candidate: String?, title: String?) {
+            guard options.count < maxOptions else { return }
+            let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !text.isEmpty else { return }
+            guard KeyboardReplacementTextSafety.isSafeReplacementText(text) else { return }
+            let key = Self.normalizedCandidateKey(text)
+            guard !key.isEmpty, key != normalizedSource, !seen.contains(key) else { return }
+            seen.insert(key)
+
+            let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let optionTitle = cleanTitle?.isEmpty == false ? cleanTitle ?? "" : "Option \(options.count + 1)"
+            options.append(KeyboardRewriteOption(
+                id: "rewrite-option-\(options.count + 1)",
+                title: optionTitle,
+                text: text
+            ))
+        }
+
+        for item in items {
+            append(item.replacement, title: item.title)
+            append(item.text, title: item.title)
+        }
+        append(correctedText, title: "Suggested rewrite")
+        append(displayText, title: "Suggested rewrite")
+
+        return options
     }
 
     var isStructuredGrammarNoChange: Bool {
@@ -469,6 +545,15 @@ struct KeyboardActionOperationResult: Equatable {
     private static func clean(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func normalizedCandidateKey(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+            .lowercased()
     }
 
     private static func isNestedJSONLike(_ value: String) -> Bool {
@@ -623,13 +708,14 @@ struct KeyboardActionOperationResult: Equatable {
 
 enum KeyboardActionProductOutcome: Equatable {
     case showCorrections(KeyboardSuggestionResponse)
+    case showRewriteOptions([KeyboardRewriteOption])
     case replaceText(String)
     case noChanges
     case noUsableResult
 }
 
 enum KeyboardActionResultHandler {
-    static func outcome(operation: String, result: KeyboardActionOperationResult) -> KeyboardActionProductOutcome {
+    static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalizedOperation == "fix_grammar" {
             let response = result.suggestionResponse()
@@ -640,14 +726,21 @@ enum KeyboardActionResultHandler {
                 return .noChanges
             }
         }
+        if normalizedOperation == "rewrite" {
+            let options = result.rewriteOptions(sourceText: sourceText)
+            guard !options.isEmpty else { return .noUsableResult }
+            return .showRewriteOptions(options)
+        }
 
         let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !displayText.isEmpty else { return .noUsableResult }
-        guard isSafeReplacementText(displayText) else { return .noUsableResult }
+        guard KeyboardReplacementTextSafety.isSafeReplacementText(displayText) else { return .noUsableResult }
         return .replaceText(displayText)
     }
+}
 
-    private static func isSafeReplacementText(_ text: String) -> Bool {
+enum KeyboardReplacementTextSafety {
+    static func isSafeReplacementText(_ text: String) -> Bool {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return false }
 

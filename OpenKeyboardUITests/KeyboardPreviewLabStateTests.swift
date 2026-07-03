@@ -11,6 +11,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPreviewLabState.predictionOnly.previewPanel, .predictionOnly)
         XCTAssertEqual(KeyboardPreviewLabState.correctionDetail.previewPanel, .correctionDetail)
         XCTAssertEqual(KeyboardPreviewLabState.actions.previewPanel, .actions)
+        XCTAssertEqual(KeyboardPreviewLabState.rewriteOptions.previewPanel, .rewriteOptions)
         XCTAssertEqual(KeyboardPreviewLabState.correctionComplete.previewPanel, .correctionComplete)
     }
 
@@ -23,6 +24,7 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "predictionOnly"), .predictionOnly)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionDetail"), .correctionDetail)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "actions"), .actions)
+        XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "rewriteOptions"), .rewriteOptions)
         XCTAssertEqual(KeyboardVisualPreviewPanel(rawValue: "correctionComplete"), .correctionComplete)
     }
 
@@ -90,7 +92,13 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
         XCTAssertNil(KeyboardPreviewLabState.ready.compactSuggestion)
         XCTAssertNil(KeyboardPreviewLabState.issue.compactSuggestion)
         XCTAssertNil(KeyboardPreviewLabState.correctionDetail.compactSuggestion)
+        XCTAssertNil(KeyboardPreviewLabState.rewriteOptions.compactSuggestion)
         XCTAssertNil(KeyboardPreviewLabState.correctionComplete.compactSuggestion)
+    }
+
+    func testRewriteOptionsStateIsLaunchArgumentAddressable() {
+        XCTAssertEqual(KeyboardPreviewLabState.rewriteOptions.title, "Rephrase result")
+        XCTAssertEqual(KeyboardPreviewLabState.rewriteOptions.previewPanel.rawValue, "rewriteOptions")
     }
 }
 #endif

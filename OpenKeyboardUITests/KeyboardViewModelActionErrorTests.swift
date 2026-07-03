@@ -8,6 +8,88 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLegacyPersistedRewriteSeedIsIgnoredAndCleared() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.suggestionState")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.initialPanelMode")
+            defaults.removeObject(forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.removeObject(forKey: "keyboardExtension.initialPanelModeSeedID")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "plain text"),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .keyboard)
+            XCTAssertNil(viewModel.rewriteOptionsState)
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelMode"))
+        }
+    }
+
+    func testStalePersistedRewriteSeedIsIgnoredAndCleared() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            let staleSeededAt = Date().timeIntervalSince1970 - 3_600
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.suggestionState")
+            defaults.set("rewrite-seed", forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.set(staleSeededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.initialPanelMode")
+            defaults.set("panel-seed", forKey: "keyboardExtension.initialPanelModeSeedID")
+            defaults.set(staleSeededAt, forKey: "keyboardExtension.initialPanelModeSeededAt")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "plain text"),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .keyboard)
+            XCTAssertNil(viewModel.rewriteOptionsState)
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelMode"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelModeSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.initialPanelModeSeededAt"))
+        }
+    }
+
+    func testSeededRewriteOptionsStateIsOneShot() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            let seededAt = Date().timeIntervalSince1970
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.suggestionState")
+            defaults.set("rewrite-seed", forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+            defaults.set("rewriteOptions", forKey: "keyboardExtension.initialPanelMode")
+            defaults.set("panel-seed", forKey: "keyboardExtension.initialPanelModeSeedID")
+            defaults.set(seededAt, forKey: "keyboardExtension.initialPanelModeSeededAt")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "All of these are no bulb in the universe."),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway }
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .rewriteOptions)
+            XCTAssertEqual(viewModel.rewriteOptionsState?.sourceText, "All of these are no bulb in the universe.")
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelMode"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.initialPanelModeSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.initialPanelModeSeededAt"))
+        }
+    }
+
     func testRewriteFailureShowsSanitizedErrorAndPreservesText() async {
         await assertGatewayFailureShowsErrorAndPreservesText(for: .rewrite)
     }
@@ -40,6 +122,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.retryAfterActionError()
         XCTAssertNil(viewModel.actionError)
         XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, "please make this better")
         XCTAssertEqual(proxy.text, "please make this better")
 
         viewModel.performAIAction(.rewrite)
@@ -50,6 +133,394 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.clearActionError()
         XCTAssertNil(viewModel.actionError)
         XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testActionPanelStartsImproveFromTopRightTrigger() async {
+        let sourceText = "All of these are no bulb in the universe."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredRewriteResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
+        XCTAssertEqual(proxy.text, sourceText)
+
+        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedOption?.text, "Please make this clearer.")
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.selectActionPanelAction(.rewrite)
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
+
+        await waitUntil { viewModel.actionPanelState?.selectedAction == .rewrite && viewModel.actionPanelState?.selectedOption != nil && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedOption?.text, "Please make this clearer.")
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
+    func testActionPanelCopyToggleAndApplyGeneratedSuggestion() async {
+        let proxy = FakeTextDocumentProxy(text: "please make this better")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredRewriteResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.actionPanelState?.isCarouselVisible, true)
+        viewModel.toggleActionPanelCarousel()
+        XCTAssertEqual(viewModel.actionPanelState?.isCarouselVisible, false)
+
+        viewModel.copySelectedActionPanelSuggestion()
+        XCTAssertEqual(UIPasteboard.general.string, "Please make this clearer.")
+
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(proxy.text, "Please make this clearer.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.completionPanelState, .improvementApplied)
+    }
+
+    func testReturningFromActionPanelResumesGrammarCorrectionLane() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.showActionPanel()
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertFalse(viewModel.canOpenAnalysisResult)
+        XCTAssertNil(viewModel.currentCorrection)
+
+        viewModel.showKeyboardPanel()
+        await waitUntil { viewModel.suggestionState?.correctionCount == 2 && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(proxy.text, sourceText)
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+        XCTAssertTrue(viewModel.toolbarState.showsIssueCount)
+        XCTAssertEqual(viewModel.toolbarState.issueCount, 2)
+
+        viewModel.showAnalysisResult()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testCompletedActionPanelKeepsExistingGrammarCorrectionLane() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: RoutingKeyboardAIService(
+                grammarResult: Self.structuredGrammarResult(),
+                rewriteResult: Self.structuredRewriteResult()
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil { viewModel.suggestionState?.correctionCount == 2 && !viewModel.isPerformingAIAction }
+
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+
+        viewModel.showActionPanel()
+        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.suggestionState?.correctionCount, 2)
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+
+        viewModel.showKeyboardPanel()
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.suggestionState?.correctionCount, 2)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection)
+
+        viewModel.openGrammarCorrection()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertTrue(viewModel.isGrammarCorrectionLoading)
+        await waitUntil { viewModel.currentCorrectionCard?.categoryTitle == "Subject-verb agreement" && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testLeftGrammarCorrectionButtonStartsGrammarAnalysisWithoutStoredResult() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        XCTAssertFalse(viewModel.canOpenAnalysisResult)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection)
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.panelMode == .correctionDetail && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, sourceText)
+        XCTAssertEqual(viewModel.suggestionState?.correctionCount, 2)
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testGrammarCorrectionButtonIsDisabledOnlyForHardBlockers() async {
+        let noTextProxy = FakeTextDocumentProxy(text: "")
+        let noTextViewModel = KeyboardViewModel(
+            textDocumentProxy: noTextProxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+        XCTAssertTrue(noTextViewModel.canOpenGrammarCorrection)
+
+        let noFullAccessViewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway }
+        )
+        XCTAssertFalse(noFullAccessViewModel.canOpenGrammarCorrection)
+
+        let gatewayErrorViewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            loadGatewayConnectionError: { "Gateway timed out. Open the app to retry." },
+            productionTestFullAccess: true
+        )
+        XCTAssertFalse(gatewayErrorViewModel.canOpenGrammarCorrection)
+
+        let incompleteConfig = AppConfig(
+            apiKey: "",
+            gatewayURL: "https://mock.local.invalid",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "test"
+        )
+        let notConfiguredViewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { incompleteConfig },
+            productionTestFullAccess: true
+        )
+        XCTAssertFalse(notConfiguredViewModel.canOpenGrammarCorrection)
+
+        let visibleErrorViewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
+            aiService: FailingKeyboardAIService(),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+        visibleErrorViewModel.performAIAction(.rewrite)
+        await waitUntil { visibleErrorViewModel.actionError != nil }
+        XCTAssertFalse(visibleErrorViewModel.canOpenGrammarCorrection)
+    }
+
+    func testOpeningGrammarCorrectionImmediatelyShowsLoadingAndRequestsFixGrammar() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = DelayedRecordingKeyboardAIService(result: Self.structuredGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertTrue(viewModel.isGrammarCorrectionLoading)
+        XCTAssertEqual(viewModel.aiStatus, "Checking grammar…")
+        await waitUntil { service.requestedActions == [.fixGrammar] }
+
+        await waitUntil { viewModel.panelMode == .correctionDetail && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertEqual(proxy.text, sourceText)
+        XCTAssertEqual(viewModel.suggestionState?.correctionCount, 2)
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testManualGrammarLoadingSurvivesCancelledAutomaticAnalysis() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = CancellableDelayedRecordingKeyboardAIService(result: Self.structuredGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil {
+            service.requestedActions == [.fixGrammar]
+                && viewModel.aiStatus == "Analyzing…"
+                && viewModel.isPerformingAIAction
+        }
+
+        viewModel.openGrammarCorrection()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertTrue(viewModel.isGrammarCorrectionLoading)
+        XCTAssertEqual(viewModel.aiStatus, "Checking grammar…")
+        await waitUntil { service.requestedActions == [.fixGrammar, .fixGrammar] }
+
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        XCTAssertTrue(viewModel.isGrammarCorrectionLoading)
+        XCTAssertEqual(viewModel.aiStatus, "Checking grammar…")
+
+        await waitUntil {
+            viewModel.currentCorrectionCard?.categoryTitle == "Subject-verb agreement"
+                && !viewModel.isGrammarCorrectionLoading
+        }
+
+        XCTAssertEqual(service.requestedActions, [.fixGrammar, .fixGrammar])
+        XCTAssertEqual(viewModel.aiStatus, "Suggestions ready")
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
+    func testGrammarCorrectionAlwaysRequestsAgainAfterPreviousNoIssuesResult() async {
+        let proxy = FakeTextDocumentProxy(text: "The app works well.")
+        let service = SequencedKeyboardAIService(results: [
+            Self.noIssueGrammarResult(),
+            Self.structuredGrammarResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.panelMode == .correctionComplete && viewModel.canOpenAnalysisResult }
+
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(service.requestedActions, [.fixGrammar])
+
+        viewModel.showKeyboardPanel()
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.panelMode == .correctionDetail && viewModel.currentCorrection != nil }
+
+        XCTAssertEqual(service.requestedActions, [.fixGrammar, .fixGrammar])
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testGrammarCorrectionFailureShowsMiddleErrorState() async {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: FailingKeyboardAIService(),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.actionError?.message, "Unable to reach gateway.")
+        XCTAssertFalse(viewModel.isGrammarCorrectionLoading)
+        XCTAssertFalse(viewModel.canOpenGrammarCorrection)
+        XCTAssertEqual(proxy.text, "i has a apple")
+    }
+
+    func testApplyingActionPanelSuggestionRestartsGrammarLaneAfterReturningToKeyboard() async {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: RoutingKeyboardAIService(
+                grammarResult: Self.noIssueGrammarResult(),
+                rewriteResult: Self.structuredRewriteResult()
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(proxy.text, "Please make this clearer.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertFalse(viewModel.canOpenAnalysisResult)
+
+        viewModel.showKeyboardPanel()
+        await waitUntil { viewModel.canOpenAnalysisResult && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "No issues found")
+    }
+
+    func testActionPanelCancelsAutomaticAnalysisAndKeepsRealSourceText() async {
+        let sourceText = "All of these are no bulb in the universe."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: DelayedKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil { viewModel.isPerformingAIAction }
+
+        XCTAssertTrue(viewModel.canOpenActionPanel)
+        XCTAssertFalse(viewModel.canRunAIAction)
+
+        viewModel.showActionPanel()
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
+        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
+        XCTAssertTrue(viewModel.isPerformingAIAction)
+
+        try? await Task.sleep(nanoseconds: 90_000_000)
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertNotNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertNil(viewModel.currentCorrection)
+        XCTAssertEqual(proxy.text, sourceText)
     }
 
     func testInvalidStructuredResponseCopyIsSpecificAndSanitized() async {
@@ -113,6 +584,36 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             XCTAssertFalse(message.localizedCaseInsensitiveContains("Analysis failed"), "Known gateway error should be specific: \(message)")
             XCTAssertFalse(message.contains("{"), "Known gateway error must be sanitized: \(message)")
         }
+    }
+
+    private func withSharedKeyboardDebugSeedDefaults(_ body: (UserDefaults) throws -> Void) throws {
+        let defaults = try XCTUnwrap(AppConfig.sharedDefaults())
+        let keys = [
+            "keyboardExtension.uiTestDebugStateEnabled",
+            "keyboardExtension.suggestionState",
+            "keyboardExtension.suggestionStateSeedID",
+            "keyboardExtension.suggestionStateSeededAt",
+            "keyboardExtension.initialPanelMode",
+            "keyboardExtension.initialPanelModeSeedID",
+            "keyboardExtension.initialPanelModeSeededAt"
+        ]
+        let originalValues = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0) as Any?) })
+        defer {
+            for key in keys {
+                defaults.removeObject(forKey: key)
+                if let value = originalValues[key] ?? nil {
+                    defaults.set(value, forKey: key)
+                }
+            }
+            defaults.synchronize()
+        }
+
+        for key in keys {
+            defaults.removeObject(forKey: key)
+        }
+        defaults.synchronize()
+
+        try body(defaults)
     }
 
     func testPersistedGatewayConnectionErrorBlocksKeyboardActions() {
@@ -181,6 +682,65 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.suggestionState?.correctionProgressText, "1 of 2")
         XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
         XCTAssertEqual(proxy.text, "i has a apple and ths")
+    }
+
+    func testRewriteShowsOptionsBeforeApplyingSelectedRewrite() async {
+        let proxy = FakeTextDocumentProxy(text: "please make this better")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredRewriteResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, "please make this better")
+        XCTAssertEqual(viewModel.panelMode, .rewriteOptions)
+        XCTAssertEqual(viewModel.rewriteOptionsState?.sourceText, "please make this better")
+        XCTAssertEqual(viewModel.rewriteOptionsState?.options.map(\.text), [
+            "Please make this clearer.",
+            "Could you make this better?"
+        ])
+        XCTAssertEqual(viewModel.rewriteOptionsState?.selectedOption?.text, "Please make this clearer.")
+
+        viewModel.selectRewriteOption("rewrite-option-2")
+        XCTAssertEqual(viewModel.rewriteOptionsState?.selectedOption?.text, "Could you make this better?")
+
+        viewModel.applySelectedRewriteOption()
+
+        XCTAssertEqual(proxy.text, "Could you make this better?")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertNil(viewModel.rewriteOptionsState)
+        XCTAssertEqual(viewModel.completionPanelState, .rewriteApplied)
+    }
+
+    func testImproveShowsImprovementOptionsBeforeApplyingSelectedImprovement() async {
+        let proxy = FakeTextDocumentProxy(text: "please make this better")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredRewriteResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.improve)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, "please make this better")
+        XCTAssertEqual(viewModel.panelMode, .rewriteOptions)
+        XCTAssertEqual(viewModel.rewriteOptionsState?.intent, .improve)
+        XCTAssertEqual(viewModel.rewriteOptionsState?.intent.headerTitle, "Choose an improvement")
+        XCTAssertEqual(viewModel.rewriteOptionsState?.selectedOption?.text, "Please make this clearer.")
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "2 improvements")
+
+        viewModel.applySelectedRewriteOption()
+
+        XCTAssertEqual(proxy.text, "Please make this clearer.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertNil(viewModel.rewriteOptionsState)
+        XCTAssertEqual(viewModel.completionPanelState, .improvementApplied)
     }
 
     func testAutomaticGrammarAnalysisShowsIssueCountBeforeOpeningCarousel() async {
@@ -261,6 +821,27 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNil(viewModel.suggestionState)
     }
 
+    func testAcceptingStaleArticleCorrectionDoesNotDuplicateAlreadyCorrectedText() async {
+        let text = "Yesterday I has an apple before the meeting, and this message still sound wrong."
+        let proxy = FakeTextDocumentProxy(text: text)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.staleArticleGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.fixGrammar)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.currentCorrection?.id, "article")
+        viewModel.applyCurrentCorrection()
+
+        XCTAssertEqual(proxy.text, text)
+        XCTAssertFalse(proxy.text.contains("ann apple"))
+        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
+    }
+
     private func assertGatewayFailureShowsErrorAndPreservesText(for action: KeyboardAIAction, file: StaticString = #filePath, line: UInt = #line) async {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
@@ -336,6 +917,60 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
+    private static func structuredRewriteResult() -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "rewrite",
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "clear",
+                    type: "suggestion",
+                    title: "Clearer",
+                    text: "Please make this clearer.",
+                    replacement: "Please make this clearer."
+                ),
+                KeyboardActionOperationResult.Item(
+                    id: "friendly",
+                    type: "suggestion",
+                    title: "Friendly",
+                    text: "Could you make this better?",
+                    replacement: "Could you make this better?"
+                )
+            ],
+            correctedText: "Please make this clearer.",
+            isStructuredResponse: true
+        )
+    }
+
+    private static func staleArticleGrammarResult() -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "fix_grammar",
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "article",
+                    type: "correction",
+                    title: "Article",
+                    text: "Use an before a vowel sound.",
+                    original: "a",
+                    replacement: "an",
+                    range: KeyboardTextRange(start: 16, end: 17),
+                    explanation: "Use an before a vowel sound.",
+                    category: "grammar"
+                ),
+                KeyboardActionOperationResult.Item(
+                    id: "subject-verb",
+                    type: "correction",
+                    title: "Subject-verb agreement",
+                    text: "Use sounds.",
+                    original: "sound",
+                    replacement: "sounds",
+                    explanation: "With a singular subject, use sounds.",
+                    category: "grammar"
+                )
+            ],
+            isStructuredResponse: true
+        )
+    }
+
     private func waitUntil(_ predicate: @MainActor @escaping () -> Bool) async {
         for _ in 0..<100 {
             if await predicate() { return }
@@ -362,6 +997,127 @@ private final class SuccessfulKeyboardAIService: KeyboardAIServiceProviding {
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         result
+    }
+}
+
+private final class RoutingKeyboardAIService: KeyboardAIServiceProviding {
+    let grammarResult: KeyboardActionOperationResult
+    let rewriteResult: KeyboardActionOperationResult
+
+    init(grammarResult: KeyboardActionOperationResult, rewriteResult: KeyboardActionOperationResult) {
+        self.grammarResult = grammarResult
+        self.rewriteResult = rewriteResult
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        grammarResult.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        action == .fixGrammar ? grammarResult : rewriteResult
+    }
+}
+
+private final class DelayedRecordingKeyboardAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+    private(set) var requestedActions: [KeyboardAIAction] = []
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        result.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedActions.append(action)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        return result
+    }
+}
+
+private final class CancellableDelayedRecordingKeyboardAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+    private(set) var requestedActions: [KeyboardAIAction] = []
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        result.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedActions.append(action)
+        let delay: UInt64 = requestedActions.count == 1 ? 1_000_000_000 : 100_000_000
+        try await Task.sleep(nanoseconds: delay)
+        return result
+    }
+}
+
+private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
+    private var results: [KeyboardActionOperationResult]
+    private(set) var requestedActions: [KeyboardAIAction] = []
+
+    init(results: [KeyboardActionOperationResult]) {
+        self.results = results
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        try nextResult().suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedActions.append(action)
+        return try nextResult()
+    }
+
+    private func nextResult() throws -> KeyboardActionOperationResult {
+        guard !results.isEmpty else {
+            throw KeyboardAIError.invalidResponse
+        }
+        return results.removeFirst()
+    }
+}
+
+private final class DelayedKeyboardAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        return result.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        return result.displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        return result
     }
 }
 

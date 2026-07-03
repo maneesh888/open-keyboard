@@ -9,15 +9,19 @@ struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
 
     var body: some View {
-        VStack(spacing: 7) {
-            KeyboardAIToolbar(
-                state: viewModel.toolbarState,
-                isPerformingAIAction: viewModel.isPerformingAIAction,
-                actionsEnabled: viewModel.canRunAIAction,
-                statusActionEnabled: viewModel.canOpenAnalysisResult,
-                onStatus: { viewModel.showAnalysisResult() },
-                onSparkle: { viewModel.showActionPanel() }
-            )
+        let showsToolbar = viewModel.panelMode != .actions && viewModel.panelMode != .rewriteOptions
+
+        VStack(spacing: showsToolbar ? 7 : 0) {
+            if showsToolbar {
+                KeyboardAIToolbar(
+                    state: viewModel.toolbarState,
+                    isPerformingAIAction: viewModel.isPerformingAIAction,
+                    actionsEnabled: viewModel.canOpenActionPanel,
+                    statusActionEnabled: viewModel.canOpenGrammarCorrection,
+                    onStatus: { viewModel.openGrammarCorrection() },
+                    onSparkle: { viewModel.showActionPanel() }
+                )
+            }
 
             switch viewModel.panelMode {
             case .keyboard:
@@ -32,11 +36,34 @@ struct KeyboardView: View {
                     keyGrid
                 }
             case .actions:
-                AIActionPanel(
-                    actionsEnabled: viewModel.canRunAIAction,
-                    onAction: { viewModel.performAIAction($0) },
-                    onBackToKeyboard: { viewModel.showKeyboardPanel() }
-                )
+                if let state = viewModel.actionPanelState {
+                    AIActionPanel(
+                        state: state,
+                        actionsEnabled: viewModel.canRunAIAction,
+                        onSelect: { viewModel.selectActionPanelAction($0) },
+                        onRegenerate: { viewModel.rerunSelectedActionPanelAction() },
+                        onToggleCarousel: { viewModel.toggleActionPanelCarousel() },
+                        onCopy: { viewModel.copySelectedActionPanelSuggestion() },
+                        onApply: { viewModel.applySelectedActionPanelAction() },
+                        onBackToKeyboard: { viewModel.showKeyboardPanel() }
+                    )
+                } else {
+                    keyGrid
+                }
+            case .rewriteOptions:
+                if let state = viewModel.rewriteOptionsState {
+                    RewriteOptionsPanel(
+                        state: state,
+                        onSelect: { viewModel.selectRewriteOption($0) },
+                        onRegenerate: { viewModel.rerunRewriteOptionsAction() },
+                        onToggleCarousel: { viewModel.toggleRewriteOptionsCarousel() },
+                        onCopy: { viewModel.copySelectedRewriteOption() },
+                        onApply: { viewModel.applySelectedRewriteOption() },
+                        onBack: { viewModel.dismissRewriteOptions() }
+                    )
+                } else {
+                    keyGrid
+                }
             case .correctionDetail:
                 if let card = viewModel.currentCorrectionCard {
                     CorrectionDetailPanel(
@@ -50,6 +77,11 @@ struct KeyboardView: View {
                         onDismiss: { viewModel.dismissCurrentCorrection() },
                         onBackToKeyboard: { viewModel.showKeyboardPanel() }
                     )
+                } else if viewModel.isGrammarCorrectionLoading {
+                    GrammarCorrectionLoadingPanel(
+                        status: viewModel.aiStatus,
+                        onBackToKeyboard: { viewModel.showKeyboardPanel() }
+                    )
                 } else {
                     keyGrid
                 }
@@ -61,9 +93,10 @@ struct KeyboardView: View {
             }
 
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 8)
-        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, maxHeight: showsToolbar ? nil : .infinity, alignment: .top)
+        .padding(.horizontal, showsToolbar ? 6 : 0)
+        .padding(.top, showsToolbar ? 8 : 0)
+        .padding(.bottom, showsToolbar ? 6 : 0)
         .background(KeyboardColors.keyboardBackground)
         .onAppear {
             viewModel.reloadConfig()
@@ -144,7 +177,7 @@ private struct KeyboardAIToolbar: View {
     var body: some View {
         HStack(spacing: 8) {
             statusIcon
-            Button(action: onStatus) {
+            Button(action: performStatusAction) {
                 statusContent
             }
             .buttonStyle(.plain)
@@ -161,8 +194,13 @@ private struct KeyboardAIToolbar: View {
         .accessibilityIdentifier("ai_toolbar")
     }
 
+    private func performStatusAction() {
+        guard statusActionEnabled else { return }
+        onStatus()
+    }
+
     private var statusIcon: some View {
-        Button(action: onStatus) {
+        Button(action: performStatusAction) {
             ZStack {
                 if state.showsIssueCount {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
@@ -193,7 +231,7 @@ private struct KeyboardAIToolbar: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(state.title)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
                     .lineLimit(1)
                 Text(state.subtitle)
                     .font(.caption2)
@@ -227,105 +265,474 @@ private struct KeyboardAIToolbar: View {
 }
 
 private struct AIActionPanel: View {
+    let state: KeyboardActionPanelState
     let actionsEnabled: Bool
-    let onAction: (KeyboardAIAction) -> Void
+    let onSelect: (KeyboardAIAction) -> Void
+    let onRegenerate: () -> Void
+    let onToggleCarousel: () -> Void
+    let onCopy: () -> Void
+    let onApply: () -> Void
     let onBackToKeyboard: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                }
-                .frame(width: 34, height: 34)
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Improve your writing")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Choose what Open Keyboard should do next.")
-                        .font(.caption2)
-                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                        .lineLimit(2)
-                }
-
-                Spacer()
-
-                Button(action: onBackToKeyboard) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 15, weight: .bold))
-                        .frame(width: 36, height: 36)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(.primary)
-                .background(KeyboardColors.panelBackground.opacity(0.98))
-                .overlay(
-                    Circle().stroke(OpenKeyboardTheme.Stroke.control, lineWidth: 1)
-                )
-                .clipShape(Circle())
-                .accessibilityIdentifier("back_to_keyboard")
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+                .padding(.top, 8)
+            suggestionBlock
+            Spacer(minLength: 8)
+            if state.isCarouselVisible {
+                actionCarousel
+                .padding(.bottom, 7)
             }
-
-            VStack(spacing: 8) {
-                overlayAction(.fixGrammar, title: "Improve", subtitle: "Fix grammar and clarity", systemImage: "sparkles")
-                overlayAction(.rewrite, title: "Rephrase", subtitle: "Make the sentence flow better", systemImage: "arrow.triangle.2.circlepath")
-                overlayAction(.summarize, title: "Summarize", subtitle: "Shorten the selected thought", systemImage: "text.bubble")
-            }
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+            controlRow
         }
-        .padding(12)
-        .frame(maxWidth: .infinity, minHeight: 226, alignment: .topLeading)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.55), lineWidth: 1.2)
-        )
-        .padding(.horizontal, 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_action_panel")
     }
 
-    private func overlayAction(_ action: KeyboardAIAction, title: String, subtitle: String, systemImage: String) -> some View {
-        Button { onAction(action) } label: {
-            HStack(spacing: 12) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .foregroundColor(action == .fixGrammar ? OpenKeyboardTheme.Text.inverse : OpenKeyboardTheme.Semantic.primaryAction)
-                    .background(action == .fixGrammar ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Surface.iconBackground)
-                    .clipShape(Circle())
+    private var header: some View {
+        HStack(spacing: 10) {
+            OpenKeyboardBrandMark(size: 30, symbolSize: 13)
 
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    Text(subtitle)
-                        .font(.caption2)
-                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                        .lineLimit(1)
-                }
+            Text(state.selectedAction.actionPanelTitle)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
 
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-            }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .padding(.horizontal, 12)
+            Spacer(minLength: 0)
         }
-        .foregroundColor(actionsEnabled ? .primary : .secondary)
-        .background(KeyboardColors.panelBackground.opacity(0.94))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(action == .fixGrammar ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.9) : OpenKeyboardTheme.Stroke.control.opacity(0.75), lineWidth: action == .fixGrammar ? 1.5 : 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .disabled(!actionsEnabled)
+    }
+
+    private var suggestionBlock: some View {
+        Group {
+            if state.isLoading {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .scaleEffect(0.88)
+                    Text("\(state.selectedAction.title)…")
+                        .font(.system(size: 18, weight: .regular))
+                        .foregroundColor(OpenKeyboardTheme.Text.primary)
+                        .lineLimit(2)
+                        .accessibilityIdentifier("ai_action_loading_text")
+                }
+            } else if let selectedOption = state.selectedOption {
+                Text(selectedOption.text)
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .lineLimit(state.isCarouselVisible ? 4 : 6)
+                    .minimumScaleFactor(0.72)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("ai_action_result_text")
+            } else {
+                Text("No suggestion yet")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("ai_action_empty_text")
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: state.isCarouselVisible ? 84 : 132, alignment: .topLeading)
+        .padding(.top, 10)
+    }
+
+    private var actionCarousel: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(KeyboardActionPanelState.availableActions) { action in
+                    actionCard(action)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .frame(height: 38)
+        .accessibilityIdentifier("ai_action_carousel")
+    }
+
+    private func actionCard(_ action: KeyboardAIAction) -> some View {
+        let isSelected = action == state.selectedAction
+        return Button {
+            onSelect(action)
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: action.actionPanelSystemImage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 18, height: 18)
+                    .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+
+                Text(action.actionPanelDisplayName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32, alignment: .center)
+            .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.95) : OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: isSelected ? 1.5 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!actionsEnabled || state.isLoading)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
+        .accessibilityValue(isSelected ? "Selected" : "")
+    }
+
+    private var controlRow: some View {
+        HStack(spacing: 8) {
+            panelCircleButton(
+                systemImage: "keyboard",
+                foreground: OpenKeyboardTheme.Text.primary,
+                background: KeyboardColors.overlayBackground.opacity(0.7),
+                action: onBackToKeyboard
+            )
+            .overlay(Circle().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.2))
+            .accessibilityIdentifier("back_to_keyboard")
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 0) {
+                panelGroupedButton(
+                    systemImage: "arrow.clockwise",
+                    foreground: OpenKeyboardTheme.Text.primary,
+                    action: onRegenerate
+                )
+                .disabled(!actionsEnabled || state.isLoading)
+                .accessibilityIdentifier("ai_action_rerun")
+
+                panelGroupedButton(
+                    systemImage: "sparkles",
+                    foreground: OpenKeyboardTheme.Semantic.primaryAction,
+                    action: onToggleCarousel
+                )
+                .accessibilityIdentifier("ai_action_toggle_carousel")
+
+                panelGroupedButton(
+                    systemImage: "doc.on.doc",
+                    foreground: OpenKeyboardTheme.Text.primary,
+                    action: onCopy
+                )
+                .disabled(state.selectedOption == nil || state.isLoading)
+                .accessibilityIdentifier("ai_action_copy")
+            }
+            .frame(height: 36)
+            .background(KeyboardColors.overlayBackground.opacity(0.72), in: Capsule())
+            .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
+
+            Spacer(minLength: 0)
+
+            panelCircleButton(
+                systemImage: "checkmark",
+                foreground: OpenKeyboardTheme.Text.inverse,
+                background: OpenKeyboardTheme.Semantic.primaryAction,
+                action: onApply
+            )
+            .disabled(state.selectedOption == nil || state.isLoading)
+            .opacity(state.selectedOption == nil || state.isLoading ? 0.42 : 1)
+            .accessibilityIdentifier("ai_action_apply")
+        }
+        .padding(.top, 7)
+    }
+
+    private func panelCircleButton(
+        systemImage: String,
+        foreground: Color,
+        background: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(foreground)
+        .background(background, in: Circle())
+    }
+
+    private func panelGroupedButton(systemImage: String, foreground: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 40, height: 36)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(foreground)
+    }
+}
+
+private extension KeyboardAIAction {
+    var actionPanelTitle: String {
+        switch self {
+        case .improve: return "Improve grammar and clarity."
+        case .fixGrammar: return "Fix grammar."
+        case .rewrite: return "Rephrase text."
+        case .summarize: return "Summarize text."
+        }
+    }
+
+    var actionPanelSubtitle: String {
+        switch self {
+        case .improve: return "Choose an action for the text below."
+        case .fixGrammar: return "Find grammar and spelling fixes."
+        case .rewrite: return "Generate alternatives before replacing."
+        case .summarize: return "Shorten the source text."
+        }
+    }
+
+    var actionPanelDisplayName: String {
+        switch self {
+        case .improve: return "Improve"
+        case .fixGrammar: return "Fix"
+        case .rewrite: return "Rephrase"
+        case .summarize: return "Summarize"
+        }
+    }
+
+    var actionPanelShortHint: String {
+        switch self {
+        case .improve: return "Clearer"
+        case .fixGrammar: return "Correct"
+        case .rewrite: return "Alternatives"
+        case .summarize: return "Shorten"
+        }
+    }
+
+    var actionPanelSystemImage: String {
+        switch self {
+        case .improve: return "sparkles"
+        case .fixGrammar: return "checkmark.seal.fill"
+        case .rewrite: return "arrow.triangle.2.circlepath"
+        case .summarize: return "text.bubble"
+        }
+    }
+}
+
+private struct RewriteOptionsPanel: View {
+    let state: KeyboardRewriteOptionsState
+    let onSelect: (String) -> Void
+    let onRegenerate: () -> Void
+    let onToggleCarousel: () -> Void
+    let onCopy: () -> Void
+    let onApply: () -> Void
+    let onBack: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+                .padding(.top, 8)
+            suggestionBlock
+            Spacer(minLength: 8)
+            if state.isCarouselVisible {
+                optionsCarousel
+                    .padding(.bottom, 7)
+            }
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+            controlRow
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(KeyboardColors.overlayBackground)
+                .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_rewrite_panel")
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            OpenKeyboardBrandMark(size: 30, symbolSize: 13)
+
+            Text(state.intent == .improve ? "Improve grammar and clarity." : "Rephrase text.")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.72)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var suggestionBlock: some View {
+        Group {
+            if let selectedOption = state.selectedOption {
+                Text(selectedOption.text)
+                    .font(.system(size: 19, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .lineLimit(state.isCarouselVisible ? 4 : 6)
+                    .minimumScaleFactor(0.72)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("ai_rewrite_result_text")
+            } else {
+                Text("No rewrite available")
+                    .font(.system(size: 18, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("ai_rewrite_empty_text")
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: state.isCarouselVisible ? 84 : 132, alignment: .topLeading)
+        .padding(.top, 10)
+    }
+
+    private var sourceBlock: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(state.intent.sourceLabel)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .lineLimit(1)
+            Text(state.sourceText)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ai_rewrite_source_text")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+        .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.94), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(OpenKeyboardTheme.Stroke.control.opacity(0.65), lineWidth: 1)
+        )
+    }
+
+    private var optionsCarousel: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(state.options.enumerated()), id: \.element.id) { index, option in
+                    optionCard(option, index: index)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .frame(height: 38)
+        .accessibilityIdentifier("ai_rewrite_options_carousel")
+    }
+
+    private func optionCard(_ option: KeyboardRewriteOption, index: Int) -> some View {
+        let isSelected = option.id == state.selectedOptionID
+        return Button {
+            onSelect(option.id)
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+
+                Text(option.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Text(option.text)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 12)
+            .frame(width: 184, height: 32, alignment: .leading)
+            .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(isSelected ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.95) : OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: isSelected ? 1.5 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("ai_rewrite_option_\(index)")
+        .accessibilityValue(isSelected ? "Selected" : "")
+    }
+
+    private var controlRow: some View {
+        HStack(spacing: 8) {
+            panelCircleButton(
+                systemImage: "keyboard",
+                foreground: OpenKeyboardTheme.Text.primary,
+                background: KeyboardColors.overlayBackground.opacity(0.7),
+                action: onBack
+            )
+            .overlay(Circle().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.2))
+            .accessibilityIdentifier("ai_rewrite_back")
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: 0) {
+                panelGroupedButton(systemImage: "arrow.clockwise", foreground: OpenKeyboardTheme.Text.primary, action: onRegenerate)
+                    .accessibilityIdentifier("ai_rewrite_rerun")
+                panelGroupedButton(systemImage: "sparkles", foreground: OpenKeyboardTheme.Semantic.primaryAction, action: onToggleCarousel)
+                    .accessibilityIdentifier("ai_rewrite_toggle_carousel")
+                panelGroupedButton(systemImage: "doc.on.doc", foreground: OpenKeyboardTheme.Text.primary, action: onCopy)
+                    .disabled(state.selectedOption == nil)
+                    .accessibilityIdentifier("ai_rewrite_copy")
+            }
+            .frame(height: 36)
+            .background(KeyboardColors.overlayBackground.opacity(0.72), in: Capsule())
+            .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
+
+            Spacer(minLength: 0)
+
+            panelCircleButton(
+                systemImage: "checkmark",
+                foreground: OpenKeyboardTheme.Text.inverse,
+                background: OpenKeyboardTheme.Semantic.primaryAction,
+                action: onApply
+            )
+            .disabled(state.selectedOption == nil)
+            .opacity(state.selectedOption == nil ? 0.42 : 1)
+            .accessibilityIdentifier("ai_rewrite_apply")
+        }
+        .padding(.top, 7)
+    }
+
+    private func panelCircleButton(
+        systemImage: String,
+        foreground: Color,
+        background: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 36, height: 36)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(foreground)
+        .background(background, in: Circle())
+    }
+
+    private func panelGroupedButton(systemImage: String, foreground: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 40, height: 36)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(foreground)
     }
 }
 
@@ -392,6 +799,56 @@ private struct KeyboardActionErrorPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai_error_panel")
+    }
+}
+
+private struct GrammarCorrectionLoadingPanel: View {
+    let status: String
+    let onBackToKeyboard: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                ProgressView()
+                    .scaleEffect(0.9)
+                    .frame(width: 38, height: 38)
+                    .background(KeyboardColors.panelBackground.opacity(0.92), in: Circle())
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.isEmpty ? "Checking grammar…" : status)
+                        .font(.headline.weight(.semibold))
+                        .foregroundColor(OpenKeyboardTheme.Text.primary)
+                        .lineLimit(1)
+                        .accessibilityIdentifier("ai_correction_loading_text")
+                    Text("Reviewing current text")
+                        .font(.caption)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button(action: onBackToKeyboard) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .background(KeyboardColors.panelBackground.opacity(0.92), in: Circle())
+                .accessibilityIdentifier("back_to_keyboard")
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+        .background(KeyboardColors.overlayBackground)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.35), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_correction_loading_panel")
     }
 }
 
