@@ -189,6 +189,59 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "i has a apple and ths")
     }
 
+    func testAutomaticGrammarAnalysisShowsIssueCountBeforeOpeningCarousel() async {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert("i has a apple and ths")
+        await waitUntil { viewModel.suggestionState?.correctionCount == 2 && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, "i has a apple and ths")
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.toolbarState.issueCount, 2)
+        XCTAssertTrue(viewModel.toolbarState.showsIssueCount)
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+
+        viewModel.showAnalysisResult()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+    }
+
+    func testAutomaticGrammarAnalysisOpensNoIssuesScreenWhenAllClear() async {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: SuccessfulKeyboardAIService(result: Self.noIssueGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert("The app works well.")
+        await waitUntil { viewModel.canOpenAnalysisResult && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, "The app works well.")
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertFalse(viewModel.toolbarState.showsIssueCount)
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "No issues found")
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+
+        viewModel.showAnalysisResult()
+
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState.title, "No issues found")
+        XCTAssertEqual(viewModel.completionPanelState.message, "There are no grammar or spelling suggestions.")
+    }
+
     func testAcceptingCurrentVisibleCorrectionKeepsCarouselUntilComplete() async {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let viewModel = KeyboardViewModel(
@@ -279,6 +332,17 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             summary: "Two issues.",
             correctedText: nil,
             isStructuredResponse: true
+        )
+    }
+
+    private static func noIssueGrammarResult() -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "fix_grammar",
+            items: [],
+            summary: "No issues found.",
+            correctedText: nil,
+            isStructuredResponse: true,
+            isNoChangeResult: true
         )
     }
 

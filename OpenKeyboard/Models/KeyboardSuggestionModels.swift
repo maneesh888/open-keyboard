@@ -7,6 +7,72 @@
 
 import Foundation
 
+enum KeyboardGatewayActionContract {
+    static let structuredSystemPrompt = """
+    You are an iOS keyboard text editing assistant. Return strict JSON only.
+    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
+    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
+    """
+
+    static func prompt(operation: String, text: String) -> String {
+        switch operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "fix_grammar":
+            return """
+            Operation: fix_grammar
+            Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+
+            Text:
+            \(text)
+            """
+        case "rewrite":
+            return """
+            Operation: rewrite
+            Rewrite this text in a clear, friendly tone. Return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
+
+            Text:
+            \(text)
+            """
+        case "summarize":
+            return """
+            Operation: summarize
+            Summarize this text concisely. Return structured JSON with a summary item.
+
+            Text:
+            \(text)
+            """
+        case "improve":
+            return """
+            Operation: rewrite
+            Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
+
+            Text:
+            \(text)
+            """
+        default:
+            return """
+            Operation: \(operation)
+            Return structured JSON for this keyboard writing operation.
+
+            Text:
+            \(text)
+            """
+        }
+    }
+
+    static func maxTokens(operation: String) -> Int {
+        switch operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "fix_grammar":
+            return 5_000
+        case "rewrite", "improve":
+            return 3_000
+        case "summarize":
+            return 2_000
+        default:
+            return 2_000
+        }
+    }
+}
+
 struct KeyboardSuggestionResponse: Equatable {
     let corrections: [KeyboardCorrectionSuggestion]
     let predictions: [KeyboardPredictionSuggestion]

@@ -24,7 +24,12 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
     @Published private(set) var suggestionState: KeyboardSuggestionState?
     @Published private(set) var actionError: KeyboardActionErrorState?
+    @Published private(set) var completionPanelState = KeyboardCompletionPanelState.allDone
+    @Published private var hasNoIssueAnalysisResult = false
     private var composingBuffer = ""
+    private var automaticAnalysisTask: Task<Void, Never>?
+    private let automaticAnalysisDelayNanoseconds: UInt64
+    private var lastAnalyzedText: String?
 
     private enum Keys {
         static let composingBuffer = "keyboardExtension.composingBuffer"
@@ -39,6 +44,10 @@ final class KeyboardViewModel: ObservableObject {
 
     private var hasUsableGatewayConfig: Bool {
         config.isConfigured && config.hasCompleteGatewayRuntimeConfig
+    }
+
+    var canOpenAnalysisResult: Bool {
+        currentCorrection != nil || hasNoIssueAnalysisResult
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -78,13 +87,15 @@ final class KeyboardViewModel: ObservableObject {
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
-        productionTestFullAccess: Bool = false
+        productionTestFullAccess: Bool = false,
+        automaticAnalysisDelayNanoseconds: UInt64 = 2_500_000_000
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.advanceToNextInputMode = advanceToNextInputMode
         self.aiService = aiService
         self.loadConfig = loadConfig
         self.loadGatewayConnectionError = loadGatewayConnectionError
+        self.automaticAnalysisDelayNanoseconds = automaticAnalysisDelayNanoseconds
         self.config = loadConfig()
         self.gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
@@ -93,6 +104,8 @@ final class KeyboardViewModel: ObservableObject {
         self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
         self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
         self.isPerformingAIAction = seededSuggestionState?.isPerformingAIAction ?? false
+        self.hasNoIssueAnalysisResult = seededSuggestionState?.hasNoIssueAnalysisResult ?? false
+        self.completionPanelState = seededSuggestionState?.completionPanelState ?? .allDone
         self.hasFullAccess = productionTestFullAccess || seededSuggestionState != nil
         recordConfigVisibilityProbe(context: "init")
     }
@@ -102,6 +115,7 @@ final class KeyboardViewModel: ObservableObject {
         textDocumentProxy.insertText(output)
         composingBuffer.append(output)
         persistComposingBuffer()
+        scheduleAutomaticAnalysisAfterTextChange()
 
         if isShiftEnabled {
             isShiftEnabled = false
@@ -112,11 +126,13 @@ final class KeyboardViewModel: ObservableObject {
         textDocumentProxy.insertText(" ")
         composingBuffer.append(" ")
         persistComposingBuffer()
+        scheduleAutomaticAnalysisAfterTextChange()
     }
 
     func insertReturn() {
         textDocumentProxy.insertText("\n")
         clearComposingBuffer()
+        clearAutomaticAnalysisState()
     }
 
     func deleteBackward() {
@@ -125,6 +141,7 @@ final class KeyboardViewModel: ObservableObject {
             composingBuffer.removeLast()
             persistComposingBuffer()
         }
+        scheduleAutomaticAnalysisAfterTextChange()
     }
 
     func toggleShift() {
@@ -142,6 +159,7 @@ final class KeyboardViewModel: ObservableObject {
 
     func showActionPanel() {
         guard canRunAIAction else { return }
+        automaticAnalysisTask?.cancel()
         panelMode = .actions
     }
 
@@ -149,9 +167,13 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .keyboard
     }
 
-    func showCorrectionDetail() {
-        guard currentCorrection != nil else { return }
-        panelMode = .correctionDetail
+    func showAnalysisResult() {
+        if currentCorrection != nil {
+            panelMode = .correctionDetail
+        } else if hasNoIssueAnalysisResult {
+            completionPanelState = .noIssues
+            panelMode = .correctionComplete
+        }
     }
 
     func clearActionError() {
@@ -218,6 +240,8 @@ final class KeyboardViewModel: ObservableObject {
         suggestionState = state
         if state.isComplete {
             suggestionState = nil
+            hasNoIssueAnalysisResult = false
+            completionPanelState = .allDone
             aiStatus = "No more suggestions"
             panelMode = .correctionComplete
         } else if state.currentCorrection == nil {
@@ -232,6 +256,7 @@ final class KeyboardViewModel: ObservableObject {
     func updateFullAccess(_ value: Bool) {
         hasFullAccess = value
         reloadConfig()
+        startAutomaticAnalysis()
     }
 
     func reloadConfig() {
@@ -246,12 +271,18 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
+    func startAutomaticAnalysis() {
+        scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+    }
+
     func refreshSeededSuggestionStateForUITests() {
         guard let seededSuggestionState = Self.loadSeededSuggestionState() else { return }
         suggestionState = seededSuggestionState.suggestionState
         panelMode = seededSuggestionState.panelMode
         aiStatus = seededSuggestionState.aiStatus
         isPerformingAIAction = seededSuggestionState.isPerformingAIAction
+        hasNoIssueAnalysisResult = seededSuggestionState.hasNoIssueAnalysisResult
+        completionPanelState = seededSuggestionState.completionPanelState
         if seededSuggestionState.suggestionState != nil {
             hasFullAccess = true
         }
@@ -259,6 +290,7 @@ final class KeyboardViewModel: ObservableObject {
 
     func performAIAction(_ action: KeyboardAIAction) {
         recordDebugEvent("action_tapped:\(action.rawValue)")
+        automaticAnalysisTask?.cancel()
         guard !isPerformingAIAction else {
             recordDebugEvent("action_ignored_busy")
             return
@@ -309,16 +341,21 @@ final class KeyboardViewModel: ObservableObject {
                     switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result) {
                     case .showCorrections(let response):
                         suggestionState = KeyboardSuggestionState(response: response, sourceContext: replacementPlan.textForAI)
+                        hasNoIssueAnalysisResult = false
                         aiStatus = "Suggestions ready"
                         isPerformingAIAction = false
                         panelMode = .correctionDetail
                     case .replaceText(let output):
                         replace(plan: replacementPlan, with: output)
+                        hasNoIssueAnalysisResult = false
+                        completionPanelState = .allDone
                         aiStatus = action == .summarize ? "Summary ready" : "No more suggestions"
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noChanges:
                         suggestionState = nil
+                        hasNoIssueAnalysisResult = true
+                        completionPanelState = .noIssues
                         aiStatus = "No changes needed"
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
@@ -334,6 +371,150 @@ final class KeyboardViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    private func scheduleAutomaticAnalysisAfterTextChange() {
+        automaticAnalysisTask?.cancel()
+        if isPerformingAIAction, aiStatus == "Analyzing…" {
+            isPerformingAIAction = false
+            aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        }
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        lastAnalyzedText = nil
+        scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+    }
+
+    private func scheduleAutomaticAnalysis(delayNanoseconds: UInt64) {
+        automaticAnalysisTask?.cancel()
+        guard panelMode == .keyboard else { return }
+        guard actionError == nil else { return }
+        guard canRunAIAction else { return }
+        guard currentReplacementPlan() != nil else {
+            clearAutomaticAnalysisState()
+            return
+        }
+
+        automaticAnalysisTask = Task { [weak self] in
+            do {
+                if delayNanoseconds > 0 {
+                    try await Task.sleep(nanoseconds: delayNanoseconds)
+                }
+                await self?.runAutomaticAnalysis()
+            } catch {
+                // A newer keystroke canceled this debounce window.
+            }
+        }
+    }
+
+    private func runAutomaticAnalysis() async {
+        guard !isPerformingAIAction, canRunAIAction, panelMode == .keyboard, actionError == nil else { return }
+        guard let replacementPlan = currentReplacementPlan() else {
+            clearAutomaticAnalysisState()
+            return
+        }
+        let analysisText = replacementPlan.textForAI
+        guard analysisText.count >= 3 else {
+            clearAutomaticAnalysisState()
+            return
+        }
+        if lastAnalyzedText == analysisText, canOpenAnalysisResult { return }
+
+        let currentConfig = config
+        lastAnalyzedText = analysisText
+        isPerformingAIAction = true
+        aiStatus = "Analyzing…"
+        recordDebugEvent("automatic_analysis_start text=\(analysisText.count) model=\(currentConfig.selectedModel)")
+
+        do {
+            let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
+            guard currentReplacementPlan()?.textForAI == analysisText else {
+                isPerformingAIAction = false
+                scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+                return
+            }
+            applyAutomaticAnalysisResult(
+                KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result),
+                sourceText: analysisText
+            )
+            recordDebugEvent("automatic_analysis_success")
+        } catch is CancellationError {
+            recordDebugEvent("automatic_analysis_cancelled")
+            if lastAnalyzedText == analysisText {
+                isPerformingAIAction = false
+                aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+                lastAnalyzedText = nil
+            }
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            recordDebugEvent("automatic_analysis_failed:\(KeyboardActionErrorState.sanitized(message))")
+            aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+            suggestionState = nil
+            hasNoIssueAnalysisResult = false
+            isPerformingAIAction = false
+        }
+    }
+
+    private func applyAutomaticAnalysisResult(_ outcome: KeyboardActionProductOutcome, sourceText: String) {
+        switch outcome {
+        case .showCorrections(let response):
+            suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            hasNoIssueAnalysisResult = false
+            completionPanelState = .allDone
+            aiStatus = "Suggestions ready"
+        case .replaceText(let output):
+            let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
+            if replacement.isEmpty || replacement.caseInsensitiveCompare(sourceText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame {
+                markAutomaticAnalysisAllClear()
+            } else {
+                suggestionState = KeyboardSuggestionState(
+                    response: KeyboardSuggestionResponse(
+                        corrections: [
+                            KeyboardCorrectionSuggestion(
+                                label: "Correct text",
+                                original: sourceText,
+                                replacement: replacement,
+                                explanation: "Apply the suggested grammar and spelling correction.",
+                                category: "grammar"
+                            )
+                        ],
+                        predictions: [],
+                        correctedText: replacement
+                    ),
+                    sourceContext: sourceText
+                )
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+                aiStatus = "Suggestions ready"
+            }
+        case .noChanges:
+            markAutomaticAnalysisAllClear()
+        case .noUsableResult:
+            suggestionState = nil
+            hasNoIssueAnalysisResult = false
+            aiStatus = "Ready"
+        }
+        isPerformingAIAction = false
+        if panelMode != .correctionComplete {
+            panelMode = .keyboard
+        }
+    }
+
+    private func markAutomaticAnalysisAllClear() {
+        suggestionState = nil
+        hasNoIssueAnalysisResult = true
+        completionPanelState = .noIssues
+        aiStatus = "No issues found"
+    }
+
+    private func clearAutomaticAnalysisState() {
+        automaticAnalysisTask?.cancel()
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        lastAnalyzedText = nil
+        isPerformingAIAction = false
     }
 
     private func replace(plan: KeyboardReplacementPlan, with replacement: String) {
@@ -356,6 +537,15 @@ final class KeyboardViewModel: ObservableObject {
             composingBuffer = Self.loadPersistedComposingBuffer()
         }
         return composingBuffer
+    }
+
+    private func currentReplacementPlan() -> KeyboardReplacementPlan? {
+        let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
+        if composingBuffer.isEmpty, Self.debugStateEnabled {
+            composingBuffer = Self.loadPersistedComposingBuffer()
+        }
+        let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
+        return KeyboardReplacementPlanner.plan(for: contextBeforeInput) ?? KeyboardReplacementPlanner.plan(for: fallbackContext)
     }
 
     private func replaceEditableText(with replacement: String) {
@@ -438,6 +628,8 @@ final class KeyboardViewModel: ObservableObject {
         let suggestionState: KeyboardSuggestionState?
         let aiStatus: String
         let isPerformingAIAction: Bool
+        let hasNoIssueAnalysisResult: Bool
+        let completionPanelState: KeyboardCompletionPanelState
 
         init?(rawValue: String) {
             switch rawValue {
@@ -449,16 +641,29 @@ final class KeyboardViewModel: ObservableObject {
                 )
                 aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "correctionComplete":
                 panelMode = .correctionComplete
                 suggestionState = nil
                 aiStatus = "No more suggestions"
                 isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+            case "allGood":
+                panelMode = .correctionComplete
+                suggestionState = nil
+                aiStatus = "No issues found"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = true
+                completionPanelState = .noIssues
             case "analyzing":
                 panelMode = .keyboard
                 suggestionState = nil
                 aiStatus = "Analyzing your text..."
                 isPerformingAIAction = true
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             default:
                 return nil
             }

@@ -12,6 +12,21 @@ enum KeyboardPanelMode: Equatable {
     case correctionComplete
 }
 
+struct KeyboardCompletionPanelState: Equatable {
+    let title: String
+    let message: String
+
+    static let allDone = KeyboardCompletionPanelState(
+        title: "All Done",
+        message: "There are no more suggestions."
+    )
+
+    static let noIssues = KeyboardCompletionPanelState(
+        title: "No issues found",
+        message: "There are no grammar or spelling suggestions."
+    )
+}
+
 struct KeyboardToolbarState: Equatable {
     enum Kind: Equatable {
         case fullAccessRequired
@@ -101,6 +116,13 @@ struct KeyboardToolbarState: Equatable {
         guard isConfigured else { return KeyboardToolbarState(kind: .notConfigured) }
         if isPerformingAIAction { return KeyboardToolbarState(kind: .loading(title: aiStatus)) }
 
-        return KeyboardToolbarState(kind: .actions(status: "Ready"))
+        let trimmedStatus = aiStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayStatus: String
+        if trimmedStatus.isEmpty || trimmedStatus.hasPrefix("AI ready") {
+            displayStatus = "Ready"
+        } else {
+            displayStatus = trimmedStatus
+        }
+        return KeyboardToolbarState(kind: .actions(status: displayStatus))
     }
 }

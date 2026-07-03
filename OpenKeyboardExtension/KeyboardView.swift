@@ -14,7 +14,8 @@ struct KeyboardView: View {
                 state: viewModel.toolbarState,
                 isPerformingAIAction: viewModel.isPerformingAIAction,
                 actionsEnabled: viewModel.canRunAIAction,
-                onStatus: { viewModel.showCorrectionDetail() },
+                statusActionEnabled: viewModel.canOpenAnalysisResult,
+                onStatus: { viewModel.showAnalysisResult() },
                 onSparkle: { viewModel.showActionPanel() }
             )
 
@@ -53,7 +54,10 @@ struct KeyboardView: View {
                     keyGrid
                 }
             case .correctionComplete:
-                CorrectionCompletePanel(onBackToKeyboard: { viewModel.showKeyboardPanel() })
+                CorrectionCompletePanel(
+                    state: viewModel.completionPanelState,
+                    onBackToKeyboard: { viewModel.showKeyboardPanel() }
+                )
             }
 
         }
@@ -64,6 +68,7 @@ struct KeyboardView: View {
         .onAppear {
             viewModel.reloadConfig()
             viewModel.refreshSeededSuggestionStateForUITests()
+            viewModel.startAutomaticAnalysis()
         }
     }
 
@@ -138,6 +143,7 @@ private struct KeyboardAIToolbar: View {
     let state: KeyboardToolbarState
     let isPerformingAIAction: Bool
     let actionsEnabled: Bool
+    let statusActionEnabled: Bool
     let onStatus: () -> Void
     let onSparkle: () -> Void
 
@@ -148,7 +154,7 @@ private struct KeyboardAIToolbar: View {
                 statusContent
             }
             .buttonStyle(.plain)
-            .disabled(!state.showsIssueCount)
+            .disabled(!statusActionEnabled)
             .accessibilityIdentifier("ai_toolbar_status_action")
             sparkleButton
         }
@@ -183,7 +189,7 @@ private struct KeyboardAIToolbar: View {
             .frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
-        .disabled(!state.showsIssueCount)
+        .disabled(!statusActionEnabled)
         .accessibilityIdentifier(state.showsIssueCount ? "keyboard_issue_count_badge" : "keyboard_openkeyboard_icon")
         .accessibilityLabel(state.showsIssueCount ? "\(state.issueCount) writing suggestions" : "Open Keyboard status")
     }
@@ -553,6 +559,7 @@ private struct CorrectionDetailPanel: View {
 }
 
 private struct CorrectionCompletePanel: View {
+    let state: KeyboardCompletionPanelState
     let onBackToKeyboard: () -> Void
 
     var body: some View {
@@ -566,10 +573,10 @@ private struct CorrectionCompletePanel: View {
             .frame(width: 64, height: 64)
             .padding(.bottom, 4)
 
-            Text("All Done")
+            Text(state.title)
                 .font(.title3.weight(.bold))
 
-            Text("There are no more suggestions.")
+            Text(state.message)
                 .font(.subheadline)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 

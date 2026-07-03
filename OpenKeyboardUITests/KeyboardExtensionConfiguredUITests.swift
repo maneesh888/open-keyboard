@@ -178,6 +178,84 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         add(attachment)
     }
 
+    func testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard workflow screenshots.")
+        }
+
+        let defaultPhrase = "i has wrote ths sentance becaus this grammer checker should catches many mistake before i sends it"
+        let phrase = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? defaultPhrase
+
+        let hostArguments = ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"]
+        let environment = ProcessInfo.processInfo.environment
+        let hasInjectedGatewayCredentials = [
+            environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"],
+            environment["OPEN_KEYBOARD_TEST_API_KEY"],
+            environment["OPEN_KEYBOARD_TEST_MODEL"]
+        ].allSatisfy { ($0 ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false }
+
+        let app: XCUIApplication
+        if hasInjectedGatewayCredentials {
+            app = configuredContainingApp(
+                extraArguments: hostArguments,
+                requiresInjectedGatewayCredentials: true
+            )
+        } else {
+            try skipUnlessExistingSimulatorGatewayConfigIsPresent()
+            app = existingConfiguredContainingApp(extraArguments: hostArguments)
+        }
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard workflow verification")
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled, "Open Keyboard AI trigger was not enabled")
+
+        try captureRealKeyboardStep("01-real-keyboard-ready")
+
+        typeUsingOpenKeyboard(phrase, keyboardApp: keyboardApp)
+        let typed = NSPredicate(format: "value CONTAINS[c] %@", phrase)
+        expectation(for: typed, evaluatedWith: input)
+        waitForExpectations(timeout: 20)
+
+        try captureRealKeyboardStep("02-real-keyboard-typed-text")
+
+        let sawIssueCount = waitForIssueCountBadge(keyboardApp: keyboardApp, timeout: 90)
+        try captureRealKeyboardStep("03-real-keyboard-issue-count")
+        XCTAssertTrue(sawIssueCount, "Automatic grammar analysis did not expose a writing suggestion count")
+        guard sawIssueCount else { return }
+
+        keyboardApp.buttons["keyboard_issue_count_badge"].tap()
+        XCTAssertTrue(
+            keyboardApp.otherElements["ai_correction_panel"].waitForExistence(timeout: 10),
+            "Tapping the issue count did not open the correction carousel"
+        )
+        try captureRealKeyboardStep("04-real-keyboard-carousel-first-card")
+
+        let nextCorrection = keyboardApp.buttons["keyboard_correction_next"]
+        if nextCorrection.exists, nextCorrection.isEnabled {
+            nextCorrection.tap()
+            XCTAssertTrue(keyboardApp.otherElements["ai_correction_panel"].waitForExistence(timeout: 5))
+            try captureRealKeyboardStep("05-real-keyboard-carousel-next-card")
+        }
+
+        let accept = keyboardApp.buttons["ai_correction_apply"]
+        if accept.exists, accept.isEnabled {
+            accept.tap()
+            RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+            try captureRealKeyboardStep("06-real-keyboard-after-one-accept")
+        }
+    }
+
     func testRealKeyboardFixGrammarReplacesTextWithExistingSimulatorGatewayConfig() throws {
         try skipUnlessExistingSimulatorGatewayConfigIsPresent()
 
@@ -281,6 +359,24 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         coordinate.tap()
     }
 
+    private func captureRealKeyboardStep(_ name: String) throws {
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        guard let directory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"],
+              !directory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+
+        let directoryURL = URL(fileURLWithPath: directory, isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let url = directoryURL.appendingPathComponent("\(name).png")
+        try screenshot.pngRepresentation.write(to: url)
+    }
+
     private func typeUsingOpenKeyboard(_ text: String, keyboardApp: XCUIApplication) {
         for character in text {
             let label = character == " " ? "space" : String(character)
@@ -338,6 +434,40 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         }
 
         tapCenter(of: hostInput)
+    }
+
+    private func waitForOpenKeyboard(
+        keyboardApp: XCUIApplication,
+        hostInput: XCUIElement,
+        springboard: XCUIApplication,
+        timeout: TimeInterval = 30
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            dismissKnownKeyboardDialogs(in: springboard)
+            if keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 1)
+                || keyboardApp.buttons["keyboard_openkeyboard_icon"].exists
+                || keyboardApp.buttons["keyboard_issue_count_badge"].exists {
+                return true
+            }
+            switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: hostInput)
+        }
+        return false
+    }
+
+    private func waitForIssueCountBadge(keyboardApp: XCUIApplication, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if keyboardApp.buttons["keyboard_issue_count_badge"].exists {
+                return true
+            }
+            if keyboardApp.otherElements["ai_error_panel"].exists
+                || keyboardApp.otherElements["correction_complete_panel"].exists {
+                return false
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return false
     }
 
     private func configuredContainingApp(

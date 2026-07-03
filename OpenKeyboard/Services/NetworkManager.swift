@@ -7,9 +7,7 @@
 
 import Foundation
 
-protocol NetworkManagerTransporting: AnyObject {
-    func data(for request: URLRequest) async throws -> (Data, URLResponse)
-}
+protocol NetworkManagerTransporting: GatewayChatTransporting {}
 
 extension URLSession: NetworkManagerTransporting {}
 
@@ -162,8 +160,8 @@ class NetworkManager {
             model: trimmedModel,
             operation: "fix_grammar",
             inputText: smokeInput,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.structuredCorrectionSmokeUserPrompt(for: smokeInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
             maxTokens: 1600,
             timeoutInterval: 45
         )
@@ -213,8 +211,8 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.structuredCorrectionSmokeUserPrompt(for: settingsSmokeInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: settingsSmokeInput),
             maxTokens: 1600
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "fix_grammar", fallbackText: settingsSmokeInput, requireChangedOutput: true)
@@ -234,7 +232,7 @@ class NetworkManager {
             gatewayURL: gatewayURL,
             apiKey: apiKey,
             systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.",
-            userPrompt: Self.suggestionPrompt(for: suggestionInput),
+            userPrompt: KeyboardSuggestionParser.prompt(for: suggestionInput),
             maxTokens: 1_200
         ) { content in
             let parsed = try KeyboardSuggestionParser.parseAssistantContent(content)
@@ -252,8 +250,8 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.structuredCorrectionSmokeUserPrompt(for: complexGrammarInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: complexGrammarInput),
             maxTokens: 5_000
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "fix_grammar", fallbackText: complexGrammarInput, requireChangedOutput: true)
@@ -274,8 +272,8 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.rewritePrompt(for: rewriteInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "rewrite", text: rewriteInput),
             maxTokens: 3_000
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "rewrite", fallbackText: rewriteInput, requireChangedOutput: true)
@@ -291,8 +289,8 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.summarizePrompt(for: summaryInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "summarize", text: summaryInput),
             maxTokens: 2_000
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "summarize", fallbackText: summaryInput, requireChangedOutput: false)
@@ -308,8 +306,8 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: Self.structuredCorrectionSmokeSystemPrompt,
-            userPrompt: Self.improvePrompt(for: improveInput),
+            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+            userPrompt: KeyboardGatewayActionContract.prompt(operation: "improve", text: improveInput),
             maxTokens: 3_000
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "rewrite", fallbackText: improveInput, requireChangedOutput: true)
@@ -320,113 +318,23 @@ class NetworkManager {
     }
 
     static func isUsableCorrectionSmokeResponse(_ value: String) -> Bool {
-        let normalized = value.lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-        guard !normalized.isEmpty else { return false }
-        return normalized.contains("i have an apple") ||
-            normalized.contains("i have a apple") ||
-            normalized.contains("i had an apple") ||
-            (normalized.contains("have") && normalized.contains("apple"))
-    }
-
-    private static let structuredCorrectionSmokeSystemPrompt = """
-    You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
-    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
-    """
-
-    private static func structuredCorrectionSmokeUserPrompt(for text: String) -> String {
-        """
-        Operation: fix_grammar
-        Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
-
-        Text:
-        \(text)
-        """
-    }
-
-    private static func rewritePrompt(for text: String) -> String {
-        """
-        Operation: rewrite
-        Rewrite this text in a clear, friendly tone. Return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
-
-        Text:
-        \(text)
-        """
-    }
-
-    private static func summarizePrompt(for text: String) -> String {
-        """
-        Operation: summarize
-        Summarize this text concisely. Return structured JSON with a summary item.
-
-        Text:
-        \(text)
-        """
-    }
-
-    private static func improvePrompt(for text: String) -> String {
-        """
-        Operation: rewrite
-        Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
-
-        Text:
-        \(text)
-        """
-    }
-
-    private static func suggestionPrompt(for boundedContext: String) -> String {
-        """
-        Analyze this bounded keyboard context and return strict JSON only. Do not include markdown or explanations outside JSON.
-        Return corrections and predictions separately using this schema:
-        {"corrections":[{"label":"Correct capitalization","original":"i","replacement":"I","explanation":"Capitalize the pronoun I.","category":"capitalization"}],"predictions":[{"label":"Suggestion","text":"apple","kind":"nextWord"}]}
-        Corrections modify existing text. Predictions are optional next-word/phrase/synonym suggestions. Keep replacements and prediction text short for a compact keyboard bar.
-        Context:
-        \(String(boundedContext.prefix(500)))
-        """
+        CanonicalGatewayClient.isUsableCorrectionSmokeResponse(value)
     }
 
     static func normalizedGatewayBaseURLString(_ value: String) throws -> String {
-        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { throw NetworkError.invalidURL }
-        while trimmed.localizedCaseInsensitiveContains("https://https://") {
-            trimmed = trimmed.replacingOccurrences(of: "https://https://", with: "https://", options: .caseInsensitive)
-        }
-        while trimmed.localizedCaseInsensitiveContains("http://http://") {
-            trimmed = trimmed.replacingOccurrences(of: "http://http://", with: "http://", options: .caseInsensitive)
-        }
-        if trimmed.hasPrefix("http:/"), !trimmed.hasPrefix("http://") {
-            trimmed = "http://" + trimmed.dropFirst("http:/".count)
-        }
-        if trimmed.hasPrefix("https:/"), !trimmed.hasPrefix("https://") {
-            trimmed = "https://" + trimmed.dropFirst("https:/".count)
-        }
-        if !trimmed.localizedCaseInsensitiveContains("://") {
-            trimmed = "https://" + trimmed
-        }
-        guard var components = URLComponents(string: trimmed),
-              let scheme = components.scheme?.lowercased(),
-              ["https", "http"].contains(scheme),
-              let host = components.host,
-              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        do {
+            return try CanonicalGatewayClient.normalizedGatewayBaseURLString(value)
+        } catch {
             throw NetworkError.invalidURL
         }
-        components.scheme = scheme
-        components.path = components.path.replacingOccurrences(of: "/+$", with: "", options: .regularExpression)
-        if components.path == "/v1" { components.path = "" }
-        components.query = nil
-        components.fragment = nil
-        guard let normalized = components.url?.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), !normalized.isEmpty else {
-            throw NetworkError.invalidURL
-        }
-        return normalized
     }
 
     static func endpointURL(gatewayURL: String, path: String) throws -> URL {
-        let base = try normalizedGatewayBaseURLString(gatewayURL)
-        let cleanedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard let url = URL(string: "\(base)/\(cleanedPath)") else { throw NetworkError.invalidURL }
-        return url
+        do {
+            return try CanonicalGatewayClient.endpointURL(gatewayURL: gatewayURL, path: path)
+        } catch {
+            throw NetworkError.invalidURL
+        }
     }
 
     static func userFacingSmokeErrorMessage(for error: Error, model: String) -> String {
@@ -531,46 +439,30 @@ class NetworkManager {
         maxTokens: Int,
         timeoutInterval: TimeInterval
     ) async throws -> String {
-        let url = try Self.endpointURL(gatewayURL: gatewayURL, path: "v1/chat/completions")
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = timeoutInterval
-        request.httpBody = try JSONEncoder().encode(ChatCompletionRequest(
-            model: trimmedModel,
-            operation: operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            inputText: inputText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
-            messages: [
-                ChatMessage(role: "system", content: systemPrompt),
-                ChatMessage(role: "user", content: userPrompt.trimmingCharacters(in: .whitespacesAndNewlines))
-            ],
-            maxTokens: maxTokens,
-            temperature: 0.1,
-            stream: false
-        ))
-
         do {
-            let (data, response) = try await transport.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.noData }
-            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw NetworkError.unauthorized }
-            guard httpResponse.statusCode == 200 else {
-                let body = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
-                throw NetworkError.serverError(body)
-            }
-            let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
-            let content = decoded.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !content.isEmpty else { throw NetworkError.unusableCorrection }
-            return content
+            return try await CanonicalGatewayClient(transport: transport).chatCompletionContent(
+                systemPrompt: systemPrompt,
+                userPrompt: userPrompt,
+                operation: operation,
+                inputText: inputText,
+                maxTokens: maxTokens,
+                config: AppConfig(
+                    apiKey: apiKey,
+                    gatewayURL: gatewayURL,
+                    selectedModel: trimmedModel,
+                    isConfigured: true,
+                    supportsStructuredCorrections: true,
+                    structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+                ),
+                timeoutInterval: timeoutInterval
+            )
         } catch let error as NetworkError {
             throw error
-        } catch let error as URLError where error.code == .timedOut {
-            throw NetworkError.timeout
-        } catch DecodingError.dataCorrupted, DecodingError.keyNotFound, DecodingError.typeMismatch, DecodingError.valueNotFound {
-            throw NetworkError.unusableCorrection
+        } catch let error as CanonicalGatewayClientError {
+            throw Self.networkError(from: error)
         } catch {
             throw NetworkError.networkError(error)
         }
@@ -690,32 +582,28 @@ class NetworkManager {
         }
         return KeyboardActionErrorState.sanitized(raw)
     }
-}
 
-
-private struct ChatCompletionRequest: Encodable {
-    let model: String
-    let operation: String?
-    let inputText: String?
-    let messages: [ChatMessage]
-    let maxTokens: Int
-    let temperature: Double
-    let stream: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case operation
-        case inputText = "input_text"
-        case messages
-        case maxTokens = "max_tokens"
-        case temperature
-        case stream
-    }
-}
-
-private extension String {
-    var nilIfEmpty: String? {
-        isEmpty ? nil : self
+    private static func networkError(from error: CanonicalGatewayClientError) -> NetworkError {
+        switch error {
+        case .invalidURL:
+            return .invalidURL
+        case .notConfigured:
+            return .unauthorized
+        case .missingInput:
+            return .unusableCorrection
+        case .unauthorized:
+            return .unauthorized
+        case .modelUnavailable:
+            return .modelUnavailable
+        case .invalidResponse, .unusableCorrection:
+            return .unusableCorrection
+        case .timeout:
+            return .timeout
+        case .serverStatus(let status):
+            return .serverError("HTTP \(status)")
+        case .transport:
+            return .networkError(URLError(.unknown))
+        }
     }
 }
 
@@ -729,17 +617,4 @@ private struct ModelsResponse: Decodable {
 
 private struct HealthResponse: Decodable {
     let status: String
-}
-
-private struct ChatMessage: Codable {
-    let role: String
-    let content: String
-}
-
-private struct ChatCompletionResponse: Decodable {
-    let choices: [Choice]
-
-    struct Choice: Decodable {
-        let message: ChatMessage
-    }
 }

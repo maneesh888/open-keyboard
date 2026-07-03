@@ -41,6 +41,72 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(json["max_tokens"] as? Int, 256)
         XCTAssertEqual(json["stream"] as? Bool, false)
     }
+
+    func testKeyboardAIServiceUsesCanonicalGatewayContractForCarouselCorrections() async throws {
+        let assistantContent = #"{"operation":"fix_grammar","results":[{"id":"verb","type":"correction","title":"Subject-verb agreement","text":"Use have.","original":"has","replacement":"have","category":"grammar"}],"corrected_text":"I have an apple."}"#
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "content": assistantContent
+                    ]
+                ]
+            ]
+        ])
+        let transport = CanonicalGatewayClientTestTransport(
+            data: responseBody,
+            statusCode: 200
+        )
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+        let config = AppConfig(
+            apiKey: "test-api-key",
+            gatewayURL: "https://gateway.example/v1",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: "i has a apple",
+            config: config
+        )
+
+        XCTAssertEqual(result.operation, "fix_grammar")
+        XCTAssertEqual(result.displayText, "I have an apple.")
+        XCTAssertEqual(result.items.count, 1)
+        if case .showCorrections(let response) = KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result) {
+            XCTAssertEqual(response.corrections.first?.original, "has")
+            XCTAssertEqual(response.corrections.first?.replacement, "have")
+        } else {
+            XCTFail("Expected correction carousel response")
+        }
+
+        let request = try XCTUnwrap(transport.requests.first)
+        XCTAssertEqual(request.url?.absoluteString, "https://gateway.example/v1/chat/completions")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-api-key")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertEqual(request.timeoutInterval, 90)
+
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["model"] as? String, "test-model")
+        XCTAssertEqual(json["operation"] as? String, "fix_grammar")
+        XCTAssertEqual(json["input_text"] as? String, "i has a apple")
+        XCTAssertEqual(json["max_tokens"] as? Int, KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"))
+        XCTAssertEqual(json["temperature"] as? Double, 0.1)
+        XCTAssertEqual(json["stream"] as? Bool, false)
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
+        XCTAssertEqual(messages.first?["content"] as? String, KeyboardGatewayActionContract.structuredSystemPrompt)
+        XCTAssertEqual(
+            messages.last?["content"] as? String,
+            KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: "i has a apple").trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
 }
 
 final class NetworkManagerGatewayTests: XCTestCase {
@@ -100,7 +166,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testCorrectionSmokeMapsServerMalformedTimeoutAndUnusableResponses() async throws {
-        try await assertCorrectionSmokeThrows(.serverError("Gateway down"), response: .rawJSON("Gateway down", statusCode: 503))
+        try await assertCorrectionSmokeThrows(.serverError("HTTP 503"), response: .rawJSON("Gateway down", statusCode: 503))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .rawJSON(#"{"choices":[]}"#))
         try await assertCorrectionSmokeThrows(.timeout, response: .throwing(URLError(.timedOut)))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))

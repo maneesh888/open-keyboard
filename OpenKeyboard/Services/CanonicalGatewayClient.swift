@@ -50,7 +50,8 @@ struct CanonicalGatewayClient {
         inputText: String?,
         maxTokens: Int,
         config: AppConfig,
-        temperature: Double = 0.1
+        temperature: Double = 0.1,
+        timeoutInterval: TimeInterval = 45
     ) async throws -> String {
         let request = try chatCompletionRequest(
             systemPrompt: systemPrompt,
@@ -59,16 +60,19 @@ struct CanonicalGatewayClient {
             inputText: inputText,
             maxTokens: maxTokens,
             config: config,
-            temperature: temperature
+            temperature: temperature,
+            timeoutInterval: timeoutInterval
         )
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await transport.data(for: request)
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
         } catch let error as URLError where error.code == .timedOut {
             throw CanonicalGatewayClientError.timeout
-        } catch is CancellationError {
-            throw CanonicalGatewayClientError.transport
+        } catch let error as CancellationError {
+            throw error
         } catch {
             throw CanonicalGatewayClientError.transport
         }
@@ -90,7 +94,8 @@ struct CanonicalGatewayClient {
         inputText: String?,
         maxTokens: Int,
         config: AppConfig,
-        temperature: Double = 0.1
+        temperature: Double = 0.1,
+        timeoutInterval: TimeInterval = 45
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -101,7 +106,7 @@ struct CanonicalGatewayClient {
         let url = try Self.endpointURL(gatewayURL: config.gatewayURL, path: "v1/chat/completions")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45
+        request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
