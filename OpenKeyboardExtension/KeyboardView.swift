@@ -232,21 +232,21 @@ private struct AIActionPanel: View {
     let onBackToKeyboard: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 ZStack {
                     Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
                     Image(systemName: "sparkles")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(OpenKeyboardTheme.Text.inverse)
                 }
-                .frame(width: 38, height: 38)
+                .frame(width: 34, height: 34)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Improve your writing")
-                        .font(.headline.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                     Text("Choose what Open Keyboard should do next.")
-                        .font(.caption)
+                        .font(.caption2)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         .lineLimit(2)
                 }
@@ -256,7 +256,7 @@ private struct AIActionPanel: View {
                 Button(action: onBackToKeyboard) {
                     Image(systemName: "xmark")
                         .font(.system(size: 15, weight: .bold))
-                        .frame(width: 40, height: 40)
+                        .frame(width: 36, height: 36)
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(.primary)
@@ -274,8 +274,8 @@ private struct AIActionPanel: View {
                 overlayAction(.summarize, title: "Summarize", subtitle: "Shorten the selected thought", systemImage: "text.bubble")
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
+        .padding(12)
+        .frame(maxWidth: .infinity, minHeight: 226, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
@@ -292,15 +292,15 @@ private struct AIActionPanel: View {
         Button { onAction(action) } label: {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 30, height: 30)
+                    .font(.system(size: 15, weight: .semibold))
+                    .frame(width: 28, height: 28)
                     .foregroundColor(action == .fixGrammar ? OpenKeyboardTheme.Text.inverse : OpenKeyboardTheme.Semantic.primaryAction)
                     .background(action == .fixGrammar ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Surface.iconBackground)
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(title)
-                        .font(.subheadline.weight(.semibold))
+                        .font(.caption.weight(.semibold))
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.caption2)
@@ -314,7 +314,7 @@ private struct AIActionPanel: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
             }
-            .frame(maxWidth: .infinity, minHeight: 50)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.horizontal, 12)
         }
         .foregroundColor(actionsEnabled ? .primary : .secondary)
@@ -557,18 +557,18 @@ private struct CorrectionCompletePanel: View {
     let onBackToKeyboard: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             ZStack {
                 Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
                 Image(systemName: "checkmark")
-                    .font(.system(size: 30, weight: .bold))
+                    .font(.system(size: 27, weight: .bold))
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
             }
-            .frame(width: 64, height: 64)
-            .padding(.bottom, 4)
+            .frame(width: 58, height: 58)
+            .padding(.bottom, 2)
 
             Text(state.title)
-                .font(.title3.weight(.bold))
+                .font(.headline.weight(.bold))
 
             Text(state.message)
                 .font(.subheadline)
@@ -576,9 +576,9 @@ private struct CorrectionCompletePanel: View {
 
             Button(action: onBackToKeyboard) {
                 Text("Back to Keyboard")
-                    .font(.headline.weight(.semibold))
+                    .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 18)
-                    .frame(minHeight: 42)
+                    .frame(minHeight: 40)
             }
             .buttonStyle(.plain)
             .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
@@ -586,12 +586,12 @@ private struct CorrectionCompletePanel: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
             )
-            .padding(.top, 4)
+            .padding(.top, 2)
             .accessibilityIdentifier("back_to_keyboard")
         }
-        .frame(maxWidth: .infinity, minHeight: 226)
         .padding(.horizontal, 18)
-        .padding(.vertical, 26)
+        .padding(.vertical, 14)
+        .frame(maxWidth: .infinity, minHeight: 226)
         .background(KeyboardColors.overlayBackground)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("correction_complete_panel")

@@ -38,7 +38,7 @@ enum OpenKeyboardTheme {
         static let successBackground = Brand.teal.opacity(0.15)
         static let warningBackground = Semantic.warning.opacity(0.14)
         static let errorBackground = Semantic.error.opacity(0.12)
-        static let keyboardBackground = Color(.systemGray5)
+        static let keyboardBackground = Color.clear
         static let toolbarBackground = Brand.blue.opacity(0.14)
         static let panelBackground = Color(.systemBackground)
         static let overlayBackground = Color(.secondarySystemBackground).opacity(0.96)
