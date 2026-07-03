@@ -122,7 +122,9 @@ struct AppConfig: Codable {
     static let structuredCorrectionSchemaVersionKey = "structuredCorrectionSchemaVersion"
     static let gatewayConnectionErrorMessageKey = "gatewayConnectionErrorMessage"
     static let gatewayConnectionErrorUpdatedAtKey = "gatewayConnectionErrorUpdatedAt"
+    static let gatewayConnectionLastTestedAtKey = "gatewayConnectionLastTestedAt"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
+    static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
 
 
     static var secretStore: AppConfigSecretStore = KeychainAppConfigSecretStore()
@@ -318,6 +320,25 @@ extension AppConfig {
         return gatewayConnectionError(from: defaults)
     }
 
+    static func gatewayConnectionLastTestedAt(from defaults: UserDefaults) -> Date? {
+        guard defaults.object(forKey: gatewayConnectionLastTestedAtKey) != nil else { return nil }
+        let timestamp = defaults.double(forKey: gatewayConnectionLastTestedAtKey)
+        guard timestamp > 0 else { return nil }
+        return Date(timeIntervalSince1970: timestamp)
+    }
+
+    static func saveGatewayConnectionLastTestedAt(_ date: Date = Date(), to defaults: UserDefaults? = sharedDefaults()) {
+        guard let defaults else { return }
+        defaults.set(date.timeIntervalSince1970, forKey: gatewayConnectionLastTestedAtKey)
+        defaults.synchronize()
+    }
+
+    static func clearGatewayConnectionLastTestedAt(from defaults: UserDefaults? = sharedDefaults()) {
+        guard let defaults else { return }
+        defaults.removeObject(forKey: gatewayConnectionLastTestedAtKey)
+        defaults.synchronize()
+    }
+
     static func saveGatewayConnectionError(_ message: String, to defaults: UserDefaults? = sharedDefaults()) {
         guard let defaults else { return }
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -463,7 +484,7 @@ extension AppConfig {
 
     static func clear(from defaults: UserDefaults) {
         secretStore.clearAPIKey()
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, supportsStructuredCorrectionsKey, structuredCorrectionSchemaVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.suggestionState"].forEach {
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, supportsStructuredCorrectionsKey, structuredCorrectionSchemaVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.suggestionState"].forEach {
             defaults.removeObject(forKey: $0)
         }
         defaults.synchronize()

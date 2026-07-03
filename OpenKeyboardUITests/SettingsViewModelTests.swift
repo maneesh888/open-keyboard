@@ -307,6 +307,62 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
     }
 
+    func testSavedConfigLaunchValidationUsesRecentDefaultTimestampWithoutNetwork() async {
+        let suiteName = "SettingsViewModelTests.saved-recent.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertFalse(viewModel.shouldShowGatewayValidationPending)
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 0)
+        XCTAssertEqual(tester.modelFetches, 0)
+        XCTAssertTrue(viewModel.trustedModelLoaded)
+    }
+
+    func testSavedConfigLaunchValidationRunsAgainAfterOneHourAndRefreshesTimestamp() async {
+        let suiteName = "SettingsViewModelTests.saved-stale.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let staleTimestamp = Date().addingTimeInterval(-(AppConfig.gatewayConnectionRetestInterval + 1))
+        AppConfig.saveGatewayConnectionLastTestedAt(staleTimestamp, to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertTrue(viewModel.shouldShowGatewayValidationPending)
+
+        let validationStartedAt = Date()
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        let refreshedTimestamp = AppConfig.gatewayConnectionLastTestedAt(from: defaults)
+        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertGreaterThanOrEqual(refreshedTimestamp?.timeIntervalSince1970 ?? 0, validationStartedAt.timeIntervalSince1970)
+    }
+
     func testBareGatewayHostNormalizesToHTTPSBeforeSaving() async {
         let tester = FakeGatewayTester(models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
@@ -603,8 +659,10 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testFailedTestConnectionPersistsGlobalErrorForSettingsRetry() async {
-        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.failure.\(UUID().uuidString)")!
-        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let suiteName = "SettingsViewModelTests.failure.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
         let tester = FakeGatewayTester(healthSucceeds: false)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.updateGatewayURLInput("gateway.example")
@@ -614,6 +672,7 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), "Connection failed")
+        XCTAssertNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
         XCTAssertTrue(viewModel.shouldShowConnectionActions)
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }

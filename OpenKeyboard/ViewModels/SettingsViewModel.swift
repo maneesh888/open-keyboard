@@ -55,9 +55,11 @@ class SettingsViewModel: ObservableObject {
         self.gatewayURLInput = displayConfig.gatewayURL.isEmpty ? "https://" : displayConfig.gatewayURL
         self.apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
+        let hasRecentValidation = Self.hasRecentSavedGatewayValidation(for: displayConfig, defaults: defaults)
         self.errorMessage = sharedError
-        self.connectionStatus = sharedError == nil ? .unknown : .failure
-        self.showsValidatedGatewayDetails = false
+        self.connectionStatus = sharedError == nil ? (hasRecentValidation ? .success : .unknown) : .failure
+        self.showsValidatedGatewayDetails = sharedError == nil && hasRecentValidation
+        self.hasValidatedSavedGatewayThisLaunch = sharedError == nil && hasRecentValidation
     }
     
     @discardableResult
@@ -75,11 +77,12 @@ class SettingsViewModel: ObservableObject {
         gatewayURLInput = displayConfig.gatewayURL.isEmpty ? "https://" : displayConfig.gatewayURL
         apiKeyInput = displayConfig.apiKey
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
+        let hasRecentValidation = Self.hasRecentSavedGatewayValidation(for: displayConfig, defaults: defaults)
         errorMessage = sharedError
-        showsValidatedGatewayDetails = false
+        showsValidatedGatewayDetails = sharedError == nil && hasRecentValidation
         diagnosticReport = nil
-        connectionStatus = sharedError == nil ? .unknown : .failure
-        hasValidatedSavedGatewayThisLaunch = false
+        connectionStatus = sharedError == nil ? (hasRecentValidation ? .success : .unknown) : .failure
+        hasValidatedSavedGatewayThisLaunch = sharedError == nil && hasRecentValidation
     }
 
     private static func settingsDisplayConfig(from config: AppConfig, defaults: UserDefaults?) -> AppConfig {
@@ -176,6 +179,12 @@ class SettingsViewModel: ObservableObject {
         guard !hasConnectionError else { return }
         guard !hasValidatedSavedGatewayThisLaunch else { return }
         hasValidatedSavedGatewayThisLaunch = true
+        if Self.hasRecentSavedGatewayValidation(for: config, defaults: defaults) {
+            connectionStatus = .success
+            errorMessage = nil
+            showsValidatedGatewayDetails = true
+            return
+        }
         await testConnection()
     }
 
@@ -184,6 +193,7 @@ class SettingsViewModel: ObservableObject {
         errorMessage = nil
         connectionStatus = .unknown
         AppConfig.clearGatewayConnectionError(from: defaults)
+        AppConfig.clearGatewayConnectionLastTestedAt(from: defaults)
         await validateSavedGatewayOnceOnLaunch()
     }
 
@@ -245,6 +255,7 @@ class SettingsViewModel: ObservableObject {
                         connectionStatus = .success
                         errorMessage = nil
                         AppConfig.clearGatewayConnectionError(from: defaults)
+                        AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
                         showsValidatedGatewayDetails = true
                         isTestingConnection = false
                         return
@@ -314,6 +325,14 @@ class SettingsViewModel: ObservableObject {
         errorMessage = message
         showsValidatedGatewayDetails = false
         AppConfig.saveGatewayConnectionError(message, to: defaults)
+        AppConfig.clearGatewayConnectionLastTestedAt(from: defaults)
+    }
+
+    private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {
+        guard config.isConfigured, config.hasCompleteGatewayRuntimeConfig else { return false }
+        guard let defaults, let lastTestedAt = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else { return false }
+        let elapsed = now.timeIntervalSince(lastTestedAt)
+        return elapsed >= 0 && elapsed < AppConfig.gatewayConnectionRetestInterval
     }
 
     var keyboardSettingsInstructions: String {
