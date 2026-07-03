@@ -59,17 +59,55 @@ struct KeyboardPredictionSuggestion: Equatable, Identifiable {
     }
 }
 
+struct KeyboardCorrectionCard: Equatable {
+    let categoryTitle: String
+    let original: String
+    let replacement: String
+    let explanation: String
+
+    init(correction: KeyboardCorrectionSuggestion) {
+        self.categoryTitle = Self.categoryTitle(label: correction.label, category: correction.category)
+        self.original = correction.original
+        self.replacement = correction.replacement
+        self.explanation = Self.explanation(for: correction)
+    }
+
+    private static func categoryTitle(label: String, category: String?) -> String {
+        let labelValue = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let categoryValue = category?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let combined = "\(labelValue) \(categoryValue)".lowercased()
+
+        if combined.contains("subject") || combined.contains("verb") {
+            return "Subject-verb agreement"
+        }
+        if !labelValue.isEmpty, !combined.contains("grammar"), !combined.contains("correct") {
+            return labelValue.replacingOccurrences(of: ":", with: "")
+        }
+        return "Correctness"
+    }
+
+    private static func explanation(for correction: KeyboardCorrectionSuggestion) -> String {
+        let provided = correction.explanation?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !provided.isEmpty { return provided }
+        return "Replace \"\(correction.original)\" with \"\(correction.replacement)\"."
+    }
+}
+
 struct KeyboardSuggestionState: Equatable {
     private(set) var corrections: [KeyboardCorrectionSuggestion]
     let predictions: [KeyboardPredictionSuggestion]
     let correctedText: String?
     private(set) var currentCorrectionIndex: Int
 
-    init(response: KeyboardSuggestionResponse, currentCorrectionIndex: Int = 0) {
+    init(response: KeyboardSuggestionResponse, sourceContext: String? = nil, currentCorrectionIndex: Int = 0) {
         self.corrections = response.corrections
-        self.predictions = response.predictions
+        self.predictions = Self.filteredPredictions(response.predictions, sourceContext: sourceContext)
         self.correctedText = response.correctedText
-        self.currentCorrectionIndex = min(max(currentCorrectionIndex, 0), response.corrections.count)
+        if response.corrections.isEmpty {
+            self.currentCorrectionIndex = 0
+        } else {
+            self.currentCorrectionIndex = min(max(currentCorrectionIndex, 0), response.corrections.count - 1)
+        }
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -80,15 +118,37 @@ struct KeyboardSuggestionState: Equatable {
     var currentPrediction: KeyboardPredictionSuggestion? { predictions.first }
 
     var remainingCorrectionCount: Int {
-        max(corrections.count - currentCorrectionIndex, 0)
+        corrections.count
     }
 
     var correctionCount: Int {
         corrections.count
     }
 
+    var currentCorrectionPosition: Int {
+        guard currentCorrection != nil else { return 0 }
+        return currentCorrectionIndex + 1
+    }
+
+    var showsCorrectionProgress: Bool {
+        currentCorrection != nil && correctionCount > 1
+    }
+
+    var correctionProgressText: String? {
+        guard showsCorrectionProgress else { return nil }
+        return "\(currentCorrectionPosition) of \(correctionCount)"
+    }
+
+    var canMoveToPreviousCorrection: Bool {
+        currentCorrectionIndex > 0
+    }
+
+    var canMoveToNextCorrection: Bool {
+        currentCorrectionIndex + 1 < corrections.count
+    }
+
     var isComplete: Bool {
-        remainingCorrectionCount == 0 && predictions.isEmpty
+        currentCorrection == nil && predictions.isEmpty
     }
 
     var compactCorrectionReplacement: String? {
@@ -99,19 +159,64 @@ struct KeyboardSuggestionState: Equatable {
         currentPrediction?.text
     }
 
+    var currentCorrectionCard: KeyboardCorrectionCard? {
+        currentCorrection.map(KeyboardCorrectionCard.init(correction:))
+    }
+
+    mutating func moveToPreviousCorrection() {
+        guard canMoveToPreviousCorrection else { return }
+        currentCorrectionIndex -= 1
+    }
+
+    mutating func moveToNextCorrection() {
+        guard canMoveToNextCorrection else { return }
+        currentCorrectionIndex += 1
+    }
+
     mutating func applyCurrentCorrection() {
-        guard currentCorrection != nil else { return }
-        currentCorrectionIndex = min(currentCorrectionIndex + 1, corrections.count)
+        removeCurrentCorrection()
     }
 
     mutating func dismissCurrentCorrection() {
-        guard currentCorrection != nil else { return }
-        currentCorrectionIndex = min(currentCorrectionIndex + 1, corrections.count)
+        removeCurrentCorrection()
     }
 
     func textByApplyingCurrentCorrection(to text: String) -> String? {
         guard let correction = currentCorrection else { return nil }
         return correction.applying(to: text)
+    }
+
+    private mutating func removeCurrentCorrection() {
+        guard currentCorrection != nil else { return }
+        corrections.remove(at: currentCorrectionIndex)
+        currentCorrectionIndex = min(currentCorrectionIndex, max(corrections.count - 1, 0))
+    }
+
+    private static func filteredPredictions(_ predictions: [KeyboardPredictionSuggestion], sourceContext: String?) -> [KeyboardPredictionSuggestion] {
+        guard let sourceContext, !sourceContext.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return predictions
+        }
+        return predictions.filter { !isRedundantPrediction($0.text, sourceContext: sourceContext) }
+    }
+
+    static func isRedundantPrediction(_ prediction: String, sourceContext: String) -> Bool {
+        let normalizedPrediction = normalizeText(prediction)
+        guard !normalizedPrediction.isEmpty else { return true }
+        let normalizedContext = normalizeText(sourceContext)
+        guard !normalizedContext.isEmpty else { return false }
+
+        return normalizedContext == normalizedPrediction
+            || normalizedContext.hasSuffix(" " + normalizedPrediction)
+            || normalizedContext.split(separator: " ").last.map(String.init) == normalizedPrediction
+    }
+
+    private static func normalizeText(_ value: String) -> String {
+        value
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 }
 

@@ -173,7 +173,7 @@ struct OpenKeyboardApp: App {
 
         let panelMode = panelArgument.replacingOccurrences(of: "--keyboard-initial-panel=", with: "")
         switch panelMode {
-        case "actions", "correctionComplete":
+        case "actions", "correctionDetail", "correctionCarousel", "correctionComplete":
             sharedDefaults.set(panelMode, forKey: "keyboardExtension.initialPanelMode")
         default:
             sharedDefaults.removeObject(forKey: "keyboardExtension.initialPanelMode")

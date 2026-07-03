@@ -61,25 +61,29 @@ class NetworkManager {
         !((try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)).isEmpty)
     }
 
-    /// Run a low-cost correction smoke through the actual chat completions path.
+    /// Run a correction smoke through the same structured chat completions contract
+    /// used by the keyboard action path.
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         let url = try Self.endpointURL(gatewayURL: gatewayURL, path: "v1/chat/completions")
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
+        let smokeInput = "i has a apple"
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 20
+        request.timeoutInterval = 45
         request.httpBody = try JSONEncoder().encode(ChatCompletionRequest(
             model: trimmedModel,
+            operation: "fix_grammar",
+            inputText: smokeInput,
             messages: [
-                ChatMessage(role: "system", content: "You are a keyboard grammar checker. Return only one corrected sentence. Do not explain."),
-                ChatMessage(role: "user", content: "Correct this sentence and return the full corrected sentence only: i has a apple")
+                ChatMessage(role: "system", content: Self.structuredCorrectionSmokeSystemPrompt),
+                ChatMessage(role: "user", content: Self.structuredCorrectionSmokeUserPrompt(for: smokeInput))
             ],
-            maxTokens: 80,
-            temperature: 0,
+            maxTokens: 1600,
+            temperature: 0.1,
             stream: false
         ))
 
@@ -93,7 +97,9 @@ class NetworkManager {
             }
             let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
             let content = decoded.choices.first?.message.content ?? ""
-            guard Self.isUsableCorrectionSmokeResponse(content) else { throw NetworkError.unusableCorrection }
+            guard Self.isUsableCorrectionSmokeResponse(content) else {
+                throw NetworkError.unusableCorrection
+            }
         } catch let error as NetworkError {
             throw error
         } catch let error as URLError where error.code == .timedOut {
@@ -113,6 +119,22 @@ class NetworkManager {
             normalized.contains("i have a apple") ||
             normalized.contains("i had an apple") ||
             (normalized.contains("have") && normalized.contains("apple"))
+    }
+
+    private static let structuredCorrectionSmokeSystemPrompt = """
+    You are an iOS keyboard text editing assistant. Return strict JSON only.
+    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
+    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
+    """
+
+    private static func structuredCorrectionSmokeUserPrompt(for text: String) -> String {
+        """
+        Operation: fix_grammar
+        Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+
+        Text:
+        \(text)
+        """
     }
 
     static func normalizedGatewayBaseURLString(_ value: String) throws -> String {
@@ -228,6 +250,8 @@ class NetworkManager {
 
 private struct ChatCompletionRequest: Encodable {
     let model: String
+    let operation: String?
+    let inputText: String?
     let messages: [ChatMessage]
     let maxTokens: Int
     let temperature: Double
@@ -235,6 +259,8 @@ private struct ChatCompletionRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case model
+        case operation
+        case inputText = "input_text"
         case messages
         case maxTokens = "max_tokens"
         case temperature

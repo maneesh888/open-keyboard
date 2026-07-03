@@ -57,11 +57,12 @@ class SettingsViewModel: ObservableObject {
         self.showsValidatedGatewayDetails = false
     }
     
-    func saveSettings() {
+    @discardableResult
+    func saveSettings() -> Bool {
         if let defaults {
-            config.save(to: defaults)
+            return config.save(to: defaults)
         } else {
-            config.save()
+            return config.save()
         }
     }
 
@@ -97,9 +98,7 @@ class SettingsViewModel: ObservableObject {
     }
 
     var hasSavedGatewayConfig: Bool {
-        config.isConfigured
-            && !config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        config.isConfigured && config.hasCompleteGatewayRuntimeConfig
     }
 
     var shouldShowGatewayValidationPending: Bool {
@@ -164,6 +163,7 @@ class SettingsViewModel: ObservableObject {
 
     func validateSavedGatewayOnceOnLaunch() async {
         guard hasSavedGatewayConfig else { return }
+        guard !hasConnectionError else { return }
         guard !hasValidatedSavedGatewayThisLaunch else { return }
         hasValidatedSavedGatewayThisLaunch = true
         await testConnection()
@@ -171,6 +171,9 @@ class SettingsViewModel: ObservableObject {
 
     func retrySavedGatewayValidation() async {
         hasValidatedSavedGatewayThisLaunch = false
+        errorMessage = nil
+        connectionStatus = .unknown
+        AppConfig.clearGatewayConnectionError(from: defaults)
         await validateSavedGatewayOnceOnLaunch()
     }
 
@@ -214,17 +217,24 @@ class SettingsViewModel: ObservableObject {
                             apiKey: draftAPIKey,
                             model: gatewayModel
                         )
-                        connectionStatus = .success
-                        errorMessage = nil
-                        AppConfig.clearGatewayConnectionError(from: defaults)
+                        let previousConfig = config
                         config.gatewayURL = draftGatewayURL
                         config.apiKey = draftAPIKey
                         config.selectedModel = gatewayModel
                         config.isConfigured = true
                         config.supportsStructuredCorrections = true
                         config.structuredCorrectionSchemaVersion = "openkeyboard.structured-corrections.v1"
+                        guard saveSettings() else {
+                            config = previousConfig
+                            failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
+                            isTestingConnection = false
+                            return
+                        }
+
+                        connectionStatus = .success
+                        errorMessage = nil
+                        AppConfig.clearGatewayConnectionError(from: defaults)
                         showsValidatedGatewayDetails = true
-                        saveSettings()
                         isTestingConnection = false
                         return
                     } catch {

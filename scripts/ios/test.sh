@@ -198,6 +198,8 @@ case "${1:-}" in
     echo -e "${YELLOW}Running opt-in live gateway Test Connection smoke on iPhone 16...${NC}"
     require_xcodebuild
     seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+    derived_data="$REPO_ROOT/.derived-live-gateway-smoke"
+    result_bundle="$REPO_ROOT/.ci-results/live-gateway-smoke-$(date +%Y%m%d_%H%M%S).xcresult"
 
     if [[ ! -f "$seed_file" ]]; then
       echo -e "${RED}✗ Seed file not found: $seed_file${NC}"
@@ -219,19 +221,34 @@ case "${1:-}" in
       exit 1
     fi
 
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
-    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
-    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    mkdir -p "$REPO_ROOT/.ci-results"
     echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
-    run_xcodebuild xcodebuild test \
+    run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
       -destination "$DESTINATION" \
       -configuration Debug \
-      -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
+      -derivedDataPath "$derived_data" \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
+
+    xctestrun="$(find "$derived_data/Build/Products" -name '*.xctestrun' -print -quit)"
+    if [[ -z "$xctestrun" ]]; then
+      echo -e "${RED}✗ .xctestrun file was not produced under $derived_data/Build/Products${NC}"
+      exit 1
+    fi
+
+    inject_xctestrun_gateway_env "$xctestrun"
+    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
+    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
+    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    run_xcodebuild xcodebuild test-without-building \
+      -xctestrun "$xctestrun" \
+      -destination "$DESTINATION" \
+      -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
+      -resultBundlePath "$result_bundle"
     echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
+    echo "Result bundle: $result_bundle"
     ;;
 
   real-keyboard-live)

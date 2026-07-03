@@ -8,9 +8,13 @@ import SwiftUI
 import UIKit
 
 struct KeyboardExtensionHostTestView: View {
-    @State private var text = ""
+    @State private var text: String
     private let autoFocusEditor = ProcessInfo.processInfo.arguments.contains("--keyboard-host-autofocus")
     private let preferOpenKeyboardInputMode = ProcessInfo.processInfo.arguments.contains("--keyboard-host-prefer-openkeyboard")
+
+    init() {
+        _text = State(initialValue: Self.initialHostText())
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -35,6 +39,16 @@ struct KeyboardExtensionHostTestView: View {
             Spacer()
         }
         .padding(20)
+    }
+
+    private static func initialHostText() -> String {
+        let prefix = "--keyboard-host-text="
+        guard let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(prefix) }) else {
+            return ""
+        }
+
+        let rawValue = String(argument.dropFirst(prefix.count))
+        return rawValue.removingPercentEncoding ?? rawValue
     }
 }
 

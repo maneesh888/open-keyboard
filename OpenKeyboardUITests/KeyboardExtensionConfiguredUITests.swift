@@ -60,7 +60,10 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             }
         }
 
-        XCTAssertTrue(foundOpenKeyboard, "Open Keyboard extension did not appear or the AI menu trigger was missing")
+        if !foundOpenKeyboard {
+            attachKeyboardConfigVisibilityDiagnostic(named: "real-keyboard-config-visibility-probe")
+        }
+        XCTAssertTrue(foundOpenKeyboard, "Open Keyboard extension did not appear or the AI menu trigger was missing; see redacted config visibility diagnostic attachment")
         XCTAssertFalse(keyboardApp.staticTexts["Gateway not configured"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Pair gateway in app"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
@@ -71,6 +74,50 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].isEnabled)
         XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].isEnabled)
+    }
+
+    func testSeededRealKeyboardCorrectionCarouselCanNavigateCards() throws {
+        let seededCorrectionText = "i has a apple and ths sentence"
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-suggestion-state=correctionCarousel",
+            "--keyboard-initial-panel=correctionDetail",
+            "--keyboard-host-text=\(seededCorrectionText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? seededCorrectionText)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for seeded carousel verification")
+        XCTAssertTrue((input.value as? String)?.contains(seededCorrectionText) == true)
+        input.tap()
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        dismissKnownKeyboardDialogs(in: springboard)
+
+        let keyboardApp = XCUIApplication()
+        for _ in 0..<8 where !keyboardApp.buttons["keyboard_correction_next"].exists {
+            dismissKnownKeyboardDialogs(in: springboard)
+            switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: input)
+        }
+
+        XCTAssertTrue(keyboardApp.buttons["keyboard_correction_next"].waitForExistence(timeout: 5), "Seeded correction carousel did not appear in the real keyboard extension")
+        XCTAssertTrue(keyboardApp.staticTexts["keyboard_correction_progress"].waitForExistence(timeout: 2))
+        XCTAssertTrue(keyboardApp.staticTexts["keyboard_correction_progress"].label.contains("1 of 3"))
+        XCTAssertEqual(keyboardApp.staticTexts["ai_correction_replacement"].label, "have")
+
+        keyboardApp.buttons["keyboard_correction_next"].tap()
+
+        XCTAssertTrue(keyboardApp.staticTexts["keyboard_correction_progress"].waitForExistence(timeout: 2))
+        XCTAssertTrue(keyboardApp.staticTexts["keyboard_correction_progress"].label.contains("2 of 3"))
+        XCTAssertEqual(keyboardApp.staticTexts["ai_correction_replacement"].label, "an apple")
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "seeded-real-keyboard-correction-carousel"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured() throws {
@@ -104,6 +151,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         liveFixGrammar.tap()
 
         if keyboardApp.buttons["ai_correction_apply"].waitForExistence(timeout: 60) {
+            let carouselAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            carouselAttachment.name = "live-gateway-real-keyboard-correction-carousel"
+            carouselAttachment.lifetime = .keepAlways
+            add(carouselAttachment)
+
             applyVisibleCorrections(keyboardApp: keyboardApp)
             let improved = NSPredicate(
                 format: "NOT (value CONTAINS[c] %@) AND value CONTAINS[c] %@ AND value CONTAINS[c] %@",
@@ -119,6 +171,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             expectation(for: corrected, evaluatedWith: input)
             waitForExpectations(timeout: 1)
         }
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "live-gateway-real-keyboard-corrected-text"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testRealKeyboardFixGrammarReplacesTextWithExistingSimulatorGatewayConfig() throws {
@@ -195,6 +252,28 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         defaults.removeObject(forKey: "keyboardExtension.lastDebugEvent")
         defaults.removeObject(forKey: "keyboardExtension.debugEvents")
         defaults.synchronize()
+    }
+
+    private func attachKeyboardConfigVisibilityDiagnostic(named name: String) {
+        guard let defaults = AppConfig.sharedDefaults() else {
+            let attachment = XCTAttachment(string: "keyboard config visibility probe unavailable: shared App Group defaults unavailable")
+            attachment.name = name
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            return
+        }
+
+        let lastEvent = defaults.string(forKey: "keyboardExtension.lastDebugEvent") ?? "missing"
+        let events = defaults.string(forKey: "keyboardExtension.debugEvents") ?? "missing"
+        let appSideDiagnostic = AppConfig.redactedVisibilityDiagnostic(from: defaults).redactedDescription
+        let attachment = XCTAttachment(string: [
+            "appSide=\(appSideDiagnostic)",
+            "extensionLastEvent=\(lastEvent)",
+            "extensionRecentEvents=\(events)"
+        ].joined(separator: "\n"))
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     private func tapCenter(of element: XCUIElement) {

@@ -169,6 +169,119 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertFalse(state.isComplete, "Prediction lane may remain after corrections finish")
     }
 
+    func testCorrectionCarouselNavigationRespectsBounds() {
+        var state = KeyboardSuggestionState(response: Self.multiCorrectionResponse())
+
+        XCTAssertEqual(state.currentCorrectionPosition, 1)
+        XCTAssertEqual(state.correctionCount, 3)
+        XCTAssertEqual(state.correctionProgressText, "1 of 3")
+        XCTAssertFalse(state.canMoveToPreviousCorrection)
+        XCTAssertTrue(state.canMoveToNextCorrection)
+        XCTAssertTrue(state.showsCorrectionProgress)
+
+        state.moveToPreviousCorrection()
+        XCTAssertEqual(state.currentCorrection?.id, "subject-verb")
+
+        state.moveToNextCorrection()
+        XCTAssertEqual(state.currentCorrectionPosition, 2)
+        XCTAssertEqual(state.currentCorrection?.id, "article")
+        XCTAssertEqual(state.correctionProgressText, "2 of 3")
+        XCTAssertTrue(state.canMoveToPreviousCorrection)
+        XCTAssertTrue(state.canMoveToNextCorrection)
+
+        state.moveToNextCorrection()
+        XCTAssertEqual(state.currentCorrectionPosition, 3)
+        XCTAssertEqual(state.currentCorrection?.id, "spelling-this")
+        XCTAssertFalse(state.canMoveToNextCorrection)
+
+        state.moveToNextCorrection()
+        XCTAssertEqual(state.currentCorrection?.id, "spelling-this")
+    }
+
+    func testAcceptCurrentCorrectionRemovesOnlyVisibleCardAndClampsIndex() {
+        var state = KeyboardSuggestionState(response: Self.multiCorrectionResponse())
+        state.moveToNextCorrection()
+
+        state.applyCurrentCorrection()
+
+        XCTAssertEqual(state.correctionCount, 2)
+        XCTAssertEqual(state.currentCorrectionPosition, 2)
+        XCTAssertEqual(state.currentCorrection?.id, "spelling-this")
+        XCTAssertEqual(state.corrections.map(\.id), ["subject-verb", "spelling-this"])
+        XCTAssertEqual(state.correctionProgressText, "2 of 2")
+    }
+
+    func testDismissCurrentCorrectionRemovesOnlyVisibleLastCard() {
+        var state = KeyboardSuggestionState(response: Self.multiCorrectionResponse())
+        state.moveToNextCorrection()
+        state.moveToNextCorrection()
+
+        state.dismissCurrentCorrection()
+
+        XCTAssertEqual(state.correctionCount, 2)
+        XCTAssertEqual(state.currentCorrectionPosition, 2)
+        XCTAssertEqual(state.currentCorrection?.id, "article")
+        XCTAssertEqual(state.corrections.map(\.id), ["subject-verb", "article"])
+    }
+
+    func testSingleCorrectionDoesNotShowCarouselProgress() {
+        let state = KeyboardSuggestionState(response: KeyboardSuggestionResponse(
+            corrections: [KeyboardCorrectionSuggestion(id: "only", label: "Spelling", original: "ths", replacement: "this")],
+            predictions: []
+        ))
+
+        XCTAssertEqual(state.currentCorrectionPosition, 1)
+        XCTAssertEqual(state.correctionCount, 1)
+        XCTAssertFalse(state.showsCorrectionProgress)
+        XCTAssertNil(state.correctionProgressText)
+        XCTAssertFalse(state.canMoveToPreviousCorrection)
+        XCTAssertFalse(state.canMoveToNextCorrection)
+    }
+
+    func testCorrectionCardUsesMetadataAndFallbackExplanation() {
+        let response = KeyboardSuggestionResponse(
+            corrections: [
+                KeyboardCorrectionSuggestion(
+                    id: "subject-verb",
+                    label: "Grammar",
+                    original: "has",
+                    replacement: "have",
+                    explanation: "Use have because the subject is plural.",
+                    category: "subjectVerb"
+                ),
+                KeyboardCorrectionSuggestion(
+                    id: "spelling-this",
+                    label: "Spelling:",
+                    original: "ths",
+                    replacement: "this"
+                )
+            ],
+            predictions: []
+        )
+
+        var state = KeyboardSuggestionState(response: response)
+        XCTAssertEqual(state.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+        XCTAssertEqual(state.currentCorrectionCard?.explanation, "Use have because the subject is plural.")
+
+        state.moveToNextCorrection()
+        XCTAssertEqual(state.currentCorrectionCard?.categoryTitle, "Spelling")
+        XCTAssertEqual(state.currentCorrectionCard?.explanation, #"Replace "ths" with "this"."#)
+    }
+
+    func testRedundantPredictionIsFilteredAgainstSourceContext() {
+        let response = KeyboardSuggestionResponse(
+            corrections: [],
+            predictions: [
+                KeyboardPredictionSuggestion(label: "Suggestion", text: "apple"),
+                KeyboardPredictionSuggestion(label: "Suggestion", text: "banana")
+            ]
+        )
+
+        let state = KeyboardSuggestionState(response: response, sourceContext: "I ate an apple")
+
+        XCTAssertEqual(state.predictions.map(\.text), ["banana"])
+    }
+
     func testCorrectionOnlyPredictionOnlyAndNoSuggestionsStates() {
         let correctionOnly = KeyboardSuggestionState(response: KeyboardSuggestionResponse(corrections: [KeyboardCorrectionSuggestion(label: "Correct", original: "i", replacement: "I")], predictions: []))
         XCTAssertEqual(correctionOnly.compactCorrectionReplacement, "I")
@@ -448,6 +561,17 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     private static func canonicalGrammarJSON(correctedText: String?) -> String {
         let correctedTextField = correctedText.map { #", "corrected_text": "\#($0)""# } ?? ""
         return #"{"operation":"fix_grammar","results":[{"id":"subject-verb","type":"correction","title":"Subject-verb agreement","text":"Use have.","original":"has","replacement":"have","category":"grammar","explanation":"Use have for first-person agreement."},{"id":"article","type":"correction","title":"Article","text":"Use an.","original":"a apple","replacement":"an apple","explanation":"Use an before a vowel sound."},{"id":"spelling-this","type":"correction","title":"Spelling","text":"Fix typo.","original":"ths","replacement":"this","category":"spelling","explanation":"Correct the misspelling."}], "summary":"Three issues found."\#(correctedTextField)}"#
+    }
+
+    private static func multiCorrectionResponse() -> KeyboardSuggestionResponse {
+        KeyboardSuggestionResponse(
+            corrections: [
+                KeyboardCorrectionSuggestion(id: "subject-verb", label: "Subject-verb agreement", original: "has", replacement: "have", category: "grammar"),
+                KeyboardCorrectionSuggestion(id: "article", label: "Article", original: "a apple", replacement: "an apple", category: "grammar"),
+                KeyboardCorrectionSuggestion(id: "spelling-this", label: "Spelling", original: "ths", replacement: "this", category: "spelling")
+            ],
+            predictions: []
+        )
     }
 
 }

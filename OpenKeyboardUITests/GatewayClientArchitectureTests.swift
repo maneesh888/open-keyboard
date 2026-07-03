@@ -36,8 +36,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["model"] as? String, "test-model")
-        XCTAssertNil(json["operation"])
-        XCTAssertNil(json["input_text"])
+        XCTAssertEqual(json["operation"] as? String, "fix_grammar")
+        XCTAssertEqual(json["input_text"] as? String, "i has a apple,ths is nt sound god")
         XCTAssertEqual(json["max_tokens"] as? Int, 256)
         XCTAssertEqual(json["stream"] as? Bool, false)
     }
@@ -76,16 +76,20 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-api-key")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertEqual(request.timeoutInterval, 20)
+        XCTAssertEqual(request.timeoutInterval, 45)
 
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["model"] as? String, "gpt-oss:120b-cloud")
-        XCTAssertEqual(json["max_tokens"] as? Int, 80)
-        XCTAssertEqual(json["temperature"] as? Double, 0)
+        XCTAssertEqual(json["operation"] as? String, "fix_grammar")
+        XCTAssertEqual(json["input_text"] as? String, "i has a apple")
+        XCTAssertEqual(json["max_tokens"] as? Int, 1600)
+        XCTAssertEqual(json["temperature"] as? Double, 0.1)
         XCTAssertEqual(json["stream"] as? Bool, false)
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
+        XCTAssertTrue((messages.first?["content"] as? String)?.contains("Return strict JSON only") == true)
+        XCTAssertTrue((messages.last?["content"] as? String)?.contains("Operation: fix_grammar") == true)
         XCTAssertTrue((messages.last?["content"] as? String)?.contains("i has a apple") == true)
     }
 
@@ -104,6 +108,14 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
     @MainActor
     func testViewModelFallsBackAcrossRealNetworkManagerSmokePath() async throws {
+        let suiteName = "NetworkManagerGatewayTests.fallback.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let oldSecretStore = AppConfig.secretStore
+        let secretStore = NetworkManagerInMemorySecretStore()
+        AppConfig.secretStore = secretStore
+        defer { AppConfig.secretStore = oldSecretStore }
+
         let transport = NetworkManagerTestTransport([
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
@@ -111,7 +123,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
             .chat(content: "I have an apple.")
         ])
         let manager = NetworkManager(transport: transport)
-        let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: nil)
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: defaults)
         viewModel.updateGatewayURLInput("gateway.example")
         viewModel.updateAPIKeyInput("test-api-key")
 
@@ -120,6 +132,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
         XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertEqual(secretStore.apiKey, "test-api-key")
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
             "/v1/models",
             "/v1/models",

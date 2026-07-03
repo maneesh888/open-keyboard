@@ -162,7 +162,7 @@ extension AppConfig {
             isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
             supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
             structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
-        )
+        ).runtimeNormalized()
 
         if loadedConfig.isKnownTestPlaceholderConfig,
            !ProcessInfo.processInfo.arguments.contains("--uitesting"),
@@ -174,19 +174,43 @@ extension AppConfig {
         return loadedConfig
     }
 
-    func save() {
+    @discardableResult
+    func save() -> Bool {
         guard let sharedDefaults = AppConfig.sharedDefaults() else {
-            return
+            return false
         }
 
-        save(to: sharedDefaults)
+        return save(to: sharedDefaults)
     }
 
-    func save(to defaults: UserDefaults) {
-        if AppConfig.secretStore.saveAPIKey(apiKey) {
+    @discardableResult
+    func save(to defaults: UserDefaults) -> Bool {
+        let runtimeConfig = runtimeNormalized()
+        let trimmedAPIKey = runtimeConfig.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard runtimeConfig.isConfigured else {
+            _ = AppConfig.secretStore.clearAPIKey()
+            var unconfigured = runtimeConfig
+            unconfigured.apiKey = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
+            unconfigured.saveNonSecretValues(to: defaults)
+            return true
         }
-        saveNonSecretValues(to: defaults)
+
+        guard AppConfig.secretStore.saveAPIKey(trimmedAPIKey) else {
+            var unconfigured = runtimeConfig
+            unconfigured.apiKey = ""
+            unconfigured.isConfigured = false
+            unconfigured.supportsStructuredCorrections = false
+            unconfigured.structuredCorrectionSchemaVersion = ""
+            defaults.removeObject(forKey: AppConfig.apiKeyKey)
+            unconfigured.saveNonSecretValues(to: defaults)
+            return false
+        }
+
+        defaults.removeObject(forKey: AppConfig.apiKeyKey)
+        runtimeConfig.saveNonSecretValues(to: defaults)
+        return true
     }
 
     @discardableResult
@@ -199,13 +223,26 @@ extension AppConfig {
             return false
         }
 
-        if AppConfig.secretStore.saveAPIKey(apiKey) {
+        let didSaveSecret = AppConfig.secretStore.saveAPIKey(apiKey)
+        if didSaveSecret {
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
         }
         if mirrorAPIKeyToDefaultsForUITest {
             defaults.set(apiKey, forKey: AppConfig.apiKeyKey)
         }
-        saveNonSecretValues(to: defaults)
+
+        guard didSaveSecret || mirrorAPIKeyToDefaultsForUITest else {
+            var unconfigured = self
+            unconfigured.apiKey = ""
+            unconfigured.isConfigured = false
+            unconfigured.supportsStructuredCorrections = false
+            unconfigured.structuredCorrectionSchemaVersion = ""
+            defaults.removeObject(forKey: AppConfig.apiKeyKey)
+            unconfigured.saveNonSecretValues(to: defaults)
+            return false
+        }
+
+        runtimeNormalized().saveNonSecretValues(to: defaults)
         return true
     }
 
@@ -318,6 +355,28 @@ extension AppConfig {
             || AppConfig.rejectedAPIKeys.contains(normalizedAPIKey)
     }
 
+    var hasCompleteGatewayRuntimeConfig: Bool {
+        !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func runtimeNormalized() -> AppConfig {
+        guard isConfigured else {
+            var copy = self
+            copy.supportsStructuredCorrections = false
+            copy.structuredCorrectionSchemaVersion = ""
+            return copy
+        }
+        guard !hasCompleteGatewayRuntimeConfig else { return self }
+
+        var copy = self
+        copy.isConfigured = false
+        copy.supportsStructuredCorrections = false
+        copy.structuredCorrectionSchemaVersion = ""
+        return copy
+    }
+
     private static var rejectedGatewayURLs: [String] {
         [["https://gateway", "example", "invalid"].joined(separator: ".")]
     }
@@ -328,6 +387,74 @@ extension AppConfig {
 
     private static var rejectedAPIKeys: [String] {
         [["test", "placeholder", "key"].joined(separator: "-")]
+    }
+
+    struct RedactedVisibilityDiagnostic: Equatable {
+        let uiTestDebugStateEnabled: Bool
+        let gatewayURLPresent: Bool
+        let gatewayHost: String
+        let selectedModelPresent: Bool
+        let selectedModel: String
+        let defaultsIsConfigured: Bool
+        let legacyDefaultsAPIKeyPresent: Bool
+        let keychainAPIKeyPresent: Bool
+        let loadedConfigIsConfigured: Bool
+
+        var redactedDescription: String {
+            [
+                "keyboardExtension.uiTestDebugStateEnabled=\(uiTestDebugStateEnabled)",
+                "gatewayURLPresent=\(gatewayURLPresent)",
+                "gatewayHost=\(gatewayHost)",
+                "selectedModelPresent=\(selectedModelPresent)",
+                "selectedModel=\(selectedModel)",
+                "AppConfig.isConfigured(defaults)=\(defaultsIsConfigured)",
+                "legacyAppGroupAPIKeyPresent=\(legacyDefaultsAPIKeyPresent)",
+                "keychainAPIKeyPresent=\(keychainAPIKeyPresent)",
+                "loadedExtensionAppConfig.isConfigured=\(loadedConfigIsConfigured)"
+            ].joined(separator: "; ")
+        }
+    }
+
+    static func redactedVisibilityDiagnostic(from defaults: UserDefaults? = sharedDefaults()) -> RedactedVisibilityDiagnostic {
+        guard let defaults else {
+            return RedactedVisibilityDiagnostic(
+                uiTestDebugStateEnabled: false,
+                gatewayURLPresent: false,
+                gatewayHost: "shared-defaults-unavailable",
+                selectedModelPresent: false,
+                selectedModel: "missing",
+                defaultsIsConfigured: false,
+                legacyDefaultsAPIKeyPresent: false,
+                keychainAPIKeyPresent: false,
+                loadedConfigIsConfigured: false
+            )
+        }
+
+        let rawGatewayURL = defaults.string(forKey: gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rawSelectedModel = defaults.string(forKey: selectedModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let legacyDefaultsAPIKey = defaults.string(forKey: apiKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let keychainAPIKey = secretStore.loadAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let loadedConfig = load(from: defaults)
+
+        return RedactedVisibilityDiagnostic(
+            uiTestDebugStateEnabled: isUITestDebugStateEnabled(in: defaults),
+            gatewayURLPresent: !rawGatewayURL.isEmpty,
+            gatewayHost: redactedGatewayHost(from: rawGatewayURL),
+            selectedModelPresent: !rawSelectedModel.isEmpty,
+            selectedModel: rawSelectedModel.isEmpty ? "missing" : rawSelectedModel,
+            defaultsIsConfigured: defaults.bool(forKey: isConfiguredKey),
+            legacyDefaultsAPIKeyPresent: !legacyDefaultsAPIKey.isEmpty,
+            keychainAPIKeyPresent: !keychainAPIKey.isEmpty,
+            loadedConfigIsConfigured: loadedConfig.isConfigured
+        )
+    }
+
+    private static func redactedGatewayHost(from gatewayURL: String) -> String {
+        guard !gatewayURL.isEmpty else { return "missing" }
+        if let host = URL(string: gatewayURL)?.host, !host.isEmpty {
+            return host
+        }
+        return "present-unparseable"
     }
 
     static func isUITestDebugStateEnabled(in defaults: UserDefaults) -> Bool {

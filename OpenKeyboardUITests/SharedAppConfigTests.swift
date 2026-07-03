@@ -63,7 +63,7 @@ final class SharedAppConfigTests: XCTestCase {
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
 
-        mainAppConfig.save(to: defaults)
+        XCTAssertTrue(mainAppConfig.save(to: defaults))
 
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
         XCTAssertEqual(secretStore.apiKey, "fake-shared-test-token")
@@ -75,6 +75,47 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(extensionLoadedConfig.isConfigured)
         XCTAssertTrue(extensionLoadedConfig.supportsStructuredCorrections)
         XCTAssertEqual(extensionLoadedConfig.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
+    }
+
+    func testConfiguredStateRequiresAPIKeyVisibleToExtensionRuntime() throws {
+        defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(fixtureModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
+        defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
+
+        let extensionLoadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(extensionLoadedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(extensionLoadedConfig.selectedModel, fixtureModel)
+        XCTAssertEqual(extensionLoadedConfig.apiKey, "")
+        XCTAssertFalse(extensionLoadedConfig.isConfigured)
+        XCTAssertFalse(extensionLoadedConfig.supportsStructuredCorrections)
+        XCTAssertEqual(extensionLoadedConfig.structuredCorrectionSchemaVersion, "")
+    }
+
+    func testMainAppSaveDoesNotPublishConfiguredStateWhenSecretStoreSaveFails() throws {
+        secretStore.shouldFailSave = true
+        let mainAppConfig = AppConfig(
+            apiKey: "fake-shared-test-token",
+            gatewayURL: fixtureGatewayURL,
+            selectedModel: fixtureModel,
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        XCTAssertFalse(mainAppConfig.save(to: defaults))
+
+        let extensionLoadedConfig = AppConfig.load(from: defaults)
+        XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
+        XCTAssertNil(secretStore.apiKey)
+        XCTAssertEqual(extensionLoadedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(extensionLoadedConfig.selectedModel, fixtureModel)
+        XCTAssertEqual(extensionLoadedConfig.apiKey, "")
+        XCTAssertFalse(extensionLoadedConfig.isConfigured)
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertFalse(extensionLoadedConfig.supportsStructuredCorrections)
     }
 
     func testLegacyDefaultsAPIKeyMigratesToSecretStoreAndIsRemovedFromDefaults() throws {
@@ -130,6 +171,30 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
     }
 
+
+    func testRedactedVisibilityDiagnosticReportsPresenceWithoutLeakingAPIKey() throws {
+        let rawAPIKey = "super-secret-test-key"
+        secretStore.apiKey = rawAPIKey
+        defaults.set("https://gateway.test.local/v1", forKey: AppConfig.gatewayURLKey)
+        defaults.set("safe-model", forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+
+        let diagnostic = AppConfig.redactedVisibilityDiagnostic(from: defaults)
+        let description = diagnostic.redactedDescription
+
+        XCTAssertTrue(diagnostic.uiTestDebugStateEnabled)
+        XCTAssertTrue(diagnostic.gatewayURLPresent)
+        XCTAssertEqual(diagnostic.gatewayHost, "gateway.test.local")
+        XCTAssertTrue(diagnostic.selectedModelPresent)
+        XCTAssertEqual(diagnostic.selectedModel, "safe-model")
+        XCTAssertTrue(diagnostic.keychainAPIKeyPresent)
+        XCTAssertFalse(diagnostic.legacyDefaultsAPIKeyPresent)
+        XCTAssertTrue(diagnostic.loadedConfigIsConfigured)
+        XCTAssertFalse(description.contains(rawAPIKey))
+        XCTAssertFalse(description.contains("https://gateway.test.local/v1"))
+        XCTAssertTrue(description.contains("gatewayHost=gateway.test.local"))
+    }
 
     func testKnownUITestPlaceholderConfigIsAcceptedWhenKeyboardDebugStateEnabled() throws {
         secretStore.apiKey = RejectedGatewayFixture.apiKey
@@ -200,6 +265,26 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(loadedConfig.selectedModel, RejectedGatewayFixture.selectedModel)
         XCTAssertTrue(loadedConfig.isConfigured)
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey), "Load should migrate the legacy defaults API-key mirror back out after secret-store save succeeds.")
+    }
+
+    func testSeedWithoutSecretStoreOrMirrorDoesNotPublishConfiguredState() throws {
+        secretStore.shouldFailSave = true
+        let dummyConfig = AppConfig(
+            apiKey: "fake-seed-token",
+            gatewayURL: fixtureGatewayURL,
+            selectedModel: fixtureModel,
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        XCTAssertFalse(dummyConfig.saveTestSeed(to: defaults, mirrorAPIKeyToDefaultsForUITest: false))
+
+        let loadedConfig = AppConfig.load(from: defaults)
+        XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
+        XCTAssertFalse(loadedConfig.isConfigured)
+        XCTAssertEqual(loadedConfig.apiKey, "")
+        XCTAssertFalse(loadedConfig.supportsStructuredCorrections)
     }
 
     func testExplicitOverwriteFlagAllowsDisposableDummySeedReplacement() throws {

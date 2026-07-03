@@ -33,9 +33,12 @@ final class KeyboardViewModel: ObservableObject {
     var canRunAIAction: Bool {
         hasFullAccess
             && gatewayConnectionError == nil
-            && config.isConfigured
-            && !config.apiKey.isEmpty
+            && hasUsableGatewayConfig
             && !isPerformingAIAction
+    }
+
+    private var hasUsableGatewayConfig: Bool {
+        config.isConfigured && config.hasCompleteGatewayRuntimeConfig
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -47,10 +50,11 @@ final class KeyboardViewModel: ObservableObject {
             return KeyboardToolbarState(kind: .error(message: actionError.message))
         }
         if let suggestionState,
-           let correction = suggestionState.currentCorrection {
+           let correction = suggestionState.currentCorrection,
+           let card = suggestionState.currentCorrectionCard {
             return KeyboardToolbarState(kind: .correctionPreview(
-                count: suggestionState.remainingCorrectionCount,
-                explanation: correction.explanation ?? correction.label,
+                count: suggestionState.correctionCount,
+                explanation: card.categoryTitle,
                 replacement: correction.replacement,
                 original: correction.original
             ))
@@ -61,7 +65,7 @@ final class KeyboardViewModel: ObservableObject {
 
         return KeyboardToolbarState.current(
             hasFullAccess: hasFullAccess,
-            isConfigured: config.isConfigured,
+            isConfigured: hasUsableGatewayConfig,
             selectedModel: config.selectedModel,
             isPerformingAIAction: isPerformingAIAction,
             aiStatus: aiStatus
@@ -84,8 +88,13 @@ final class KeyboardViewModel: ObservableObject {
         self.config = loadConfig()
         self.gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
-        self.panelMode = Self.consumeInitialPanelModeSeed()
-        self.hasFullAccess = productionTestFullAccess
+        let seededSuggestionState = Self.loadSeededSuggestionState()
+        self.suggestionState = seededSuggestionState?.suggestionState
+        self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
+        self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
+        self.isPerformingAIAction = seededSuggestionState?.isPerformingAIAction ?? false
+        self.hasFullAccess = productionTestFullAccess || seededSuggestionState != nil
+        recordConfigVisibilityProbe(context: "init")
     }
 
     func insert(_ character: String) {
@@ -140,15 +149,20 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .keyboard
     }
 
+    func showCorrectionDetail() {
+        guard currentCorrection != nil else { return }
+        panelMode = .correctionDetail
+    }
+
     func clearActionError() {
         actionError = nil
-        aiStatus = config.isConfigured ? "Ready" : "Pair gateway in app"
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         panelMode = .keyboard
     }
 
     func retryAfterActionError() {
         actionError = nil
-        aiStatus = config.isConfigured ? "Ready" : "Pair gateway in app"
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         panelMode = .actions
     }
 
@@ -182,15 +196,36 @@ final class KeyboardViewModel: ObservableObject {
         finishCorrectionStep(state)
     }
 
+    var currentCorrectionCard: KeyboardCorrectionCard? {
+        suggestionState?.currentCorrectionCard
+    }
+
+    func moveToPreviousSuggestion() {
+        guard var state = suggestionState else { return }
+        state.moveToPreviousCorrection()
+        suggestionState = state
+        panelMode = state.currentCorrection == nil ? .keyboard : .correctionDetail
+    }
+
+    func moveToNextSuggestion() {
+        guard var state = suggestionState else { return }
+        state.moveToNextCorrection()
+        suggestionState = state
+        panelMode = state.currentCorrection == nil ? .keyboard : .correctionDetail
+    }
+
     private func finishCorrectionStep(_ state: KeyboardSuggestionState) {
         suggestionState = state
-        if state.currentCorrection == nil {
+        if state.isComplete {
             suggestionState = nil
             aiStatus = "No more suggestions"
             panelMode = .correctionComplete
-        } else {
+        } else if state.currentCorrection == nil {
             aiStatus = "Suggestions ready"
             panelMode = .keyboard
+        } else {
+            aiStatus = "Suggestions ready"
+            panelMode = .correctionDetail
         }
     }
 
@@ -207,7 +242,18 @@ final class KeyboardViewModel: ObservableObject {
         } else if let gatewayConnectionError {
             aiStatus = gatewayConnectionError
         } else {
-            aiStatus = config.isConfigured ? "AI ready · \(config.selectedModel)" : "Pair gateway in app"
+            aiStatus = hasUsableGatewayConfig ? "AI ready · \(config.selectedModel)" : "Pair gateway in app"
+        }
+    }
+
+    func refreshSeededSuggestionStateForUITests() {
+        guard let seededSuggestionState = Self.loadSeededSuggestionState() else { return }
+        suggestionState = seededSuggestionState.suggestionState
+        panelMode = seededSuggestionState.panelMode
+        aiStatus = seededSuggestionState.aiStatus
+        isPerformingAIAction = seededSuggestionState.isPerformingAIAction
+        if seededSuggestionState.suggestionState != nil {
+            hasFullAccess = true
         }
     }
 
@@ -227,6 +273,11 @@ final class KeyboardViewModel: ObservableObject {
         if let gatewayConnectionError {
             aiStatus = gatewayConnectionError
             recordDebugEvent("action_blocked_gateway_error")
+            return
+        }
+        guard hasUsableGatewayConfig else {
+            aiStatus = "Pair gateway in app"
+            recordDebugEvent("action_blocked_not_configured")
             return
         }
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
@@ -257,10 +308,10 @@ final class KeyboardViewModel: ObservableObject {
                     recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
                     switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result) {
                     case .showCorrections(let response):
-                        suggestionState = KeyboardSuggestionState(response: response)
+                        suggestionState = KeyboardSuggestionState(response: response, sourceContext: replacementPlan.textForAI)
                         aiStatus = "Suggestions ready"
                         isPerformingAIAction = false
-                        panelMode = .keyboard
+                        panelMode = .correctionDetail
                     case .replaceText(let output):
                         replace(plan: replacementPlan, with: output)
                         aiStatus = action == .summarize ? "Summary ready" : "No more suggestions"
@@ -330,6 +381,13 @@ final class KeyboardViewModel: ObservableObject {
         defaults.synchronize()
     }
 
+    private func recordConfigVisibilityProbe(context: String) {
+        guard Self.debugStateEnabled, let defaults = AppConfig.sharedDefaults() else { return }
+        let diagnostic = AppConfig.redactedVisibilityDiagnostic(from: defaults).redactedDescription
+        let toolbar = "toolbar.canRunAIAction=\(canRunAIAction); toolbar.actionsEnabled=\(canRunAIAction); toolbar.title=\(toolbarState.title); toolbar.subtitle=\(toolbarState.subtitle); hasFullAccess=\(hasFullAccess); gatewayConnectionErrorPresent=\(gatewayConnectionError != nil)"
+        recordDebugEvent("configVisibilityProbe context=\(context); \(diagnostic); \(toolbar)")
+    }
+
     private func recordDebugEvent(_ event: String) {
         guard Self.debugStateEnabled, let defaults = AppConfig.sharedDefaults() else { return }
         defaults.set(event, forKey: "keyboardExtension.lastDebugEvent")
@@ -355,8 +413,87 @@ final class KeyboardViewModel: ObservableObject {
 
         switch rawValue {
         case "actions": return .actions
+        case "correctionDetail", "correctionCarousel": return .correctionDetail
         case "correctionComplete": return .correctionComplete
         default: return .keyboard
+        }
+    }
+
+    private static func loadSeededSuggestionState() -> SeededKeyboardSuggestionState? {
+        seededSuggestionStateRawValue().flatMap(SeededKeyboardSuggestionState.init(rawValue:))
+    }
+
+    private static func seededSuggestionStateRawValue() -> String? {
+        guard KeyboardDebugStatePolicy.isPersistenceAvailable,
+              let defaults = AppConfig.sharedDefaults(),
+              defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled") else {
+            return nil
+        }
+        defaults.synchronize()
+        return defaults.string(forKey: "keyboardExtension.suggestionState")
+    }
+
+    private struct SeededKeyboardSuggestionState {
+        let panelMode: KeyboardPanelMode
+        let suggestionState: KeyboardSuggestionState?
+        let aiStatus: String
+        let isPerformingAIAction: Bool
+
+        init?(rawValue: String) {
+            switch rawValue {
+            case "correctionCard", "correctionDetail", "correctionCarousel":
+                panelMode = .correctionDetail
+                suggestionState = KeyboardSuggestionState(
+                    response: Self.carouselResponse,
+                    sourceContext: "i has a apple and ths sentence"
+                )
+                aiStatus = "Suggestions ready"
+                isPerformingAIAction = false
+            case "correctionComplete":
+                panelMode = .correctionComplete
+                suggestionState = nil
+                aiStatus = "No more suggestions"
+                isPerformingAIAction = false
+            case "analyzing":
+                panelMode = .keyboard
+                suggestionState = nil
+                aiStatus = "Analyzing your text..."
+                isPerformingAIAction = true
+            default:
+                return nil
+            }
+        }
+
+        private static var carouselResponse: KeyboardSuggestionResponse {
+            KeyboardSuggestionResponse(
+                corrections: [
+                    KeyboardCorrectionSuggestion(
+                        id: "subject-verb",
+                        label: "Subject-verb agreement",
+                        original: "has",
+                        replacement: "have",
+                        explanation: "Use have for agreement.",
+                        category: "grammar"
+                    ),
+                    KeyboardCorrectionSuggestion(
+                        id: "article",
+                        label: "Article",
+                        original: "a apple",
+                        replacement: "an apple",
+                        explanation: "Use an before apple.",
+                        category: "grammar"
+                    ),
+                    KeyboardCorrectionSuggestion(
+                        id: "spelling-this",
+                        label: "Spelling",
+                        original: "ths",
+                        replacement: "this",
+                        explanation: "Correct the typo.",
+                        category: "spelling"
+                    )
+                ],
+                predictions: []
+            )
         }
     }
 

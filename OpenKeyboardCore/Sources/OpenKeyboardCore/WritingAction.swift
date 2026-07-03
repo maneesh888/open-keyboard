@@ -64,7 +64,7 @@ public enum WritingPromptBuilder {
             return """
             Operation: fix_grammar
             Analyze the text below and return structured JSON with a results array.
-            Each result item should include type, title, text, replacement, explanation, range, and confidence when applicable.
+            Each result item should include type, title, text, replacement, explanation, category, range, and confidence when applicable.
             Preserve the original meaning and tone.
 
             Text:

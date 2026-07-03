@@ -31,8 +31,8 @@ struct PlaygroundView: View {
         return "Yesterday I has a apple before the meeting, and ths message still sound wrong when I send it to the client."
     }
 
-    private var proofCard: KeyboardCorrectionCard {
-        KeyboardCorrectionCard(correction: KeyboardCorrectionSuggestion(
+    private var proofCard: PlaygroundKeyboardCorrectionCard {
+        PlaygroundKeyboardCorrectionCard(correction: KeyboardCorrectionSuggestion(
             label: "Subject-verb agreement",
             original: "has",
             replacement: "have",
@@ -131,7 +131,7 @@ struct PlaygroundView: View {
         """
         do {
             let response = try KeyboardSuggestionParser.parseAssistantContent(content)
-            let cards = response.corrections.map(KeyboardCorrectionCard.init(correction:))
+            let cards = response.corrections.map(PlaygroundKeyboardCorrectionCard.init(correction:))
             regressionResult = cards.isEmpty ? .failure("Analysis failed. No usable suggestions were returned for broken input.") : .suggestions(cards)
         } catch {
             regressionResult = .failure("Analysis failed. The model output was unusable for this broken input.")
@@ -167,7 +167,7 @@ struct PlaygroundView: View {
     }
 }
 
-private struct KeyboardCorrectionCard: Equatable, Identifiable {
+private struct PlaygroundKeyboardCorrectionCard: Equatable, Identifiable {
     let id: String
     let categoryTitle: String
     let original: String
@@ -188,7 +188,7 @@ private struct KeyboardCorrectionCard: Equatable, Identifiable {
 }
 
 private enum PlaygroundAnalysisResult: Equatable {
-    case suggestions([KeyboardCorrectionCard])
+    case suggestions([PlaygroundKeyboardCorrectionCard])
     case failure(String)
     case allGood
 }
@@ -235,7 +235,7 @@ private struct PlaygroundAnalysisResultView: View {
 
 
 private struct PlaygroundCorrectionCarousel: View {
-    let cards: [KeyboardCorrectionCard]
+    let cards: [PlaygroundKeyboardCorrectionCard]
     @State private var currentIndex = 0
 
     private var clampedIndex: Int {
@@ -352,7 +352,7 @@ private struct PlaygroundGatewayProofCard: View {
 }
 
 private struct PlaygroundCorrectionProofCard: View {
-    let card: KeyboardCorrectionCard
+    let card: PlaygroundKeyboardCorrectionCard
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

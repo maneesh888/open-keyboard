@@ -150,7 +150,7 @@ struct LiveAITestHarnessView: View {
 
     private static let structuredOperationSystemPrompt = """
     You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|improve","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Contract: {"operation":"fix_grammar|summarize|improve","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
     Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
     """
 
@@ -159,7 +159,7 @@ struct LiveAITestHarnessView: View {
         case "fix_grammar":
             return """
             Operation: fix_grammar
-            Analyze this text and return structured JSON with a results array of correction items. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+            Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
 
             Text:
             \(text)

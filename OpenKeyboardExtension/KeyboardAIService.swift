@@ -41,7 +41,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .fixGrammar:
             return """
             Operation: fix_grammar
-            Analyze this text and return structured JSON with a results array of correction items. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
+            Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
 
             Text:
             \(text)
@@ -133,7 +133,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
     private static let structuredOperationSystemPrompt = """
     You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
     Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
     """
 
@@ -158,6 +158,8 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
         let body = ChatRequest(
             model: config.selectedModel,
+            operation: operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            inputText: inputText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             messages: [
                 ChatMessage(role: "system", content: systemPrompt),
                 ChatMessage(role: "user", content: trimmed)
@@ -184,6 +186,8 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
 private struct ChatRequest: Encodable {
     let model: String
+    let operation: String?
+    let inputText: String?
     let messages: [ChatMessage]
     let maxTokens: Int
     let temperature: Double
@@ -191,6 +195,8 @@ private struct ChatRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case model
+        case operation
+        case inputText = "input_text"
         case messages
         case maxTokens = "max_tokens"
         case temperature
@@ -208,5 +214,11 @@ private struct ChatResponse: Decodable {
 
     struct Choice: Decodable {
         let message: ChatMessage
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

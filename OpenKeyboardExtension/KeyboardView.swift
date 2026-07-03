@@ -14,6 +14,7 @@ struct KeyboardView: View {
                 state: viewModel.toolbarState,
                 isPerformingAIAction: viewModel.isPerformingAIAction,
                 actionsEnabled: viewModel.canRunAIAction,
+                onStatus: { viewModel.showCorrectionDetail() },
                 onSparkle: { viewModel.showActionPanel() }
             )
 
@@ -26,12 +27,6 @@ struct KeyboardView: View {
                         onCopyDetails: { viewModel.copyActionErrorDetails() },
                         onDismiss: { viewModel.clearActionError() }
                     )
-                } else if let correction = viewModel.currentCorrection {
-                    CorrectionDetailPanel(
-                        correction: correction,
-                        onApply: { viewModel.applyCurrentCorrection() },
-                        onDismiss: { viewModel.dismissCurrentCorrection() }
-                    )
                 } else {
                     keyGrid
                 }
@@ -41,6 +36,22 @@ struct KeyboardView: View {
                     onAction: { viewModel.performAIAction($0) },
                     onBackToKeyboard: { viewModel.showKeyboardPanel() }
                 )
+            case .correctionDetail:
+                if let card = viewModel.currentCorrectionCard {
+                    CorrectionDetailPanel(
+                        card: card,
+                        progressText: viewModel.suggestionState?.correctionProgressText,
+                        canMovePrevious: viewModel.suggestionState?.canMoveToPreviousCorrection ?? false,
+                        canMoveNext: viewModel.suggestionState?.canMoveToNextCorrection ?? false,
+                        onPrevious: { viewModel.moveToPreviousSuggestion() },
+                        onNext: { viewModel.moveToNextSuggestion() },
+                        onApply: { viewModel.applyCurrentCorrection() },
+                        onDismiss: { viewModel.dismissCurrentCorrection() },
+                        onBackToKeyboard: { viewModel.showKeyboardPanel() }
+                    )
+                } else {
+                    keyGrid
+                }
             case .correctionComplete:
                 CorrectionCompletePanel(onBackToKeyboard: { viewModel.showKeyboardPanel() })
             }
@@ -50,7 +61,10 @@ struct KeyboardView: View {
         .padding(.top, 8)
         .padding(.bottom, 6)
         .background(KeyboardColors.keyboardBackground)
-        .onAppear { viewModel.reloadConfig() }
+        .onAppear {
+            viewModel.reloadConfig()
+            viewModel.refreshSeededSuggestionStateForUITests()
+        }
     }
 
     private var keyGrid: some View {
@@ -124,12 +138,18 @@ private struct KeyboardAIToolbar: View {
     let state: KeyboardToolbarState
     let isPerformingAIAction: Bool
     let actionsEnabled: Bool
+    let onStatus: () -> Void
     let onSparkle: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             statusIcon
-            statusContent
+            Button(action: onStatus) {
+                statusContent
+            }
+            .buttonStyle(.plain)
+            .disabled(!state.showsIssueCount)
+            .accessibilityIdentifier("ai_toolbar_status_action")
             sparkleButton
         }
         .frame(minHeight: 44)
@@ -142,22 +162,29 @@ private struct KeyboardAIToolbar: View {
     }
 
     private var statusIcon: some View {
-        ZStack {
-            if state.showsIssueCount {
-                Circle().fill(OpenKeyboardTheme.Semantic.error)
-                Text("\(state.issueCount)")
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
-            } else if state.showsBrandMark && actionsEnabled {
-                OpenKeyboardBrandMark(size: 36, symbolSize: 16)
-            } else {
-                Circle().fill(OpenKeyboardTheme.Surface.warningBackground)
-                Image(systemName: state.leadingSystemImage)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+        Button(action: onStatus) {
+            ZStack {
+                if state.showsIssueCount {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(OpenKeyboardTheme.Semantic.error)
+                    Text("\(state.issueCount)")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                } else if state.showsBrandMark && actionsEnabled {
+                    OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+                } else {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(OpenKeyboardTheme.Surface.warningBackground)
+                    Image(systemName: state.leadingSystemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                }
             }
+            .frame(width: 36, height: 36)
         }
-        .frame(width: 36, height: 36)
+        .buttonStyle(.plain)
+        .disabled(!state.showsIssueCount)
+        .accessibilityIdentifier(state.showsIssueCount ? "keyboard_issue_count_badge" : "keyboard_openkeyboard_icon")
         .accessibilityLabel(state.showsIssueCount ? "\(state.issueCount) writing suggestions" : "Open Keyboard status")
     }
 
@@ -369,90 +396,159 @@ private struct KeyboardActionErrorPanel: View {
 }
 
 private struct CorrectionDetailPanel: View {
-    let correction: KeyboardCorrectionSuggestion
+    let card: KeyboardCorrectionCard
+    let progressText: String?
+    let canMovePrevious: Bool
+    let canMoveNext: Bool
+    let onPrevious: () -> Void
+    let onNext: () -> Void
     let onApply: () -> Void
     let onDismiss: () -> Void
+    let onBackToKeyboard: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text(correction.label.isEmpty ? "Correct grammar" : correction.label)
-                    .font(.headline.weight(.bold))
-                    .lineLimit(1)
-                Spacer()
-                Text("1 issue")
-                    .font(.caption.weight(.bold))
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "shield.lefthalf.filled")
+                    .font(.system(size: 13, weight: .bold))
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(OpenKeyboardTheme.Semantic.error, in: Capsule())
+                    .frame(width: 24, height: 24)
+                    .background(OpenKeyboardTheme.Semantic.error)
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(card.categoryTitle)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(OpenKeyboardTheme.Text.primary)
+                        .lineLimit(1)
+                    if let progressText {
+                        Text(progressText)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                            .accessibilityIdentifier("keyboard_correction_progress")
+                            .accessibilityLabel("Correction \(progressText)")
+                    }
+                }
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Button(action: onPrevious) {
+                        Image(systemName: "chevron.left")
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canMovePrevious)
+                    .foregroundColor(canMovePrevious ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondary)
+                    .accessibilityIdentifier("keyboard_correction_previous")
+
+                    Button(action: onNext) {
+                        Image(systemName: "chevron.right")
+                            .frame(width: 26, height: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!canMoveNext)
+                    .foregroundColor(canMoveNext ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondary)
+                    .accessibilityIdentifier("keyboard_correction_next")
+                }
+                .font(.caption.weight(.bold))
+
+                Button(action: onBackToKeyboard) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 13, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .background(KeyboardColors.panelBackground.opacity(0.92))
+                .clipShape(Circle())
+                .accessibilityIdentifier("back_to_keyboard")
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Replace")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                Text(correction.original)
-                    .font(.body.weight(.semibold))
-                    .foregroundColor(OpenKeyboardTheme.Semantic.error.opacity(0.9))
-                    .strikethrough(color: OpenKeyboardTheme.Semantic.error)
-                    .accessibilityIdentifier("ai_correction_original")
-            }
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Text(card.original)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                        .strikethrough(true, color: OpenKeyboardTheme.Semantic.error)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .accessibilityIdentifier("ai_correction_original")
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("With")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                Text(correction.replacement)
-                    .font(.title3.weight(.bold))
-                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-                    .accessibilityIdentifier("ai_correction_replacement")
-            }
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
-            if let explanation = correction.explanation, !explanation.isEmpty {
-                Text(explanation)
+                    Text(card.replacement)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .accessibilityIdentifier("ai_correction_replacement")
+                }
+
+                Text(card.explanation)
                     .font(.caption)
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("ai_correction_explanation")
             }
+            .padding(.vertical, 4)
 
             HStack(spacing: 10) {
-                Button(action: onApply) {
-                    Text("Apply")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 42)
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                .background(OpenKeyboardTheme.Semantic.primaryAction)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .accessibilityIdentifier("ai_correction_apply")
-
                 Button(action: onDismiss) {
                     Text("Dismiss")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .font(.caption.weight(.semibold))
+                        .frame(minHeight: 34)
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(OpenKeyboardTheme.Semantic.error)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(OpenKeyboardTheme.Semantic.error, lineWidth: 1.2)
-                )
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 .accessibilityIdentifier("ai_correction_dismiss")
+
+                Spacer()
+
+                Button(action: onApply) {
+                    Text("Accept")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: 34)
+                        .background(OpenKeyboardTheme.Semantic.success)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ai_correction_apply")
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 182, alignment: .topLeading)
         .background(KeyboardColors.overlayBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(OpenKeyboardTheme.Semantic.error.opacity(0.55), lineWidth: 1.2)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(OpenKeyboardTheme.Semantic.primaryAction.opacity(0.35), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 28)
+                .onEnded { value in
+                    if value.translation.width < -36, canMoveNext {
+                        onNext()
+                    } else if value.translation.width > 36, canMovePrevious {
+                        onPrevious()
+                    }
+                }
+        )
         .accessibilityElement(children: .contain)
+        .accessibilityValue(progressText ?? "1 of 1")
         .accessibilityIdentifier("ai_correction_panel")
+        .accessibilityAction(named: "Next correction") {
+            if canMoveNext { onNext() }
+        }
+        .accessibilityAction(named: "Previous correction") {
+            if canMovePrevious { onPrevious() }
+        }
     }
 }
 

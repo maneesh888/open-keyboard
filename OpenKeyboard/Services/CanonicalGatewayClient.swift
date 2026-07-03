@@ -106,6 +106,8 @@ struct CanonicalGatewayClient {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
+            operation: operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            inputText: inputText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)
@@ -172,6 +174,8 @@ struct CanonicalGatewayClient {
 
 private struct CanonicalChatCompletionRequest: Encodable {
     let model: String
+    let operation: String?
+    let inputText: String?
     let messages: [CanonicalChatMessage]
     let maxTokens: Int
     let temperature: Double
@@ -179,6 +183,8 @@ private struct CanonicalChatCompletionRequest: Encodable {
 
     enum CodingKeys: String, CodingKey {
         case model, messages, temperature, stream
+        case operation
+        case inputText = "input_text"
         case maxTokens = "max_tokens"
     }
 }
@@ -197,5 +203,11 @@ private struct CanonicalChatCompletionResponse: Decodable {
 
     struct Message: Decodable {
         let content: String
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
     }
 }

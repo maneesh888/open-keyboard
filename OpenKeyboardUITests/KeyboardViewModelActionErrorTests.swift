@@ -140,6 +140,83 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "please make this better")
     }
 
+    func testConfiguredFlagWithoutCompleteRuntimeConfigBlocksKeyboardActions() {
+        let incompleteConfig = AppConfig(
+            apiKey: "",
+            gatewayURL: "https://mock.local.invalid",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let proxy = FakeTextDocumentProxy(text: "please make this better")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: FailingKeyboardAIService(),
+            loadConfig: { incompleteConfig },
+            productionTestFullAccess: true
+        )
+
+        XCTAssertFalse(viewModel.canRunAIAction)
+        XCTAssertEqual(viewModel.toolbarState.kind, .notConfigured)
+
+        viewModel.showActionPanel()
+        viewModel.performAIAction(.rewrite)
+
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.toolbarState.title, "Gateway not configured")
+        XCTAssertEqual(proxy.text, "please make this better")
+    }
+
+    func testFixGrammarStructuredCorrectionsOpenDetailWithoutReplacingText() async {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.fixGrammar)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertEqual(viewModel.suggestionState?.correctionCount, 2)
+        XCTAssertEqual(viewModel.suggestionState?.correctionProgressText, "1 of 2")
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+        XCTAssertEqual(proxy.text, "i has a apple and ths")
+    }
+
+    func testAcceptingCurrentVisibleCorrectionKeepsCarouselUntilComplete() async {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            advanceToNextInputMode: {},
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.fixGrammar)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        viewModel.moveToNextSuggestion()
+        XCTAssertEqual(viewModel.currentCorrection?.id, "spelling-this")
+
+        viewModel.applyCurrentCorrection()
+        XCTAssertEqual(proxy.text, "i has a apple and this")
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
+        XCTAssertNil(viewModel.suggestionState?.correctionProgressText)
+
+        viewModel.applyCurrentCorrection()
+        XCTAssertEqual(proxy.text, "i have a apple and this")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertNil(viewModel.suggestionState)
+    }
+
     private func assertGatewayFailureShowsErrorAndPreservesText(for action: KeyboardAIAction, file: StaticString = #filePath, line: UInt = #line) async {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
@@ -173,6 +250,65 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         supportsStructuredCorrections: true,
         structuredCorrectionSchemaVersion: "test"
     )
+
+    private static func structuredGrammarResult() -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "fix_grammar",
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "subject-verb",
+                    type: "correction",
+                    title: "Subject-verb agreement",
+                    text: "Use have.",
+                    original: "has",
+                    replacement: "have",
+                    explanation: "Use have for agreement.",
+                    category: "grammar"
+                ),
+                KeyboardActionOperationResult.Item(
+                    id: "spelling-this",
+                    type: "correction",
+                    title: "Spelling",
+                    text: "Correct the typo.",
+                    original: "ths",
+                    replacement: "this",
+                    explanation: "Correct the typo.",
+                    category: "spelling"
+                )
+            ],
+            summary: "Two issues.",
+            correctedText: nil,
+            isStructuredResponse: true
+        )
+    }
+
+    private func waitUntil(_ predicate: @MainActor @escaping () -> Bool) async {
+        for _ in 0..<100 {
+            if await predicate() { return }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Timed out waiting for async keyboard action")
+    }
+}
+
+private final class SuccessfulKeyboardAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        result.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        result.displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        result
+    }
 }
 
 private final class ErrorTextResultKeyboardAIService: KeyboardAIServiceProviding {

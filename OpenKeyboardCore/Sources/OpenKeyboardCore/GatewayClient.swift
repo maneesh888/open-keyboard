@@ -146,6 +146,8 @@ public final class GatewayClient: Sendable {
         let prompt = WritingPromptBuilder.prompt(for: action, text: text)
         let payload = ChatCompletionRequest(
             model: model,
+            operation: action.operationName,
+            inputText: text,
             messages: [
                 ChatMessage(role: "system", content: Self.structuredResultSystemPrompt),
                 ChatMessage(role: "user", content: prompt)
@@ -173,7 +175,7 @@ public final class GatewayClient: Sendable {
 
     private static let structuredResultSystemPrompt = """
     You are an iOS keyboard writing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite|...","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"..."}],"summary":"...","corrected_text":"..."}
+    Contract: {"operation":"fix_grammar|summarize|rewrite|...","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
     Use the requested operation and current text only. Unknown fields are allowed. Do not include markdown.
     """
 
@@ -390,11 +392,15 @@ private struct HealthResponse: Decodable {
 
 private struct ChatCompletionRequest: Encodable {
     let model: String
+    let operation: String
+    let inputText: String
     let messages: [ChatMessage]
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
         case model
+        case operation
+        case inputText = "input_text"
         case messages
         case stream
     }

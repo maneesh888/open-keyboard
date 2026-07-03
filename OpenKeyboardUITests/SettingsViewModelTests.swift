@@ -8,6 +8,19 @@ private enum RejectedGatewayFixture {
 
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
+    private var previousSecretStore: AppConfigSecretStore!
+
+    override func setUp() {
+        super.setUp()
+        previousSecretStore = AppConfig.secretStore
+        AppConfig.secretStore = SettingsInMemorySecretStore()
+    }
+
+    override func tearDown() {
+        AppConfig.secretStore = previousSecretStore
+        previousSecretStore = nil
+        super.tearDown()
+    }
 
 
 
@@ -220,6 +233,8 @@ final class SettingsViewModelTests: XCTestCase {
 
 
     func testSavedConfigStartsUnverifiedUntilLaunchValidationSucceeds() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.saved-success.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
         let config = AppConfig(
             apiKey: "working-key",
             gatewayURL: "https://gateway.example",
@@ -229,7 +244,7 @@ final class SettingsViewModelTests: XCTestCase {
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
-        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
 
         XCTAssertEqual(viewModel.connectionStatus, .unknown)
         XCTAssertTrue(viewModel.shouldShowGatewayValidationPending)
@@ -244,6 +259,8 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testSavedConfigLaunchValidationFailureKeepsCachedValuesButNotReady() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.saved-failure.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
         let config = AppConfig(
             apiKey: "working-key",
             gatewayURL: "https://gateway.example",
@@ -253,7 +270,7 @@ final class SettingsViewModelTests: XCTestCase {
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
         let tester = FakeGatewayTester(healthSucceeds: false)
-        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
@@ -266,6 +283,8 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testSavedConfigLaunchValidationRunsOnlyOnceAndGuardsConcurrentCalls() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.saved-once.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
         let config = AppConfig(
             apiKey: "working-key",
             gatewayURL: "https://gateway.example",
@@ -275,7 +294,7 @@ final class SettingsViewModelTests: XCTestCase {
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
-        let viewModel = SettingsViewModel(config: config, gatewayTester: tester)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
 
         await withTaskGroup(of: Void.self) { group in
             group.addTask { await viewModel.validateSavedGatewayOnceOnLaunch() }
@@ -542,6 +561,37 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.trustedModelLoaded)
     }
 
+    func testLaunchValidationPreservesPersistedGlobalGatewayErrorUntilRetry() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.global-error-launch.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        AppConfig.saveGatewayConnectionError("Keyboard detected gateway timeout", to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 0)
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, "Keyboard detected gateway timeout")
+        XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), "Keyboard detected gateway timeout")
+
+        await viewModel.retrySavedGatewayValidation()
+
+        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+    }
+
     func testFailedTestConnectionPersistsGlobalErrorForSettingsRetry() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.failure.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
@@ -580,6 +630,31 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
         XCTAssertEqual(secretStore.apiKey, "test-key")
+    }
+
+    func testSuccessfulGatewayValidationFailsIfSharedConfigCannotBePersisted() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.save-failure.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let oldSecretStore = AppConfig.secretStore
+        let secretStore = SettingsInMemorySecretStore()
+        secretStore.shouldFailSave = true
+        AppConfig.secretStore = secretStore
+        defer { AppConfig.secretStore = oldSecretStore }
+        let tester = FakeGatewayTester(healthSucceeds: true, models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, "Could not save gateway configuration. Check Keychain access and try again.")
+        XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), viewModel.errorMessage)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
+        XCTAssertNil(secretStore.apiKey)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
     func testModelValidationFallsBackWhenAppleFoundationModelFailsSmoke() async {
@@ -636,11 +711,13 @@ private func defaultsSuiteName(_ defaults: UserDefaults) -> String {
 
 private final class SettingsInMemorySecretStore: AppConfigSecretStore {
     var apiKey: String?
+    var shouldFailSave = false
 
     func loadAPIKey() -> String? { apiKey }
 
     @discardableResult
     func saveAPIKey(_ apiKey: String) -> Bool {
+        guard !shouldFailSave else { return false }
         self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return true
     }
