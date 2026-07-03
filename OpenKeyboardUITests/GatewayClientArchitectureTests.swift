@@ -106,6 +106,109 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))
     }
 
+    func testGatewayDiagnosticsRunsFullGatewayContractAndMeasuresPerformance() async throws {
+        let transport = NetworkManagerTestTransport([
+            .rawJSON(#"{"status":"ok"}"#),
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"verb","type":"correction","title":"Verb","text":"Use have.","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#),
+            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[{"label":"Suggestion","text":"tomorrow","kind":"nextWord"}]}"#),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Spelling","text":"Use definitely.","original":"definately","replacement":"definitely"},{"id":"2","type":"correction","title":"Spelling","text":"Use receive.","original":"recieve","replacement":"receive"},{"id":"3","type":"correction","title":"Spelling","text":"Use address.","original":"adress","replacement":"address"},{"id":"4","type":"correction","title":"Spelling","text":"Use tomorrow.","original":"tomorow","replacement":"tomorrow"}],"corrected_text":"I definitely receive the address tomorrow, and separate files won't upload because its receive limit is too low."}"#),
+            .chat(content: #"{"operation":"rewrite","results":[{"id":"rewrite","type":"suggestion","title":"Rewrite","text":"Hi team, the app has issues that need attention soon. Please check it when possible.","replacement":"Hi team, the app has issues that need attention soon. Please check it when possible."}],"corrected_text":"Hi team, the app has issues that need attention soon. Please check it when possible."}"#),
+            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard shares gateway configuration and validates the selected model."}],"summary":"The keyboard shares gateway configuration and validates the selected model."}"#),
+            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer and more helpful for the customer.","replacement":"This message is clearer and more helpful for the customer."}],"corrected_text":"This message is clearer and more helpful for the customer."}"#)
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        let report = await manager.runGatewayDiagnostics(
+            gatewayURL: "gateway.example/v1",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertFalse(report.hasFailures)
+        XCTAssertEqual(report.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertEqual(report.passedCount, 8)
+        XCTAssertEqual(report.checks.count, 8)
+        XCTAssertEqual(report.measuredDurations.count, 8)
+        XCTAssertEqual(transport.requests.map { $0.url?.path }, [
+            "/health",
+            "/v1/models",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions"
+        ])
+
+        let chatBodies = try transport.requests.dropFirst(2).map { request -> [String: Any] in
+            let body = try XCTUnwrap(request.httpBody)
+            return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        }
+        XCTAssertEqual(chatBodies.compactMap { $0["model"] as? String }, Array(repeating: "gpt-oss:120b-cloud", count: 6))
+        XCTAssertEqual(chatBodies.map { $0["operation"] as? String }, ["fix_grammar", nil, "fix_grammar", "rewrite", "summarize", "rewrite"])
+        XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [1600, 1200, 5000, 3000, 2000, 3000])
+        XCTAssertEqual(chatBodies.map { $0["stream"] as? Bool }, Array(repeating: false, count: 6))
+        XCTAssertNil(chatBodies[1]["input_text"])
+        XCTAssertEqual(chatBodies[4]["operation"] as? String, "summarize")
+        XCTAssertEqual(chatBodies[5]["operation"] as? String, "rewrite")
+        let improveMessages = try XCTUnwrap(chatBodies[5]["messages"] as? [[String: Any]])
+        let improvePrompt = try XCTUnwrap(improveMessages.last?["content"] as? String)
+        XCTAssertTrue(improvePrompt.contains("Improve this text"))
+    }
+
+    func testGatewayDiagnosticsContinueWhenHealthFailsButModelsPass() async throws {
+        let transport = NetworkManagerTestTransport([
+            .status(404),
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"verb","type":"correction","title":"Verb","text":"Use have.","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#),
+            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Spelling","text":"Use definitely.","original":"definately","replacement":"definitely"},{"id":"2","type":"correction","title":"Spelling","text":"Use receive.","original":"recieve","replacement":"receive"},{"id":"3","type":"correction","title":"Spelling","text":"Use address.","original":"adress","replacement":"address"}],"corrected_text":"I definitely receive the address tomorrow."}"#),
+            .chat(content: #"{"operation":"rewrite","results":[{"id":"rewrite","type":"suggestion","title":"Rewrite","text":"Hi team, please check the app issue soon.","replacement":"Hi team, please check the app issue soon."}],"corrected_text":"Hi team, please check the app issue soon."}"#),
+            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard validates gateway requests."}],"summary":"The keyboard validates gateway requests."}"#),
+            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer for the customer.","replacement":"This message is clearer for the customer."}],"corrected_text":"This message is clearer for the customer."}"#)
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        let report = await manager.runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertTrue(report.hasFailures)
+        XCTAssertEqual(report.failedCount, 1)
+        XCTAssertEqual(report.passedCount, 7)
+        XCTAssertEqual(report.checks.first?.id, "health")
+        XCTAssertEqual(report.checks.first?.status, .failed)
+        XCTAssertEqual(transport.requests.count, 8)
+        XCTAssertEqual(transport.requests.suffix(6).map { $0.url?.path }, Array(repeating: "/v1/chat/completions", count: 6))
+    }
+
+    func testGatewayDiagnosticsFailsPlainTextActionBecauseJSONIsRequired() async throws {
+        let transport = NetworkManagerTestTransport([
+            .rawJSON(#"{"status":"ok"}"#),
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"verb","type":"correction","title":"Verb","text":"Use have.","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#),
+            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Spelling","text":"Use definitely.","original":"definately","replacement":"definitely"},{"id":"2","type":"correction","title":"Spelling","text":"Use receive.","original":"recieve","replacement":"receive"},{"id":"3","type":"correction","title":"Spelling","text":"Use address.","original":"adress","replacement":"address"}],"corrected_text":"I definitely receive the address tomorrow."}"#),
+            .chat(content: "Hi team, please check the app issue soon."),
+            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard validates gateway requests."}],"summary":"The keyboard validates gateway requests."}"#),
+            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer for the customer.","replacement":"This message is clearer for the customer."}],"corrected_text":"This message is clearer for the customer."}"#)
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        let report = await manager.runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        let rewriteCheck = try XCTUnwrap(report.checks.first { $0.id == "rewrite-json" })
+        XCTAssertEqual(rewriteCheck.status, .failed)
+        XCTAssertEqual(rewriteCheck.message, "rewrite did not return valid app JSON.")
+    }
+
     @MainActor
     func testViewModelFallsBackAcrossRealNetworkManagerSmokePath() async throws {
         let suiteName = "NetworkManagerGatewayTests.fallback.\(UUID().uuidString)"

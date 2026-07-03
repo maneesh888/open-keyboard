@@ -13,6 +13,7 @@ protocol GatewayConnectionTesting {
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String]
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws
+    func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport
 }
 
 extension NetworkManager: GatewayConnectionTesting {}
@@ -27,6 +28,8 @@ class SettingsViewModel: ObservableObject {
     @Published var connectionStatus: ConnectionStatus = .unknown
     @Published var errorMessage: String?
     @Published var onboardingResetMessage: String?
+    @Published var isRunningDiagnostics = false
+    @Published var diagnosticReport: GatewayDiagnosticReport?
     @Published private(set) var showsValidatedGatewayDetails: Bool
     
     enum ConnectionStatus: Equatable {
@@ -74,6 +77,7 @@ class SettingsViewModel: ObservableObject {
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         errorMessage = sharedError
         showsValidatedGatewayDetails = false
+        diagnosticReport = nil
         connectionStatus = sharedError == nil ? .unknown : .failure
         hasValidatedSavedGatewayThisLaunch = false
     }
@@ -111,6 +115,11 @@ class SettingsViewModel: ObservableObject {
 
     var canTestConnection: Bool {
         guard !isTestingConnection else { return false }
+        guard !isRunningDiagnostics else { return false }
+        return hasCompleteGatewayDraft
+    }
+
+    private var hasCompleteGatewayDraft: Bool {
         guard normalizedGatewayURLInputOrNil != nil else { return false }
         return !apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -158,6 +167,7 @@ class SettingsViewModel: ObservableObject {
         let draftAPIKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard draftGatewayURL != config.gatewayURL || draftAPIKey != config.apiKey else { return }
         showsValidatedGatewayDetails = false
+        diagnosticReport = nil
         if connectionStatus == .success || connectionStatus == .checking { connectionStatus = .unknown }
     }
 
@@ -180,6 +190,7 @@ class SettingsViewModel: ObservableObject {
     func testConnection() async {
         guard !isTestingConnection else { return }
         showsValidatedGatewayDetails = false
+        diagnosticReport = nil
         isTestingConnection = true
         connectionStatus = .checking
         errorMessage = nil
@@ -256,6 +267,46 @@ class SettingsViewModel: ObservableObject {
         }
 
         isTestingConnection = false
+    }
+
+    func runDiagnostics() async {
+        guard canRunDiagnostics else { return }
+        isRunningDiagnostics = true
+        diagnosticReport = nil
+        await Task.yield()
+
+        do {
+            let draftGatewayURL = try NetworkManager.normalizedGatewayBaseURLString(gatewayURLInput)
+            let draftAPIKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            gatewayURLInput = draftGatewayURL
+            guard !draftAPIKey.isEmpty else { throw NetworkError.unauthorized }
+            let preferredModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            diagnosticReport = await gatewayTester.runGatewayDiagnostics(
+                gatewayURL: draftGatewayURL,
+                apiKey: draftAPIKey,
+                preferredModel: preferredModel
+            )
+        } catch {
+            diagnosticReport = GatewayDiagnosticReport(
+                selectedModel: config.selectedModel,
+                checks: [
+                    GatewayDiagnosticCheck(
+                        id: "diagnostic-input",
+                        title: "Configuration",
+                        endpoint: "-",
+                        status: .failed,
+                        durationMilliseconds: nil,
+                        message: (error as? NetworkError)?.localizedDescription ?? error.localizedDescription
+                    )
+                ]
+            )
+        }
+
+        isRunningDiagnostics = false
+    }
+
+    var canRunDiagnostics: Bool {
+        hasCompleteGatewayDraft && !isRunningDiagnostics
     }
 
     private func failConnection(with message: String) {

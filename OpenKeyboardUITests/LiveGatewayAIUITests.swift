@@ -25,7 +25,7 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         app.buttons["live_ai_fix_grammar_button"].tap()
 
         let status = app.staticTexts["live_ai_status"]
-        XCTAssertTrue(status.waitForText("Success", timeout: 60))
+        XCTAssertTrue(status.waitForText("Success", timeout: 90))
 
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -43,7 +43,7 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         app.buttons["live_ai_improve_button"].tap()
 
         let status = app.staticTexts["live_ai_status"]
-        XCTAssertTrue(status.waitForText("Success", timeout: 60))
+        XCTAssertTrue(status.waitForText("Success", timeout: 90))
 
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

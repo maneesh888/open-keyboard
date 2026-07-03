@@ -114,6 +114,50 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(header: Label("Gateway Diagnostics", systemImage: "waveform.path.ecg")) {
+                    Text("Run the full gateway contract check when basic connection passes but keyboard AI behavior needs deeper verification.")
+                        .font(.footnote)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+
+                    Button(action: {
+                        dismissKeyboard()
+                        Task {
+                            await viewModel.runDiagnostics()
+                        }
+                    }) {
+                        HStack {
+                            if viewModel.isRunningDiagnostics {
+                                ProgressView()
+                                    .padding(.trailing, 8)
+                            }
+
+                            Text(viewModel.isRunningDiagnostics ? "Diagnosing..." : "Diagnose Gateway")
+                        }
+                    }
+                    .disabled(!viewModel.canRunDiagnostics)
+                    .accessibilityIdentifier("settings_diagnose_gateway")
+
+                    if let report = viewModel.diagnosticReport {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text("Model")
+                            Spacer(minLength: 12)
+                            Text(report.selectedModel.isEmpty ? "Unavailable" : report.selectedModel)
+                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+
+                        Text(report.summary)
+                            .font(.footnote)
+                            .foregroundColor(report.hasFailures ? OpenKeyboardTheme.Semantic.error : OpenKeyboardTheme.Semantic.success)
+                            .accessibilityIdentifier("settings_gateway_diagnostic_summary")
+
+                        ForEach(report.checks) { check in
+                            GatewayDiagnosticRow(check: check)
+                        }
+                    }
+                }
+
                 Section(header: Label("Privacy & Full Access", systemImage: "lock.shield.fill")) {
                     Text("Basic typing stays local on the keyboard. Full Access is only needed for AI actions so Open Keyboard can send bounded text/context to your configured gateway and receive suggestions. Text sent to the gateway may follow that gateway or model provider logging policy.")
                         .font(.footnote)
@@ -183,6 +227,49 @@ struct SettingsView: View {
         focusedField = nil
     }
 
+}
+
+private struct GatewayDiagnosticRow: View {
+    let check: GatewayDiagnosticCheck
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label(check.title, systemImage: statusIcon)
+                    .foregroundColor(statusColor)
+                Spacer(minLength: 12)
+                Text(check.durationDisplay)
+                    .font(.caption.monospacedDigit())
+                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+            }
+
+            Text(check.endpoint)
+                .font(.caption)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+
+            Text(check.message)
+                .font(.footnote)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var statusIcon: String {
+        switch check.status {
+        case .passed: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .skipped: return "minus.circle.fill"
+        }
+    }
+
+    private var statusColor: Color {
+        switch check.status {
+        case .passed: return OpenKeyboardTheme.Semantic.success
+        case .failed: return OpenKeyboardTheme.Semantic.error
+        case .skipped: return OpenKeyboardTheme.Text.secondaryStrong
+        }
+    }
 }
 
 struct SettingsView_Previews: PreviewProvider {

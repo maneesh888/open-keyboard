@@ -35,7 +35,7 @@ struct LiveAITestHarnessView: View {
                     .accessibilityIdentifier("live_ai_fix_grammar_button")
 
                     Button {
-                        run(action: "improve")
+                        run(action: "rewrite")
                     } label: {
                         Label("Improve", systemImage: "sparkles")
                             .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct LiveAITestHarnessView: View {
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 45
+        request.timeoutInterval = 90
 
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: model,
@@ -121,7 +121,7 @@ struct LiveAITestHarnessView: View {
                 ChatMessage(role: "system", content: Self.structuredOperationSystemPrompt),
                 ChatMessage(role: "user", content: prompt(for: action, text: text))
             ],
-            maxTokens: 1600,
+            maxTokens: maxTokens(for: action),
             temperature: 0.1,
             stream: false
         ))
@@ -150,7 +150,7 @@ struct LiveAITestHarnessView: View {
 
     private static let structuredOperationSystemPrompt = """
     You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|improve","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
+    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
     Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
     """
 
@@ -164,10 +164,10 @@ struct LiveAITestHarnessView: View {
             Text:
             \(text)
             """
-        case "improve":
+        case "rewrite":
             return """
-            Operation: improve
-            Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a suggestion item and corrected_text for the full replacement.
+            Operation: rewrite
+            Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
 
             Text:
             \(text)
@@ -180,6 +180,19 @@ struct LiveAITestHarnessView: View {
             Text:
             \(text)
             """
+        default:
+            throw LiveAITestHarnessError.unsupportedAction
+        }
+    }
+
+    private func maxTokens(for action: String) throws -> Int {
+        switch action {
+        case "fix_grammar":
+            return 5_000
+        case "rewrite":
+            return 3_000
+        case "summarize":
+            return 2_000
         default:
             throw LiveAITestHarnessError.unsupportedAction
         }

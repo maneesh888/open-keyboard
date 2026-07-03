@@ -521,6 +521,16 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canTestConnection)
     }
 
+    func testDiagnosticsCanRunWhileBasicConnectionTestIsBusy() {
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
+        viewModel.updateGatewayURLInput("gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+        viewModel.isTestingConnection = true
+
+        XCTAssertFalse(viewModel.canTestConnection)
+        XCTAssertTrue(viewModel.canRunDiagnostics)
+    }
+
     func testBareGatewayURLNormalizesBeforeTestingAndSaving() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
@@ -657,6 +667,39 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
+    func testGatewayDiagnosticUsesDraftConfigWithoutSavingOrMarkingConnectionReady() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.diagnostic.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let tester = FakeGatewayTester(models: ["gpt-oss:120b-cloud"])
+        tester.diagnosticReport = GatewayDiagnosticReport(
+            selectedModel: "gpt-oss:120b-cloud",
+            checks: [
+                GatewayDiagnosticCheck(
+                    id: "models",
+                    title: "Models",
+                    endpoint: "GET /v1/models",
+                    status: .passed,
+                    durationMilliseconds: 12,
+                    message: "Loaded 1 model."
+                )
+            ]
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.runDiagnostics()
+
+        XCTAssertFalse(viewModel.isRunningDiagnostics)
+        XCTAssertEqual(viewModel.diagnosticReport, tester.diagnosticReport)
+        XCTAssertEqual(tester.diagnosticGatewayURL, "https://gateway.example")
+        XCTAssertEqual(tester.diagnosticAPIKey, "test-key")
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+    }
+
     func testModelValidationFallsBackWhenAppleFoundationModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
@@ -739,6 +782,10 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     private(set) var testedGatewayURLs: [String] = []
     private(set) var healthChecks = 0
     private(set) var modelFetches = 0
+    var diagnosticReport = GatewayDiagnosticReport(selectedModel: "gpt-oss:120b-cloud", checks: [])
+    private(set) var diagnosticGatewayURL: String?
+    private(set) var diagnosticAPIKey: String?
+    private(set) var diagnosticPreferredModel: String?
     var fetchedGatewayURL: String? { testedGatewayURLs.last }
 
     init(healthSucceeds: Bool = true, models: [String] = [], smokeSucceeds: Bool = true, failingSmokeModels: Set<String> = []) {
@@ -764,5 +811,12 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         smokeModel = model
         smokeModels.append(model)
         if !smokeSucceeds || failingSmokeModels.contains(model) { throw NetworkError.unusableCorrection }
+    }
+
+    func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport {
+        diagnosticGatewayURL = gatewayURL
+        diagnosticAPIKey = apiKey
+        diagnosticPreferredModel = preferredModel
+        return diagnosticReport
     }
 }

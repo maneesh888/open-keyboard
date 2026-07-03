@@ -36,6 +36,17 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         }
     }
 
+    var maxTokens: Int {
+        switch self {
+        case .fixGrammar:
+            return 5_000
+        case .rewrite:
+            return 3_000
+        case .summarize:
+            return 2_000
+        }
+    }
+
     func prompt(for text: String) -> String {
         switch self {
         case .fixGrammar:
@@ -105,7 +116,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     }
 
     private func performRawSuggestionRequest(prompt: String, config: AppConfig) async throws -> String {
-        try await performRequest(systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.", userPrompt: prompt, maxTokens: 360, config: config)
+        try await performRequest(systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.", userPrompt: prompt, maxTokens: 1_200, config: config)
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -121,7 +132,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             userPrompt: action.prompt(for: text),
             operation: action.operationName,
             inputText: text,
-            maxTokens: 1600,
+            maxTokens: action.maxTokens,
             config: config
         )
         do {
@@ -152,7 +163,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45
+        request.timeoutInterval = 90
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
