@@ -27,10 +27,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func installKeyboardView() {
         let viewModel = KeyboardViewModel(
-            textDocumentProxy: textDocumentProxy,
-            advanceToNextInputMode: { [weak self] in
-                self?.advanceToNextInputMode()
-            }
+            textDocumentProxy: textDocumentProxy
         )
         self.viewModel = viewModel
 

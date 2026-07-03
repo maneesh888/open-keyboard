@@ -9,7 +9,6 @@ import UIKit
 @MainActor
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
-    private let advanceToNextInputMode: () -> Void
     private let aiService: KeyboardAIServiceProviding
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
@@ -83,7 +82,6 @@ final class KeyboardViewModel: ObservableObject {
 
     init(
         textDocumentProxy: UITextDocumentProxy,
-        advanceToNextInputMode: @escaping () -> Void,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
@@ -91,7 +89,6 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisDelayNanoseconds: UInt64 = 2_500_000_000
     ) {
         self.textDocumentProxy = textDocumentProxy
-        self.advanceToNextInputMode = advanceToNextInputMode
         self.aiService = aiService
         self.loadConfig = loadConfig
         self.loadGatewayConnectionError = loadGatewayConnectionError
@@ -151,10 +148,6 @@ final class KeyboardViewModel: ObservableObject {
     func toggleNumbers() {
         isNumbersEnabled.toggle()
         isShiftEnabled = false
-    }
-
-    func switchKeyboard() {
-        advanceToNextInputMode()
     }
 
     func showActionPanel() {

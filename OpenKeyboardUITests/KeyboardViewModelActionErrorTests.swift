@@ -20,7 +20,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: FailingKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
@@ -57,7 +56,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "i has a apple,ths is nt sound sound")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: InvalidRawResponseKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
@@ -85,7 +83,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: original)
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: ErrorTextResultKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
@@ -122,7 +119,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: FailingKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             loadGatewayConnectionError: { "Gateway timed out. Open the app to retry." },
@@ -152,7 +148,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: FailingKeyboardAIService(),
             loadConfig: { incompleteConfig },
             productionTestFullAccess: true
@@ -173,7 +168,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
@@ -193,7 +187,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true,
@@ -219,7 +212,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: SuccessfulKeyboardAIService(result: Self.noIssueGrammarResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true,
@@ -246,7 +238,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
@@ -274,7 +265,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            advanceToNextInputMode: {},
             aiService: FailingKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true

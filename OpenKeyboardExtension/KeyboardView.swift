@@ -107,12 +107,6 @@ struct KeyboardView: View {
                     .frame(width: 58)
                     .accessibilityIdentifier("keyboard_key_numbers")
 
-                KeyButton(label: "🌐", role: .modifier) {
-                    viewModel.switchKeyboard()
-                }
-                    .frame(width: 52)
-                    .accessibilityIdentifier("keyboard_key_next_keyboard")
-
                 KeyButton(label: "space", role: .space) {
                     viewModel.insertSpace()
                 }

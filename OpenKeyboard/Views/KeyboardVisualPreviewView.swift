@@ -280,7 +280,6 @@ struct KeyboardVisualPreviewView: View {
 
             HStack(spacing: 6) {
                 previewKey("123", role: .modifier).frame(width: 58)
-                previewKey("🌐", role: .modifier).frame(width: 52)
                 previewKey("space", role: .space)
                 previewKey("return", role: .modifier).frame(width: 92)
             }
