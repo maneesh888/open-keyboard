@@ -134,6 +134,23 @@ private enum GatewayDiagnosticValidationError: LocalizedError {
 
 class NetworkManager {
     static let shared = NetworkManager()
+    static let correctionSmokeTestPhrases: [String] = [
+        "teh tiny robot has a sandwhich for brekfast",
+        "my keyboard definately knows alot about tacos",
+        "the sleepy astronaut recieve a pizza tomorow",
+        "i accidently taught the app to juggle banannas",
+        "this sentence is wierd but the gateway should fix it",
+        "our pocket wizard mispelled three words before lunch",
+        "the brave toaster is runing late becuase traffic",
+        "please seperate the spicy notes from teh soup",
+        "my freind says the cloud printer is realy fast",
+        "we will adress the bug after coffe arrives",
+        "the calendar forgot tommorow and wrote yestarday",
+        "this tiny app is recieveing a suprise message",
+        "i should of saved teh draft before testing",
+        "the button dissapeared untill i tapped it twice",
+        "my burrito report is missing its grammer"
+    ]
 
     private let transport: NetworkManagerTransporting
 
@@ -153,7 +170,7 @@ class NetworkManager {
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
-        let smokeInput = "i has a apple"
+        let smokeInput = Self.randomCorrectionSmokeTestPhrase()
         let content = try await chatCompletionContent(
             gatewayURL: gatewayURL,
             apiKey: apiKey,
@@ -165,7 +182,9 @@ class NetworkManager {
             maxTokens: 1600,
             timeoutInterval: 45
         )
-        guard Self.isUsableCorrectionSmokeResponse(content) else {
+        do {
+            _ = try Self.validateStructuredActionContent(content, operation: "fix_grammar", fallbackText: smokeInput, requireChangedOutput: true)
+        } catch {
             throw NetworkError.unusableCorrection
         }
     }
@@ -202,7 +221,7 @@ class NetworkManager {
             return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
         }
 
-        let settingsSmokeInput = "i has a apple"
+        let settingsSmokeInput = Self.randomCorrectionSmokeTestPhrase()
         checks.append(await chatDiagnosticCheck(
             id: "settings-correction-smoke",
             title: "Settings correction",
@@ -216,10 +235,7 @@ class NetworkManager {
             maxTokens: 1600
         ) { content in
             let result = try Self.validateStructuredActionContent(content, operation: "fix_grammar", fallbackText: settingsSmokeInput, requireChangedOutput: true)
-            guard Self.isUsableCorrectionSmokeResponse("\(content)\n\(result.displayText)") else {
-                throw NetworkError.unusableCorrection
-            }
-            return "Correction smoke returned usable structured JSON."
+            return "Correction smoke returned usable structured JSON for: \"\(settingsSmokeInput)\""
         })
 
         let suggestionInput = "i definately recieve teh adress tomorow"
@@ -319,6 +335,10 @@ class NetworkManager {
 
     static func isUsableCorrectionSmokeResponse(_ value: String) -> Bool {
         CanonicalGatewayClient.isUsableCorrectionSmokeResponse(value)
+    }
+
+    static func randomCorrectionSmokeTestPhrase() -> String {
+        correctionSmokeTestPhrases.randomElement() ?? "i has a apple"
     }
 
     static func normalizedGatewayBaseURLString(_ value: String) throws -> String {

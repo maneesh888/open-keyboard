@@ -128,7 +128,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testCorrectionSmokeBuildsAuthenticatedChatCompletionRequest() async throws {
-        let transport = NetworkManagerTestTransport(.chat(content: "I have an apple."))
+        let transport = NetworkManagerTestTransport(.chat(content: #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix typo.","original":"teh","replacement":"the"}],"corrected_text":"The tiny robot has a sandwich for breakfast."}"#))
         let manager = NetworkManager(transport: transport)
 
         try await manager.testCorrectionSmoke(
@@ -148,7 +148,8 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["model"] as? String, "gpt-oss:120b-cloud")
         XCTAssertEqual(json["operation"] as? String, "fix_grammar")
-        XCTAssertEqual(json["input_text"] as? String, "i has a apple")
+        let smokeInput = try XCTUnwrap(json["input_text"] as? String)
+        XCTAssertTrue(NetworkManager.correctionSmokeTestPhrases.contains(smokeInput))
         XCTAssertEqual(json["max_tokens"] as? Int, 1600)
         XCTAssertEqual(json["temperature"] as? Double, 0.1)
         XCTAssertEqual(json["stream"] as? Bool, false)
@@ -156,7 +157,30 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
         XCTAssertTrue((messages.first?["content"] as? String)?.contains("Return strict JSON only") == true)
         XCTAssertTrue((messages.last?["content"] as? String)?.contains("Operation: fix_grammar") == true)
-        XCTAssertTrue((messages.last?["content"] as? String)?.contains("i has a apple") == true)
+        XCTAssertTrue((messages.last?["content"] as? String)?.contains(smokeInput) == true)
+    }
+
+    func testCorrectionSmokeTestPhrasesAreCuratedTypoInputs() {
+        let phrases = NetworkManager.correctionSmokeTestPhrases
+        let typoMarkers = [
+            "teh", "sandwhich", "brekfast", "definately", "alot",
+            "recieve", "tomorow", "accidently", "banannas", "wierd",
+            "mispelled", "runing", "becuase", "seperate", "freind",
+            "realy", "adress", "coffe", "tommorow", "yestarday",
+            "recieveing", "suprise", "should of", "dissapeared",
+            "untill", "grammer"
+        ]
+
+        XCTAssertGreaterThanOrEqual(phrases.count, 12)
+        XCTAssertEqual(Set(phrases).count, phrases.count)
+        for phrase in phrases {
+            let normalized = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
+            XCTAssertFalse(normalized.isEmpty)
+            XCTAssertTrue(
+                typoMarkers.contains { normalized.localizedCaseInsensitiveContains($0) },
+                "\(phrase) should contain at least one known typo marker."
+            )
+        }
     }
 
     func testFetchModelsMapsAuthServerAndMalformedResponses() async throws {
@@ -215,6 +239,11 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(chatBodies.map { $0["operation"] as? String }, ["fix_grammar", nil, "fix_grammar", "rewrite", "summarize", "rewrite"])
         XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [1600, 1200, 5000, 3000, 2000, 3000])
         XCTAssertEqual(chatBodies.map { $0["stream"] as? Bool }, Array(repeating: false, count: 6))
+        let settingsSmokeInput = try XCTUnwrap(chatBodies[0]["input_text"] as? String)
+        XCTAssertTrue(NetworkManager.correctionSmokeTestPhrases.contains(settingsSmokeInput))
+        let settingsMessages = try XCTUnwrap(chatBodies[0]["messages"] as? [[String: Any]])
+        XCTAssertTrue((settingsMessages.last?["content"] as? String)?.contains(settingsSmokeInput) == true)
+        XCTAssertTrue(report.checks[2].message.contains(settingsSmokeInput))
         XCTAssertNil(chatBodies[1]["input_text"])
         XCTAssertEqual(chatBodies[4]["operation"] as? String, "summarize")
         XCTAssertEqual(chatBodies[5]["operation"] as? String, "rewrite")
@@ -289,7 +318,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .chat(content: "This sentence is already fine."),
-            .chat(content: "I have an apple.")
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix typo.","original":"teh","replacement":"the"}],"corrected_text":"The tiny robot has a sandwich for breakfast."}"#)
         ])
         let manager = NetworkManager(transport: transport)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: defaults)
