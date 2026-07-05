@@ -1,8 +1,37 @@
 # Open Keyboard
 
-Open Keyboard is a privacy-focused, open-source iOS keyboard with AI writing actions, paired with a self-hosted LLM Gateway. Basic typing stays local. When the user chooses an AI action, the keyboard sends the needed text/context to the gateway configured by the user and inserts the model response back into the current app.
+Open Keyboard is a privacy-focused, open-source iOS keyboard with AI writing tools, paired with a self-hosted LLM Gateway. Basic typing stays local. When the user chooses an AI action, the keyboard sends the needed text/context to the gateway configured by the user and inserts the model response back into the current app.
 
-> Status: active early implementation. The app, keyboard extension, shared configuration, gateway pairing, and first AI actions are buildable and tested, but the project is not production-ready yet.
+> Status: complete working prototype in active hardening. The app, keyboard extension, shared configuration, gateway pairing, grammar correction, and first AI writing tools are implemented and buildable. Current work is focused on keyboard polish, selected-text and paragraph handling, real-device validation, and release preparation.
+
+## Screenshots
+
+Public screenshot assets are served from the project page to keep this repository free of generated image artifacts.
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="https://myadidi.com/projects/open-keyboard-simulator-gateway-ready.png" alt="Open Keyboard app showing verified gateway configuration and selected model." width="180">
+      <br>
+      <sub>Gateway-ready app state</sub>
+    </td>
+    <td align="center">
+      <img src="https://myadidi.com/projects/open-keyboard-simulator-playground.png" alt="Open Keyboard playground with a text field and custom keyboard extension active." width="180">
+      <br>
+      <sub>Keyboard playground</sub>
+    </td>
+    <td align="center">
+      <img src="https://myadidi.com/projects/open-keyboard-simulator-grammar-review.png" alt="Open Keyboard grammar review flow with correction suggestions and accept controls." width="180">
+      <br>
+      <sub>Grammar review</sub>
+    </td>
+    <td align="center">
+      <img src="https://myadidi.com/projects/open-keyboard-simulator-improve-action.png" alt="Open Keyboard AI writing action flow with generated improvement text and action controls." width="180">
+      <br>
+      <sub>AI writing action</sub>
+    </td>
+  </tr>
+</table>
 
 ## What It Does
 
@@ -11,7 +40,7 @@ Open Keyboard is built for people who want AI writing help while keeping control
 - Provides a custom iOS keyboard extension for everyday typing.
 - Connects to a user-controlled LLM Gateway using a gateway URL and API key.
 - Loads the selected model from the configured gateway.
-- Exposes AI writing actions from the keyboard, currently including Fix Grammar, Rewrite, and Summarize.
+- Separates grammar and typo correction from broader AI writing tools such as Improve, Rephrase, and Summarize.
 - Stores the gateway API key in a shared Keychain access group.
 - Shares non-sensitive gateway settings with the keyboard extension through App Group storage.
 - Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
@@ -57,15 +86,15 @@ The keyboard extension currently includes:
 - SwiftUI keyboard UI
 - basic letter, number, symbol, space, return, delete, shift, and globe-key behavior
 - Full Access and gateway-configuration state in the toolbar
-- separate toolbar workflows for correction review and generative actions:
-  - the left toolbar status/logo area is for grammar and typo correction results. When automatic analysis finds issues, the badge opens the correction review flow.
-  - the right sparkle button is for generative actions such as Improve, Rephrase, and Summarize. Future generative actions such as Translate belong in this sparkle workflow, not in the correction badge flow.
-- an AI action panel opened from the sparkle button, with source text, selectable actions, and explicit Apply/back controls
+- separate toolbar workflows for correction review and AI writing actions:
+  - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
+  - AI writing tools handle Improve, Rephrase, and Summarize without mixing those actions into the correction review flow.
+- an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - rewrite/improvement options that are shown before replacement, with selected option state
-- replacement of the current line/context before the cursor through the replacement planner after the user applies a selected correction or rewrite
+- replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
 
-Current limitation: the active extension path uses the last line before the cursor as the main replacement unit. Broader selected-text, paragraph, and multi-action workflows are still being developed.
+Next focus: broader selected-text, paragraph, and multi-action workflows beyond the current line/context replacement path.
 
 ### OpenKeyboardCore
 
@@ -159,10 +188,13 @@ Do not commit live keys, local config, `.xctestrun` files containing secrets, or
 
 Recent local verification:
 
-- `swift test --package-path OpenKeyboardCore`: passed, with live tests skipped unless configured
-- `./scripts/ios/test.sh build`: passed for the iOS app and keyboard extension
+- `git diff --check`: passed
+- `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/openkeyboard-derived build-for-testing`: passed
+- `KeyboardSuggestionModelsTests`: passed
+- `KeyboardViewModelActionErrorTests`: passed
+- real extension configured smoke test for AI controls: passed
 
-The project still needs broader UI, real-device, live-gateway, prompt-quality verification, and a passing real-keyboard extension smoke before release. The current real-extension smoke reaches the actual keyboard/QWERTY UI but is blocked because the extension still reports `Gateway not configured`; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+The project still needs broader real-device, live-gateway, prompt-quality, release-signing, and App Store readiness verification before release. See `docs/REAL_EXTENSION_SMOKE_PLAN.md` for the focused simulator smoke route.
 
 ## Roadmap
 
@@ -170,7 +202,8 @@ The project still needs broader UI, real-device, live-gateway, prompt-quality ve
 
 - [x] Buildable host app and keyboard extension
 - [x] Basic typing keys, delete, space, return, shift, number/symbol toggle, and globe-key switching
-- [x] AI action panel in the keyboard extension
+- [x] Grammar correction review flow in the keyboard extension
+- [x] AI writing workflow in the keyboard extension
 - [ ] More complete keyboard layout and native-feeling key behavior
 - [ ] Haptics, animations, and dark-mode polish
 - [ ] Better selected-text and paragraph-level replacement behavior
@@ -182,15 +215,18 @@ The project still needs broader UI, real-device, live-gateway, prompt-quality ve
 - [x] Model discovery
 - [x] Shared App Group config for non-sensitive settings
 - [x] Shared Keychain storage for gateway API key
-- [ ] Runtime verification for shared Keychain/App Group behavior on simulator and device; current real-extension smoke is blocked on extension config visibility (`Gateway not configured`).
+- [x] Simulator smoke coverage for configured gateway state inside the keyboard extension
+- [ ] Broader real-device verification for shared Keychain/App Group behavior
 
 ### AI Writing
 
 - [x] Core prompt builders for grammar, rewrite, summarize, translate, continue writing, and custom templates
 - [x] Gateway chat-completion client in core
-- [x] Extension actions for Fix Grammar, Rewrite, and Summarize
+- [x] Extension workflows for grammar correction, Improve/Rephrase, and Summarize
+- [x] Suggestion selection, retry, copy, and accept controls for AI-generated writing improvements
+- [x] Regression coverage for grammar loading and correction replacement behavior
 - [ ] Continue writing and translate actions in the extension UI
-- [ ] Better loading, retry, offline, rate-limit, and invalid-key states
+- [ ] Broader offline, rate-limit, invalid-key, and guidance polish
 - [ ] Prompt-quality evaluation suite
 - [ ] Latency and quality checks across local and hosted models
 

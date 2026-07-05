@@ -6,6 +6,17 @@
 
 import SwiftUI
 
+private enum KeyboardVisualPreviewLayout {
+    static let toolbarHeight: CGFloat = 44
+    static let toolbarSpacing: CGFloat = 7
+    static let outerHorizontalPadding: CGFloat = 6
+    static let outerTopPadding: CGFloat = 8
+    static let outerBottomPadding: CGFloat = 6
+    static let expandedPanelMinHeight: CGFloat = 286
+    static let correctionDetailMinHeight: CGFloat = 232
+    static let correctionCompleteMinHeight: CGFloat = 226
+}
+
 struct KeyboardPreviewLabView: View {
     @State private var selectedState: KeyboardPreviewLabState = .ready
 
@@ -96,7 +107,7 @@ struct KeyboardVisualPreviewView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            VStack(spacing: showsToolbar ? 7 : 0) {
+            VStack(spacing: showsToolbar ? KeyboardVisualPreviewLayout.toolbarSpacing : 0) {
                 if showsToolbar {
                     previewToolbar
                 }
@@ -117,9 +128,9 @@ struct KeyboardVisualPreviewView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: showsToolbar ? nil : .infinity, alignment: .top)
-            .padding(.horizontal, showsToolbar ? 6 : 0)
-            .padding(.top, showsToolbar ? 8 : 0)
-            .padding(.bottom, showsToolbar ? 6 : 0)
+            .padding(.horizontal, showsToolbar ? KeyboardVisualPreviewLayout.outerHorizontalPadding : 0)
+            .padding(.top, showsToolbar ? KeyboardVisualPreviewLayout.outerTopPadding : 0)
+            .padding(.bottom, showsToolbar ? KeyboardVisualPreviewLayout.outerBottomPadding : 0)
             .background(OpenKeyboardTheme.Surface.keyboardBackground)
             .accessibilityIdentifier("keyboard_visual_preview")
         }
@@ -187,7 +198,7 @@ struct KeyboardVisualPreviewView: View {
                 .clipShape(Circle())
                 .accessibilityIdentifier("preview_ai_sparkle_action")
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: KeyboardVisualPreviewLayout.toolbarHeight)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(OpenKeyboardTheme.Surface.toolbarBackground)
@@ -294,6 +305,7 @@ struct KeyboardVisualPreviewView: View {
                 previewKey("return", role: .modifier).frame(width: 92)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .top)
         .accessibilityIdentifier("preview_keyboard_grid")
     }
 
@@ -333,7 +345,7 @@ struct KeyboardVisualPreviewView: View {
             }
         }
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 232, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.correctionDetailMinHeight, alignment: .topLeading)
         .background(OpenKeyboardTheme.Surface.overlayBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -390,7 +402,7 @@ struct KeyboardVisualPreviewView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
@@ -446,7 +458,7 @@ struct KeyboardVisualPreviewView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
@@ -514,7 +526,7 @@ struct KeyboardVisualPreviewView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, minHeight: 226)
+        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.correctionCompleteMinHeight)
         .background(OpenKeyboardTheme.Surface.overlayBackground)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("preview_correction_complete_panel")

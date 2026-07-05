@@ -141,6 +141,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         attachment.name = "seeded-real-keyboard-correction-carousel"
         attachment.lifetime = .keepAlways
         add(attachment)
+        try captureRealKeyboardStep("04-real-keyboard-correction-detail")
     }
 
     func testRealKeyboardImproveReplacesTextWhenGatewayConfigured() throws {
@@ -343,21 +344,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 5))
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
         try captureRealKeyboardStep("02-real-keyboard-ai-action-screen")
-        app.terminate()
 
-        let seededArguments = hostArguments + [
-            "--keyboard-suggestion-state=rewriteOptions",
-            "--keyboard-initial-panel=rewriteOptions"
-        ]
-        let seededApp = configuredContainingApp(extraArguments: seededArguments)
-        seededApp.launch()
-        XCTAssertTrue(seededApp.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
-
-        let seededInput = seededApp.textViews["keyboard_host_text_editor"]
-        XCTAssertTrue(seededInput.waitForExistence(timeout: 10), "Seeded host app text editor was not available")
-        tapCenter(of: seededInput)
+        seedKeyboardExtensionDebugState(suggestionState: "rewriteOptions", initialPanel: "rewriteOptions")
+        reopenHostInput(input)
         XCTAssertTrue(
-            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: seededInput, springboard: springboard),
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
             "Open Keyboard extension did not appear for seeded rewrite options"
         )
         XCTAssertTrue(keyboardApp.buttons["ai_rewrite_option_1"].waitForExistence(timeout: 5))
@@ -372,7 +363,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         apply.tap()
 
         let rewritten = NSPredicate(format: "value CONTAINS[c] %@", "There are no bulbs anywhere in the universe.")
-        expectation(for: rewritten, evaluatedWith: seededInput)
+        expectation(for: rewritten, evaluatedWith: input)
         waitForExpectations(timeout: 10)
         XCTAssertTrue(keyboardApp.staticTexts["Rewrite applied"].waitForExistence(timeout: 5))
         try captureRealKeyboardStep("04-real-keyboard-rewrite-applied")
@@ -464,6 +455,32 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    private func seedKeyboardExtensionDebugState(suggestionState: String, initialPanel: String) {
+        guard let defaults = AppConfig.sharedDefaults() else {
+            XCTFail("App Group defaults were unavailable for keyboard debug state seeding")
+            return
+        }
+
+        let seedID = UUID().uuidString
+        let seededAt = Date().timeIntervalSince1970
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        defaults.set(suggestionState, forKey: "keyboardExtension.suggestionState")
+        defaults.set(seedID, forKey: "keyboardExtension.suggestionStateSeedID")
+        defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+        defaults.set(initialPanel, forKey: "keyboardExtension.initialPanelMode")
+        defaults.set(seedID, forKey: "keyboardExtension.initialPanelModeSeedID")
+        defaults.set(seededAt, forKey: "keyboardExtension.initialPanelModeSeededAt")
+        defaults.synchronize()
+    }
+
+    private func reopenHostInput(_ input: XCUIElement) {
+        XCUIDevice.shared.press(.home)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        XCUIApplication().activate()
+        XCTAssertTrue(input.waitForExistence(timeout: 5), "Host input was not available after reactivating the containing app")
+        tapCenter(of: input)
     }
 
     private func tapCenter(of element: XCUIElement) {
