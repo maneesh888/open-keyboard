@@ -27,7 +27,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts.matching(identifier: "Playground").count, 1, "Playground should only render one visible title")
         let input = app.textViews["playground_text_input"]
         XCTAssertTrue(input.waitForExistence(timeout: 5), "Playground text input should be available")
-        XCTAssertTrue((input.value as? String)?.contains("Yesterday I has a apple before the meeting") == true, "Playground input should start with the intentionally flawed sample sentence")
+        let initialValue = try XCTUnwrap(input.value as? String)
+        XCTAssertTrue(
+            NetworkManager.correctionSmokeTestPhrases.contains { initialValue.contains($0) },
+            "Playground input should start with a curated typo sample phrase"
+        )
         input.tap()
         input.typeText(" hello")
         XCTAssertTrue((input.value as? String)?.contains("hello") == true, "Playground input should accept typed text")
