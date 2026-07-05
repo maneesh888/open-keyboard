@@ -33,6 +33,15 @@ Acceptance:
 - Stable pass/fail behavior in normal CI.
 - Checks key rubric constraints such as “preserve meaning” and “return only the answer”.
 
+## Playground and smoke phrase fixtures
+
+The curated playground and gateway smoke phrases must be synthetic and meaningful enough to demonstrate grammar correction, Improve, and Rephrase behavior. Each phrase should:
+
+- be long enough to show a real rewrite, not just a tiny typo fix.
+- include multiple obvious spelling typos.
+- include at least one grammar mistake.
+- avoid real private user text, secrets, credentials, or production conversation content.
+
 ## Live prompt evals
 
 Live prompt evals should be skipped unless explicit env vars are set:

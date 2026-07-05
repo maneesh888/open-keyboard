@@ -163,12 +163,23 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testCorrectionSmokeTestPhrasesAreCuratedTypoInputs() {
         let phrases = NetworkManager.correctionSmokeTestPhrases
         let typoMarkers = [
-            "teh", "sandwhich", "brekfast", "definately", "alot",
-            "recieve", "tomorow", "accidently", "banannas", "wierd",
-            "mispelled", "runing", "becuase", "seperate", "freind",
-            "realy", "adress", "coffe", "tommorow", "yestarday",
-            "recieveing", "suprise", "should of", "dissapeared",
-            "untill", "grammer"
+            "teh", "cliant", "timline", "confussing", "suport",
+            "definately", "befor", "refnd", "recieve", "feedbak",
+            "yestarday", "explan", "seperate", "qustions", "logn",
+            "answr", "accidently", "delievered", "waitng", "meetng",
+            "actoin", "wrng", "freind", "mesage", "coatch", "practce",
+            "should of", "warnd", "repot", "tommorow", "promissed",
+            "reveiw", "checlist", "realy", "explanaton", "recieveing",
+            "editting", "sentance", "unrelatted", "adress", "paragraf",
+            "paymant", "detials", "wierd", "casul", "apoligy",
+            "grammer", "dissapeared", "untill", "retryed"
+        ]
+        let grammarMarkers = [
+            "still sound", "team definately need", "she forget", "team is answr",
+            "driver were", "notes is missing", "deadline look", "freind want",
+            "should of", "repot are", "calendar say", "email are", "app are",
+            "sentance feel", "I explains", "sentance are", "both needs",
+            "tester were"
         ]
 
         XCTAssertGreaterThanOrEqual(phrases.count, 12)
@@ -176,9 +187,20 @@ final class NetworkManagerGatewayTests: XCTestCase {
         for phrase in phrases {
             let normalized = phrase.trimmingCharacters(in: .whitespacesAndNewlines)
             XCTAssertFalse(normalized.isEmpty)
+            XCTAssertGreaterThanOrEqual(
+                normalized.split(whereSeparator: { $0.isWhitespace }).count,
+                10,
+                "\(phrase) should be long enough to demonstrate rewriting."
+            )
+            let typoCount = typoMarkers.filter { normalized.localizedCaseInsensitiveContains($0) }.count
+            XCTAssertGreaterThanOrEqual(
+                typoCount,
+                2,
+                "\(phrase) should contain multiple obvious typo markers."
+            )
             XCTAssertTrue(
-                typoMarkers.contains { normalized.localizedCaseInsensitiveContains($0) },
-                "\(phrase) should contain at least one known typo marker."
+                grammarMarkers.contains { normalized.localizedCaseInsensitiveContains($0) },
+                "\(phrase) should contain a known grammar mistake marker."
             )
         }
     }

@@ -135,21 +135,21 @@ private enum GatewayDiagnosticValidationError: LocalizedError {
 class NetworkManager {
     static let shared = NetworkManager()
     static let correctionSmokeTestPhrases: [String] = [
-        "teh tiny robot has a sandwhich for brekfast",
-        "my keyboard definately knows alot about tacos",
-        "the sleepy astronaut recieve a pizza tomorow",
-        "i accidently taught the app to juggle banannas",
-        "this sentence is wierd but the gateway should fix it",
-        "our pocket wizard mispelled three words before lunch",
-        "the brave toaster is runing late becuase traffic",
-        "please seperate the spicy notes from teh soup",
-        "my freind says the cloud printer is realy fast",
-        "we will adress the bug after coffe arrives",
-        "the calendar forgot tommorow and wrote yestarday",
-        "this tiny app is recieveing a suprise message",
-        "i should of saved teh draft before testing",
-        "the button dissapeared untill i tapped it twice",
-        "my burrito report is missing its grammer"
+        "I sent teh cliant an update this morning, but the timline still sound confussing to everyone.",
+        "Our suport team definately need clearer notes befor they reply to the customer about the delayed refnd.",
+        "The designer recieve the feedbak yestarday, but she forget to explan why the button moved.",
+        "Please seperate the billing qustions from the logn issues so the right team is answr faster.",
+        "I accidently marked the shipment as delievered even though the driver were still waitng outside.",
+        "The meetng notes is missing several actoin items, and teh prototype deadline look wrng.",
+        "My freind want to rephrase this mesage before sending it to the coatch after practce.",
+        "We should of warnd the users that the repot are slower when the server is busy.",
+        "The calendar say tommorow is free, but I promissed to reveiw the launch checlist.",
+        "This onboarding email are too blunt and realy need a warmer explanaton for new customers.",
+        "The app are recieveing the wrong text after editting, so the improved sentance feel unrelatted.",
+        "Can you adress the confussing paragraf where I explains why the paymant failed twice?",
+        "The project update has good detials, but the opening sentance are wierd and too casul.",
+        "I wrote a quick apoligy to the cliant, but the grammer and tone both needs work.",
+        "The button dissapeared untill I retryed the action, so the tester were unable to finish the demo."
     ]
 
     private let transport: NetworkManagerTransporting
