@@ -201,6 +201,76 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.completionPanelState, .improvementApplied)
     }
 
+    func testImproveUsesCurrentLineAcrossCursor() async {
+        let beforeCursor = "it’s never going to be a penalty, gk can’t have handball"
+        let afterCursor = " in the box"
+        let sourceText = beforeCursor + afterCursor
+        let proxy = FakeTextDocumentProxy(text: sourceText, cursorOffset: beforeCursor.count)
+        let service = SequencedKeyboardAIService(results: [Self.structuredRewriteResult()])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.improve)
+        await waitUntil { service.requestedTexts.count == 1 && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(viewModel.rewriteOptionsState?.sourceText, sourceText)
+    }
+
+    func testActionPanelRerunUsesEditedCurrentLineAcrossCursor() async {
+        let originalText = "it’s never going to be a penalty, gk can’t have in the box"
+        let beforeCursor = "it’s never going to be a penalty, gk can’t have handball"
+        let afterCursor = " in the box"
+        let editedText = beforeCursor + afterCursor
+        let proxy = FakeTextDocumentProxy(text: originalText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedTexts.count == 1 && !viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest(editedText, cursorOffset: beforeCursor.count)
+        viewModel.rerunSelectedActionPanelAction()
+        await waitUntil { service.requestedTexts.count == 2 && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(service.requestedTexts, [originalText, editedText])
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, editedText)
+    }
+
+    func testApplyingActionPanelSuggestionReplacesCurrentLineAcrossCursor() async {
+        let beforeCursor = "it’s never going to be a penalty, gk can’t have handball"
+        let afterCursor = " in the box"
+        let sourceText = beforeCursor + afterCursor
+        let proxy = FakeTextDocumentProxy(text: sourceText, cursorOffset: beforeCursor.count)
+        let service = SequencedKeyboardAIService(results: [Self.structuredRewriteResult()])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "Please make this clearer.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
     func testReturningFromActionPanelResumesGrammarCorrectionLane() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -346,6 +416,80 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         visibleErrorViewModel.performAIAction(.rewrite)
         await waitUntil { visibleErrorViewModel.actionError != nil }
         XCTAssertFalse(visibleErrorViewModel.canOpenGrammarCorrection)
+    }
+
+    func testOpeningGrammarCorrectionWithEmptyTextShowsAllDoneWithoutGatewayRequest() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            defaults.set(false, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.removeObject(forKey: "keyboardExtension.composingBuffer")
+            let proxy = FakeTextDocumentProxy(text: "")
+            let service = SequencedKeyboardAIService(results: [Self.structuredGrammarResult()])
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: proxy,
+                aiService: service,
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            viewModel.openGrammarCorrection()
+
+            XCTAssertNil(viewModel.actionError)
+            XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+            XCTAssertEqual(viewModel.completionPanelState, .allDone)
+            XCTAssertFalse(viewModel.isPerformingAIAction)
+            XCTAssertFalse(viewModel.isGrammarCorrectionLoading)
+            XCTAssertTrue(service.requestedActions.isEmpty)
+            XCTAssertEqual(proxy.text, "")
+        }
+    }
+
+    func testAIActionWithEmptyTextShowsAllDoneWithoutGatewayRequest() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            defaults.set(false, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.removeObject(forKey: "keyboardExtension.composingBuffer")
+            let proxy = FakeTextDocumentProxy(text: "")
+            let service = SequencedKeyboardAIService(results: [Self.structuredRewriteResult()])
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: proxy,
+                aiService: service,
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            viewModel.performAIAction(.rewrite)
+
+            XCTAssertNil(viewModel.actionError)
+            XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+            XCTAssertEqual(viewModel.completionPanelState, .allDone)
+            XCTAssertFalse(viewModel.isPerformingAIAction)
+            XCTAssertTrue(service.requestedActions.isEmpty)
+            XCTAssertEqual(proxy.text, "")
+        }
+    }
+
+    func testActionPanelWithEmptyTextShowsAllDoneWithoutGatewayRequest() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            defaults.set(false, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.removeObject(forKey: "keyboardExtension.composingBuffer")
+            let proxy = FakeTextDocumentProxy(text: "")
+            let service = SequencedKeyboardAIService(results: [Self.structuredRewriteResult()])
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: proxy,
+                aiService: service,
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            viewModel.showActionPanel()
+
+            XCTAssertNil(viewModel.actionError)
+            XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+            XCTAssertEqual(viewModel.completionPanelState, .allDone)
+            XCTAssertFalse(viewModel.isPerformingAIAction)
+            XCTAssertNil(viewModel.actionPanelState)
+            XCTAssertTrue(service.requestedActions.isEmpty)
+            XCTAssertEqual(proxy.text, "")
+        }
     }
 
     func testOpeningGrammarCorrectionImmediatelyShowsLoadingAndRequestsFixGrammar() async {
@@ -595,7 +739,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             "keyboardExtension.suggestionStateSeededAt",
             "keyboardExtension.initialPanelMode",
             "keyboardExtension.initialPanelModeSeedID",
-            "keyboardExtension.initialPanelModeSeededAt"
+            "keyboardExtension.initialPanelModeSeededAt",
+            "keyboardExtension.composingBuffer"
         ]
         let originalValues = Dictionary(uniqueKeysWithValues: keys.map { ($0, defaults.object(forKey: $0) as Any?) })
         defer {
@@ -1072,6 +1217,7 @@ private final class CancellableDelayedRecordingKeyboardAIService: KeyboardAIServ
 private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
     private var results: [KeyboardActionOperationResult]
     private(set) var requestedActions: [KeyboardAIAction] = []
+    private(set) var requestedTexts: [String] = []
 
     init(results: [KeyboardActionOperationResult]) {
         self.results = results
@@ -1087,6 +1233,7 @@ private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         requestedActions.append(action)
+        requestedTexts.append(text)
         return try nextResult()
     }
 
@@ -1171,30 +1318,47 @@ private final class FailingKeyboardAIService: KeyboardAIServiceProviding {
 
 private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {
     var text: String
+    private var cursorOffset: Int
 
-    init(text: String) {
+    init(text: String, cursorOffset: Int? = nil) {
         self.text = text
+        self.cursorOffset = min(max(cursorOffset ?? text.count, 0), text.count)
         super.init()
     }
 
-    var documentContextBeforeInput: String? { text }
-    var documentContextAfterInput: String? { "" }
+    func replaceTextForTest(_ text: String, cursorOffset: Int? = nil) {
+        self.text = text
+        self.cursorOffset = min(max(cursorOffset ?? text.count, 0), text.count)
+    }
+
+    var documentContextBeforeInput: String? {
+        String(text.prefix(cursorOffset))
+    }
+    var documentContextAfterInput: String? {
+        String(text.dropFirst(cursorOffset))
+    }
     var selectedText: String? { nil }
     var documentInputMode: UITextInputMode? { nil }
     var documentIdentifier: UUID { UUID(uuidString: "00000000-0000-0000-0000-000000000001")! }
     var keyboardType: UIKeyboardType { .default }
     var hasText: Bool { !text.isEmpty }
 
-    func adjustTextPosition(byCharacterOffset offset: Int) {}
+    func adjustTextPosition(byCharacterOffset offset: Int) {
+        cursorOffset = min(max(cursorOffset + offset, 0), text.count)
+    }
     func setMarkedText(_ markedText: String, selectedRange: NSRange) {}
     func unmarkText() {}
 
     func insertText(_ text: String) {
-        self.text += text
+        let index = self.text.index(self.text.startIndex, offsetBy: cursorOffset)
+        self.text.insert(contentsOf: text, at: index)
+        cursorOffset += text.count
     }
 
     func deleteBackward() {
-        guard !text.isEmpty else { return }
-        text.removeLast()
+        guard cursorOffset > 0, !text.isEmpty else { return }
+        let index = text.index(text.startIndex, offsetBy: cursorOffset - 1)
+        text.remove(at: index)
+        cursorOffset -= 1
     }
 }

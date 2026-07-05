@@ -370,8 +370,8 @@ final class KeyboardViewModel: ObservableObject {
         }
         rewriteOptionsState = nil
         guard let replacementPlan = currentReplacementPlan() else {
-            aiStatus = "Type text first"
             recordDebugEvent("action_panel_blocked_no_text")
+            showAllDoneForEmptyText()
             return
         }
         actionPanelState = KeyboardActionPanelState(
@@ -420,6 +420,15 @@ final class KeyboardViewModel: ObservableObject {
         guard var state = actionPanelState else { return }
         guard !state.isLoading else { return }
         state.selectAction(action)
+        if let currentPlan = currentReplacementPlan(), currentPlan != state.replacementPlan {
+            state = KeyboardActionPanelState(
+                sourceText: currentPlan.textForAI,
+                replacementPlan: currentPlan,
+                selectedAction: action,
+                isCarouselVisible: state.isCarouselVisible,
+                isLoading: true
+            )
+        }
         actionPanelState = state
         requestActionPanelResult(action, replacementPlan: state.replacementPlan)
     }
@@ -445,7 +454,17 @@ final class KeyboardViewModel: ObservableObject {
 
     func rerunSelectedActionPanelAction() {
         guard let state = actionPanelState, !state.isLoading else { return }
-        requestActionPanelResult(state.selectedAction, replacementPlan: state.replacementPlan)
+        let replacementPlan = currentReplacementPlan() ?? state.replacementPlan
+        if replacementPlan != state.replacementPlan {
+            actionPanelState = KeyboardActionPanelState(
+                sourceText: replacementPlan.textForAI,
+                replacementPlan: replacementPlan,
+                selectedAction: state.selectedAction,
+                isCarouselVisible: state.isCarouselVisible,
+                isLoading: true
+            )
+        }
+        requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
     }
 
     func toggleActionPanelCarousel() {
@@ -526,7 +545,8 @@ final class KeyboardViewModel: ObservableObject {
         lastAnalyzedText = nil
 
         guard let replacementPlan = currentReplacementPlan() else {
-            showActionError("Type text first")
+            recordDebugEvent("grammar_correction_blocked_no_text")
+            showAllDoneForEmptyText()
             return
         }
 
@@ -642,6 +662,27 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .correctionComplete
     }
 
+    private func showAllDoneForEmptyText() {
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        actionError = nil
+        actionPanelState = nil
+        suggestionState = nil
+        rewriteOptionsState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        isGrammarCorrectionLoading = false
+        isPerformingAIAction = false
+        lastAnalyzedText = nil
+        aiStatus = "No more suggestions"
+        panelMode = .correctionComplete
+    }
+
     private func showActionError(_ message: String) {
         let error = KeyboardActionErrorState(message: message)
         actionPanelTask?.cancel()
@@ -712,15 +753,16 @@ final class KeyboardViewModel: ObservableObject {
     func rerunRewriteOptionsAction() {
         guard let state = rewriteOptionsState else { return }
         let selectedAction: KeyboardAIAction = state.intent == .improve ? .improve : .rewrite
+        let replacementPlan = currentReplacementPlan() ?? state.replacementPlan
         actionPanelState = KeyboardActionPanelState(
-            sourceText: state.sourceText,
-            replacementPlan: state.replacementPlan,
+            sourceText: replacementPlan.textForAI,
+            replacementPlan: replacementPlan,
             selectedAction: selectedAction,
             isLoading: true
         )
         rewriteOptionsState = nil
         panelMode = .actions
-        requestActionPanelResult(selectedAction, replacementPlan: state.replacementPlan)
+        requestActionPanelResult(selectedAction, replacementPlan: replacementPlan)
     }
 
     func copySelectedRewriteOption() {
@@ -834,8 +876,8 @@ final class KeyboardViewModel: ObservableObject {
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
         recordDebugEvent("action_context context=\(contextBeforeInput?.count ?? 0) buffer=\(fallbackContext?.count ?? 0)")
         guard let replacementPlan = currentReplacementPlan() else {
-            aiStatus = "Type text first"
             recordDebugEvent("action_blocked_no_text")
+            showAllDoneForEmptyText()
             return
         }
 
@@ -1212,6 +1254,12 @@ final class KeyboardViewModel: ObservableObject {
         let finalReplacement = plan.replacementText(from: replacement)
         guard !finalReplacement.isEmpty else { return }
 
+        if !plan.textAfterCursorToDelete.isEmpty {
+            textDocumentProxy.adjustTextPosition(byCharacterOffset: plan.textAfterCursorToDelete.count)
+            for _ in plan.textAfterCursorToDelete {
+                textDocumentProxy.deleteBackward()
+            }
+        }
         for _ in plan.textToDelete {
             textDocumentProxy.deleteBackward()
         }
@@ -1221,6 +1269,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func currentEditableText() -> String {
+        if let plan = currentReplacementPlan() {
+            return plan.textToReplace
+        }
         if let context = textDocumentProxy.documentContextBeforeInput, !context.isEmpty {
             return context
         }
@@ -1232,14 +1283,22 @@ final class KeyboardViewModel: ObservableObject {
 
     private func currentReplacementPlan() -> KeyboardReplacementPlan? {
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
+        let contextAfterInput = textDocumentProxy.documentContextAfterInput
         if composingBuffer.isEmpty, Self.debugStateEnabled {
             composingBuffer = Self.loadPersistedComposingBuffer()
         }
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
-        return KeyboardReplacementPlanner.plan(for: contextBeforeInput) ?? KeyboardReplacementPlanner.plan(for: fallbackContext)
+        return KeyboardReplacementPlanner.plan(
+            contextBeforeInput: contextBeforeInput,
+            contextAfterInput: contextAfterInput
+        ) ?? KeyboardReplacementPlanner.plan(for: fallbackContext)
     }
 
     private func replaceEditableText(with replacement: String) {
+        if let plan = currentReplacementPlan() {
+            replace(plan: plan, with: replacement)
+            return
+        }
         let currentText = currentEditableText()
         for _ in currentText {
             textDocumentProxy.deleteBackward()

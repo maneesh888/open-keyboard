@@ -32,9 +32,23 @@ final class KeyboardReplacementPlannerTests: XCTestCase {
         XCTAssertEqual(plan.replacementText(from: "I like 👨‍👩‍👧‍👦."), "I like 👨‍👩‍👧‍👦. ")
     }
 
+    func testPlansCurrentLineAcrossCursor() throws {
+        let plan = try XCTUnwrap(KeyboardReplacementPlanner.plan(
+            contextBeforeInput: "hello\n  it’s never going to be a penalty, gk can’t have handball",
+            contextAfterInput: " in the box\nnext"
+        ))
+        XCTAssertEqual(plan.textToDelete, "  it’s never going to be a penalty, gk can’t have handball")
+        XCTAssertEqual(plan.textAfterCursorToDelete, " in the box")
+        XCTAssertEqual(plan.textToReplace, "  it’s never going to be a penalty, gk can’t have handball in the box")
+        XCTAssertEqual(plan.textForAI, "it’s never going to be a penalty, gk can’t have handball in the box")
+        XCTAssertEqual(plan.leadingWhitespace, "  ")
+        XCTAssertEqual(plan.replacementText(from: "It will never be a penalty."), "  It will never be a penalty.")
+    }
+
     func testReturnsNilForWhitespaceOnlyContext() {
         XCTAssertNil(KeyboardReplacementPlanner.plan(for: "   "))
         XCTAssertNil(KeyboardReplacementPlanner.plan(for: "hello\n   "))
         XCTAssertNil(KeyboardReplacementPlanner.plan(for: nil))
+        XCTAssertNil(KeyboardReplacementPlanner.plan(contextBeforeInput: "", contextAfterInput: "   "))
     }
 }
