@@ -5,13 +5,30 @@
 
 import SwiftUI
 
+enum KeyboardPanelLayout {
+    static let toolbarHeight: CGFloat = 44
+    static let toolbarVerticalPadding: CGFloat = 6
+    static let toolbarRenderedHeight: CGFloat = toolbarHeight + (toolbarVerticalPadding * 2)
+    static let toolbarSpacing: CGFloat = 10
+    static let outerHorizontalPadding: CGFloat = 6
+    static let outerTopPadding: CGFloat = 4
+    static let outerBottomPadding: CGFloat = 0
+    static let letterKeyHeight: CGFloat = 46
+    static let controlKeyHeight: CGFloat = 42
+    static let keyRowSpacing: CGFloat = 8
+    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3)
+    static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
+    static let expandedPanelMinHeight: CGFloat = preferredKeyboardHeight
+}
+
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
 
     var body: some View {
         let showsToolbar = viewModel.panelMode != .actions && viewModel.panelMode != .rewriteOptions
+        let usesTypingKeyboardHeight = isTypingKeyboardVisible
 
-        VStack(spacing: showsToolbar ? 7 : 0) {
+        VStack(spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0) {
             if showsToolbar {
                 KeyboardAIToolbar(
                     state: viewModel.toolbarState,
@@ -21,6 +38,8 @@ struct KeyboardView: View {
                     onStatus: { viewModel.openGrammarCorrection() },
                     onSparkle: { viewModel.showActionPanel() }
                 )
+                .frame(height: KeyboardPanelLayout.toolbarRenderedHeight)
+                .layoutPriority(1)
             }
 
             switch viewModel.panelMode {
@@ -93,10 +112,10 @@ struct KeyboardView: View {
             }
 
         }
-        .frame(maxWidth: .infinity, maxHeight: showsToolbar ? nil : .infinity, alignment: .top)
-        .padding(.horizontal, showsToolbar ? 6 : 0)
-        .padding(.top, showsToolbar ? 8 : 0)
-        .padding(.bottom, showsToolbar ? 6 : 0)
+        .frame(maxWidth: .infinity, maxHeight: usesTypingKeyboardHeight ? nil : .infinity, alignment: .top)
+        .padding(.horizontal, showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0)
+        .padding(.top, showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0)
+        .padding(.bottom, showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0)
         .background(KeyboardColors.keyboardBackground)
         .onAppear {
             viewModel.reloadConfig()
@@ -106,16 +125,22 @@ struct KeyboardView: View {
     }
 
     private var keyGrid: some View {
-        VStack(spacing: 8) {
-            keyRow(viewModel.isNumbersEnabled ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"])
-                .accessibilityIdentifier("keyboard_row_qwerty")
+        VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
+            keyRow(
+                viewModel.isNumbersEnabled ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                keyHeight: KeyboardPanelLayout.letterKeyHeight
+            )
+            .accessibilityIdentifier("keyboard_row_qwerty")
 
-            keyRow(viewModel.isNumbersEnabled ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"] : ["a", "s", "d", "f", "g", "h", "j", "k", "l"])
-                .padding(.horizontal, 18)
-                .accessibilityIdentifier("keyboard_row_home")
+            keyRow(
+                viewModel.isNumbersEnabled ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"] : ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+                keyHeight: KeyboardPanelLayout.letterKeyHeight
+            )
+            .padding(.horizontal, 18)
+            .accessibilityIdentifier("keyboard_row_home")
 
             HStack(spacing: 6) {
-                KeyButton(label: viewModel.isNumbersEnabled ? "#+=" : "⇧", role: .modifier, isAccent: viewModel.isShiftEnabled) {
+                KeyButton(label: viewModel.isNumbersEnabled ? "#+=" : "⇧", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight, isAccent: viewModel.isShiftEnabled) {
                     if viewModel.isNumbersEnabled {
                         viewModel.toggleNumbers()
                     } else {
@@ -124,9 +149,12 @@ struct KeyboardView: View {
                 }
                 .frame(width: 52)
 
-                keyRow(viewModel.isNumbersEnabled ? [".", ",", "?", "!", "'", "\"", "_"] : ["z", "x", "c", "v", "b", "n", "m"])
+                keyRow(
+                    viewModel.isNumbersEnabled ? [".", ",", "?", "!", "'", "\"", "_"] : ["z", "x", "c", "v", "b", "n", "m"],
+                    keyHeight: KeyboardPanelLayout.letterKeyHeight
+                )
 
-                KeyButton(label: "⌫", role: .modifier) {
+                KeyButton(label: "⌫", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight) {
                     viewModel.deleteBackward()
                 }
                 .frame(width: 52)
@@ -134,18 +162,18 @@ struct KeyboardView: View {
             .accessibilityIdentifier("keyboard_row_bottom_letters")
 
             HStack(spacing: 6) {
-                KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier) {
+                KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
                     viewModel.toggleNumbers()
                 }
-                    .frame(width: 58)
-                    .accessibilityIdentifier("keyboard_key_numbers")
+                .frame(width: 58)
+                .accessibilityIdentifier("keyboard_key_numbers")
 
-                KeyButton(label: "space", role: .space) {
+                KeyButton(label: "space", role: .space, height: KeyboardPanelLayout.controlKeyHeight) {
                     viewModel.insertSpace()
                 }
                 .accessibilityIdentifier("keyboard_key_space")
 
-                KeyButton(label: "return", role: .returnKey) {
+                KeyButton(label: "return", role: .returnKey, height: KeyboardPanelLayout.controlKeyHeight) {
                     viewModel.insertReturn()
                 }
                 .frame(width: 92)
@@ -153,15 +181,32 @@ struct KeyboardView: View {
             }
             .accessibilityIdentifier("keyboard_row_controls")
         }
+        .frame(maxWidth: .infinity)
+        .frame(height: KeyboardPanelLayout.keyGridHeight, alignment: .bottom)
     }
 
-    private func keyRow(_ keys: [String]) -> some View {
+    private func keyRow(_ keys: [String], keyHeight: CGFloat) -> some View {
         HStack(spacing: 6) {
             ForEach(keys, id: \.self) { key in
-                KeyButton(label: viewModel.isShiftEnabled ? key.uppercased() : key, role: .letter) {
+                KeyButton(label: viewModel.isShiftEnabled ? key.uppercased() : key, role: .letter, height: keyHeight) {
                     viewModel.insert(key)
                 }
             }
+        }
+    }
+
+    private var isTypingKeyboardVisible: Bool {
+        switch viewModel.panelMode {
+        case .keyboard:
+            return viewModel.actionError == nil
+        case .actions:
+            return viewModel.actionPanelState == nil
+        case .rewriteOptions:
+            return viewModel.rewriteOptionsState == nil
+        case .correctionDetail:
+            return viewModel.currentCorrectionCard == nil && !viewModel.isGrammarCorrectionLoading
+        case .correctionComplete:
+            return false
         }
     }
 }
@@ -185,9 +230,9 @@ private struct KeyboardAIToolbar: View {
             .accessibilityIdentifier("ai_toolbar_status_action")
             sparkleButton
         }
-        .frame(minHeight: 44)
+        .frame(minHeight: KeyboardPanelLayout.toolbarHeight)
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, KeyboardPanelLayout.toolbarVerticalPadding)
         .background(KeyboardColors.toolbarBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityElement(children: .contain)
@@ -281,7 +326,6 @@ private struct AIActionPanel: View {
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
                 .padding(.top, 8)
             suggestionBlock
-            Spacer(minLength: 8)
             if state.isCarouselVisible {
                 actionCarousel
                 .padding(.bottom, 7)
@@ -293,7 +337,7 @@ private struct AIActionPanel: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
@@ -345,8 +389,14 @@ private struct AIActionPanel: View {
                     .accessibilityIdentifier("ai_action_empty_text")
             }
         }
-        .frame(maxWidth: .infinity, minHeight: state.isCarouselVisible ? 84 : 132, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: state.isCarouselVisible ? 84 : 132,
+            maxHeight: .infinity,
+            alignment: state.selectedOption == nil ? .center : .topLeading
+        )
         .padding(.top, 10)
+        .layoutPriority(1)
     }
 
     private var actionCarousel: some View {
@@ -539,7 +589,6 @@ private struct RewriteOptionsPanel: View {
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
                 .padding(.top, 8)
             suggestionBlock
-            Spacer(minLength: 8)
             if state.isCarouselVisible {
                 optionsCarousel
                     .padding(.bottom, 7)
@@ -551,7 +600,7 @@ private struct RewriteOptionsPanel: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: 286, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
@@ -593,8 +642,14 @@ private struct RewriteOptionsPanel: View {
                     .accessibilityIdentifier("ai_rewrite_empty_text")
             }
         }
-        .frame(maxWidth: .infinity, minHeight: state.isCarouselVisible ? 84 : 132, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: state.isCarouselVisible ? 84 : 132,
+            maxHeight: .infinity,
+            alignment: state.selectedOption == nil ? .center : .topLeading
+        )
         .padding(.top, 10)
+        .layoutPriority(1)
     }
 
     private var sourceBlock: some View {
@@ -789,8 +844,10 @@ private struct KeyboardActionErrorPanel: View {
                 .accessibilityIdentifier("ai_error_copy_details")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .layoutPriority(0)
         .background(KeyboardColors.overlayBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
@@ -839,8 +896,10 @@ private struct GrammarCorrectionLoadingPanel: View {
                 .accessibilityIdentifier("back_to_keyboard")
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
-        .frame(maxWidth: .infinity, minHeight: 160, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .layoutPriority(0)
         .background(KeyboardColors.overlayBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -952,6 +1011,7 @@ private struct CorrectionDetailPanel: View {
                     .accessibilityIdentifier("ai_correction_explanation")
             }
             .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, minHeight: 72, maxHeight: .infinity, alignment: .leading)
 
             HStack(spacing: 10) {
                 Button(action: onDismiss) {
@@ -979,7 +1039,8 @@ private struct CorrectionDetailPanel: View {
             }
         }
         .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 182, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .layoutPriority(0)
         .background(KeyboardColors.overlayBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -1015,13 +1076,13 @@ private struct CorrectionCompletePanel: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            ZStack {
-                Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 27, weight: .bold))
-                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
-            }
-            .frame(width: 58, height: 58)
+            Image(systemName: "checkmark")
+                .font(.system(size: 27, weight: .bold))
+                .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                .padding(15)
+                .background(
+                    Circle().fill(OpenKeyboardTheme.Brand.blueGreenGradient)
+                )
             .padding(.bottom, 2)
 
             Text(state.title)
@@ -1035,7 +1096,7 @@ private struct CorrectionCompletePanel: View {
                 Text("Back to Keyboard")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 18)
-                    .frame(minHeight: 40)
+                    .padding(.vertical, 9)
             }
             .buttonStyle(.plain)
             .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
@@ -1048,7 +1109,8 @@ private struct CorrectionCompletePanel: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, minHeight: 226)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .layoutPriority(0)
         .background(KeyboardColors.overlayBackground)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("correction_complete_panel")
@@ -1065,6 +1127,7 @@ private enum KeyRole {
 private struct KeyButton: View {
     let label: String
     var role: KeyRole = .letter
+    let height: CGFloat
     var isAccent = false
     let action: () -> Void
 
@@ -1073,7 +1136,7 @@ private struct KeyButton: View {
             Text(label)
                 .font(font)
                 .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, minHeight: role == .letter ? 52 : 46)
+                .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
                 .background(backgroundColor)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)

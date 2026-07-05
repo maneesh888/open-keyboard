@@ -38,13 +38,14 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(controller.view)
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         controller.view.backgroundColor = .clear
+        let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: KeyboardPanelLayout.preferredKeyboardHeight)
 
         NSLayoutConstraint.activate([
             controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             controller.view.topAnchor.constraint(equalTo: view.topAnchor),
             controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            controller.view.heightAnchor.constraint(greaterThanOrEqualToConstant: 260)
+            keyboardHeightConstraint
         ])
 
         controller.didMove(toParent: self)
