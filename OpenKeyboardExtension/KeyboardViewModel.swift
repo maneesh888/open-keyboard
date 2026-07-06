@@ -142,6 +142,14 @@ struct KeyboardActionPanelState: Equatable {
         options.first { $0.id == selectedOptionID } ?? options.first
     }
 
+    var usesExpandedImprovePanel: Bool {
+        selectedAction == .improve
+    }
+
+    var usesScrollableImproveResult: Bool {
+        usesExpandedImprovePanel && selectedOption != nil && !isLoading
+    }
+
     mutating func selectAction(_ action: KeyboardAIAction) {
         guard Self.availableActions.contains(action) else { return }
         selectedAction = action
@@ -306,6 +314,7 @@ final class KeyboardViewModel: ObservableObject {
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
         let seededSuggestionState = Self.loadSeededSuggestionState()
         self.suggestionState = seededSuggestionState?.suggestionState
+        self.actionPanelState = seededSuggestionState?.actionPanelState
         self.rewriteOptionsState = seededSuggestionState?.rewriteOptionsState
         self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
         self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
@@ -1503,6 +1512,7 @@ final class KeyboardViewModel: ObservableObject {
     private struct SeededKeyboardSuggestionState {
         let panelMode: KeyboardPanelMode
         let suggestionState: KeyboardSuggestionState?
+        let actionPanelState: KeyboardActionPanelState?
         let rewriteOptionsState: KeyboardRewriteOptionsState?
         let aiStatus: String
         let isPerformingAIAction: Bool
@@ -1514,8 +1524,18 @@ final class KeyboardViewModel: ObservableObject {
             case "rewriteOptions":
                 panelMode = .rewriteOptions
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = Self.rewriteOptionsState
                 aiStatus = "3 rewrites ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+            case "improvePanel":
+                panelMode = .actions
+                suggestionState = nil
+                actionPanelState = Self.improveActionPanelState
+                rewriteOptionsState = nil
+                aiStatus = "Improve ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -1525,6 +1545,7 @@ final class KeyboardViewModel: ObservableObject {
                     response: Self.carouselResponse,
                     sourceContext: "i has a apple and ths sentence"
                 )
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
@@ -1533,6 +1554,7 @@ final class KeyboardViewModel: ObservableObject {
             case "correctionComplete":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "No more suggestions"
                 isPerformingAIAction = false
@@ -1541,6 +1563,7 @@ final class KeyboardViewModel: ObservableObject {
             case "allGood":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "No issues found"
                 isPerformingAIAction = false
@@ -1549,6 +1572,7 @@ final class KeyboardViewModel: ObservableObject {
             case "analyzing":
                 panelMode = .keyboard
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "Analyzing your text..."
                 isPerformingAIAction = true
@@ -1607,6 +1631,30 @@ final class KeyboardViewModel: ObservableObject {
                     KeyboardRewriteOption(id: "rewrite-option-2", title: "Natural", text: "There are no bulbs anywhere in the universe."),
                     KeyboardRewriteOption(id: "rewrite-option-3", title: "Concise", text: "No bulbs exist in the universe.")
                 ]
+            )
+        }
+
+        private static var improveActionPanelState: KeyboardActionPanelState {
+            let sourceText = "Do you know that our test phrases are essentially meaningless, making them hard to rephrase? Technically, they are being rephrased, but not very effectively. Could you add a few longer, more meaningful sentences?"
+            let replacementPlan = KeyboardReplacementPlan(
+                textToDelete: sourceText,
+                textForAI: sourceText,
+                leadingWhitespace: "",
+                trailingWhitespace: ""
+            )
+            return KeyboardActionPanelState(
+                sourceText: sourceText,
+                replacementPlan: replacementPlan,
+                selectedAction: .improve,
+                options: [
+                    KeyboardRewriteOption(
+                        id: "improve-option-1",
+                        title: "Clearer",
+                        text: sourceText
+                    )
+                ],
+                isCarouselVisible: true,
+                isLoading: false
             )
         }
     }

@@ -90,6 +90,115 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testSeededImprovePanelStateIsOneShot() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            let seededAt = Date().timeIntervalSince1970
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("improvePanel", forKey: "keyboardExtension.suggestionState")
+            defaults.set("improve-seed", forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "Long text for the improve panel."),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway }
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .actions)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+            XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
+            XCTAssertTrue(viewModel.actionPanelState?.selectedOption?.text.contains("longer, more meaningful sentences") ?? false)
+            XCTAssertNil(viewModel.rewriteOptionsState)
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt"))
+        }
+    }
+
+    func testImprovePanelExpandsForImproveAndScrollsOnlyForLoadedResult() {
+        let sourceText = "Please make this clearer."
+        let replacementPlan = KeyboardReplacementPlan(
+            textToDelete: sourceText,
+            textForAI: sourceText,
+            leadingWhitespace: "",
+            trailingWhitespace: ""
+        )
+        let option = KeyboardRewriteOption(
+            id: "improve-option-1",
+            title: "Clearer",
+            text: "Please make this message clearer and easier to understand."
+        )
+
+        var loadingImproveState = KeyboardActionPanelState(
+            sourceText: sourceText,
+            replacementPlan: replacementPlan,
+            selectedAction: .improve
+        )
+        loadingImproveState.beginLoading()
+
+        let emptyImproveState = KeyboardActionPanelState(
+            sourceText: sourceText,
+            replacementPlan: replacementPlan,
+            selectedAction: .improve
+        )
+        let loadedImproveState = KeyboardActionPanelState(
+            sourceText: sourceText,
+            replacementPlan: replacementPlan,
+            selectedAction: .improve,
+            options: [option],
+            isLoading: false
+        )
+        let loadedRewriteState = KeyboardActionPanelState(
+            sourceText: sourceText,
+            replacementPlan: replacementPlan,
+            selectedAction: .rewrite,
+            options: [option],
+            isLoading: false
+        )
+
+        XCTAssertTrue(loadingImproveState.usesExpandedImprovePanel)
+        XCTAssertTrue(emptyImproveState.usesExpandedImprovePanel)
+        XCTAssertFalse(loadedRewriteState.usesExpandedImprovePanel)
+        XCTAssertTrue(loadedImproveState.usesExpandedImprovePanel)
+        XCTAssertFalse(loadingImproveState.usesScrollableImproveResult)
+        XCTAssertFalse(emptyImproveState.usesScrollableImproveResult)
+        XCTAssertFalse(loadedRewriteState.usesScrollableImproveResult)
+        XCTAssertTrue(loadedImproveState.usesScrollableImproveResult)
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadingImproveState),
+            KeyboardPanelLayout.improvePanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: emptyImproveState),
+            KeyboardPanelLayout.improvePanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadedRewriteState),
+            KeyboardPanelLayout.preferredKeyboardHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadedImproveState),
+            KeyboardPanelLayout.improvePanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .keyboard, actionPanelState: loadedImproveState),
+            KeyboardPanelLayout.preferredKeyboardHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .rewriteOptions, actionPanelState: loadedImproveState),
+            KeyboardPanelLayout.preferredKeyboardHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .correctionDetail, actionPanelState: loadedImproveState),
+            KeyboardPanelLayout.preferredKeyboardHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .correctionComplete, actionPanelState: loadedImproveState),
+            KeyboardPanelLayout.preferredKeyboardHeight
+        )
+    }
+
     func testRewriteFailureShowsSanitizedErrorAndPreservesText() async {
         await assertGatewayFailureShowsErrorAndPreservesText(for: .rewrite)
     }

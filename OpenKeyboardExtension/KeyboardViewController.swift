@@ -3,12 +3,15 @@
 //  OpenKeyboardExtension
 //
 
+import Combine
 import SwiftUI
 import UIKit
 
 final class KeyboardViewController: UIInputViewController {
     private var hostingController: UIHostingController<KeyboardView>?
     private var viewModel: KeyboardViewModel?
+    private var keyboardHeightConstraint: NSLayoutConstraint?
+    private var cancellables = Set<AnyCancellable>()
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -39,6 +42,7 @@ final class KeyboardViewController: UIInputViewController {
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         controller.view.backgroundColor = .clear
         let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: KeyboardPanelLayout.preferredKeyboardHeight)
+        self.keyboardHeightConstraint = keyboardHeightConstraint
 
         NSLayoutConstraint.activate([
             controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -50,7 +54,28 @@ final class KeyboardViewController: UIInputViewController {
 
         controller.didMove(toParent: self)
         hostingController = controller
+        bindKeyboardHeight(to: viewModel)
         refreshRuntimeState()
+    }
+
+    private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
+        Publishers.CombineLatest(viewModel.$panelMode, viewModel.$actionPanelState)
+            .map { panelMode, actionPanelState in
+                KeyboardPanelLayout.keyboardHeight(
+                    for: panelMode,
+                    actionPanelState: actionPanelState
+                )
+            }
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] height in
+                guard let self else { return }
+                self.keyboardHeightConstraint?.constant = height
+                self.view.setNeedsUpdateConstraints()
+                self.view.invalidateIntrinsicContentSize()
+                self.view.layoutIfNeeded()
+            }
+            .store(in: &cancellables)
     }
 
     private func refreshRuntimeState() {

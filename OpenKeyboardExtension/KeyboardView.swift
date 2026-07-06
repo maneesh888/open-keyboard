@@ -5,28 +5,18 @@
 
 import SwiftUI
 
-enum KeyboardPanelLayout {
-    static let toolbarHeight: CGFloat = 44
-    static let toolbarVerticalPadding: CGFloat = 6
-    static let toolbarRenderedHeight: CGFloat = toolbarHeight + (toolbarVerticalPadding * 2)
-    static let toolbarSpacing: CGFloat = 10
-    static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 4
-    static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 46
-    static let controlKeyHeight: CGFloat = 42
-    static let keyRowSpacing: CGFloat = 8
-    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3)
-    static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
-    static let expandedPanelMinHeight: CGFloat = preferredKeyboardHeight
-}
-
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
 
     var body: some View {
         let showsToolbar = viewModel.panelMode != .actions && viewModel.panelMode != .rewriteOptions
-        let usesTypingKeyboardHeight = isTypingKeyboardVisible
+        let viewportHeight = KeyboardPanelLayout.keyboardHeight(
+            for: viewModel.panelMode,
+            actionPanelState: viewModel.actionPanelState
+        )
+        let contentHeight = showsToolbar
+            ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
+            : viewportHeight
 
         VStack(spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0) {
             if showsToolbar {
@@ -112,7 +102,7 @@ struct KeyboardView: View {
             }
 
         }
-        .frame(maxWidth: .infinity, maxHeight: usesTypingKeyboardHeight ? nil : .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, minHeight: contentHeight, maxHeight: contentHeight, alignment: .top)
         .padding(.horizontal, showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0)
         .padding(.top, showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0)
         .padding(.bottom, showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0)
@@ -182,7 +172,8 @@ struct KeyboardView: View {
             .accessibilityIdentifier("keyboard_row_controls")
         }
         .frame(maxWidth: .infinity)
-        .frame(height: KeyboardPanelLayout.keyGridHeight, alignment: .bottom)
+        .padding(.bottom, KeyboardPanelLayout.keyShadowAllowance)
+        .frame(height: KeyboardPanelLayout.keyGridHeight, alignment: .top)
     }
 
     private func keyRow(_ keys: [String], keyHeight: CGFloat) -> some View {
@@ -192,21 +183,6 @@ struct KeyboardView: View {
                     viewModel.insert(key)
                 }
             }
-        }
-    }
-
-    private var isTypingKeyboardVisible: Bool {
-        switch viewModel.panelMode {
-        case .keyboard:
-            return viewModel.actionError == nil
-        case .actions:
-            return viewModel.actionPanelState == nil
-        case .rewriteOptions:
-            return viewModel.rewriteOptionsState == nil
-        case .correctionDetail:
-            return viewModel.currentCorrectionCard == nil && !viewModel.isGrammarCorrectionLoading
-        case .correctionComplete:
-            return false
         }
     }
 }
@@ -230,11 +206,8 @@ private struct KeyboardAIToolbar: View {
             .accessibilityIdentifier("ai_toolbar_status_action")
             sparkleButton
         }
-        .frame(minHeight: KeyboardPanelLayout.toolbarHeight)
-        .padding(.horizontal, 8)
-        .padding(.vertical, KeyboardPanelLayout.toolbarVerticalPadding)
-        .background(KeyboardColors.toolbarBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(height: KeyboardPanelLayout.toolbarHeight)
+        .padding(.horizontal, 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai_toolbar")
     }
@@ -247,14 +220,20 @@ private struct KeyboardAIToolbar: View {
     private var statusIcon: some View {
         Button(action: performStatusAction) {
             ZStack {
-                if state.showsIssueCount {
+                if isPerformingAIAction {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(KeyboardColors.panelBackground.opacity(0.78))
+                    ProgressView()
+                        .scaleEffect(0.72)
+                        .tint(OpenKeyboardTheme.Semantic.primaryAction)
+                } else if state.showsIssueCount {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(OpenKeyboardTheme.Semantic.error)
                     Text("\(state.issueCount)")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(OpenKeyboardTheme.Text.inverse)
                 } else if state.showsBrandMark && actionsEnabled {
-                    OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+                    OpenKeyboardBrandMark(size: KeyboardPanelLayout.toolbarControlSize, symbolSize: 15)
                 } else {
                     RoundedRectangle(cornerRadius: 11, style: .continuous)
                         .fill(OpenKeyboardTheme.Surface.warningBackground)
@@ -263,7 +242,7 @@ private struct KeyboardAIToolbar: View {
                         .foregroundColor(OpenKeyboardTheme.Semantic.warning)
                 }
             }
-            .frame(width: 36, height: 36)
+            .frame(width: KeyboardPanelLayout.toolbarControlSize, height: KeyboardPanelLayout.toolbarControlSize)
         }
         .buttonStyle(.plain)
         .disabled(!statusActionEnabled)
@@ -273,7 +252,7 @@ private struct KeyboardAIToolbar: View {
 
     private var statusContent: some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(state.title)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.primary)
@@ -284,22 +263,17 @@ private struct KeyboardAIToolbar: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 4)
-            if isPerformingAIAction {
-                ProgressView().scaleEffect(0.7)
-            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(actionsEnabled ? OpenKeyboardTheme.Surface.brandPanelBackground : KeyboardColors.panelBackground.opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .frame(height: KeyboardPanelLayout.toolbarControlSize)
+        .padding(.horizontal, 6)
     }
 
     private var sparkleButton: some View {
         Button(action: onSparkle) {
             Image(systemName: "sparkles")
                 .font(.system(size: 16, weight: .semibold))
-                .frame(width: 34, height: 34)
+                .frame(width: KeyboardPanelLayout.toolbarControlSize, height: KeyboardPanelLayout.toolbarControlSize)
         }
         .foregroundColor(actionsEnabled ? OpenKeyboardTheme.Text.inverse : .secondary)
         .background(actionsEnabled ? OpenKeyboardTheme.Semantic.primaryAction : KeyboardColors.panelBackground.opacity(0.72))
@@ -326,18 +300,26 @@ private struct AIActionPanel: View {
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
                 .padding(.top, 8)
             suggestionBlock
+            Spacer(minLength: 0)
             if state.isCarouselVisible {
                 actionCarousel
-                .padding(.bottom, 7)
+                .padding(.bottom, carouselBottomPadding)
+                .layoutPriority(1)
             }
             Divider()
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
             controlRow
+                .layoutPriority(1)
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: panelHeight,
+            maxHeight: panelHeight,
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)
@@ -345,6 +327,49 @@ private struct AIActionPanel: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai_action_panel")
+    }
+
+    private var usesScrollableImproveResult: Bool {
+        state.usesScrollableImproveResult
+    }
+
+    private var usesExpandedImprovePanel: Bool {
+        state.usesExpandedImprovePanel
+    }
+
+    private var panelHeight: CGFloat {
+        usesExpandedImprovePanel ? KeyboardPanelLayout.improvePanelHeight : KeyboardPanelLayout.expandedPanelHeight
+    }
+
+    private var suggestionHeight: CGFloat {
+        if usesExpandedImprovePanel {
+            return 200
+        }
+        return state.isCarouselVisible ? 72 : 132
+    }
+
+    private var carouselHeight: CGFloat {
+        usesExpandedImprovePanel ? 32 : 38
+    }
+
+    private var carouselBottomPadding: CGFloat {
+        usesExpandedImprovePanel ? 4 : 7
+    }
+
+    private var controlButtonSize: CGFloat {
+        usesExpandedImprovePanel ? 34 : 36
+    }
+
+    private var groupedButtonWidth: CGFloat {
+        usesExpandedImprovePanel ? 38 : 40
+    }
+
+    private var controlRowTopPadding: CGFloat {
+        usesExpandedImprovePanel ? 4 : 7
+    }
+
+    private var actionResultFontSize: CGFloat {
+        usesExpandedImprovePanel ? 15 : 19
     }
 
     private var header: some View {
@@ -374,13 +399,7 @@ private struct AIActionPanel: View {
                         .accessibilityIdentifier("ai_action_loading_text")
                 }
             } else if let selectedOption = state.selectedOption {
-                Text(selectedOption.text)
-                    .font(.system(size: 19, weight: .regular))
-                    .foregroundColor(OpenKeyboardTheme.Text.primary)
-                    .lineLimit(state.isCarouselVisible ? 4 : 6)
-                    .minimumScaleFactor(0.72)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("ai_action_result_text")
+                actionResultText(selectedOption.text)
             } else {
                 Text("No suggestion yet")
                     .font(.system(size: 18, weight: .regular))
@@ -391,12 +410,36 @@ private struct AIActionPanel: View {
         }
         .frame(
             maxWidth: .infinity,
-            minHeight: state.isCarouselVisible ? 84 : 132,
-            maxHeight: .infinity,
+            minHeight: suggestionHeight,
+            maxHeight: suggestionHeight,
             alignment: state.selectedOption == nil ? .center : .topLeading
         )
         .padding(.top, 10)
-        .layoutPriority(1)
+        .clipped()
+    }
+
+    @ViewBuilder
+    private func actionResultText(_ text: String) -> some View {
+        if usesScrollableImproveResult {
+            ScrollView(.vertical, showsIndicators: true) {
+                actionResultLabel(text, lineLimit: nil)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .clipped()
+        } else {
+            actionResultLabel(text, lineLimit: state.isCarouselVisible ? 4 : 6)
+        }
+    }
+
+    private func actionResultLabel(_ text: String, lineLimit: Int?) -> some View {
+        Text(text)
+            .font(.system(size: actionResultFontSize, weight: .regular))
+            .foregroundColor(OpenKeyboardTheme.Text.primary)
+            .lineLimit(lineLimit)
+            .minimumScaleFactor(0.72)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("ai_action_result_text")
     }
 
     private var actionCarousel: some View {
@@ -408,7 +451,7 @@ private struct AIActionPanel: View {
             }
             .padding(.horizontal, 1)
         }
-        .frame(height: 38)
+        .frame(height: carouselHeight)
         .accessibilityIdentifier("ai_action_carousel")
     }
 
@@ -480,7 +523,7 @@ private struct AIActionPanel: View {
                 .disabled(state.selectedOption == nil || state.isLoading)
                 .accessibilityIdentifier("ai_action_copy")
             }
-            .frame(height: 36)
+            .frame(height: controlButtonSize)
             .background(KeyboardColors.overlayBackground.opacity(0.72), in: Capsule())
             .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
 
@@ -496,7 +539,7 @@ private struct AIActionPanel: View {
             .opacity(state.selectedOption == nil || state.isLoading ? 0.42 : 1)
             .accessibilityIdentifier("ai_action_apply")
         }
-        .padding(.top, 7)
+        .padding(.top, controlRowTopPadding)
     }
 
     private func panelCircleButton(
@@ -508,7 +551,7 @@ private struct AIActionPanel: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
-                .frame(width: 36, height: 36)
+                .frame(width: controlButtonSize, height: controlButtonSize)
         }
         .buttonStyle(.plain)
         .foregroundColor(foreground)
@@ -519,7 +562,7 @@ private struct AIActionPanel: View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
-                .frame(width: 40, height: 36)
+                .frame(width: groupedButtonWidth, height: controlButtonSize)
         }
         .buttonStyle(.plain)
         .foregroundColor(foreground)
@@ -600,7 +643,12 @@ private struct RewriteOptionsPanel: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: KeyboardPanelLayout.expandedPanelHeight,
+            maxHeight: KeyboardPanelLayout.expandedPanelHeight,
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(KeyboardColors.overlayBackground)

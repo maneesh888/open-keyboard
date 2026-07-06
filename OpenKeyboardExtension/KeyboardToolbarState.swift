@@ -3,6 +3,7 @@
 //  OpenKeyboardExtension
 //
 
+import CoreGraphics
 import Foundation
 
 enum KeyboardPanelMode: Equatable {
@@ -11,6 +12,34 @@ enum KeyboardPanelMode: Equatable {
     case rewriteOptions
     case correctionDetail
     case correctionComplete
+}
+
+enum KeyboardPanelLayout {
+    static let toolbarHeight: CGFloat = 38
+    static let toolbarControlSize: CGFloat = 34
+    static let toolbarRenderedHeight: CGFloat = toolbarHeight
+    static let toolbarSpacing: CGFloat = 6
+    static let outerHorizontalPadding: CGFloat = 6
+    static let outerTopPadding: CGFloat = 6
+    static let outerBottomPadding: CGFloat = 0
+    static let letterKeyHeight: CGFloat = 46
+    static let controlKeyHeight: CGFloat = 42
+    static let keyRowSpacing: CGFloat = 8
+    static let keyShadowAllowance: CGFloat = 2
+    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
+    static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
+    static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
+    static let improvePanelHeight: CGFloat = preferredKeyboardHeight + 104
+
+    static func keyboardHeight(
+        for panelMode: KeyboardPanelMode,
+        actionPanelState: KeyboardActionPanelState?
+    ) -> CGFloat {
+        if panelMode == .actions, actionPanelState?.usesExpandedImprovePanel == true {
+            return improvePanelHeight
+        }
+        return preferredKeyboardHeight
+    }
 }
 
 struct KeyboardCompletionPanelState: Equatable {
