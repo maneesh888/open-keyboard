@@ -7,12 +7,19 @@
 import SwiftUI
 
 private enum KeyboardVisualPreviewLayout {
-    static let toolbarHeight: CGFloat = 44
-    static let toolbarSpacing: CGFloat = 7
+    static let toolbarHeight: CGFloat = 38
+    static let toolbarControlSize: CGFloat = 34
+    static let toolbarSpacing: CGFloat = 6
     static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 8
-    static let outerBottomPadding: CGFloat = 6
-    static let expandedPanelMinHeight: CGFloat = 286
+    static let outerTopPadding: CGFloat = 6
+    static let outerBottomPadding: CGFloat = 0
+    static let letterKeyHeight: CGFloat = 46
+    static let controlKeyHeight: CGFloat = 42
+    static let keyRowSpacing: CGFloat = 8
+    static let keyShadowAllowance: CGFloat = 2
+    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
+    static let expandedPanelHeight: CGFloat = 286
+    static let improvePanelHeight: CGFloat = expandedPanelHeight + 104
     static let correctionDetailMinHeight: CGFloat = 232
     static let correctionCompleteMinHeight: CGFloat = 226
 }
@@ -103,6 +110,12 @@ struct KeyboardVisualPreviewView: View {
 
     var body: some View {
         let showsToolbar = panel != .actions && panel != .rewriteOptions
+        let viewportHeight = panel == .actions
+            ? KeyboardVisualPreviewLayout.improvePanelHeight
+            : KeyboardVisualPreviewLayout.expandedPanelHeight
+        let contentHeight = showsToolbar
+            ? viewportHeight - KeyboardVisualPreviewLayout.outerTopPadding - KeyboardVisualPreviewLayout.outerBottomPadding
+            : viewportHeight
 
         VStack(spacing: 0) {
             Spacer()
@@ -127,7 +140,7 @@ struct KeyboardVisualPreviewView: View {
                     correctionCompletePanel
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: showsToolbar ? nil : .infinity, alignment: .top)
+            .frame(maxWidth: .infinity, minHeight: contentHeight, maxHeight: contentHeight, alignment: .top)
             .padding(.horizontal, showsToolbar ? KeyboardVisualPreviewLayout.outerHorizontalPadding : 0)
             .padding(.top, showsToolbar ? KeyboardVisualPreviewLayout.outerTopPadding : 0)
             .padding(.bottom, showsToolbar ? KeyboardVisualPreviewLayout.outerBottomPadding : 0)
@@ -181,28 +194,19 @@ struct KeyboardVisualPreviewView: View {
 
             previewToolbarContent
                 .frame(maxWidth: .infinity)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Surface.overlayBackground : OpenKeyboardTheme.Surface.brandPanelBackground)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke((panel == .correctionCard || panel == .correctionCardNext || panel == .correctionOnly || panel == .predictionOnly) ? OpenKeyboardTheme.Semantic.error.opacity(0.42) : Color.clear, lineWidth: 1)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(height: KeyboardVisualPreviewLayout.toolbarControlSize)
+                .padding(.horizontal, 6)
 
             Image(systemName: "sparkles")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                .frame(width: 34, height: 34)
+                .frame(width: KeyboardVisualPreviewLayout.toolbarControlSize, height: KeyboardVisualPreviewLayout.toolbarControlSize)
                 .background(OpenKeyboardTheme.Semantic.primaryAction)
                 .clipShape(Circle())
                 .accessibilityIdentifier("preview_ai_sparkle_action")
         }
-        .frame(minHeight: KeyboardVisualPreviewLayout.toolbarHeight)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(OpenKeyboardTheme.Surface.toolbarBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .frame(height: KeyboardVisualPreviewLayout.toolbarHeight)
+        .padding(.horizontal, 4)
         .accessibilityIdentifier("preview_ai_toolbar")
     }
 
@@ -235,7 +239,7 @@ struct KeyboardVisualPreviewView: View {
             .accessibilityIdentifier("preview_compact_suggestion_strip")
         } else {
             HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(toolbarState.title)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.primary)
@@ -280,15 +284,15 @@ struct KeyboardVisualPreviewView: View {
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
             } else {
-                OpenKeyboardBrandMark(size: 36, symbolSize: 16)
+                OpenKeyboardBrandMark(size: KeyboardVisualPreviewLayout.toolbarControlSize, symbolSize: 15)
             }
         }
-        .frame(width: 36, height: 36)
+        .frame(width: KeyboardVisualPreviewLayout.toolbarControlSize, height: KeyboardVisualPreviewLayout.toolbarControlSize)
         .accessibilityIdentifier(toolbarState.showsIssueCount ? "preview_issue_count_badge" : "preview_openkeyboard_icon")
     }
 
     private var keyGrid: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: KeyboardVisualPreviewLayout.keyRowSpacing) {
             previewKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"])
             previewKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"])
                 .padding(.horizontal, 18)
@@ -306,6 +310,8 @@ struct KeyboardVisualPreviewView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.bottom, KeyboardVisualPreviewLayout.keyShadowAllowance)
+        .frame(height: KeyboardVisualPreviewLayout.keyGridHeight, alignment: .top)
         .accessibilityIdentifier("preview_keyboard_grid")
     }
 
@@ -370,15 +376,18 @@ struct KeyboardVisualPreviewView: View {
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
                 .padding(.top, 8)
 
-            Text("None of these are bulbs in the universe.")
-                .font(.system(size: 19, weight: .regular))
-                .foregroundColor(OpenKeyboardTheme.Text.primary)
-                .lineLimit(4)
-                .minimumScaleFactor(0.72)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-                .padding(.top, 10)
-                .accessibilityIdentifier("preview_action_result_text")
+            ScrollView(.vertical, showsIndicators: true) {
+                Text("Do you know that our test phrases are essentially meaningless, making them hard to rephrase? Technically, they are being rephrased, but not very effectively. Could you add a few longer, more meaningful sentences?")
+                    .font(.system(size: 15, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .minimumScaleFactor(0.72)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .accessibilityIdentifier("preview_action_result_text")
+            }
+            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 200, alignment: .topLeading)
+            .padding(.top, 10)
+            .clipped()
 
             Spacer(minLength: 8)
 
@@ -390,19 +399,26 @@ struct KeyboardVisualPreviewView: View {
                 }
                 .padding(.horizontal, 1)
             }
-            .frame(height: 38)
-            .padding(.bottom, 7)
+            .frame(height: 32)
+            .padding(.bottom, 4)
+            .layoutPriority(1)
             .accessibilityIdentifier("preview_ai_action_carousel")
 
             Divider()
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
 
-            previewImproveControls(applyIdentifier: "preview_ai_action_apply", backIdentifier: "preview_back_to_keyboard")
+            previewImproveControls(applyIdentifier: "preview_ai_action_apply", backIdentifier: "preview_back_to_keyboard", compact: true)
+                .layoutPriority(1)
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: KeyboardVisualPreviewLayout.improvePanelHeight,
+            maxHeight: KeyboardVisualPreviewLayout.improvePanelHeight,
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
@@ -458,7 +474,12 @@ struct KeyboardVisualPreviewView: View {
         .padding(.horizontal, 12)
         .padding(.top, 10)
         .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, minHeight: KeyboardVisualPreviewLayout.expandedPanelMinHeight, maxHeight: .infinity, alignment: .topLeading)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: KeyboardVisualPreviewLayout.expandedPanelHeight,
+            maxHeight: KeyboardVisualPreviewLayout.expandedPanelHeight,
+            alignment: .topLeading
+        )
         .background(
             RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
@@ -548,10 +569,19 @@ struct KeyboardVisualPreviewView: View {
         Text(label)
             .font(previewKeyFont(label, role: role))
             .foregroundColor(.primary)
-            .frame(maxWidth: .infinity, minHeight: role == .letter ? 52 : 46)
+            .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
             .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+    }
+
+    private func keyHeight(for role: PreviewKeyRole) -> CGFloat {
+        switch role {
+        case .letter:
+            return KeyboardVisualPreviewLayout.letterKeyHeight
+        case .modifier, .space:
+            return KeyboardVisualPreviewLayout.controlKeyHeight
+        }
     }
 
     private func previewKeyFont(_ label: String, role: PreviewKeyRole) -> Font {
@@ -586,47 +616,50 @@ struct KeyboardVisualPreviewView: View {
         .accessibilityValue(selected ? "Selected" : "")
     }
 
-    private func previewImproveControls(applyIdentifier: String, backIdentifier: String) -> some View {
-        HStack(spacing: 8) {
-            previewCircleControl(systemImage: "keyboard", foreground: OpenKeyboardTheme.Text.primary, background: OpenKeyboardTheme.Surface.overlayBackground.opacity(0.7))
+    private func previewImproveControls(applyIdentifier: String, backIdentifier: String, compact: Bool = false) -> some View {
+        let buttonSize: CGFloat = compact ? 34 : 36
+        let groupedWidth: CGFloat = compact ? 38 : 40
+
+        return HStack(spacing: 8) {
+            previewCircleControl(systemImage: "keyboard", foreground: OpenKeyboardTheme.Text.primary, background: OpenKeyboardTheme.Surface.overlayBackground.opacity(0.7), size: buttonSize)
                 .overlay(Circle().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.2))
                 .accessibilityIdentifier(backIdentifier)
 
             Spacer(minLength: 0)
 
             HStack(spacing: 0) {
-                previewGroupedControl(systemImage: "arrow.clockwise", foreground: OpenKeyboardTheme.Text.primary)
+                previewGroupedControl(systemImage: "arrow.clockwise", foreground: OpenKeyboardTheme.Text.primary, width: groupedWidth, height: buttonSize)
                     .accessibilityIdentifier("preview_ai_rerun")
-                previewGroupedControl(systemImage: "sparkles", foreground: OpenKeyboardTheme.Semantic.primaryAction)
+                previewGroupedControl(systemImage: "sparkles", foreground: OpenKeyboardTheme.Semantic.primaryAction, width: groupedWidth, height: buttonSize)
                     .accessibilityIdentifier("preview_ai_toggle_carousel")
-                previewGroupedControl(systemImage: "doc.on.doc", foreground: OpenKeyboardTheme.Text.primary)
+                previewGroupedControl(systemImage: "doc.on.doc", foreground: OpenKeyboardTheme.Text.primary, width: groupedWidth, height: buttonSize)
                     .accessibilityIdentifier("preview_ai_copy")
             }
-            .frame(height: 36)
+            .frame(height: buttonSize)
             .background(OpenKeyboardTheme.Surface.overlayBackground.opacity(0.72), in: Capsule())
             .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
 
             Spacer(minLength: 0)
 
-            previewCircleControl(systemImage: "checkmark", foreground: OpenKeyboardTheme.Text.inverse, background: OpenKeyboardTheme.Semantic.primaryAction)
+            previewCircleControl(systemImage: "checkmark", foreground: OpenKeyboardTheme.Text.inverse, background: OpenKeyboardTheme.Semantic.primaryAction, size: buttonSize)
                 .accessibilityIdentifier(applyIdentifier)
         }
-        .padding(.top, 7)
+        .padding(.top, compact ? 4 : 7)
     }
 
-    private func previewCircleControl(systemImage: String, foreground: Color, background: Color) -> some View {
+    private func previewCircleControl(systemImage: String, foreground: Color, background: Color, size: CGFloat = 36) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 16, weight: .semibold))
             .foregroundColor(foreground)
-            .frame(width: 36, height: 36)
+            .frame(width: size, height: size)
             .background(background, in: Circle())
     }
 
-    private func previewGroupedControl(systemImage: String, foreground: Color) -> some View {
+    private func previewGroupedControl(systemImage: String, foreground: Color, width: CGFloat = 40, height: CGFloat = 36) -> some View {
         Image(systemName: systemImage)
             .font(.system(size: 16, weight: .semibold))
             .foregroundColor(foreground)
-            .frame(width: 40, height: 36)
+            .frame(width: width, height: height)
     }
 
     private func detailButton(_ title: String, filled: Bool, tint: Color = OpenKeyboardTheme.Semantic.primaryAction) -> some View {

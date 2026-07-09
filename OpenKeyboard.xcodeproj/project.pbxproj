@@ -45,6 +45,8 @@
 		OKLIVEUI000000000000002 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKLIVEUI000000000000001 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift */; };
 		OKLS00000000000000000002 /* OpenKeyboard/LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */; };
 		OKNETUITEST000000002 /* OpenKeyboard/Services/NetworkManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972B832BB4490EB9A8C5CA2C /* OpenKeyboard/Services/NetworkManager.swift */; };
+		OKNEXTPREDEXT000002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKNEXTPRED000000001 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift */; };
+		OKNEXTPREDUITEST002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKNEXTPRED000000001 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift */; };
 		OKPANELTEST00000002 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPANELTEST00000001 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift */; };
 		OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */; };
 		OKPLANTEST000000000002 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPLANTEST000000000001 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift */; };
@@ -135,6 +137,7 @@
 		OKLIVE000000000000000001 /* OpenKeyboard/Views/LiveAITestHarnessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/LiveAITestHarnessView.swift; sourceTree = SOURCE_ROOT; };
 		OKLIVEUI000000000000001 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/LiveGatewayAIUITests.swift; sourceTree = SOURCE_ROOT; };
 		OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = OpenKeyboard/LaunchScreen.storyboard; sourceTree = SOURCE_ROOT; };
+		OKNEXTPRED000000001 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift; sourceTree = SOURCE_ROOT; };
 		OKPANELTEST00000001 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardPanelModeTests.swift; sourceTree = SOURCE_ROOT; };
 		OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardReplacementPlanner.swift; sourceTree = SOURCE_ROOT; };
 		OKPLANTEST000000000001 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift; sourceTree = SOURCE_ROOT; };
@@ -190,6 +193,7 @@
 				OKPLAYGROUND0000001 /* OpenKeyboard/Views/PlaygroundView.swift */,
 				OKLABSTATE000000001 /* OpenKeyboard/Models/KeyboardPreviewLabState.swift */,
 				OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */,
+				OKNEXTPRED000000001 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift */,
 				703438C4D3A1836F6B202DA7 /* OpenKeyboard/Info.plist */,
 				OKLS00000000000000000001 /* OpenKeyboard/LaunchScreen.storyboard */,
 				807C41B5A20BFF253A7A6DAD /* OpenKeyboard/OpenKeyboard.entitlements */,
@@ -424,6 +428,7 @@
 				OKACTIONERRTEST0002 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift in Sources */,
 				OKVMUITEST0000000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
 				OKAIUITEST0000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
+				OKNEXTPREDUITEST002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */,
 				OKNETUITEST000000002 /* OpenKeyboard/Services/NetworkManager.swift in Sources */,
 				OKSETVMUITEST000002 /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */,
 				OKSETVMTEST00000002 /* OpenKeyboardUITests/SettingsViewModelTests.swift in Sources */,
@@ -440,6 +445,7 @@
 				39D261B1DB017C6BA7680468B /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
 				OKAI000000000000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
 				OKSUGMODELEXT0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
+				OKNEXTPREDEXT000002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */,
 				OKCANONGWEXT000000002 /* OpenKeyboard/Services/CanonicalGatewayClient.swift in Sources */,
 				OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
 				OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,

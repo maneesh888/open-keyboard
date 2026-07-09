@@ -142,6 +142,14 @@ struct KeyboardActionPanelState: Equatable {
         options.first { $0.id == selectedOptionID } ?? options.first
     }
 
+    var usesExpandedImprovePanel: Bool {
+        selectedAction == .improve
+    }
+
+    var usesScrollableImproveResult: Bool {
+        usesExpandedImprovePanel && selectedOption != nil && !isLoading
+    }
+
     mutating func selectAction(_ action: KeyboardAIAction) {
         guard Self.availableActions.contains(action) else { return }
         selectedAction = action
@@ -174,6 +182,7 @@ struct KeyboardActionPanelState: Equatable {
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
     private let aiService: KeyboardAIServiceProviding
+    private let nextTextPredictor: NextTextPredicting
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
 
@@ -191,6 +200,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var actionError: KeyboardActionErrorState?
     @Published private(set) var completionPanelState = KeyboardCompletionPanelState.allDone
     @Published private(set) var isGrammarCorrectionLoading = false
+    @Published private(set) var typingPredictions: [KeyboardPredictionSuggestion] = []
     @Published private var hasNoIssueAnalysisResult = false
     private var composingBuffer = ""
     private var automaticAnalysisTask: Task<Void, Never>?
@@ -291,6 +301,7 @@ final class KeyboardViewModel: ObservableObject {
     init(
         textDocumentProxy: UITextDocumentProxy,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
+        nextTextPredictor: NextTextPredicting = AppleNaturalLanguageNextTextPredictor(),
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
         productionTestFullAccess: Bool = false,
@@ -298,6 +309,7 @@ final class KeyboardViewModel: ObservableObject {
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
+        self.nextTextPredictor = nextTextPredictor
         self.loadConfig = loadConfig
         self.loadGatewayConnectionError = loadGatewayConnectionError
         self.automaticAnalysisDelayNanoseconds = automaticAnalysisDelayNanoseconds
@@ -306,6 +318,7 @@ final class KeyboardViewModel: ObservableObject {
         self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
         let seededSuggestionState = Self.loadSeededSuggestionState()
         self.suggestionState = seededSuggestionState?.suggestionState
+        self.actionPanelState = seededSuggestionState?.actionPanelState
         self.rewriteOptionsState = seededSuggestionState?.rewriteOptionsState
         self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
         self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
@@ -313,6 +326,7 @@ final class KeyboardViewModel: ObservableObject {
         self.hasNoIssueAnalysisResult = seededSuggestionState?.hasNoIssueAnalysisResult ?? false
         self.completionPanelState = seededSuggestionState?.completionPanelState ?? .allDone
         self.hasFullAccess = productionTestFullAccess || seededSuggestionState != nil
+        refreshTypingPredictions()
         recordConfigVisibilityProbe(context: "init")
     }
 
@@ -341,6 +355,7 @@ final class KeyboardViewModel: ObservableObject {
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText("\n")
         clearComposingBuffer()
+        typingPredictions = []
         clearAutomaticAnalysisState()
     }
 
@@ -564,6 +579,15 @@ final class KeyboardViewModel: ObservableObject {
     func copyActionErrorDetails() {
         guard let actionError else { return }
         UIPasteboard.general.string = "\(actionError.title): \(actionError.message)"
+    }
+
+    func applyTypingPrediction(id: String) {
+        guard let prediction = typingPredictions.first(where: { $0.id == id }) else { return }
+        clearKeyboardReplacementTracking()
+        insertTypingPrediction(prediction)
+        persistComposingBuffer()
+        refreshTypingPredictions()
+        scheduleAutomaticAnalysisAfterTextChange()
     }
 
     private func requestGrammarCorrectionForCurrentText() {
@@ -990,6 +1014,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
+        refreshTypingPredictions()
         actionPanelTask?.cancel()
         actionPanelTask = nil
         automaticAnalysisTask?.cancel()
@@ -1010,6 +1035,19 @@ final class KeyboardViewModel: ObservableObject {
         completionPanelState = .allDone
         lastAnalyzedText = nil
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+    }
+
+    private func refreshTypingPredictions() {
+        let text = currentEditableText()
+        typingPredictions = nextTextPredictor
+            .predictions(for: NextTextPredictionRequest(text: text, maxSuggestions: 3))
+            .map { prediction in
+                KeyboardPredictionSuggestion(
+                    label: prediction.kind == .completion ? "Complete" : "Next word",
+                    text: prediction.text,
+                    kind: prediction.kind.rawValue
+                )
+            }
     }
 
     private func requestActionPanelResult(_ action: KeyboardAIAction, replacementPlan: KeyboardReplacementPlan) {
@@ -1306,6 +1344,30 @@ final class KeyboardViewModel: ObservableObject {
         composingBuffer = finalReplacement
         rememberKeyboardReplacement(sourceText: plan.textForAI, resultText: finalReplacement)
         persistComposingBuffer()
+        refreshTypingPredictions()
+    }
+
+    private func insertTypingPrediction(_ prediction: KeyboardPredictionSuggestion) {
+        let currentText = currentEditableText()
+        let predictionText = prediction.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !predictionText.isEmpty else { return }
+
+        if prediction.kind == NextTextPredictionKind.completion.rawValue,
+           let partialToken = Self.trailingPredictionToken(in: currentText) {
+            for _ in partialToken {
+                textDocumentProxy.deleteBackward()
+            }
+            if composingBuffer.hasSuffix(partialToken) {
+                composingBuffer.removeLast(partialToken.count)
+            }
+            textDocumentProxy.insertText(predictionText)
+            composingBuffer.append(predictionText)
+            return
+        }
+
+        let insertionText = Self.predictionInsertionText(predictionText, after: currentText)
+        textDocumentProxy.insertText(insertionText)
+        composingBuffer.append(insertionText)
     }
 
     private func shouldPreferComposingBuffer(over context: String) -> Bool {
@@ -1393,6 +1455,26 @@ final class KeyboardViewModel: ObservableObject {
         composingBuffer = replacement
         rememberKeyboardReplacement(sourceText: sourceText, resultText: replacement)
         persistComposingBuffer()
+        refreshTypingPredictions()
+    }
+
+    private static func predictionInsertionText(_ prediction: String, after text: String) -> String {
+        let trimmedPrediction = prediction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrediction.isEmpty else { return "" }
+        guard let lastCharacter = text.last, !lastCharacter.isWhitespace else {
+            return trimmedPrediction
+        }
+        return " \(trimmedPrediction)"
+    }
+
+    private static func trailingPredictionToken(in text: String) -> String? {
+        let tokenCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "'"))
+        var suffix = ""
+        for character in text.reversed() {
+            guard character.unicodeScalars.allSatisfy({ tokenCharacters.contains($0) }) else { break }
+            suffix.insert(character, at: suffix.startIndex)
+        }
+        return suffix.isEmpty ? nil : suffix
     }
 
     private func persistComposingBuffer() {
@@ -1503,6 +1585,7 @@ final class KeyboardViewModel: ObservableObject {
     private struct SeededKeyboardSuggestionState {
         let panelMode: KeyboardPanelMode
         let suggestionState: KeyboardSuggestionState?
+        let actionPanelState: KeyboardActionPanelState?
         let rewriteOptionsState: KeyboardRewriteOptionsState?
         let aiStatus: String
         let isPerformingAIAction: Bool
@@ -1514,8 +1597,18 @@ final class KeyboardViewModel: ObservableObject {
             case "rewriteOptions":
                 panelMode = .rewriteOptions
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = Self.rewriteOptionsState
                 aiStatus = "3 rewrites ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+            case "improvePanel":
+                panelMode = .actions
+                suggestionState = nil
+                actionPanelState = Self.improveActionPanelState
+                rewriteOptionsState = nil
+                aiStatus = "Improve ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -1525,6 +1618,7 @@ final class KeyboardViewModel: ObservableObject {
                     response: Self.carouselResponse,
                     sourceContext: "i has a apple and ths sentence"
                 )
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
@@ -1533,6 +1627,7 @@ final class KeyboardViewModel: ObservableObject {
             case "correctionComplete":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "No more suggestions"
                 isPerformingAIAction = false
@@ -1541,6 +1636,7 @@ final class KeyboardViewModel: ObservableObject {
             case "allGood":
                 panelMode = .correctionComplete
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "No issues found"
                 isPerformingAIAction = false
@@ -1549,6 +1645,7 @@ final class KeyboardViewModel: ObservableObject {
             case "analyzing":
                 panelMode = .keyboard
                 suggestionState = nil
+                actionPanelState = nil
                 rewriteOptionsState = nil
                 aiStatus = "Analyzing your text..."
                 isPerformingAIAction = true
@@ -1607,6 +1704,30 @@ final class KeyboardViewModel: ObservableObject {
                     KeyboardRewriteOption(id: "rewrite-option-2", title: "Natural", text: "There are no bulbs anywhere in the universe."),
                     KeyboardRewriteOption(id: "rewrite-option-3", title: "Concise", text: "No bulbs exist in the universe.")
                 ]
+            )
+        }
+
+        private static var improveActionPanelState: KeyboardActionPanelState {
+            let sourceText = "Do you know that our test phrases are essentially meaningless, making them hard to rephrase? Technically, they are being rephrased, but not very effectively. Could you add a few longer, more meaningful sentences?"
+            let replacementPlan = KeyboardReplacementPlan(
+                textToDelete: sourceText,
+                textForAI: sourceText,
+                leadingWhitespace: "",
+                trailingWhitespace: ""
+            )
+            return KeyboardActionPanelState(
+                sourceText: sourceText,
+                replacementPlan: replacementPlan,
+                selectedAction: .improve,
+                options: [
+                    KeyboardRewriteOption(
+                        id: "improve-option-1",
+                        title: "Clearer",
+                        text: sourceText
+                    )
+                ],
+                isCarouselVisible: true,
+                isLoading: false
             )
         }
     }
