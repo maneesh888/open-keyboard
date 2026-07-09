@@ -22,9 +22,11 @@ struct KeyboardView: View {
             if showsToolbar {
                 KeyboardAIToolbar(
                     state: viewModel.toolbarState,
+                    typingPredictions: viewModel.typingPredictions,
                     isPerformingAIAction: viewModel.isPerformingAIAction,
                     actionsEnabled: viewModel.canOpenActionPanel,
                     statusActionEnabled: viewModel.canOpenGrammarCorrection,
+                    onPrediction: { viewModel.applyTypingPrediction(id: $0) },
                     onStatus: { viewModel.openGrammarCorrection() },
                     onSparkle: { viewModel.showActionPanel() }
                 )
@@ -189,21 +191,27 @@ struct KeyboardView: View {
 
 private struct KeyboardAIToolbar: View {
     let state: KeyboardToolbarState
+    let typingPredictions: [KeyboardPredictionSuggestion]
     let isPerformingAIAction: Bool
     let actionsEnabled: Bool
     let statusActionEnabled: Bool
+    let onPrediction: (String) -> Void
     let onStatus: () -> Void
     let onSparkle: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             statusIcon
-            Button(action: performStatusAction) {
-                statusContent
+            if typingPredictions.isEmpty {
+                Button(action: performStatusAction) {
+                    statusContent
+                }
+                .buttonStyle(.plain)
+                .disabled(!statusActionEnabled)
+                .accessibilityIdentifier("ai_toolbar_status_action")
+            } else {
+                predictionStrip
             }
-            .buttonStyle(.plain)
-            .disabled(!statusActionEnabled)
-            .accessibilityIdentifier("ai_toolbar_status_action")
             sparkleButton
         }
         .frame(height: KeyboardPanelLayout.toolbarHeight)
@@ -248,6 +256,32 @@ private struct KeyboardAIToolbar: View {
         .disabled(!statusActionEnabled)
         .accessibilityIdentifier(state.showsIssueCount ? "keyboard_issue_count_badge" : "keyboard_openkeyboard_icon")
         .accessibilityLabel(state.showsIssueCount ? "\(state.issueCount) writing suggestions" : "Open Keyboard status")
+    }
+
+    private var predictionStrip: some View {
+        HStack(spacing: 6) {
+            ForEach(Array(typingPredictions.prefix(3).enumerated()), id: \.element.id) { index, prediction in
+                Button {
+                    onPrediction(prediction.id)
+                } label: {
+                    Text(prediction.text)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(OpenKeyboardTheme.Text.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.toolbarControlSize)
+                        .padding(.horizontal, 6)
+                        .background(OpenKeyboardTheme.Surface.panelBackground.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("typing_prediction_chip_\(index)")
+                .accessibilityLabel("Typing suggestion \(prediction.text)")
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: KeyboardPanelLayout.toolbarControlSize)
+        .accessibilityIdentifier("typing_prediction_strip")
     }
 
     private var statusContent: some View {

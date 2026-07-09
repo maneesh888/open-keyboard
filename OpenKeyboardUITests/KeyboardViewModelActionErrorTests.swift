@@ -8,6 +8,70 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLocalNLPPredictionsUpdateWhileTyping() {
+        let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
+            "How are you?",
+            "How can I help?",
+            "How is everything?"
+        ]))
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: ""),
+            aiService: FailingKeyboardAIService(),
+            nextTextPredictor: predictor,
+            loadConfig: { Self.configuredGateway }
+        )
+
+        viewModel.insert("H")
+        viewModel.insert("o")
+
+        XCTAssertEqual(viewModel.typingPredictions.first?.text, "how")
+        XCTAssertEqual(viewModel.typingPredictions.first?.kind, NextTextPredictionKind.completion.rawValue)
+
+        viewModel.insert("w")
+        viewModel.insertSpace()
+
+        XCTAssertEqual(viewModel.typingPredictions.map(\.text), ["are", "can", "is"])
+        XCTAssertTrue(viewModel.typingPredictions.allSatisfy { $0.kind == NextTextPredictionKind.nextWord.rawValue })
+    }
+
+    func testApplyingCompletionPredictionReplacesPartialWord() throws {
+        let proxy = FakeTextDocumentProxy(text: "Ho")
+        let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
+            "Hope this helps.",
+            "Home screen is ready."
+        ]))
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: FailingKeyboardAIService(),
+            nextTextPredictor: predictor,
+            loadConfig: { Self.configuredGateway }
+        )
+
+        let prediction = try XCTUnwrap(viewModel.typingPredictions.first { $0.text == "hope" })
+        viewModel.applyTypingPrediction(id: prediction.id)
+
+        XCTAssertEqual(proxy.text, "hope")
+    }
+
+    func testApplyingNextWordPredictionInsertsSeparatedWord() throws {
+        let proxy = FakeTextDocumentProxy(text: "How ")
+        let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
+            "How are you?",
+            "How can I help?"
+        ]))
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: FailingKeyboardAIService(),
+            nextTextPredictor: predictor,
+            loadConfig: { Self.configuredGateway }
+        )
+
+        let prediction = try XCTUnwrap(viewModel.typingPredictions.first { $0.text == "are" })
+        viewModel.applyTypingPrediction(id: prediction.id)
+
+        XCTAssertEqual(proxy.text, "How are")
+    }
+
     func testLegacyPersistedRewriteSeedIsIgnoredAndCleared() throws {
         try withSharedKeyboardDebugSeedDefaults { defaults in
             defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")

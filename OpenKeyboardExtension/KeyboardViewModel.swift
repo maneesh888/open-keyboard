@@ -182,6 +182,7 @@ struct KeyboardActionPanelState: Equatable {
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
     private let aiService: KeyboardAIServiceProviding
+    private let nextTextPredictor: NextTextPredicting
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
 
@@ -199,6 +200,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var actionError: KeyboardActionErrorState?
     @Published private(set) var completionPanelState = KeyboardCompletionPanelState.allDone
     @Published private(set) var isGrammarCorrectionLoading = false
+    @Published private(set) var typingPredictions: [KeyboardPredictionSuggestion] = []
     @Published private var hasNoIssueAnalysisResult = false
     private var composingBuffer = ""
     private var automaticAnalysisTask: Task<Void, Never>?
@@ -299,6 +301,7 @@ final class KeyboardViewModel: ObservableObject {
     init(
         textDocumentProxy: UITextDocumentProxy,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
+        nextTextPredictor: NextTextPredicting = AppleNaturalLanguageNextTextPredictor(),
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
         productionTestFullAccess: Bool = false,
@@ -306,6 +309,7 @@ final class KeyboardViewModel: ObservableObject {
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
+        self.nextTextPredictor = nextTextPredictor
         self.loadConfig = loadConfig
         self.loadGatewayConnectionError = loadGatewayConnectionError
         self.automaticAnalysisDelayNanoseconds = automaticAnalysisDelayNanoseconds
@@ -322,6 +326,7 @@ final class KeyboardViewModel: ObservableObject {
         self.hasNoIssueAnalysisResult = seededSuggestionState?.hasNoIssueAnalysisResult ?? false
         self.completionPanelState = seededSuggestionState?.completionPanelState ?? .allDone
         self.hasFullAccess = productionTestFullAccess || seededSuggestionState != nil
+        refreshTypingPredictions()
         recordConfigVisibilityProbe(context: "init")
     }
 
@@ -350,6 +355,7 @@ final class KeyboardViewModel: ObservableObject {
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText("\n")
         clearComposingBuffer()
+        typingPredictions = []
         clearAutomaticAnalysisState()
     }
 
@@ -573,6 +579,15 @@ final class KeyboardViewModel: ObservableObject {
     func copyActionErrorDetails() {
         guard let actionError else { return }
         UIPasteboard.general.string = "\(actionError.title): \(actionError.message)"
+    }
+
+    func applyTypingPrediction(id: String) {
+        guard let prediction = typingPredictions.first(where: { $0.id == id }) else { return }
+        clearKeyboardReplacementTracking()
+        insertTypingPrediction(prediction)
+        persistComposingBuffer()
+        refreshTypingPredictions()
+        scheduleAutomaticAnalysisAfterTextChange()
     }
 
     private func requestGrammarCorrectionForCurrentText() {
@@ -999,6 +1014,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
+        refreshTypingPredictions()
         actionPanelTask?.cancel()
         actionPanelTask = nil
         automaticAnalysisTask?.cancel()
@@ -1019,6 +1035,19 @@ final class KeyboardViewModel: ObservableObject {
         completionPanelState = .allDone
         lastAnalyzedText = nil
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+    }
+
+    private func refreshTypingPredictions() {
+        let text = currentEditableText()
+        typingPredictions = nextTextPredictor
+            .predictions(for: NextTextPredictionRequest(text: text, maxSuggestions: 3))
+            .map { prediction in
+                KeyboardPredictionSuggestion(
+                    label: prediction.kind == .completion ? "Complete" : "Next word",
+                    text: prediction.text,
+                    kind: prediction.kind.rawValue
+                )
+            }
     }
 
     private func requestActionPanelResult(_ action: KeyboardAIAction, replacementPlan: KeyboardReplacementPlan) {
@@ -1315,6 +1344,30 @@ final class KeyboardViewModel: ObservableObject {
         composingBuffer = finalReplacement
         rememberKeyboardReplacement(sourceText: plan.textForAI, resultText: finalReplacement)
         persistComposingBuffer()
+        refreshTypingPredictions()
+    }
+
+    private func insertTypingPrediction(_ prediction: KeyboardPredictionSuggestion) {
+        let currentText = currentEditableText()
+        let predictionText = prediction.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !predictionText.isEmpty else { return }
+
+        if prediction.kind == NextTextPredictionKind.completion.rawValue,
+           let partialToken = Self.trailingPredictionToken(in: currentText) {
+            for _ in partialToken {
+                textDocumentProxy.deleteBackward()
+            }
+            if composingBuffer.hasSuffix(partialToken) {
+                composingBuffer.removeLast(partialToken.count)
+            }
+            textDocumentProxy.insertText(predictionText)
+            composingBuffer.append(predictionText)
+            return
+        }
+
+        let insertionText = Self.predictionInsertionText(predictionText, after: currentText)
+        textDocumentProxy.insertText(insertionText)
+        composingBuffer.append(insertionText)
     }
 
     private func shouldPreferComposingBuffer(over context: String) -> Bool {
@@ -1402,6 +1455,26 @@ final class KeyboardViewModel: ObservableObject {
         composingBuffer = replacement
         rememberKeyboardReplacement(sourceText: sourceText, resultText: replacement)
         persistComposingBuffer()
+        refreshTypingPredictions()
+    }
+
+    private static func predictionInsertionText(_ prediction: String, after text: String) -> String {
+        let trimmedPrediction = prediction.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrediction.isEmpty else { return "" }
+        guard let lastCharacter = text.last, !lastCharacter.isWhitespace else {
+            return trimmedPrediction
+        }
+        return " \(trimmedPrediction)"
+    }
+
+    private static func trailingPredictionToken(in text: String) -> String? {
+        let tokenCharacters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "'"))
+        var suffix = ""
+        for character in text.reversed() {
+            guard character.unicodeScalars.allSatisfy({ tokenCharacters.contains($0) }) else { break }
+            suffix.insert(character, at: suffix.startIndex)
+        }
+        return suffix.isEmpty ? nil : suffix
     }
 
     private func persistComposingBuffer() {
