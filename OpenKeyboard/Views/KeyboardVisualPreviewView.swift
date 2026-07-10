@@ -11,7 +11,7 @@ private enum KeyboardVisualPreviewLayout {
     static let toolbarControlSize: CGFloat = 34
     static let toolbarSpacing: CGFloat = 6
     static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 10
+    static let outerTopPadding: CGFloat = 6
     static let outerBottomPadding: CGFloat = 0
     static let letterKeyHeight: CGFloat = 52
     static let controlKeyHeight: CGFloat = 48
