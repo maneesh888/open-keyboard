@@ -715,6 +715,79 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
     }
 
+    func testDelayedManualGrammarResponseIsDiscardedWhenInputIsClearedBeforeResponseReturns() async {
+        let sourceText = "i has a apple and ths"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = DelayedSequencedKeyboardAIService(
+            results: [Self.structuredGrammarResult()],
+            delays: [50_000_000]
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 1_000_000_000
+        )
+
+        for character in sourceText {
+            viewModel.insert(String(character))
+        }
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts == [sourceText] && viewModel.isGrammarCorrectionLoading }
+
+        proxy.replaceTextForTest("")
+        await waitUntil { !viewModel.isGrammarCorrectionLoading && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertNil(viewModel.currentCorrection)
+        XCTAssertFalse(viewModel.canOpenAnalysisResult)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState, .allDone)
+        XCTAssertEqual(viewModel.aiStatus, "No more suggestions")
+    }
+
+    func testTypingDuringManualGrammarRequestSchedulesFreshAnalysisForUpdatedText() async {
+        let sourceText = "i has a apple and ths"
+        let updatedText = "\(sourceText) now"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = DelayedSequencedKeyboardAIService(
+            results: [
+                Self.structuredGrammarResult(),
+                Self.noIssueGrammarResult()
+            ],
+            delays: [50_000_000, 0]
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 10_000_000
+        )
+
+        for character in sourceText {
+            viewModel.insert(String(character))
+        }
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts == [sourceText] && viewModel.isGrammarCorrectionLoading }
+
+        viewModel.insert(" now")
+        await waitUntil { service.requestedTexts == [sourceText, updatedText] && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(proxy.text, updatedText)
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertNil(viewModel.currentCorrection)
+        XCTAssertFalse(viewModel.isGrammarCorrectionLoading)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+    }
+
     func testManualGrammarLoadingSurvivesCancelledAutomaticAnalysis() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -1477,6 +1550,46 @@ private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
         requestedActions.append(action)
         requestedTexts.append(text)
         return try nextResult()
+    }
+
+    private func nextResult() throws -> KeyboardActionOperationResult {
+        guard !results.isEmpty else {
+            throw KeyboardAIError.invalidResponse
+        }
+        return results.removeFirst()
+    }
+}
+
+private final class DelayedSequencedKeyboardAIService: KeyboardAIServiceProviding {
+    private var results: [KeyboardActionOperationResult]
+    private let delays: [UInt64]
+    private(set) var requestedActions: [KeyboardAIAction] = []
+    private(set) var requestedTexts: [String] = []
+
+    init(results: [KeyboardActionOperationResult], delays: [UInt64]) {
+        self.results = results
+        self.delays = delays
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        let result = try await performResult(action: .fixGrammar, on: text, config: config)
+        return try result.suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        let requestIndex = requestedActions.count
+        requestedActions.append(action)
+        requestedTexts.append(text)
+        let result = try nextResult()
+        let delay = requestIndex < delays.count ? delays[requestIndex] : 0
+        if delay > 0 {
+            try? await Task.sleep(nanoseconds: delay)
+        }
+        return result
     }
 
     private func nextResult() throws -> KeyboardActionOperationResult {
