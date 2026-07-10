@@ -20,7 +20,7 @@ enum KeyboardPanelLayout {
     static let toolbarRenderedHeight: CGFloat = toolbarHeight
     static let toolbarSpacing: CGFloat = 6
     static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 2
+    static let outerTopPadding: CGFloat = 6
     static let outerBottomPadding: CGFloat = 0
     static let letterKeyHeight: CGFloat = 52
     static let controlKeyHeight: CGFloat = 48
