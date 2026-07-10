@@ -21,11 +21,18 @@ final class KeyboardViewController: UIInputViewController {
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         refreshRuntimeState()
+        applyKeyboardHeight(currentKeyboardHeight, forcingLayout: true)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshRuntimeState()
+    }
+
+    override func updateViewConstraints() {
+        ensureKeyboardHeightConstraint()
+        keyboardHeightConstraint?.constant = currentKeyboardHeight
+        super.updateViewConstraints()
     }
 
     private func installKeyboardView() {
@@ -41,21 +48,20 @@ final class KeyboardViewController: UIInputViewController {
         view.addSubview(controller.view)
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         controller.view.backgroundColor = .clear
-        let keyboardHeightConstraint = view.heightAnchor.constraint(equalToConstant: KeyboardPanelLayout.preferredKeyboardHeight)
-        self.keyboardHeightConstraint = keyboardHeightConstraint
+        ensureKeyboardHeightConstraint()
 
         NSLayoutConstraint.activate([
             controller.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             controller.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             controller.view.topAnchor.constraint(equalTo: view.topAnchor),
-            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            keyboardHeightConstraint
+            controller.view.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
         controller.didMove(toParent: self)
         hostingController = controller
         bindKeyboardHeight(to: viewModel)
         refreshRuntimeState()
+        applyKeyboardHeight(currentKeyboardHeight, forcingLayout: true)
     }
 
     private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
@@ -70,15 +76,40 @@ final class KeyboardViewController: UIInputViewController {
             .receive(on: RunLoop.main)
             .sink { [weak self] height in
                 guard let self else { return }
-                self.keyboardHeightConstraint?.constant = height
-                self.view.setNeedsUpdateConstraints()
-                self.view.invalidateIntrinsicContentSize()
-                self.view.layoutIfNeeded()
+                self.applyKeyboardHeight(height, forcingLayout: true)
             }
             .store(in: &cancellables)
     }
 
     private func refreshRuntimeState() {
         viewModel?.updateFullAccess(hasFullAccess)
+    }
+
+    private var currentKeyboardHeight: CGFloat {
+        guard let viewModel else { return KeyboardPanelLayout.preferredKeyboardHeight }
+        return KeyboardPanelLayout.keyboardHeight(
+            for: viewModel.panelMode,
+            actionPanelState: viewModel.actionPanelState
+        )
+    }
+
+    private func ensureKeyboardHeightConstraint() {
+        guard keyboardHeightConstraint == nil else { return }
+        let constraint = view.heightAnchor.constraint(equalToConstant: KeyboardPanelLayout.preferredKeyboardHeight)
+        constraint.priority = .required
+        constraint.isActive = true
+        keyboardHeightConstraint = constraint
+    }
+
+    private func applyKeyboardHeight(_ height: CGFloat, forcingLayout: Bool) {
+        ensureKeyboardHeightConstraint()
+        keyboardHeightConstraint?.constant = height
+        view.setNeedsUpdateConstraints()
+        view.invalidateIntrinsicContentSize()
+        view.superview?.setNeedsLayout()
+        if forcingLayout {
+            view.layoutIfNeeded()
+            view.superview?.layoutIfNeeded()
+        }
     }
 }
