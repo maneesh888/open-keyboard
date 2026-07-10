@@ -48,6 +48,7 @@ public struct NextTextPredictionCorpus: Equatable, Sendable {
         "I hope you are well.",
         "I am going to send the message.",
         "I am going to the store.",
+        "I no longer need this.",
         "Thank you for your help.",
         "Thank you for the update.",
         "Please let me know.",

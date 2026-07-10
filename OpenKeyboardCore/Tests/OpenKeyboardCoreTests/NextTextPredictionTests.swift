@@ -44,6 +44,22 @@ final class NextTextPredictionTests: XCTestCase {
         XCTAssertTrue(predictions.allSatisfy { $0.text.hasPrefix("ho") })
     }
 
+    func testDefaultCorpusCompletesNoLongerPhrase() {
+        let predictions = AppleNaturalLanguageNextTextPredictor()
+            .predictions(for: NextTextPredictionRequest(text: "i no lon"))
+
+        XCTAssertEqual(predictions.first?.text, "longer")
+        XCTAssertEqual(predictions.first?.kind, .completion)
+    }
+
+    func testDefaultCorpusPredictsLongerAfterNo() {
+        let predictions = AppleNaturalLanguageNextTextPredictor()
+            .predictions(for: NextTextPredictionRequest(text: "i no "))
+
+        XCTAssertEqual(predictions.first?.text, "longer")
+        XCTAssertEqual(predictions.first?.kind, .nextWord)
+    }
+
     func testMaxSuggestionsIsClampedToThree() {
         let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
             "Please alpha.",

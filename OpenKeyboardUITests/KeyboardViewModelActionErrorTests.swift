@@ -34,6 +34,17 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(viewModel.typingPredictions.allSatisfy { $0.kind == NextTextPredictionKind.nextWord.rawValue })
     }
 
+    func testLocalNLPPredictionsCompleteNoLongerPhrase() {
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i no lon"),
+            aiService: FailingKeyboardAIService(),
+            loadConfig: { Self.configuredGateway }
+        )
+
+        XCTAssertEqual(viewModel.typingPredictions.first?.text, "longer")
+        XCTAssertEqual(viewModel.typingPredictions.first?.kind, NextTextPredictionKind.completion.rawValue)
+    }
+
     func testApplyingCompletionPredictionReplacesPartialWord() throws {
         let proxy = FakeTextDocumentProxy(text: "Ho")
         let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
