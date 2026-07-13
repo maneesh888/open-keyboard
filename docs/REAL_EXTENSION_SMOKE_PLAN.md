@@ -54,12 +54,11 @@ The real-extension route should now prove these visible states independently:
 - The right `ai_sparkle_action` lane is present and opens the generative action panel.
 - The sparkle action panel exposes source text plus selectable Improve/Rephrase/Summarize actions.
 
-Historical config-visibility evidence remains useful when diagnosing App Group or gateway seeding regressions:
+Historical config-visibility evidence remains useful when diagnosing App Group or gateway seeding regressions. The original machine-local reports are not repository dependencies; retain only these artifact IDs for traceability:
 
 ```text
-reports/real-extension-config-seed-legacy-key-20260619T1235/summary.md
-reports/real-extension-config-seed-legacy-key-20260619T1235/logs/xcodebuild-real-extension-config-seed-legacy-key.log
-.agent/reports/20260619T1212-real-extension-gateway-config-seed/report.md
+real-extension-config-seed-legacy-key-20260619T1235
+20260619T1212-real-extension-gateway-config-seed
 ```
 
 ## What counts as acceptance proof

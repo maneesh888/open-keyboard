@@ -128,7 +128,7 @@
 
 - [ ] Create project structure
 - [ ] Initialize Git repository
-- [ ] Create documentation framework (CLAUDE.md, ARCHITECTURE.md, etc.)
+- [ ] Create a repository-owned documentation framework (`AGENTS.md` plus focused files under `docs/`)
 - [ ] Set up Xcode project with 2 targets (App + Extension)
 - [ ] Configure App Groups for data sharing
 - [ ] Set up bundle identifiers
@@ -331,7 +331,7 @@ interface ClientConfig {
 ### Phase 7: Documentation & Open Source Prep (Day 11)
 **Priority: P2 (Nice to Have)
 
-- [ ] Complete CLAUDE.md
+- [ ] Complete `AGENTS.md`
 - [ ] Write comprehensive README
 - [ ] Document server setup (gateway)
 - [ ] Document iOS build process
@@ -393,7 +393,7 @@ Ollama LLM
 
 1. **Project Name?**
    - Options: AIKeyboard, SmartKeys, TypeAI, FlowType, etc.
-   - Bundle ID: `com.maneesh.[projectname]`
+   - Bundle ID template: use the team's reverse-DNS identifier, for example `com.example.[projectname]`
 
 2. **Gateway Admin UI?**
    - Web-based dashboard for managing keys?
@@ -423,6 +423,5 @@ Ollama LLM
 
 **Token Management:**
 - This research document: Load once at project start
-- CLAUDE.md: Always loaded (minimal)
+- `AGENTS.md`: repository workflow instructions loaded by compatible coding agents
 - Other docs: Load only when working on specific phase
-

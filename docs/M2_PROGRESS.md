@@ -15,13 +15,12 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
 
 - M1 real keyboard Fix Grammar path verified and committed.
   - Commit: `764c6e6 Add real keyboard AI functional path`
-  - Latest real keyboard verification: `/app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md`
+  - Latest real keyboard verifier request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
 - Release hardening docs committed.
   - Commit: `7a3438d Document Open Keyboard release hardening`
 - iPhone 17 Pro simulator App Group entitlement issue diagnosed and fixed by reinstall.
-  - Request: `/app/workspace/clawd-coder/requests/clawmaster/20260608T132414-openkeyboard-iphone17-entitlements-reinstall.md`
-- Private third-party/iOS keyboard references were removed from repo tracking; use only neutral local references outside git:
-  - `docs/design/artifacts/`
+  - Verifier request ID: `20260608T132414-openkeyboard-iphone17-entitlements-reinstall`
+- Private third-party/iOS keyboard references were removed from repo tracking; use only original or repository-owned neutral references and do not depend on machine-local copies.
 - M2 design notes appended to:
   - `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md`
 - Settings polish started:
@@ -32,10 +31,10 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
   - `OpenKeyboardExtension/KeyboardToolbarState.swift`
   - `OpenKeyboardUITests/KeyboardToolbarStateTests.swift`
 - ClawMaster M2 compact toolbar verification passed:
-  - Request: `/app/workspace/clawd-coder/requests/clawmaster/20260608T155232-openkeyboard-m2-toolbar-build-screenshot.md`
+  - Verifier request ID: `20260608T155232-openkeyboard-m2-toolbar-build-screenshot`
   - Build: PASS
   - Targeted tests: PASS, 12 tests / 0 failures
-  - Screenshot: `reports/clawmaster/20260608T155232-openkeyboard-compact-toolbar.png`
+  - Screenshot artifact ID: `20260608T155232-openkeyboard-compact-toolbar`
 
 ## User decisions
 

