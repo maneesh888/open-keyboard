@@ -8,6 +8,22 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLocalNLPPredictionsAreDisabledByDefault() {
+        let predictor = RecordingNextTextPredictor()
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: ""),
+            aiService: FailingKeyboardAIService(),
+            nextTextPredictor: predictor,
+            loadConfig: { Self.configuredGateway }
+        )
+
+        viewModel.insert("H")
+        viewModel.insert("i")
+
+        XCTAssertTrue(viewModel.typingPredictions.isEmpty)
+        XCTAssertTrue(predictor.requests.isEmpty)
+    }
+
     func testLocalNLPPredictionsUpdateWhileTyping() {
         let predictor = AppleNaturalLanguageNextTextPredictor(corpus: NextTextPredictionCorpus(texts: [
             "How are you?",
@@ -18,6 +34,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             textDocumentProxy: FakeTextDocumentProxy(text: ""),
             aiService: FailingKeyboardAIService(),
             nextTextPredictor: predictor,
+            typingPredictionsEnabled: true,
             loadConfig: { Self.configuredGateway }
         )
 
@@ -44,6 +61,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             textDocumentProxy: proxy,
             aiService: FailingKeyboardAIService(),
             nextTextPredictor: predictor,
+            typingPredictionsEnabled: true,
             loadConfig: { Self.configuredGateway }
         )
 
@@ -63,6 +81,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             textDocumentProxy: proxy,
             aiService: FailingKeyboardAIService(),
             nextTextPredictor: predictor,
+            typingPredictionsEnabled: true,
             loadConfig: { Self.configuredGateway }
         )
 
@@ -1541,6 +1560,15 @@ private final class InvalidRawResponseKeyboardAIService: KeyboardAIServiceProvid
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         throw KeyboardAIError.server("Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
+    }
+}
+
+private final class RecordingNextTextPredictor: NextTextPredicting {
+    private(set) var requests: [NextTextPredictionRequest] = []
+
+    func predictions(for request: NextTextPredictionRequest) -> [NextTextPrediction] {
+        requests.append(request)
+        return [NextTextPrediction(text: "hidden", kind: .nextWord, score: 1)]
     }
 }
 

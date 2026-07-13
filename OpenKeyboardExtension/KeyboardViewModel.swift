@@ -183,6 +183,7 @@ final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
     private let aiService: KeyboardAIServiceProviding
     private let nextTextPredictor: NextTextPredicting
+    private let typingPredictionsEnabled: Bool
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
 
@@ -302,6 +303,7 @@ final class KeyboardViewModel: ObservableObject {
         textDocumentProxy: UITextDocumentProxy,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
         nextTextPredictor: NextTextPredicting = AppleNaturalLanguageNextTextPredictor(),
+        typingPredictionsEnabled: Bool = false,
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
         productionTestFullAccess: Bool = false,
@@ -310,6 +312,7 @@ final class KeyboardViewModel: ObservableObject {
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
         self.nextTextPredictor = nextTextPredictor
+        self.typingPredictionsEnabled = typingPredictionsEnabled
         self.loadConfig = loadConfig
         self.loadGatewayConnectionError = loadGatewayConnectionError
         self.automaticAnalysisDelayNanoseconds = automaticAnalysisDelayNanoseconds
@@ -582,6 +585,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func applyTypingPrediction(id: String) {
+        guard typingPredictionsEnabled else { return }
         guard let prediction = typingPredictions.first(where: { $0.id == id }) else { return }
         clearKeyboardReplacementTracking()
         insertTypingPrediction(prediction)
@@ -1038,6 +1042,11 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func refreshTypingPredictions() {
+        guard typingPredictionsEnabled else {
+            typingPredictions = []
+            return
+        }
+
         let text = currentEditableText()
         typingPredictions = nextTextPredictor
             .predictions(for: NextTextPredictionRequest(text: text, maxSuggestions: 3))
