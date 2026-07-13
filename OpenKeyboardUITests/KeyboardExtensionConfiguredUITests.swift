@@ -265,6 +265,37 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         }
     }
 
+    func testRealKeyboardNormalKeyboardScreenshotWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard normal screenshots.")
+        }
+
+        let sourceText = "All of these are no bulb in the universe."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard screenshot")
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
+        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
+    }
+
     func testRealKeyboardSparkleImproveModeScreenshotWhenExplicitlyRequested() throws {
         let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !screenshotDirectory.isEmpty else {

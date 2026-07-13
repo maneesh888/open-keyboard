@@ -58,6 +58,14 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.issueCount, 0)
     }
 
+    func testKeyboardLayoutUsesLargerTypingTargets() {
+        XCTAssertEqual(KeyboardPanelLayout.letterKeyHeight, 52)
+        XCTAssertEqual(KeyboardPanelLayout.controlKeyHeight, 48)
+        XCTAssertEqual(KeyboardPanelLayout.outerTopPadding, 6)
+        XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 230)
+        XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 280)
+    }
+
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {
         let state = KeyboardToolbarState.current(
             hasFullAccess: true,

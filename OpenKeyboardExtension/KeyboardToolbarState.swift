@@ -22,8 +22,8 @@ enum KeyboardPanelLayout {
     static let outerHorizontalPadding: CGFloat = 6
     static let outerTopPadding: CGFloat = 6
     static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 46
-    static let controlKeyHeight: CGFloat = 42
+    static let letterKeyHeight: CGFloat = 52
+    static let controlKeyHeight: CGFloat = 48
     static let keyRowSpacing: CGFloat = 8
     static let keyShadowAllowance: CGFloat = 2
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
