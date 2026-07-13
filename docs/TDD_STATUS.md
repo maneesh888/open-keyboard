@@ -16,8 +16,8 @@ Current verified host result:
 - Core package tests: 61 executed, 2 skipped live tests, 0 failed
 - iOS app/extension build: passed on iPhone 16
 - Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation) in the previous foundation slice
-- Latest full quick-CI ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/2026-05-28T124406-openkeyboard-context-regression-verify.md`
-- Latest real keyboard functional ClawMaster request: `/app/workspace/clawd-coder/requests/clawmaster/20260606T022442-openkeyboard-uitest-debug-flag-rerun.md`
+- Latest full quick-CI verifier request ID: `2026-05-28T124406-openkeyboard-context-regression-verify`
+- Latest real keyboard functional verifier request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
 - Real keyboard Fix Grammar UI test: passed against temp LLM Gateway; final host text `I have an apple.`; gateway POST observed; injected URL/key debug assertions passed without printing secrets
 
 ## Completed TDD slices
@@ -25,7 +25,7 @@ Current verified host result:
 - [x] `OpenKeyboardCore` Swift package scaffold
 - [x] `GatewayConfig` validation and normalization
 - [x] `GatewayConfigStore` injectable key-value persistence
-- [x] Local CI runner inspired by Just Spent
+- [x] Repository-local deterministic CI runner
 - [x] `GatewayClient` request building and status-code error mapping
 - [x] `/health` request/auth test
 - [x] `/v1/models` parsing test
@@ -94,4 +94,4 @@ Added an initial `KeyboardDocumentContext` / replacement strategy slice for real
 - completed-final-sentence regression coverage
 - emoji/grapheme-safety tests
 
-Host Swift validation passed through direct ClawMaster host-path requests. The devtools `ai-keyboard` project mapping still points to a stale/missing host path and should be repaired separately; it is not a code validation blocker for this slice.
+Host Swift validation passed through direct ClawMaster requests. The optional devtools `ai-keyboard` project mapping was stale on the machine used for that run; when that mapping is unavailable, use the repository scripts directly. It is not a code validation blocker for this slice.

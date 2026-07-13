@@ -11,8 +11,14 @@ The gateway is **complete and ready to test**.
 
 ### Start the Gateway
 
+The gateway is an optional, separate checkout. Set `LLM_GATEWAY_ROOT` to its repository root on the current machine. If it is not installed, skip the gateway-only sections and use the OpenKeyboard mock/core test routes instead.
+
 ```bash
-cd /app/projects/hobby/llm-gateway
+if [[ -z "${LLM_GATEWAY_ROOT:-}" || ! -d "$LLM_GATEWAY_ROOT" ]]; then
+  echo "Set LLM_GATEWAY_ROOT to a valid LLM Gateway checkout before running gateway tests." >&2
+  exit 1
+fi
+cd "$LLM_GATEWAY_ROOT"
 npm start
 ```
 
@@ -192,7 +198,7 @@ http://localhost:8080/admin/
 2. **New Project** → iOS → App
 3. **Product Name:** OpenKeyboard
 4. **Bundle Identifier:** `com.maneesh.openkeyboard`
-5. **Save to:** `/Users/maneesh/Documents/Hobby/open-keyboard`
+5. **Save to:** the repository root (the directory containing this guide and `README.md`)
 
 6. **Add Keyboard Extension:**
    - File → New → Target
@@ -214,9 +220,9 @@ http://localhost:8080/admin/
 
 ### Option B: Use Existing Scaffolded Code
 
-The Swift files already exist in:
+The Swift files already exist at this repository-relative path:
 ```
-/app/projects/hobby/open-keyboard/OpenKeyboard/
+OpenKeyboard/
 ├── OpenKeyboardApp.swift
 ├── Views/
 │   ├── ContentView.swift
@@ -308,7 +314,11 @@ But they need to be **imported into an Xcode project** to build.
 
 ```bash
 # Terminal 1 - Start gateway
-cd /Users/maneesh/Documents/Hobby/llm-gateway
+if [[ -z "${LLM_GATEWAY_ROOT:-}" || ! -d "$LLM_GATEWAY_ROOT" ]]; then
+  echo "Set LLM_GATEWAY_ROOT to a valid LLM Gateway checkout before running gateway tests." >&2
+  exit 1
+fi
+cd "$LLM_GATEWAY_ROOT"
 npm start
 
 # Terminal 2 - Test it
@@ -322,8 +332,7 @@ If you see `{"status":"ok"}` → Gateway is working! ✅
 ## Questions?
 
 - **Gateway not starting?** Check if port 8080 is in use: `lsof -i :8080`
-- **Need admin password?** Check `llm-gateway/config/admin.json`
-- **Want to reset API keys?** Delete `llm-gateway/config/keys.json`
+- **Need admin credentials or want to reset API keys?** Follow the documentation in the configured LLM Gateway checkout; its storage layout is not assumed here.
 
 ---
 

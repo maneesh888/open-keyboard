@@ -4,6 +4,8 @@ Last updated: 2026-05-25
 
 Purpose: keep raw CI logs as file artifacts while preserving concise, durable summaries in docs/context. Do not paste full logs into chat or review packets.
 
+Path convention: all recorded project artifact paths are relative to the repository root. Historical verifier request IDs are identifiers only; their external records and Xcode's machine-local DerivedData may not exist on another machine. Never add usernames, home-directory paths, container checkout paths, or other absolute machine-specific locations to this index.
+
 ## Latest verified green run
 
 ### 2026-05-25 15:21 — Fresh pre-commit verification
@@ -17,30 +19,17 @@ Purpose: keep raw CI logs as file artifacts while preserving concise, durable su
 ./scripts/local-ci.sh --screenshots
 ```
 
-- ClawMaster request:
-
-```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-05-25T152101-openkeyboard-fresh-precommit-verify.md
-```
-
-- Combined ClawMaster tee log:
-
-```text
-/Users/maneesh/clawd-coder/requests/clawmaster/logs/2026-05-25T152101-openkeyboard-fresh-precommit-verify.log
-```
+- Verifier request ID: `2026-05-25T152101-openkeyboard-fresh-precommit-verify`
+- The combined external verifier log was not stored in this repository; the durable summary is retained below.
 
 - Project CI logs:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260525_152646.log
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260525_152735.log
+.ci-results/local-ci_20260525_152646.log
+.ci-results/local-ci_20260525_152735.log
 ```
 
-- Latest Xcode result bundle:
-
-```text
-/Users/maneesh/Library/Developer/Xcode/DerivedData/OpenKeyboard-ctoeneqbwsrymrffbsxzgrlibyxh/Logs/Test/Test-OpenKeyboard-2026.05.25_15-28-13-+0400.xcresult
-```
+- Latest Xcode result bundle was stored in the machine-selected DerivedData directory and is not a portable repository artifact.
 
 - Summary:
 
@@ -61,27 +50,17 @@ Purpose: keep raw CI logs as file artifacts while preserving concise, durable su
 ./scripts/local-ci.sh --screenshots
 ```
 
-- ClawMaster request:
-
-```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-05-23T130408-openkeyboard-ui-test-harness.md
-```
+- Verifier request ID: `2026-05-23T130408-openkeyboard-ui-test-harness`
 
 - Project CI logs:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260523_130431.log
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260523_130452.log
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260523_130531.log
+.ci-results/local-ci_20260523_130431.log
+.ci-results/local-ci_20260523_130452.log
+.ci-results/local-ci_20260523_130531.log
 ```
 
-- Xcode result bundles:
-
-```text
-/Users/maneesh/Library/Developer/Xcode/DerivedData/OpenKeyboard-ctoeneqbwsrymrffbsxzgrlibyxh/Logs/Test/Test-OpenKeyboard-2026.05.23_13-04-52-+0400.xcresult
-/Users/maneesh/Library/Developer/Xcode/DerivedData/OpenKeyboard-ctoeneqbwsrymrffbsxzgrlibyxh/Logs/Test/Test-OpenKeyboard-2026.05.23_13-05-31-+0400.xcresult
-/Users/maneesh/Library/Developer/Xcode/DerivedData/OpenKeyboard-ctoeneqbwsrymrffbsxzgrlibyxh/Logs/Test/Test-OpenKeyboard-2026.05.23_13-05-50-+0400.xcresult
-```
+- Xcode result bundles were stored in the machine-selected DerivedData directory and are not portable repository artifacts.
 
 - Summary:
 
@@ -98,26 +77,22 @@ Xcode screenshot attachment name: onboarding-welcome-iPhone.
 - Command:
 
 ```sh
-cd /Users/maneesh/Documents/Hobby/open-keyboard && ./scripts/local-ci.sh --quick
+./scripts/local-ci.sh --quick
 ```
 
 - Host log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260522_023923.log
+.ci-results/local-ci_20260522_023923.log
 ```
 
 - Screenshot:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/onboarding-first-page-20260522_023923.png
+.ci-results/onboarding-first-page-20260522_023923.png
 ```
 
-- ClawMaster request:
-
-```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-05-22T023906-openkeyboard-onboarding-ui-fourth-rerun.md
-```
+- Verifier request ID: `2026-05-22T023906-openkeyboard-onboarding-ui-fourth-rerun`
 
 - Summary:
 
@@ -135,26 +110,16 @@ Visual verification passed: complete title/subtitle, all three feature rows visi
 - Command:
 
 ```sh
-cd /Users/maneesh/Documents/Hobby/open-keyboard && ./scripts/local-ci.sh --quick
+./scripts/local-ci.sh --quick
 ```
 
 - Host log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260522_020159.log
+.ci-results/local-ci_20260522_020159.log
 ```
 
-- Docker log mirror/path:
-
-```text
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260522_020159.log
-```
-
-- ClawMaster request:
-
-```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-05-22T020131-openkeyboard-ci-user-flow-tests.md
-```
+- Verifier request ID: `2026-05-22T020131-openkeyboard-ci-user-flow-tests`
 
 - Summary:
 
@@ -174,18 +139,13 @@ All tests passed: 45 tests, 1 skipped, 0 failures
 ### 2026-05-21 16:27 — Edge-case backend tests
 
 - Status: PASS
-- Host/Docker log:
+- Project log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260521_162709.log
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260521_162709.log
+.ci-results/local-ci_20260521_162709.log
 ```
 
-- ClawMaster request:
-
-```text
-/app/workspace/clawd-coder/requests/clawmaster/2026-05-21T162651-openkeyboard-ci-edge-tests.md
-```
+- Verifier request ID: `2026-05-21T162651-openkeyboard-ci-edge-tests`
 
 - Summary:
 
@@ -205,11 +165,10 @@ All tests passed: 41 tests, 1 skipped, 0 failures
 ### 2026-05-21 16:17 — Live smoke scaffold
 
 - Status: PASS
-- Host/Docker log:
+- Project log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260521_161741.log
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260521_161741.log
+.ci-results/local-ci_20260521_161741.log
 ```
 
 - Summary: live gateway smoke test compiled and skipped cleanly without env vars; core tests and iOS build passed.
@@ -217,11 +176,10 @@ All tests passed: 41 tests, 1 skipped, 0 failures
 ### 2026-05-21 16:16 — Live smoke async assertion failure
 
 - Status: FAIL
-- Host/Docker log:
+- Project log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260521_161624.log
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260521_161624.log
+.ci-results/local-ci_20260521_161624.log
 ```
 
 - Failure:
@@ -236,11 +194,10 @@ XCTAssertTrue(try await client.checkHealth())
 ### 2026-05-21 16:14 — Keyboard reducer tests
 
 - Status: PASS
-- Host/Docker log:
+- Project log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260521_161444.log
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260521_161444.log
+.ci-results/local-ci_20260521_161444.log
 ```
 
 - Summary: keyboard reducer/context tests passed; iOS build passed.
@@ -248,11 +205,10 @@ XCTAssertTrue(try await client.checkHealth())
 ### 2026-05-21 16:13 — Chat fixes
 
 - Status: PASS
-- Host/Docker log:
+- Project log:
 
 ```text
-/Users/maneesh/Documents/Hobby/open-keyboard/.ci-results/local-ci_20260521_161313.log
-/app/projects/hobby/open-keyboard/.ci-results/local-ci_20260521_161313.log
+.ci-results/local-ci_20260521_161313.log
 ```
 
 - Summary: chat/gateway/writing-action tests passed; iOS build passed.
@@ -261,7 +217,7 @@ XCTAssertTrue(try await client.checkHealth())
 
 For each future CI run:
 
-1. Store raw log path here.
+1. Store raw logs under `.ci-results/` by default and record the repository-relative path here. If `OPEN_KEYBOARD_ARTIFACT_DIR` points outside the repository, record only the artifact name and durable summary, not its machine-specific absolute path.
 2. Extract status, command, test counts, key failure lines, and next action.
-3. If the log is large/noisy, spawn a separate log-review agent with the raw log path.
+3. If the log is large/noisy and separate log-review agents are available, use one with the artifact path. Otherwise review it in the current session.
 4. Keep `docs/TDD_STATUS.md`, `docs/WORK_QUEUE.md`, and this index synchronized.

@@ -8,7 +8,7 @@ Last updated: 2026-05-27
 Core package tests: 48 passed, 1 skipped, 0 failed
 iOS app/extension build: passed
 Onboarding first-page visual verification: passed on iPhone 16 simulator
-Latest verified CI request: /app/workspace/clawd-coder/requests/clawmaster/2026-05-22T023906-openkeyboard-onboarding-ui-fourth-rerun.md
+Latest verified CI request ID: 2026-05-22T023906-openkeyboard-onboarding-ui-fourth-rerun (external verifier record; not required to use this repository)
 ```
 
 ## Queue
@@ -17,15 +17,9 @@ Latest verified CI request: /app/workspace/clawd-coder/requests/clawmaster/2026-
 
 Status: Done
 
-Goal: stop relying on ad-hoc manual simulator screenshots for onboarding/UI quality. Build a repeatable UI-test harness using Just Spent's iOS UI test setup as reference.
+Goal: stop relying on ad-hoc manual simulator screenshots for onboarding/UI quality. Build a repeatable UI-test harness using the portable patterns listed below; no external reference checkout is required.
 
-Reference project:
-
-```text
-/Users/maneesh/Documents/Hobby/just-spent/ios/JustSpent/JustSpentUITests
-```
-
-Useful Just Spent patterns to copy/adapt:
+Useful patterns to copy/adapt:
 
 - `BaseUITestCase` common setup.
 - `TestDataHelper` launch-argument helpers.
@@ -152,9 +146,9 @@ Acceptance:
 
 - Handles emoji/grapheme clusters correctly.
 - Clear strategy enum for replacement behavior.
-- Host Swift validation passed via direct ClawMaster host-path requests.
+- Host Swift validation passed via direct ClawMaster requests.
 
-Note: devtools `ai-keyboard` mapping still points to a stale/missing host path; repair that separately from this completed core slice.
+Note: the optional devtools `ai-keyboard` mapping was stale on the machine used for that run. If the mapping is unavailable, use the repository scripts directly; repair the tool configuration separately from this completed core slice.
 
 ### 5. Timeout, cancellation, and network resilience tests
 
@@ -181,7 +175,7 @@ Acceptance:
 - Mock HTTP client can throw errors.
 - Core exposes typed errors suitable for UI messages.
 
-### 6. Documentation parity with Just Spent README style
+### 6. Documentation completeness
 
 Status: In progress
 
@@ -239,4 +233,4 @@ Recommended next order:
 - Status: blocked/follow-up needed
 - Context: real keyboard extension smoke reaches the actual OpenKeyboard QWERTY UI, but the toolbar remains `Gateway not configured` and `ai_sparkle_action` is absent.
 - Next action: add DEBUG-only extension-side config-state attachment/probe for App Group and Keychain presence, then rerun the focused smoke once.
-- Reference: `docs/REAL_EXTENSION_SMOKE_PLAN.md` and `.agent/reports/20260619T1212-real-extension-gateway-config-seed/report.md`.
+- Reference: `docs/REAL_EXTENSION_SMOKE_PLAN.md`; historical verifier artifact ID `20260619T1212-real-extension-gateway-config-seed` is informational only.

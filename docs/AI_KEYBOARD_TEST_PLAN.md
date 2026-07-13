@@ -75,11 +75,10 @@ testReplaceAllText_ClearsAndInsertsNew()
 
 **Run Command:**
 ```bash
-cd ios/AIKeyboard
-xcodebuild test \
-  -project AIKeyboard.xcodeproj \
-  -scheme AIKeyboard \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro'
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+./scripts/ios/test.sh core
+./scripts/ios/test.sh ui
 ```
 
 ---
@@ -240,7 +239,11 @@ test('adds custom headers')
 
 **Run Command:**
 ```bash
-cd server/llm-gateway
+if [[ -z "${LLM_GATEWAY_ROOT:-}" || ! -d "$LLM_GATEWAY_ROOT" ]]; then
+  echo "Set LLM_GATEWAY_ROOT to a valid LLM Gateway checkout, or skip backend-only tests." >&2
+  exit 1
+fi
+cd "$LLM_GATEWAY_ROOT"
 npm test
 ```
 
@@ -432,13 +435,13 @@ done
 ### Tools:
 - **Coverage:** Xcode Code Coverage, Istanbul (Node.js)
 - **Reporting:** Test results published to GitHub Actions
-- **Dashboard:** Simple Markdown report in `TEST_STATUS.md`
+- **Dashboard:** Keep the Markdown status report in `docs/TDD_STATUS.md`
 
 ---
 
 ## 🐛 Bug Tracking
 
-**Location:** `KNOWN_ISSUES.md` (follows just-spent pattern)
+**Location:** track active issues in `docs/WORK_QUEUE.md`; use a concise, reproducible issue template.
 
 **Format:**
 ```markdown
@@ -474,8 +477,9 @@ done
 # .git/hooks/pre-commit
 
 echo "Running tests..."
-npm test || exit 1
-cd ios && xcodebuild test ... || exit 1
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT" || exit 1
+./scripts/local-ci.sh --quick || exit 1
 echo "✅ All tests passed"
 ```
 
@@ -496,31 +500,7 @@ echo "✅ All tests passed"
 
 ## 🚀 CI/CD Integration (Phase 7)
 
-**GitHub Actions Workflow:**
-
-```yaml
-name: Test Suite
-
-on: [push, pull_request]
-
-jobs:
-  server-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-      - run: npm ci
-      - run: npm test
-      - run: npm run test:integration
-  
-  ios-tests:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: xcodebuild test -project AIKeyboard.xcodeproj ...
-      - name: Upload coverage
-        uses: codecov/codecov-action@v3
-```
+The repository workflow is `.github/workflows/openkeyboard-ci.yml`; keep OpenKeyboard CI commands rooted in this repository. LLM Gateway is a separate checkout and must run its own backend CI. If GitHub Actions or macOS runners are unavailable, use `./scripts/local-ci.sh --quick` locally and report which simulator-only checks could not run.
 
 ---
 

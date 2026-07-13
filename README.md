@@ -112,7 +112,7 @@ Next focus: broader selected-text, paragraph, and multi-action workflows beyond 
 
 ### LLM Gateway
 
-Open Keyboard is designed to pair with [LLM Gateway](../llm-gateway), the companion backend that:
+Open Keyboard is designed to pair with LLM Gateway, a separately installed companion backend that:
 
 - authenticates gateway API keys
 - applies per-key rate limits
@@ -189,7 +189,7 @@ Do not commit live keys, local config, `.xctestrun` files containing secrets, or
 Recent local verification:
 
 - `git diff --check`: passed
-- `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath /tmp/openkeyboard-derived build-for-testing`: passed
+- `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath "${TMPDIR:-/tmp}/openkeyboard-derived" build-for-testing`: passed
 - `KeyboardSuggestionModelsTests`: passed
 - `KeyboardViewModelActionErrorTests`: passed
 - real extension configured smoke test for AI controls: passed
