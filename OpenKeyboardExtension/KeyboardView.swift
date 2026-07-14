@@ -7,6 +7,7 @@ import SwiftUI
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
+    let onNextKeyboard: () -> Void
 
     var body: some View {
         let showsToolbar = viewModel.panelMode != .actions && viewModel.panelMode != .rewriteOptions
@@ -117,75 +118,125 @@ struct KeyboardView: View {
     }
 
     private var keyGrid: some View {
-        VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
-            keyRow(
-                viewModel.isNumbersEnabled ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-                keyHeight: KeyboardPanelLayout.letterKeyHeight
-            )
-            .accessibilityIdentifier("keyboard_row_qwerty")
+        GeometryReader { geometry in
+            let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
 
-            keyRow(
-                viewModel.isNumbersEnabled ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"] : ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-                keyHeight: KeyboardPanelLayout.letterKeyHeight
-            )
-            .padding(.horizontal, 18)
-            .accessibilityIdentifier("keyboard_row_home")
-
-            HStack(spacing: 6) {
-                KeyButton(label: viewModel.isNumbersEnabled ? "#+=" : "⇧", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight, isAccent: viewModel.isShiftEnabled) {
-                    if viewModel.isNumbersEnabled {
-                        viewModel.toggleNumbers()
-                    } else {
-                        viewModel.toggleShift()
-                    }
-                }
-                .frame(width: 52)
+            VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
+                keyRow(
+                    viewModel.isNumbersEnabled ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                    keyHeight: KeyboardPanelLayout.letterKeyHeight,
+                    keyWidth: positions.letterWidth
+                )
+                .accessibilityIdentifier("keyboard_row_qwerty")
 
                 keyRow(
-                    viewModel.isNumbersEnabled ? [".", ",", "?", "!", "'", "\"", "_"] : ["z", "x", "c", "v", "b", "n", "m"],
-                    keyHeight: KeyboardPanelLayout.letterKeyHeight
+                    viewModel.isNumbersEnabled ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"] : ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+                    keyHeight: KeyboardPanelLayout.letterKeyHeight,
+                    keyWidth: positions.letterWidth
                 )
+                .padding(.horizontal, positions.homeRowInset)
+                .accessibilityIdentifier("keyboard_row_home")
 
-                KeyButton(label: "⌫", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight) {
-                    viewModel.deleteBackward()
+                HStack(spacing: 0) {
+                    KeyButton(label: viewModel.isNumbersEnabled ? "#+=" : "⇧", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight, isAccent: viewModel.isShiftEnabled) {
+                        if viewModel.isNumbersEnabled {
+                            viewModel.toggleNumbers()
+                        } else {
+                            viewModel.toggleShift()
+                        }
+                    }
+                    .frame(width: positions.modifierWidth)
+
+                    Spacer(minLength: positions.bottomLetterSideGap)
+                        .frame(width: positions.bottomLetterSideGap)
+
+                    keyRow(
+                        viewModel.isNumbersEnabled ? [".", ",", "?", "!", "'", "\"", "_"] : ["z", "x", "c", "v", "b", "n", "m"],
+                        keyHeight: KeyboardPanelLayout.letterKeyHeight,
+                        keyWidth: positions.letterWidth
+                    )
+
+                    Spacer(minLength: positions.bottomLetterSideGap)
+                        .frame(width: positions.bottomLetterSideGap)
+
+                    KeyButton(label: "⌫", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight) {
+                        viewModel.deleteBackward()
+                    }
+                    .frame(width: positions.modifierWidth)
                 }
-                .frame(width: 52)
+                .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("keyboard_row_bottom_letters")
+
+                HStack(spacing: KeyboardKeyPositions.horizontalSpacing) {
+                    KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
+                        viewModel.toggleNumbers()
+                    }
+                    .frame(width: positions.bottomControlWidth)
+                    .accessibilityIdentifier("keyboard_key_numbers")
+
+                    KeyButton(label: "Emoji", systemImage: "face.smiling", role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
+                        onNextKeyboard()
+                    }
+                    .frame(width: positions.bottomControlWidth)
+                    .accessibilityIdentifier("keyboard_key_emoji")
+
+                    KeyButton(label: "space", role: .space, height: KeyboardPanelLayout.controlKeyHeight) {
+                        viewModel.insertSpace()
+                    }
+                    .frame(width: positions.spaceWidth)
+                    .accessibilityIdentifier("keyboard_key_space")
+
+                    KeyButton(label: "return", role: .returnKey, height: KeyboardPanelLayout.controlKeyHeight) {
+                        viewModel.insertReturn()
+                    }
+                    .frame(width: positions.returnWidth)
+                    .accessibilityIdentifier("keyboard_key_return")
+                }
+                .accessibilityIdentifier("keyboard_row_controls")
             }
-            .accessibilityIdentifier("keyboard_row_bottom_letters")
-
-            HStack(spacing: 6) {
-                KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
-                    viewModel.toggleNumbers()
-                }
-                .frame(width: 58)
-                .accessibilityIdentifier("keyboard_key_numbers")
-
-                KeyButton(label: "space", role: .space, height: KeyboardPanelLayout.controlKeyHeight) {
-                    viewModel.insertSpace()
-                }
-                .accessibilityIdentifier("keyboard_key_space")
-
-                KeyButton(label: "return", role: .returnKey, height: KeyboardPanelLayout.controlKeyHeight) {
-                    viewModel.insertReturn()
-                }
-                .frame(width: 92)
-                .accessibilityIdentifier("keyboard_key_return")
-            }
-            .accessibilityIdentifier("keyboard_row_controls")
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
         .padding(.bottom, KeyboardPanelLayout.keyShadowAllowance)
         .frame(height: KeyboardPanelLayout.keyGridHeight, alignment: .top)
     }
 
-    private func keyRow(_ keys: [String], keyHeight: CGFloat) -> some View {
-        HStack(spacing: 6) {
+    private func keyRow(_ keys: [String], keyHeight: CGFloat, keyWidth: CGFloat) -> some View {
+        HStack(spacing: KeyboardKeyPositions.horizontalSpacing) {
             ForEach(keys, id: \.self) { key in
                 KeyButton(label: viewModel.isShiftEnabled ? key.uppercased() : key, role: .letter, height: keyHeight) {
                     viewModel.insert(key)
                 }
+                .frame(width: keyWidth)
             }
         }
+    }
+}
+
+private struct KeyboardKeyPositions {
+    static let horizontalSpacing: CGFloat = 5.5
+
+    let letterWidth: CGFloat
+    let homeRowInset: CGFloat
+    let modifierWidth: CGFloat
+    let bottomLetterSideGap: CGFloat
+    let bottomControlWidth: CGFloat
+    let spaceWidth: CGFloat
+    let returnWidth: CGFloat
+
+    init(availableWidth: CGFloat) {
+        let letterWidth = (availableWidth - (Self.horizontalSpacing * 9)) / 10
+        let bottomControlWidth = letterWidth * (142 / 111)
+        let returnWidth = letterWidth * (302 / 111)
+        self.letterWidth = letterWidth
+        homeRowInset = (letterWidth + Self.horizontalSpacing) / 2
+        modifierWidth = letterWidth * (149 / 111)
+        bottomLetterSideGap = letterWidth * (43 / 111)
+        self.bottomControlWidth = bottomControlWidth
+        self.returnWidth = returnWidth
+        spaceWidth = availableWidth
+            - (bottomControlWidth * 2)
+            - returnWidth
+            - (Self.horizontalSpacing * 3)
     }
 }
 
@@ -1208,6 +1259,7 @@ private enum KeyRole {
 
 private struct KeyButton: View {
     let label: String
+    var systemImage: String?
     var role: KeyRole = .letter
     let height: CGFloat
     var isAccent = false
@@ -1215,15 +1267,24 @@ private struct KeyButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(font)
-                .foregroundColor(.primary)
-                .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
-                .background(backgroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+            Group {
+                if let systemImage {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 22, weight: .regular))
+                        .symbolRenderingMode(.monochrome)
+                } else {
+                    Text(label)
+                        .font(font)
+                }
+            }
+            .foregroundColor(.primary)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+            .background(backgroundColor)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     private var font: Font {
