@@ -19,17 +19,54 @@ enum KeyboardPanelLayout {
     static let toolbarControlSize: CGFloat = 34
     static let toolbarRenderedHeight: CGFloat = toolbarHeight
     static let toolbarSpacing: CGFloat = 6
-    static let outerHorizontalPadding: CGFloat = 6
+    static let outerHorizontalPadding: CGFloat = 4
     static let outerTopPadding: CGFloat = 6
     static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 52
-    static let controlKeyHeight: CGFloat = 48
-    static let keyRowSpacing: CGFloat = 8
+    static let letterKeyHeight: CGFloat = 45
+    static let controlKeyHeight: CGFloat = 45
+    static let keyHorizontalSpacing: CGFloat = 5.5
+    static let keyRowSpacing: CGFloat = 11
     static let keyShadowAllowance: CGFloat = 2
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
-    static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
+    static let preferredKeyboardHeight: CGFloat = 280
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
     static let improvePanelHeight: CGFloat = preferredKeyboardHeight + 104
+
+    struct KeyGridMetrics {
+        let contentWidth: CGFloat
+        let letterWidth: CGFloat
+        let homeRowInset: CGFloat
+        let modifierWidth: CGFloat
+        let bottomLetterSideGap: CGFloat
+        let bottomControlWidth: CGFloat
+        let returnWidth: CGFloat
+        let spaceWidth: CGFloat
+    }
+
+    static func keyGridMetrics(for contentWidth: CGFloat) -> KeyGridMetrics {
+        let safeWidth = max(contentWidth, 1)
+        let letterWidth = max((safeWidth - (keyHorizontalSpacing * 9)) / 10, 1)
+        let homeRowInset = (letterWidth + keyHorizontalSpacing) / 2
+        let modifierWidth = letterWidth * (149 / 111)
+        let bottomLetterSideGap = letterWidth * (43 / 111)
+        let bottomControlWidth = letterWidth * (142 / 111)
+        let returnWidth = letterWidth * (302 / 111)
+        let spaceWidth = max(
+            safeWidth - (bottomControlWidth * 2) - returnWidth - (keyHorizontalSpacing * 3),
+            letterWidth
+        )
+
+        return KeyGridMetrics(
+            contentWidth: safeWidth,
+            letterWidth: letterWidth,
+            homeRowInset: homeRowInset,
+            modifierWidth: modifierWidth,
+            bottomLetterSideGap: bottomLetterSideGap,
+            bottomControlWidth: bottomControlWidth,
+            returnWidth: returnWidth,
+            spaceWidth: spaceWidth
+        )
+    }
 
     static func keyboardHeight(
         for panelMode: KeyboardPanelMode,

@@ -58,12 +58,22 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.issueCount, 0)
     }
 
-    func testKeyboardLayoutUsesLargerTypingTargets() {
-        XCTAssertEqual(KeyboardPanelLayout.letterKeyHeight, 52)
-        XCTAssertEqual(KeyboardPanelLayout.controlKeyHeight, 48)
+    func testKeyboardLayoutUsesNativeLikeTypingGrid() {
+        XCTAssertEqual(KeyboardPanelLayout.letterKeyHeight, 45)
+        XCTAssertEqual(KeyboardPanelLayout.controlKeyHeight, 45)
+        XCTAssertEqual(KeyboardPanelLayout.outerHorizontalPadding, 4)
         XCTAssertEqual(KeyboardPanelLayout.outerTopPadding, 6)
-        XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 230)
+        XCTAssertEqual(KeyboardPanelLayout.keyHorizontalSpacing, 5.5)
+        XCTAssertEqual(KeyboardPanelLayout.keyRowSpacing, 11)
+        XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 215)
         XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 280)
+
+        let metrics = KeyboardPanelLayout.keyGridMetrics(for: 385)
+        XCTAssertEqual(metrics.homeRowInset, (metrics.letterWidth + KeyboardPanelLayout.keyHorizontalSpacing) / 2)
+        XCTAssertEqual(metrics.modifierWidth, metrics.letterWidth * (149 / 111), accuracy: 0.001)
+        XCTAssertEqual(metrics.bottomLetterSideGap, metrics.letterWidth * (43 / 111), accuracy: 0.001)
+        XCTAssertEqual(metrics.bottomControlWidth, metrics.letterWidth * (142 / 111), accuracy: 0.001)
+        XCTAssertEqual(metrics.returnWidth, metrics.letterWidth * (302 / 111), accuracy: 0.001)
     }
 
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {

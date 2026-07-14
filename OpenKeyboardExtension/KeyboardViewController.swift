@@ -41,7 +41,12 @@ final class KeyboardViewController: UIInputViewController {
         )
         self.viewModel = viewModel
 
-        let keyboardView = KeyboardView(viewModel: viewModel)
+        let keyboardView = KeyboardView(
+            viewModel: viewModel,
+            onNextKeyboard: { [weak self] in
+                self?.advanceToNextInputMode()
+            }
+        )
         let controller = UIHostingController(rootView: keyboardView)
 
         addChild(controller)

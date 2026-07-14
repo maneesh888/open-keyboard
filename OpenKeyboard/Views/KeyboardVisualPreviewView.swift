@@ -10,18 +10,53 @@ private enum KeyboardVisualPreviewLayout {
     static let toolbarHeight: CGFloat = 38
     static let toolbarControlSize: CGFloat = 34
     static let toolbarSpacing: CGFloat = 6
-    static let outerHorizontalPadding: CGFloat = 6
+    static let outerHorizontalPadding: CGFloat = 4
     static let outerTopPadding: CGFloat = 6
     static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 52
-    static let controlKeyHeight: CGFloat = 48
-    static let keyRowSpacing: CGFloat = 8
+    static let letterKeyHeight: CGFloat = 45
+    static let controlKeyHeight: CGFloat = 45
+    static let keyHorizontalSpacing: CGFloat = 5.5
+    static let keyRowSpacing: CGFloat = 11
     static let keyShadowAllowance: CGFloat = 2
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
-    static let expandedPanelHeight: CGFloat = 286
+    static let expandedPanelHeight: CGFloat = 280
     static let improvePanelHeight: CGFloat = expandedPanelHeight + 104
     static let correctionDetailMinHeight: CGFloat = 232
     static let correctionCompleteMinHeight: CGFloat = 226
+
+    struct KeyGridMetrics {
+        let letterWidth: CGFloat
+        let homeRowInset: CGFloat
+        let modifierWidth: CGFloat
+        let bottomLetterSideGap: CGFloat
+        let bottomControlWidth: CGFloat
+        let returnWidth: CGFloat
+        let spaceWidth: CGFloat
+    }
+
+    static func keyGridMetrics(for contentWidth: CGFloat) -> KeyGridMetrics {
+        let safeWidth = max(contentWidth, 1)
+        let letterWidth = max((safeWidth - (keyHorizontalSpacing * 9)) / 10, 1)
+        let homeRowInset = (letterWidth + keyHorizontalSpacing) / 2
+        let modifierWidth = letterWidth * (149 / 111)
+        let bottomLetterSideGap = letterWidth * (43 / 111)
+        let bottomControlWidth = letterWidth * (142 / 111)
+        let returnWidth = letterWidth * (302 / 111)
+        let spaceWidth = max(
+            safeWidth - (bottomControlWidth * 2) - returnWidth - (keyHorizontalSpacing * 3),
+            letterWidth
+        )
+
+        return KeyGridMetrics(
+            letterWidth: letterWidth,
+            homeRowInset: homeRowInset,
+            modifierWidth: modifierWidth,
+            bottomLetterSideGap: bottomLetterSideGap,
+            bottomControlWidth: bottomControlWidth,
+            returnWidth: returnWidth,
+            spaceWidth: spaceWidth
+        )
+    }
 }
 
 struct KeyboardPreviewLabView: View {
@@ -292,24 +327,39 @@ struct KeyboardVisualPreviewView: View {
     }
 
     private var keyGrid: some View {
-        VStack(spacing: KeyboardVisualPreviewLayout.keyRowSpacing) {
-            previewKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"])
-            previewKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"])
-                .padding(.horizontal, 18)
+        GeometryReader { proxy in
+            let metrics = KeyboardVisualPreviewLayout.keyGridMetrics(for: proxy.size.width)
 
-            HStack(spacing: 6) {
-                previewKey("⇧", role: .modifier).frame(width: 52)
-                previewKeyRow(["z", "x", "c", "v", "b", "n", "m"])
-                previewKey("⌫", role: .modifier).frame(width: 52)
-            }
+            VStack(spacing: KeyboardVisualPreviewLayout.keyRowSpacing) {
+                previewKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], keyWidth: metrics.letterWidth)
+                previewKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"], keyWidth: metrics.letterWidth)
+                    .padding(.horizontal, metrics.homeRowInset)
 
-            HStack(spacing: 6) {
-                previewKey("123", role: .modifier).frame(width: 58)
-                previewKey("space", role: .space)
-                previewKey("return", role: .modifier).frame(width: 92)
+                HStack(spacing: 0) {
+                    previewKey("⇧", systemImage: "shift.fill", role: .modifier)
+                        .frame(width: metrics.modifierWidth)
+                    Spacer(minLength: metrics.bottomLetterSideGap)
+                        .frame(width: metrics.bottomLetterSideGap)
+                    previewKeyRow(["z", "x", "c", "v", "b", "n", "m"], keyWidth: metrics.letterWidth)
+                    Spacer(minLength: metrics.bottomLetterSideGap)
+                        .frame(width: metrics.bottomLetterSideGap)
+                    previewKey("⌫", systemImage: "delete.left", role: .modifier)
+                        .frame(width: metrics.modifierWidth)
+                }
+
+                HStack(spacing: KeyboardVisualPreviewLayout.keyHorizontalSpacing) {
+                    previewKey("123", role: .modifier)
+                        .frame(width: metrics.bottomControlWidth)
+                    previewKey("Emoji", systemImage: "face.smiling", role: .modifier)
+                        .frame(width: metrics.bottomControlWidth)
+                    previewKey("space", displayLabel: "", role: .space)
+                        .frame(width: metrics.spaceWidth)
+                    previewKey("return", systemImage: "return", role: .modifier)
+                        .frame(width: metrics.returnWidth)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, alignment: .top)
         .padding(.bottom, KeyboardVisualPreviewLayout.keyShadowAllowance)
         .frame(height: KeyboardVisualPreviewLayout.keyGridHeight, alignment: .top)
         .accessibilityIdentifier("preview_keyboard_grid")
@@ -553,9 +603,12 @@ struct KeyboardVisualPreviewView: View {
         .accessibilityIdentifier("preview_correction_complete_panel")
     }
 
-    private func previewKeyRow(_ keys: [String]) -> some View {
-        HStack(spacing: 6) {
-            ForEach(keys, id: \.self) { previewKey($0, role: .letter) }
+    private func previewKeyRow(_ keys: [String], keyWidth: CGFloat) -> some View {
+        HStack(spacing: KeyboardVisualPreviewLayout.keyHorizontalSpacing) {
+            ForEach(keys, id: \.self) { key in
+                previewKey(key, displayLabel: key.uppercased(), role: .letter)
+                    .frame(width: keyWidth)
+            }
         }
     }
 
@@ -565,14 +618,22 @@ struct KeyboardVisualPreviewView: View {
         case space
     }
 
-    private func previewKey(_ label: String, role: PreviewKeyRole) -> some View {
-        Text(label)
-            .font(previewKeyFont(label, role: role))
-            .foregroundColor(.primary)
-            .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
-            .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+    private func previewKey(_ label: String, displayLabel: String? = nil, systemImage: String? = nil, role: PreviewKeyRole) -> some View {
+        Group {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(previewKeyIconFont(role: role))
+                    .symbolRenderingMode(.monochrome)
+            } else {
+                Text(displayLabel ?? label)
+                    .font(previewKeyFont(displayLabel ?? label, role: role))
+            }
+        }
+        .foregroundColor(.primary)
+        .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
+        .background(OpenKeyboardTheme.Surface.panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
     }
 
     private func keyHeight(for role: PreviewKeyRole) -> CGFloat {
@@ -586,9 +647,17 @@ struct KeyboardVisualPreviewView: View {
 
     private func previewKeyFont(_ label: String, role: PreviewKeyRole) -> Font {
         switch role {
-        case .letter: return .system(size: 25, weight: .regular)
+        case .letter: return .system(size: 24, weight: .regular)
         case .space: return .system(size: 16, weight: .regular)
         case .modifier: return .system(size: label.count > 2 ? 16 : 22, weight: .regular)
+        }
+    }
+
+    private func previewKeyIconFont(role: PreviewKeyRole) -> Font {
+        switch role {
+        case .letter: return .system(size: 24, weight: .regular)
+        case .space: return .system(size: 17, weight: .regular)
+        case .modifier: return .system(size: 22, weight: .regular)
         }
     }
 
