@@ -292,24 +292,34 @@ struct KeyboardVisualPreviewView: View {
     }
 
     private var keyGrid: some View {
-        VStack(spacing: KeyboardVisualPreviewLayout.keyRowSpacing) {
-            previewKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"])
-            previewKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"])
-                .padding(.horizontal, 18)
+        GeometryReader { geometry in
+            let positions = PreviewKeyPositions(availableWidth: geometry.size.width)
 
-            HStack(spacing: 6) {
-                previewKey("⇧", role: .modifier).frame(width: 52)
-                previewKeyRow(["z", "x", "c", "v", "b", "n", "m"])
-                previewKey("⌫", role: .modifier).frame(width: 52)
-            }
+            VStack(spacing: KeyboardVisualPreviewLayout.keyRowSpacing) {
+                previewKeyRow(["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], keyWidth: positions.letterWidth)
+                previewKeyRow(["a", "s", "d", "f", "g", "h", "j", "k", "l"], keyWidth: positions.letterWidth)
+                    .padding(.horizontal, positions.homeRowInset)
 
-            HStack(spacing: 6) {
-                previewKey("123", role: .modifier).frame(width: 58)
-                previewKey("space", role: .space)
-                previewKey("return", role: .modifier).frame(width: 92)
+                HStack(spacing: 0) {
+                    previewKey("⇧", role: .modifier).frame(width: positions.modifierWidth)
+                    Spacer(minLength: positions.bottomLetterSideGap)
+                        .frame(width: positions.bottomLetterSideGap)
+                    previewKeyRow(["z", "x", "c", "v", "b", "n", "m"], keyWidth: positions.letterWidth)
+                    Spacer(minLength: positions.bottomLetterSideGap)
+                        .frame(width: positions.bottomLetterSideGap)
+                    previewKey("⌫", role: .modifier).frame(width: positions.modifierWidth)
+                }
+                .frame(maxWidth: .infinity)
+
+                HStack(spacing: PreviewKeyPositions.horizontalSpacing) {
+                    previewKey("123", role: .modifier).frame(width: positions.bottomControlWidth)
+                    previewKey("Emoji", systemImage: "face.smiling", role: .modifier).frame(width: positions.bottomControlWidth)
+                    previewKey("space", role: .space).frame(width: positions.spaceWidth)
+                    previewKey("return", role: .modifier).frame(width: positions.returnWidth)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .top)
         }
-        .frame(maxWidth: .infinity, alignment: .top)
         .padding(.bottom, KeyboardVisualPreviewLayout.keyShadowAllowance)
         .frame(height: KeyboardVisualPreviewLayout.keyGridHeight, alignment: .top)
         .accessibilityIdentifier("preview_keyboard_grid")
@@ -553,9 +563,12 @@ struct KeyboardVisualPreviewView: View {
         .accessibilityIdentifier("preview_correction_complete_panel")
     }
 
-    private func previewKeyRow(_ keys: [String]) -> some View {
-        HStack(spacing: 6) {
-            ForEach(keys, id: \.self) { previewKey($0, role: .letter) }
+    private func previewKeyRow(_ keys: [String], keyWidth: CGFloat) -> some View {
+        HStack(spacing: PreviewKeyPositions.horizontalSpacing) {
+            ForEach(keys, id: \.self) {
+                previewKey($0, role: .letter)
+                    .frame(width: keyWidth)
+            }
         }
     }
 
@@ -565,14 +578,22 @@ struct KeyboardVisualPreviewView: View {
         case space
     }
 
-    private func previewKey(_ label: String, role: PreviewKeyRole) -> some View {
-        Text(label)
-            .font(previewKeyFont(label, role: role))
-            .foregroundColor(.primary)
-            .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
-            .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+    private func previewKey(_ label: String, systemImage: String? = nil, role: PreviewKeyRole) -> some View {
+        Group {
+            if let systemImage {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .regular))
+                    .symbolRenderingMode(.monochrome)
+            } else {
+                Text(label)
+                    .font(previewKeyFont(label, role: role))
+            }
+        }
+        .foregroundColor(.primary)
+        .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
+        .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
     }
 
     private func keyHeight(for role: PreviewKeyRole) -> CGFloat {
@@ -673,6 +694,34 @@ struct KeyboardVisualPreviewView: View {
                     .stroke(tint, lineWidth: 1.2)
             )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct PreviewKeyPositions {
+    static let horizontalSpacing: CGFloat = 5.5
+
+    let letterWidth: CGFloat
+    let homeRowInset: CGFloat
+    let modifierWidth: CGFloat
+    let bottomLetterSideGap: CGFloat
+    let bottomControlWidth: CGFloat
+    let spaceWidth: CGFloat
+    let returnWidth: CGFloat
+
+    init(availableWidth: CGFloat) {
+        let letterWidth = (availableWidth - (Self.horizontalSpacing * 9)) / 10
+        let bottomControlWidth = letterWidth * (142 / 111)
+        let returnWidth = letterWidth * (302 / 111)
+        self.letterWidth = letterWidth
+        homeRowInset = (letterWidth + Self.horizontalSpacing) / 2
+        modifierWidth = letterWidth * (149 / 111)
+        bottomLetterSideGap = letterWidth * (43 / 111)
+        self.bottomControlWidth = bottomControlWidth
+        self.returnWidth = returnWidth
+        spaceWidth = availableWidth
+            - (bottomControlWidth * 2)
+            - returnWidth
+            - (Self.horizontalSpacing * 3)
     }
 }
 #endif
