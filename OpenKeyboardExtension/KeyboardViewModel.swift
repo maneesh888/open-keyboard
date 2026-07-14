@@ -528,7 +528,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func openCachedGrammarAnalysisForCurrentText() -> Bool {
-        guard let sourceText = currentReplacementPlan()?.textForAI,
+        guard let sourceText = currentInputTextForAnalysis(),
               lastAnalyzedText == sourceText,
               canOpenAnalysisResult else {
             return false
@@ -603,7 +603,8 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisTask?.cancel()
         automaticAnalysisTask = nil
 
-        guard let replacementPlan = currentReplacementPlan() else {
+        let documentTextAtRequest = currentDocumentTextForAnalysis()
+        guard let sourceText = currentInputTextForAnalysis() else {
             recordDebugEvent("grammar_correction_blocked_no_text")
             showAllDoneForEmptyText()
             return
@@ -621,7 +622,6 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .correctionDetail
 
         let currentConfig = config
-        let sourceText = replacementPlan.textForAI
         lastAnalyzedText = sourceText
         let requestID = UUID()
         grammarCorrectionRequestID = requestID
@@ -633,6 +633,10 @@ final class KeyboardViewModel: ObservableObject {
                 await MainActor.run {
                     guard isGrammarCorrectionLoading,
                           grammarCorrectionRequestID == requestID else {
+                        return
+                    }
+                    guard currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest) == sourceText else {
+                        discardStaleGrammarCorrectionResponse(sourceText: sourceText)
                         return
                     }
                     applyGrammarCorrectionResult(
@@ -717,6 +721,34 @@ final class KeyboardViewModel: ObservableObject {
         case .showRewriteOptions, .noUsableResult:
             showActionError("No AI response")
         }
+    }
+
+    private func discardStaleGrammarCorrectionResponse(sourceText: String) {
+        grammarCorrectionTask = nil
+        grammarCorrectionRequestID = nil
+        actionPanelState = nil
+        suggestionState = nil
+        rewriteOptionsState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        isGrammarCorrectionLoading = false
+        isPerformingAIAction = false
+        if lastAnalyzedText == sourceText {
+            lastAnalyzedText = nil
+        }
+        recordDebugEvent("grammar_correction_response_stale text=\(sourceText.count)")
+
+        guard currentInputTextForAnalysis() != nil else {
+            if !textDocumentProxy.hasText {
+                clearComposingBuffer()
+            }
+            showAllDoneForEmptyText()
+            return
+        }
+
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        panelMode = .keyboard
+        scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
     }
 
     private func markGrammarCorrectionAllClear() {
@@ -1019,6 +1051,10 @@ final class KeyboardViewModel: ObservableObject {
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
         refreshTypingPredictions()
+        let hadAIActionTask = actionPanelTask != nil
+            || grammarCorrectionTask != nil
+            || isGrammarCorrectionLoading
+            || aiStatus == "Analyzing…"
         actionPanelTask?.cancel()
         actionPanelTask = nil
         automaticAnalysisTask?.cancel()
@@ -1027,7 +1063,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarCorrectionTask = nil
         grammarCorrectionRequestID = nil
         isGrammarCorrectionLoading = false
-        if isPerformingAIAction, aiStatus == "Analyzing…" {
+        if isPerformingAIAction, hadAIActionTask {
             isPerformingAIAction = false
             aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         }
@@ -1038,6 +1074,7 @@ final class KeyboardViewModel: ObservableObject {
         isGrammarCorrectionLoading = false
         completionPanelState = .allDone
         lastAnalyzedText = nil
+        panelMode = .keyboard
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
     }
 
@@ -1174,7 +1211,7 @@ final class KeyboardViewModel: ObservableObject {
         guard panelMode == .keyboard else { return }
         guard actionError == nil else { return }
         guard canRunAIAction else { return }
-        guard currentReplacementPlan() != nil else {
+        guard currentInputTextForAnalysis() != nil else {
             clearAutomaticAnalysisState()
             return
         }
@@ -1195,7 +1232,7 @@ final class KeyboardViewModel: ObservableObject {
         guard panelMode == .keyboard else { return }
         guard actionError == nil else { return }
         guard suggestionState == nil, !hasNoIssueAnalysisResult else { return }
-        guard currentReplacementPlan() != nil else {
+        guard currentInputTextForAnalysis() != nil else {
             clearAutomaticAnalysisState()
             return
         }
@@ -1205,11 +1242,10 @@ final class KeyboardViewModel: ObservableObject {
 
     private func runAutomaticAnalysis() async {
         guard !isPerformingAIAction, canRunAIAction, panelMode == .keyboard, actionError == nil else { return }
-        guard let replacementPlan = currentReplacementPlan() else {
+        guard let analysisText = currentInputTextForAnalysis() else {
             clearAutomaticAnalysisState()
             return
         }
-        let analysisText = replacementPlan.textForAI
         guard analysisText.count >= 3 else {
             clearAutomaticAnalysisState()
             return
@@ -1217,6 +1253,7 @@ final class KeyboardViewModel: ObservableObject {
         if lastAnalyzedText == analysisText, canOpenAnalysisResult { return }
 
         let currentConfig = config
+        let documentTextAtRequest = currentDocumentTextForAnalysis()
         lastAnalyzedText = analysisText
         isPerformingAIAction = true
         aiStatus = "Analyzing…"
@@ -1224,9 +1261,18 @@ final class KeyboardViewModel: ObservableObject {
 
         do {
             let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
-            guard currentReplacementPlan()?.textForAI == analysisText else {
+            guard let currentAnalysisText = currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest),
+                  currentAnalysisText == analysisText else {
                 isPerformingAIAction = false
-                scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+                if lastAnalyzedText == analysisText {
+                    lastAnalyzedText = nil
+                }
+                if !textDocumentProxy.hasText {
+                    clearComposingBuffer()
+                    clearAutomaticAnalysisState()
+                } else {
+                    scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
+                }
                 return
             }
             guard panelMode == .keyboard else {
@@ -1387,7 +1433,11 @@ final class KeyboardViewModel: ObservableObject {
         return shouldPreferComposingBuffer(contextPlan: contextPlan, bufferPlan: bufferPlan)
     }
 
-    private func shouldPreferComposingBuffer(contextPlan: KeyboardReplacementPlan, bufferPlan: KeyboardReplacementPlan) -> Bool {
+    private func shouldPreferComposingBuffer(
+        contextPlan: KeyboardReplacementPlan,
+        bufferPlan: KeyboardReplacementPlan,
+        knownStaleContextText: String? = nil
+    ) -> Bool {
         guard let replacementResult = lastKeyboardReplacementResultText,
               bufferPlan.textForAI == replacementResult,
               contextPlan.textForAI != replacementResult else {
@@ -1395,6 +1445,9 @@ final class KeyboardViewModel: ObservableObject {
         }
 
         if contextPlan.textForAI == lastKeyboardReplacementSourceText {
+            return true
+        }
+        if let knownStaleContextText, contextPlan.textForAI == knownStaleContextText {
             return true
         }
         if let lastAnalyzedText, contextPlan.textForAI == lastAnalyzedText {
@@ -1448,6 +1501,42 @@ final class KeyboardViewModel: ObservableObject {
             return bufferPlan
         }
         return contextPlan ?? bufferPlan
+    }
+
+    private func currentDocumentTextForAnalysis() -> String? {
+        KeyboardReplacementPlanner.plan(
+            contextBeforeInput: textDocumentProxy.documentContextBeforeInput,
+            contextAfterInput: textDocumentProxy.documentContextAfterInput
+        )?.textForAI
+    }
+
+    private func currentInputTextForAnalysis(knownStaleContextText: String? = nil) -> String? {
+        guard textDocumentProxy.hasText else { return nil }
+
+        let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
+        let contextAfterInput = textDocumentProxy.documentContextAfterInput
+        if composingBuffer.isEmpty, Self.debugStateEnabled {
+            composingBuffer = Self.loadPersistedComposingBuffer()
+        }
+        let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
+        let bufferPlan = KeyboardReplacementPlanner.plan(for: fallbackContext)
+        if let contextPlan = KeyboardReplacementPlanner.plan(
+            contextBeforeInput: contextBeforeInput,
+            contextAfterInput: contextAfterInput
+        ) {
+            if let bufferPlan,
+               shouldPreferComposingBuffer(
+                   contextPlan: contextPlan,
+                   bufferPlan: bufferPlan,
+                   knownStaleContextText: knownStaleContextText
+               ) {
+                return bufferPlan.textForAI
+            }
+            return contextPlan.textForAI
+        }
+
+        guard contextBeforeInput == nil, contextAfterInput == nil else { return nil }
+        return bufferPlan?.textForAI
     }
 
     private func replaceEditableText(with replacement: String) {

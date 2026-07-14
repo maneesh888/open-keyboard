@@ -99,6 +99,35 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         )
     }
 
+    func testRealKeyboardEmptyInputShowsNoStaleCorrectionsScreenshotWhenExplicitlyRequested() throws {
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for empty-input verification")
+        XCTAssertTrue(((input.value as? String) ?? "").isEmpty, "Host input must start empty for stale correction proof")
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        XCTAssertTrue(keyboardApp.buttons["keyboard_openkeyboard_icon"].waitForExistence(timeout: 5))
+        XCTAssertFalse(keyboardApp.buttons["keyboard_issue_count_badge"].exists)
+        XCTAssertFalse(keyboardApp.otherElements["ai_correction_panel"].exists)
+        XCTAssertFalse(keyboardApp.otherElements["correction_complete_panel"].exists)
+
+        try captureRealKeyboardStep("empty-input-no-stale-corrections")
+    }
+
     func testSeededRealKeyboardCorrectionCarouselCanNavigateCards() throws {
         let seededCorrectionText = "i has a apple and ths sentence"
         let app = configuredContainingApp(extraArguments: [
