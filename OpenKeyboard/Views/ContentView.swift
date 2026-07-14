@@ -120,6 +120,7 @@ struct ContentView: View {
 
 struct StatusCard: View {
     @ObservedObject var viewModel: SettingsViewModel
+    @State private var checkingIconRotation = 0.0
 
     private var config: AppConfig { viewModel.config }
 
@@ -157,18 +158,19 @@ struct StatusCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
-                ZStack {
-                    Image(systemName: statusImage)
-                        .foregroundColor(statusColor)
-                        .font(.title3)
-                    if isChecking {
-                        ProgressView()
-                            .scaleEffect(0.72)
-                            .accessibilityIdentifier("gateway_status_progress")
+                Image(systemName: statusImage)
+                    .foregroundColor(statusColor)
+                    .font(.title3)
+                    .rotationEffect(.degrees(isChecking ? checkingIconRotation : 0))
+                    .accessibilityIdentifier(isChecking ? "gateway_status_progress" : "gateway_status_icon")
+                    .frame(width: 34, height: 34)
+                    .background(isChecking ? Color.clear : statusColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onAppear {
+                        updateCheckingIconAnimation(isChecking: isChecking)
                     }
-                }
-                .frame(width: 34, height: 34)
-                .background(statusColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .onChange(of: isChecking) { checking in
+                        updateCheckingIconAnimation(isChecking: checking)
+                    }
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(statusTitle)
@@ -207,6 +209,18 @@ struct StatusCard: View {
         )
         .shadow(color: OpenKeyboardTheme.Shadow.card, radius: 14, x: 0, y: 8)
         .padding(.horizontal, 20)
+    }
+
+    private func updateCheckingIconAnimation(isChecking: Bool) {
+        guard isChecking else {
+            checkingIconRotation = 0
+            return
+        }
+
+        checkingIconRotation = 0
+        withAnimation(.linear(duration: 1).repeatForever(autoreverses: false)) {
+            checkingIconRotation = 360
+        }
     }
 }
 
