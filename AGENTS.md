@@ -57,6 +57,10 @@ Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboa
 
 Use the repo scripts before hand-written commands unless a targeted command is clearly narrower:
 
+- Repository hygiene: `./scripts/check.sh --hygiene`
+- Standard deterministic gate: `./scripts/check.sh --quick`
+- Exact-head release gate: `./scripts/check.sh --full`
+- Deterministic UI-target tests: `./scripts/ios/test.sh deterministic-ui`
 - Default deterministic CI: `./scripts/local-ci.sh --quick`
   - runs `./scripts/ios/test.sh core`
   - runs `./scripts/ios/test.sh build`
@@ -65,10 +69,11 @@ Use the repo scripts before hand-written commands unless a targeted command is c
 - Full OpenKeyboard UI tests on iPhone 16: `./scripts/ios/test.sh ui`
 - Onboarding screenshots on iPhone 16 + iPhone SE: `./scripts/ios/test.sh screenshots`
 - Opt-in live gateway service smoke: `./scripts/ios/test.sh live-gateway-smoke`
+- Exact-head live gateway gate: `./scripts/check-live.sh gateway`
 - Opt-in real keyboard extension live test: `./scripts/ios/test.sh real-keyboard-live`
 - Opt-in live AI harness tests: `./scripts/ios/test.sh live-ui`
 
-Remote GitHub CI only runs `core` and `build` from `.github/workflows/openkeyboard-ci.yml`. Do not imply remote CI proves simulator UI, screenshots, real keyboard extension behavior, or live gateway behavior.
+Remote GitHub CI runs hygiene, `core`, and `build` from `.github/workflows/ci.yml`, then reports the stable `Required checks` status. `.github/workflows/live.yml` enforces retained exact-head local evidence for gateway-impacting changes without receiving credentials. Do not imply remote CI proves simulator UI, screenshots, real keyboard extension behavior, live gateway execution, signing, or deployment.
 
 ## Coding Rules
 
@@ -150,11 +155,13 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
 - Visual/UI layout: targeted tests plus `./scripts/ios/test.sh screenshots` or MCP/ClawMaster screenshot proof.
 - Keyboard extension config/action path: targeted tests plus `./scripts/ios/test.sh real-keyboard-live` or the focused smoke from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 - Live gateway contract/performance: `./scripts/ios/test.sh live-gateway-smoke`, app diagnostics, or explicit live Xcode proof. Report timing separately from correctness.
-- Pre-commit broad check: `./scripts/local-ci.sh --quick`, then any task-specific UI/live/screenshot route.
+- Pre-commit broad check: `./scripts/check.sh --quick`, then any task-specific UI/live/screenshot route.
+- Pre-push/release check: `./scripts/check.sh --full`; gateway-impacting changes also require `./scripts/check-live.sh gateway`.
 
 ## Commit And Push Rules
 
 - Commit only when the user explicitly allows it after the task is clear.
+- Install the committed hooks with `./scripts/install-hooks.sh` before the first commit or push in a worktree. Never bypass them with `--no-verify`.
 - Before commit:
   - run `git status --short --branch` from the active session worktree
   - run `git diff --check`

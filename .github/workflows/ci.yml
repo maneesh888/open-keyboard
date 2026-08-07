@@ -1,0 +1,86 @@
+name: OpenKeyboard CI
+
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install --yes ripgrep
+
+      - name: Run repository hygiene
+        run: ./scripts/check.sh --hygiene
+
+  core-tests:
+    name: OpenKeyboardCore tests
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Run core Swift package tests
+        run: ./scripts/ios/test.sh core
+
+  ios-build:
+    name: iOS app + keyboard extension build
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Build OpenKeyboard app and extension
+        run: ./scripts/ios/test.sh build
+
+  required-checks:
+    name: Required checks
+    if: always()
+    runs-on: ubuntu-latest
+    needs:
+      - hygiene
+      - core-tests
+      - ios-build
+    steps:
+      - name: Confirm required jobs passed
+        env:
+          HYGIENE_RESULT: ${{ needs.hygiene.result }}
+          CORE_TESTS_RESULT: ${{ needs.core-tests.result }}
+          IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
+        run: |
+          if [[ "$HYGIENE_RESULT" != "success" ||
+                "$CORE_TESTS_RESULT" != "success" ||
+                "$IOS_BUILD_RESULT" != "success" ]]; then
+            echo "Required checks did not pass."
+            echo "hygiene=$HYGIENE_RESULT"
+            echo "core-tests=$CORE_TESTS_RESULT"
+            echo "ios-build=$IOS_BUILD_RESULT"
+            exit 1
+          fi
+
+          echo "All required OpenKeyboard checks passed."

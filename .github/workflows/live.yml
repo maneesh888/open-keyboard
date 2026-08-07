@@ -1,0 +1,149 @@
+name: OpenKeyboard Live Verification Policy
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  impact:
+    name: Detect live impact
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      head_sha: ${{ steps.classify.outputs.head_sha }}
+      live_impact: ${{ steps.classify.outputs.live_impact }}
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Classify exact-head live impact
+        id: classify
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [[ "$checked_out_sha" != "$PR_HEAD_SHA" ]]; then
+            echo "The checked-out commit does not match the pull-request head."
+            exit 1
+          fi
+
+          if git cat-file -e "$PR_BASE_SHA:scripts/live-impact.sh" 2>/dev/null; then
+            trusted_classifier="$RUNNER_TEMP/live-impact.sh"
+            git show "$PR_BASE_SHA:scripts/live-impact.sh" > "$trusted_classifier"
+            chmod +x "$trusted_classifier"
+            live_impact="$(
+              OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+                "$trusted_classifier" "$PR_BASE_SHA" "$PR_HEAD_SHA"
+            )"
+          else
+            changed_paths_file="$RUNNER_TEMP/live-bootstrap-changed-paths"
+            git diff \
+              --name-only \
+              --diff-filter=ACDMRT \
+              -z \
+              "$PR_BASE_SHA...$PR_HEAD_SHA" > "$changed_paths_file"
+            live_impact=none
+            while IFS= read -r -d '' changed_path; do
+              case "$changed_path" in
+                OpenKeyboard/Models/AppConfig.swift | \
+                  OpenKeyboard/Services/CanonicalGatewayClient.swift | \
+                  OpenKeyboard/Services/NetworkManager.swift | \
+                  OpenKeyboardCore/Package.swift | \
+                  OpenKeyboardCore/Sources/OpenKeyboardCore/Gateway*.swift | \
+                  OpenKeyboardExtension/KeyboardAIService.swift | \
+                  OpenKeyboardExtension/KeyboardViewModel.swift | \
+                  OpenKeyboard.xcodeproj/project.pbxproj | \
+                  OpenKeyboard/*.entitlements | \
+                  OpenKeyboardExtension/*.entitlements)
+                  live_impact=gateway
+                  ;;
+              esac
+            done < "$changed_paths_file"
+          fi
+
+          case "$live_impact" in
+            none|gateway)
+              ;;
+            *)
+              echo "Live-impact classification returned an invalid result."
+              exit 1
+              ;;
+          esac
+
+          if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "The pull-request head is not a full commit SHA."
+            exit 1
+          fi
+
+          echo "head_sha=$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "live_impact=$live_impact" >> "$GITHUB_OUTPUT"
+
+  required-live-verification:
+    name: Required live verification
+    if: always()
+    needs:
+      - impact
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: live-policy
+    steps:
+      - name: Enforce exact-head local live evidence
+        env:
+          HEAD_SHA: ${{ needs.impact.outputs.head_sha }}
+          IMPACT_RESULT: ${{ needs.impact.result }}
+          LIVE_IMPACT: ${{ needs.impact.outputs.live_impact }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [[ "$IMPACT_RESULT" != "success" ]]; then
+            echo "Live-impact classification did not pass."
+            exit 1
+          fi
+
+          if [[ "$LIVE_IMPACT" == "none" ]]; then
+            echo "This exact head does not require local gateway credentials."
+            exit 0
+          fi
+
+          if [[ "$LIVE_IMPACT" != "gateway" ]]; then
+            echo "Live-impact classification returned an unsupported target."
+            exit 1
+          fi
+
+          if [[ "$PR_BODY" != *"Local live verification: passed"* ]]; then
+            echo "The pull request must record 'Local live verification: passed'."
+            exit 1
+          fi
+          if [[ "$PR_BODY" != *"Live verification target: gateway"* ]]; then
+            echo "The pull request must record the gateway verification target."
+            exit 1
+          fi
+          if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]; then
+            echo "Local live evidence is not bound to this exact head."
+            exit 1
+          fi
+          if [[ "$PR_BODY" != *"No credential or gateway response body retained."* ]]; then
+            echo "The pull request must record the live-proof retention boundary."
+            exit 1
+          fi
+          if [[ "$PR_BODY" != *"Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only."* ]]; then
+            echo "The pull request must acknowledge the live-proof trust boundary."
+            exit 1
+          fi
+
+          echo "Exact-head local live evidence was recorded."
+          echo "GitHub did not receive gateway credentials."

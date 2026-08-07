@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
+LIVE_WORKFLOW="$ROOT/.github/workflows/live.yml"
+DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
+DEPENDABOT="$ROOT/.github/dependabot.yml"
+
+for required_file in "$CI_WORKFLOW" "$LIVE_WORKFLOW" "$DEPLOY_WORKFLOW" "$DEPENDABOT"; do
+  if [[ ! -f "$required_file" ]]; then
+    echo "Required workflow policy file is missing: $required_file" >&2
+    exit 1
+  fi
+done
+
+if rg --quiet 'pull_request_target|secrets\.' "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
+  echo "Ordinary and live-policy CI must remain read-only and secretless." >&2
+  exit 1
+fi
+if rg --quiet ':[[:space:]]*write([[:space:]]|$)' "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
+  echo "Ordinary and live-policy CI must not request write permissions." >&2
+  exit 1
+fi
+
+rg --quiet 'contents:[[:space:]]*read' "$CI_WORKFLOW"
+rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFLOW"
+rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
+rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
+rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
+rg --quiet 'Required checks' "$CI_WORKFLOW"
+rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
+rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
+rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
+rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests' "$ROOT/scripts/ios/test.sh"
+rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
+rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
+
+while IFS= read -r use_line; do
+  action_ref="${use_line#*uses:}"
+  action_ref="${action_ref%%#*}"
+  action_ref="${action_ref#"${action_ref%%[![:space:]]*}"}"
+  action_ref="${action_ref%"${action_ref##*[![:space:]]}"}"
+  case "$action_ref" in
+    ./*)
+      ;;
+    *@*)
+      action_sha="${action_ref##*@}"
+      if [[ ! "$action_sha" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "GitHub Action is not pinned to a full commit SHA: $action_ref" >&2
+        exit 1
+      fi
+      ;;
+    *)
+      echo "Invalid GitHub Action reference: $action_ref" >&2
+      exit 1
+      ;;
+  esac
+done < <(rg --no-filename '^[[:space:]]*uses:' "$ROOT/.github/workflows")
+
+ruby -e '
+  require "open3"
+  require "yaml"
+
+  walk = lambda do |value, path|
+    case value
+    when Hash
+      value.each do |key, child|
+        if key == "run" && child.is_a?(String)
+          _stdout, stderr, status = Open3.capture3("bash", "-n", stdin_data: child)
+          abort "Invalid embedded shell in #{path}: #{stderr}" unless status.success?
+        else
+          walk.call(child, path)
+        end
+      end
+    when Array
+      value.each { |child| walk.call(child, path) }
+    end
+  end
+
+  ARGV.each { |path| walk.call(YAML.load_file(path), path) }
+' "$CI_WORKFLOW" "$LIVE_WORKFLOW" "$DEPLOY_WORKFLOW"
+
+ruby -e '
+  require "yaml"
+  policy = YAML.load_file(ARGV.fetch(0))
+  ecosystems = policy.fetch("updates").map { |entry| entry.fetch("package-ecosystem") }
+  abort "Dependabot must cover GitHub Actions." unless ecosystems.include?("github-actions")
+  abort "Dependabot must cover Swift Package Manager." unless ecosystems.include?("swift")
+' "$DEPENDABOT"
+
+echo "GitHub workflow policy tests passed."

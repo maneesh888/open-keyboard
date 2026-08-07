@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -176,6 +176,23 @@ case "${1:-}" in
     echo -e "${GREEN}✓ UI tests complete${NC}"
     ;;
 
+  deterministic-ui)
+    echo -e "${YELLOW}Running deterministic OpenKeyboard UI-target tests on iPhone 16...${NC}"
+    require_xcodebuild
+    run_xcodebuild xcodebuild test \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "$DESTINATION" \
+      -configuration Debug \
+      -only-testing:OpenKeyboardUITests \
+      -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
+      -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
+      -skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests \
+      CODE_SIGN_IDENTITY="" \
+      CODE_SIGNING_REQUIRED=NO
+    echo -e "${GREEN}✓ Deterministic UI-target tests complete${NC}"
+    ;;
+
   live-ui)
     echo -e "${YELLOW}Running live gateway AI UI tests on iPhone 16...${NC}"
     require_xcodebuild
@@ -343,9 +360,10 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
+    echo "  deterministic-ui - Run UI-target tests without credential/state-dependent suites"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"

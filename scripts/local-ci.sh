@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard local CI runner.
-# Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--screenshots]
+# Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--live-gateway-smoke|--real-keyboard-live|--screenshots]
 
 set -euo pipefail
 
@@ -55,18 +55,28 @@ case "$MODE" in
     run_step "OpenKeyboard live gateway AI UI tests" "$SCRIPT_DIR/ios/test.sh" live-ui
     ;;
 
+  --live-gateway-smoke)
+    run_step "OpenKeyboard live gateway smoke" "$SCRIPT_DIR/ios/test.sh" live-gateway-smoke
+    ;;
+
+  --real-keyboard-live)
+    run_step "OpenKeyboard real keyboard live test" "$SCRIPT_DIR/ios/test.sh" real-keyboard-live
+    ;;
+
   --screenshots)
     run_step "OpenKeyboard screenshot UI tests" "$SCRIPT_DIR/ios/test.sh" screenshots
     ;;
 
   --help|-h)
-    echo "Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--screenshots]"
+    echo "Usage: ./scripts/local-ci.sh [--quick|--all|--core|--ios-build|--ui|--live-ui|--live-gateway-smoke|--real-keyboard-live|--screenshots]"
     echo "  --quick       Run core tests + iOS build (default)"
     echo "  --all         Run core tests + iOS build (UI tests are available via --ui)"
     echo "  --core        Run OpenKeyboardCore Swift package tests only"
     echo "  --ios-build   Build OpenKeyboard app/extension only"
     echo "  --ui          Run OpenKeyboardUITests on iPhone 16"
     echo "  --live-ui     Run opt-in live gateway AI UI tests on iPhone 16"
+    echo "  --live-gateway-smoke Run opt-in live gateway service smoke"
+    echo "  --real-keyboard-live Run opt-in configured real keyboard extension test"
     echo "  --screenshots Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     ;;
 
