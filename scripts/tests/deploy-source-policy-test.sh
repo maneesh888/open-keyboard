@@ -2,31 +2,16 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 FIXTURE="$(mktemp -d)"
 REMOTE="$FIXTURE/remote.git"
 REPOSITORY="$FIXTURE/repository"
-RUNNER="$FIXTURE/validate-release-source.sh"
+RUNNER="$ROOT/scripts/validate-deployment-source.sh"
 OUTPUT="$FIXTURE/output"
 trap 'rm -rf -- "$FIXTURE"' EXIT
 
 while IFS= read -r git_environment_name; do
   unset "$git_environment_name"
 done < <(git -C "$ROOT" rev-parse --local-env-vars)
-
-ruby -e '
-  require "yaml"
-
-  workflow = YAML.load_file(ARGV.fetch(0))
-  step = workflow
-    .fetch("jobs")
-    .fetch("validate-release-source")
-    .fetch("steps")
-    .find { |candidate| candidate["name"] == "Enforce trusted deployment ref" }
-  abort "Trusted deployment-ref step is missing." unless step
-  puts step.fetch("run")
-' "$WORKFLOW" > "$RUNNER"
-chmod +x "$RUNNER"
 
 git init -q --bare "$REMOTE"
 git init -q "$REPOSITORY"

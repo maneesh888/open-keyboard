@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+openkeyboard_restore_booted_simulator() {
+  local simulator="$1"
+
+  xcrun simctl boot "$simulator" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$simulator" -b >/dev/null
+}
+
 openkeyboard_require_local_seed_file() {
   local repository_root="$1"
   local requested_path="$2"

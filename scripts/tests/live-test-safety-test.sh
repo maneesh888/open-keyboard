@@ -12,6 +12,19 @@ while IFS= read -r git_environment_name; do
   unset "$git_environment_name"
 done < <(git -C "$ROOT" rev-parse --local-env-vars)
 
+xcrun() {
+  if [[ "${1:-}" == "simctl" && "${2:-}" == "bootstatus" ]]; then
+    return 1
+  fi
+  return 0
+}
+
+if openkeyboard_restore_booted_simulator fixture-simulator; then
+  echo "Simulator restoration accepted a failed bootstatus check." >&2
+  exit 1
+fi
+unset -f xcrun
+
 git -C "$FIXTURE" init -q
 git -C "$FIXTURE" config user.name "OpenKeyboard Policy Test"
 git -C "$FIXTURE" config user.email "policy-test@example.invalid"

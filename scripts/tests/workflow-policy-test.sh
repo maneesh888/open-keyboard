@@ -17,6 +17,7 @@ PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/opena
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
 DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
+DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 
@@ -36,6 +37,7 @@ for required_file in \
   "$PR_TEMPLATE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
   "$DEPLOY_SOURCE_POLICY_TEST" \
+  "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
   "$LIVE_TEST_SAFETY_POLICY_TEST"; do
   if [[ ! -f "$required_file" ]]; then
@@ -68,9 +70,28 @@ rg --quiet 'Required checks' "$CI_WORKFLOW"
 rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
 rg --quiet '^  validate-release-source:$' "$DEPLOY_WORKFLOW"
-rg --quiet 'refs/heads/main' "$DEPLOY_WORKFLOW"
-rg --quiet 'git merge-base --is-ancestor' "$DEPLOY_WORKFLOW"
+rg --quiet 'refs/heads/main' "$DEPLOY_SOURCE_VALIDATOR"
 rg --quiet 'validate-release-source' "$DEPLOY_WORKFLOW"
+rg --quiet 'git merge-base --is-ancestor' "$DEPLOY_SOURCE_VALIDATOR"
+if [[ "$(rg --count '\./scripts/validate-deployment-source\.sh' "$DEPLOY_WORKFLOW")" -ne 2 ]]; then
+  echo "Deployment source must be validated before and after protected-environment approval." >&2
+  exit 1
+fi
+ruby -e '
+  require "yaml"
+
+  jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
+  expected = {
+    "validate-release-source" => "Enforce trusted deployment ref",
+    "deploy-ios" => "Revalidate trusted deployment ref after approval"
+  }
+  expected.each do |job_name, step_name|
+    steps = jobs.fetch(job_name).fetch("steps")
+    step = steps.find { |candidate| candidate["name"] == step_name }
+    abort "#{job_name} is missing #{step_name}." unless step
+    abort "#{step_name} must use the shared validator." unless step["run"] == "./scripts/validate-deployment-source.sh"
+  end
+' "$DEPLOY_WORKFLOW"
 rg --quiet '^sandbox_mode = "read-only"$' "$REVIEWER_AGENT"
 rg --quiet 'Remain read-only' "$REVIEWER_AGENT"
 rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
@@ -120,7 +141,8 @@ rg --quiet 'restore_sensitive_live_source_simulator' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl clone' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl shutdown' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl bootstatus' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'openkeyboard_restore_booted_simulator' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl bootstatus' "$LIVE_TEST_SAFETY"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
   echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2
@@ -163,6 +185,13 @@ for live_impact_pattern in "${live_impact_patterns[@]}"; do
       exit 1
     fi
   done
+done
+
+for classifier_source in "$ROOT/scripts/live-impact.sh" "$LIVE_WORKFLOW"; do
+  if ! rg --fixed-strings --quiet -- '--no-renames' "$classifier_source"; then
+    echo "Live-impact policy must classify both sides of file renames in $classifier_source." >&2
+    exit 1
+  fi
 done
 
 while IFS= read -r use_line; do

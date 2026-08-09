@@ -150,7 +150,8 @@ digests. A clear implementation request bypasses this planning route.
 
 `.github/workflows/deploy-ios.yml` is separate from pull-request CI. It reruns the reusable
 deterministic CI workflow, then enters the protected `app-store-connect` environment to import
-signing material, archive, export, validate, and optionally upload.
+signing material, archive, export, validate, and optionally upload. The deployment job revalidates
+its source after environment approval and before reading deployment secrets.
 
 Production `v*` tags must point to commits contained in `main`. Manual dispatch defaults
 to validation without upload. The deployment workflow does not prove App Review acceptance or a

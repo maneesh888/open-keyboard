@@ -73,7 +73,8 @@ Set the environment's deployment branch/tag policy to **Selected branches and ta
 Add a repository tag ruleset for `v*` that restricts creation to release maintainers and blocks tag
 updates and deletion. The workflow also fails closed: manual dispatch must run from the exact current
 `main`, and every `v*` tag must resolve to a commit contained in `origin/main` before the protected
-environment job can start.
+environment job can start. The protected deployment job repeats that validation after approval and
+before reading deployment secrets, so approval wait time cannot stale the earlier result.
 
 OpenKeyboard requires separate App Store provisioning profiles for:
 

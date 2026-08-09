@@ -53,6 +53,7 @@ jobs:
           else
             changed_paths_file="$RUNNER_TEMP/live-bootstrap-changed-paths"
             git diff \
+              --no-renames \
               --name-only \
               --diff-filter=ACDMRT \
               -z \

@@ -3,6 +3,13 @@ set -euo pipefail
 
 ROOT="${OPEN_KEYBOARD_REPOSITORY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
+SECRET_PATTERNS=(
+  -e 'sk-[A-Za-z0-9_-]{20,}'
+  -e 'gh[pousr]_[A-Za-z0-9]{30,}'
+  -e 'Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}'
+  -e '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
+)
+
 if ! command -v rg >/dev/null 2>&1; then
   echo "ripgrep (rg) is required for the repository secret scan." >&2
   exit 2
@@ -26,14 +33,29 @@ if command -v git >/dev/null 2>&1 &&
       ':(glob)**/*.seed.local.env' \
       ':(glob).agent/local-seeds/**'
   )
-fi
 
-SECRET_PATTERNS=(
-  -e 'sk-[A-Za-z0-9_-]{20,}'
-  -e 'gh[pousr]_[A-Za-z0-9]{30,}'
-  -e 'Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{8,}'
-  -e '-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----'
-)
+  tracked_scan_status=0
+  git -C "$ROOT" grep \
+    --quiet \
+    --ignore-case \
+    --extended-regexp \
+    -I \
+    "${SECRET_PATTERNS[@]}" \
+    -- . || tracked_scan_status=$?
+
+  case "$tracked_scan_status" in
+    0)
+      echo "Potential secret material found in a tracked file." >&2
+      exit 1
+      ;;
+    1)
+      ;;
+    *)
+      echo "Tracked-file secret scan could not complete (git grep exit $tracked_scan_status)." >&2
+      exit "$tracked_scan_status"
+      ;;
+  esac
+fi
 
 scan_status=0
 rg --quiet \

@@ -152,10 +152,12 @@ restore_sensitive_live_source_simulator() {
     return 0
   fi
 
-  xcrun simctl boot "$SENSITIVE_LIVE_SOURCE_SIMULATOR" >/dev/null 2>&1 || true
-  xcrun simctl bootstatus "$SENSITIVE_LIVE_SOURCE_SIMULATOR" -b >/dev/null
+  if ! openkeyboard_restore_booted_simulator "$SENSITIVE_LIVE_SOURCE_SIMULATOR"; then
+    return 1
+  fi
   SENSITIVE_LIVE_SOURCE_SIMULATOR=""
   SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
+  return 0
 }
 
 cleanup_sensitive_live_artifacts() {

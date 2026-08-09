@@ -86,6 +86,23 @@ done
 
 gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
+git -C "$FIXTURE" checkout -q -B rename-base "$docs_sha"
+mkdir -p "$FIXTURE/OpenKeyboard/Resources" "$FIXTURE/docs"
+printf 'runtime configuration\n' > "$FIXTURE/OpenKeyboard/Resources/runtime-policy.json"
+git -C "$FIXTURE" add OpenKeyboard/Resources/runtime-policy.json
+git -C "$FIXTURE" commit -q -m runtime-base
+rename_base_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+git -C "$FIXTURE" mv \
+  OpenKeyboard/Resources/runtime-policy.json \
+  docs/runtime-policy.json
+git -C "$FIXTURE" commit -q -m rename-runtime-out
+rename_out_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+
+if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$rename_base_sha" "$rename_out_sha")" != "gateway" ]]; then
+  echo "Renaming a runtime file out of a sensitive directory bypassed live verification." >&2
+  exit 1
+fi
+
 if OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" invalid "$gateway_sha" >/dev/null 2>&1; then
   echo "Live-impact classification accepted an invalid revision." >&2
   exit 1

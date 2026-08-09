@@ -37,4 +37,13 @@ if OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$SCANNER" >/dev/null 2>&1; then
   exit 1
 fi
 
+git -C "$FIXTURE" reset -q -- .agent/local-seeds/openkeyboard-gateway.env
+rm -f "$FIXTURE/.agent/local-seeds/openkeyboard-gateway.env"
+printf 'sk-%s\n' 'trackedsecretmaterial1234567890' > "$FIXTURE/.agent/credentials.txt"
+git -C "$FIXTURE" add -f .agent/credentials.txt
+if OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$SCANNER" >/dev/null 2>&1; then
+  echo "Secret scan accepted recognized secret material in an excluded tracked path." >&2
+  exit 1
+fi
+
 echo "Secret-scan regression tests passed."
