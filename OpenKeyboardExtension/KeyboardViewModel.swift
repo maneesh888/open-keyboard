@@ -142,12 +142,8 @@ struct KeyboardActionPanelState: Equatable {
         options.first { $0.id == selectedOptionID } ?? options.first
     }
 
-    var usesExpandedImprovePanel: Bool {
-        selectedAction == .improve
-    }
-
-    var usesScrollableImproveResult: Bool {
-        usesExpandedImprovePanel && selectedOption != nil && !isLoading
+    var usesScrollableActionResult: Bool {
+        selectedOption != nil && !isLoading
     }
 
     mutating func selectAction(_ action: KeyboardAIAction) {
@@ -1807,6 +1803,23 @@ final class KeyboardViewModel: ObservableObject {
 
         private static var improveActionPanelState: KeyboardActionPanelState {
             let sourceText = "Do you know that our test phrases are essentially meaningless, making them hard to rephrase? Technically, they are being rephrased, but not very effectively. Could you add a few longer, more meaningful sentences?"
+            let improvedText = """
+            SCROLL TEST START
+
+            A reliable writing workflow needs enough context to preserve the original meaning while improving clarity, structure, and tone. Short examples are useful for quick checks, but they do not reveal whether a result panel remains usable when a response contains several detailed paragraphs.
+
+            The first section explains the problem, the audience, and the intended outcome. It should remain easy to read without forcing the surrounding controls to move. The action selector, rerun button, copy button, keyboard button, and apply button should stay fixed while only this text area scrolls.
+
+            The second section adds enough material to exceed the visible result area. It includes complete sentences of different lengths so line wrapping behaves like realistic generated content instead of a repeated placeholder. Scrolling should feel direct, should not move the entire keyboard, and should not accidentally trigger any action buttons.
+
+            The third section confirms that Rephrase and Summarize use the same viewport geometry as Improve. Switching between those actions must not make the extension jump in height, because a changing keyboard frame can distract the user and shift the host application's content unexpectedly.
+
+            The fourth section provides additional content for repeated swipe testing. A user should be able to move down, pause to read, continue to the end, and then return to the beginning. The scroll indicator should accurately reflect the current position within the generated response.
+
+            The final section is intentionally placed well below the initial viewport. Reaching the marker below proves that the complete response remains available instead of being clipped or truncated by the fixed action-panel height.
+
+            SCROLL TEST END
+            """
             let replacementPlan = KeyboardReplacementPlan(
                 textToDelete: sourceText,
                 textForAI: sourceText,
@@ -1821,7 +1834,7 @@ final class KeyboardViewModel: ObservableObject {
                     KeyboardRewriteOption(
                         id: "improve-option-1",
                         title: "Clearer",
-                        text: sourceText
+                        text: improvedText
                     )
                 ],
                 isCarouselVisible: true,

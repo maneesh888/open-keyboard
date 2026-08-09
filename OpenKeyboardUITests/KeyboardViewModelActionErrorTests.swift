@@ -191,7 +191,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             XCTAssertEqual(viewModel.panelMode, .actions)
             XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
             XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
-            XCTAssertTrue(viewModel.actionPanelState?.selectedOption?.text.contains("longer, more meaningful sentences") ?? false)
+            let seededResult = try XCTUnwrap(viewModel.actionPanelState?.selectedOption?.text)
+            XCTAssertTrue(seededResult.contains("SCROLL TEST START"))
+            XCTAssertTrue(seededResult.contains("SCROLL TEST END"))
             XCTAssertNil(viewModel.rewriteOptionsState)
             XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
             XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
@@ -199,7 +201,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
-    func testImprovePanelExpandsForImproveAndScrollsOnlyForLoadedResult() {
+    func testActionPanelUsesOneHeightAndScrollsLoadedResultsForEveryAction() {
         let sourceText = "Please make this clearer."
         let replacementPlan = KeyboardReplacementPlan(
             textToDelete: sourceText,
@@ -239,30 +241,38 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             options: [option],
             isLoading: false
         )
+        let loadedSummarizeState = KeyboardActionPanelState(
+            sourceText: sourceText,
+            replacementPlan: replacementPlan,
+            selectedAction: .summarize,
+            options: [option],
+            isLoading: false
+        )
 
-        XCTAssertTrue(loadingImproveState.usesExpandedImprovePanel)
-        XCTAssertTrue(emptyImproveState.usesExpandedImprovePanel)
-        XCTAssertFalse(loadedRewriteState.usesExpandedImprovePanel)
-        XCTAssertTrue(loadedImproveState.usesExpandedImprovePanel)
-        XCTAssertFalse(loadingImproveState.usesScrollableImproveResult)
-        XCTAssertFalse(emptyImproveState.usesScrollableImproveResult)
-        XCTAssertFalse(loadedRewriteState.usesScrollableImproveResult)
-        XCTAssertTrue(loadedImproveState.usesScrollableImproveResult)
+        XCTAssertFalse(loadingImproveState.usesScrollableActionResult)
+        XCTAssertFalse(emptyImproveState.usesScrollableActionResult)
+        XCTAssertTrue(loadedImproveState.usesScrollableActionResult)
+        XCTAssertTrue(loadedRewriteState.usesScrollableActionResult)
+        XCTAssertTrue(loadedSummarizeState.usesScrollableActionResult)
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadingImproveState),
-            KeyboardPanelLayout.improvePanelHeight
+            KeyboardPanelLayout.actionPanelHeight
         )
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: emptyImproveState),
-            KeyboardPanelLayout.improvePanelHeight
+            KeyboardPanelLayout.actionPanelHeight
         )
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadedRewriteState),
-            KeyboardPanelLayout.preferredKeyboardHeight
+            KeyboardPanelLayout.actionPanelHeight
         )
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadedImproveState),
-            KeyboardPanelLayout.improvePanelHeight
+            KeyboardPanelLayout.actionPanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadedSummarizeState),
+            KeyboardPanelLayout.actionPanelHeight
         )
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .keyboard, actionPanelState: loadedImproveState),

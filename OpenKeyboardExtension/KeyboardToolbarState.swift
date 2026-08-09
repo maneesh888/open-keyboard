@@ -31,14 +31,14 @@ enum KeyboardPanelLayout {
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
     static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
-    static let improvePanelHeight: CGFloat = preferredKeyboardHeight + 104
+    static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
 
     static func keyboardHeight(
         for panelMode: KeyboardPanelMode,
         actionPanelState: KeyboardActionPanelState?
     ) -> CGFloat {
-        if panelMode == .actions, actionPanelState?.usesExpandedImprovePanel == true {
-            return improvePanelHeight
+        if panelMode == .actions, actionPanelState != nil {
+            return actionPanelHeight
         }
         return preferredKeyboardHeight
     }

@@ -69,6 +69,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.outerBottomPadding, 1)
         XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 216)
         XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 267)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {

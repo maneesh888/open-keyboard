@@ -406,7 +406,13 @@ private struct AIActionPanel: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(KeyboardColors.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
@@ -414,47 +420,40 @@ private struct AIActionPanel: View {
         .accessibilityIdentifier("ai_action_panel")
     }
 
-    private var usesScrollableImproveResult: Bool {
-        state.usesScrollableImproveResult
-    }
-
-    private var usesExpandedImprovePanel: Bool {
-        state.usesExpandedImprovePanel
+    private var usesScrollableActionResult: Bool {
+        state.usesScrollableActionResult
     }
 
     private var panelHeight: CGFloat {
-        usesExpandedImprovePanel ? KeyboardPanelLayout.improvePanelHeight : KeyboardPanelLayout.expandedPanelHeight
+        KeyboardPanelLayout.actionPanelHeight
     }
 
     private var suggestionHeight: CGFloat {
-        if usesExpandedImprovePanel {
-            return 200
-        }
-        return state.isCarouselVisible ? 72 : 132
+        180
     }
 
     private var carouselHeight: CGFloat {
-        usesExpandedImprovePanel ? 32 : 38
+        32
     }
 
     private var carouselBottomPadding: CGFloat {
-        usesExpandedImprovePanel ? 4 : 7
+        4
     }
 
     private var controlButtonSize: CGFloat {
-        usesExpandedImprovePanel ? 34 : 36
+        34
     }
 
     private var groupedButtonWidth: CGFloat {
-        usesExpandedImprovePanel ? 38 : 40
+        38
     }
 
     private var controlRowTopPadding: CGFloat {
-        usesExpandedImprovePanel ? 4 : 7
+        4
     }
 
     private var actionResultFontSize: CGFloat {
-        usesExpandedImprovePanel ? 15 : 19
+        15
     }
 
     private var header: some View {
@@ -505,13 +504,14 @@ private struct AIActionPanel: View {
 
     @ViewBuilder
     private func actionResultText(_ text: String) -> some View {
-        if usesScrollableImproveResult {
+        if usesScrollableActionResult {
             ScrollView(.vertical, showsIndicators: true) {
                 actionResultLabel(text, lineLimit: nil)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .clipped()
+            .accessibilityIdentifier("ai_action_result_scroll")
         } else {
             actionResultLabel(text, lineLimit: state.isCarouselVisible ? 4 : 6)
         }
@@ -735,7 +735,13 @@ private struct RewriteOptionsPanel: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(KeyboardColors.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
