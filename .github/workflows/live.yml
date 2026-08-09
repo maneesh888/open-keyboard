@@ -60,11 +60,26 @@ jobs:
             live_impact=none
             while IFS= read -r -d '' changed_path; do
               case "$changed_path" in
-                OpenKeyboard/Models/AppConfig.swift | \
+                .github/pull_request_template.md | \
+                  .github/workflows/live.yml | \
+                  .githooks/pre-push | \
+                  scripts/check-live.sh | \
+                  scripts/check.sh | \
+                  scripts/live-impact.sh | \
+                  scripts/ios/openkeyboard-gateway.seed.env.example | \
+                  scripts/ios/test.sh | \
+                  OpenKeyboard/Info.plist | \
+                  OpenKeyboard/Models/AppConfig.swift | \
+                  OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
+                  OpenKeyboard/OpenKeyboardApp.swift | \
                   OpenKeyboard/Services/CanonicalGatewayClient.swift | \
                   OpenKeyboard/Services/NetworkManager.swift | \
+                  OpenKeyboard/ViewModels/SettingsViewModel.swift | \
                   OpenKeyboardCore/Package.swift | \
                   OpenKeyboardCore/Sources/OpenKeyboardCore/Gateway*.swift | \
+                  OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift | \
+                  OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift | \
+                  OpenKeyboardExtension/Info.plist | \
                   OpenKeyboardExtension/KeyboardAIService.swift | \
                   OpenKeyboardExtension/KeyboardViewModel.swift | \
                   OpenKeyboard.xcodeproj/project.pbxproj | \
@@ -132,7 +147,24 @@ jobs:
             echo "The pull request must record the gateway verification target."
             exit 1
           fi
-          if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]; then
+
+          live_tested_head=""
+          live_tested_head_count=0
+          while IFS= read -r body_line; do
+            body_line="${body_line%$'\r'}"
+            case "$body_line" in
+              '- Exact live-tested head: '*)
+                live_tested_head="${body_line#- Exact live-tested head: }"
+                ((live_tested_head_count += 1))
+                ;;
+            esac
+          done <<< "$PR_BODY"
+
+          if [[ "$live_tested_head_count" -ne 1 ]]; then
+            echo "The pull request must record exactly one exact live-tested head."
+            exit 1
+          fi
+          if [[ ! "$live_tested_head" =~ ^[0-9a-f]{40}$ || "$live_tested_head" != "$HEAD_SHA" ]]; then
             echo "Local live evidence is not bound to this exact head."
             exit 1
           fi

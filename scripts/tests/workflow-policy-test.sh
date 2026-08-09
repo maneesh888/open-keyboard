@@ -15,6 +15,7 @@ DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
+LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
 
 for required_file in \
   "$CI_WORKFLOW" \
@@ -29,7 +30,8 @@ for required_file in \
   "$DEVELOP_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
-  "$PR_TEMPLATE"; do
+  "$PR_TEMPLATE" \
+  "$LIVE_EVIDENCE_POLICY_TEST"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Required workflow policy file is missing: $required_file" >&2
     exit 1
@@ -50,6 +52,12 @@ rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFL
 rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
+rg --quiet 'live_tested_head_count' "$LIVE_WORKFLOW"
+rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_WORKFLOW"
+if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORKFLOW"; then
+  echo "Live evidence must bind the dedicated exact-head field, not any PR-body occurrence." >&2
+  exit 1
+fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
 rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
@@ -75,6 +83,43 @@ rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
+
+live_impact_patterns=(
+  '.github/pull_request_template.md'
+  '.github/workflows/live.yml'
+  '.githooks/pre-push'
+  'scripts/check-live.sh'
+  'scripts/check.sh'
+  'scripts/live-impact.sh'
+  'scripts/ios/openkeyboard-gateway.seed.env.example'
+  'scripts/ios/test.sh'
+  'OpenKeyboard/Info.plist'
+  'OpenKeyboard/Models/AppConfig.swift'
+  'OpenKeyboard/Models/KeyboardSuggestionModels.swift'
+  'OpenKeyboard/OpenKeyboardApp.swift'
+  'OpenKeyboard/Services/CanonicalGatewayClient.swift'
+  'OpenKeyboard/Services/NetworkManager.swift'
+  'OpenKeyboard/ViewModels/SettingsViewModel.swift'
+  'OpenKeyboardCore/Package.swift'
+  'OpenKeyboardCore/Sources/OpenKeyboardCore/Gateway*.swift'
+  'OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift'
+  'OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift'
+  'OpenKeyboardExtension/Info.plist'
+  'OpenKeyboardExtension/KeyboardAIService.swift'
+  'OpenKeyboardExtension/KeyboardViewModel.swift'
+  'OpenKeyboard.xcodeproj/project.pbxproj'
+  'OpenKeyboard/*.entitlements'
+  'OpenKeyboardExtension/*.entitlements'
+)
+
+for live_impact_pattern in "${live_impact_patterns[@]}"; do
+  for classifier_source in "$ROOT/scripts/live-impact.sh" "$LIVE_WORKFLOW"; do
+    if ! rg --fixed-strings --quiet "$live_impact_pattern" "$classifier_source"; then
+      echo "Live-impact policy omitted $live_impact_pattern from $classifier_source." >&2
+      exit 1
+    fi
+  done
+done
 
 while IFS= read -r use_line; do
   action_ref="${use_line#*uses:}"

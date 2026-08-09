@@ -31,16 +31,57 @@ if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$base_sha" "$do
   exit 1
 fi
 
-mkdir -p "$FIXTURE/OpenKeyboard/Services"
-printf 'gateway runtime\n' > "$FIXTURE/OpenKeyboard/Services/CanonicalGatewayClient.swift"
-git -C "$FIXTURE" add OpenKeyboard/Services/CanonicalGatewayClient.swift
-git -C "$FIXTURE" commit -q -m gateway
-gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+assert_gateway_path() {
+  local relative_path="$1"
+  local path_sha
 
-if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$base_sha" "$gateway_sha")" != "gateway" ]]; then
-  echo "Gateway runtime changes must require live verification." >&2
-  exit 1
-fi
+  git -C "$FIXTURE" checkout -q -B impact-case "$docs_sha"
+  mkdir -p "$(dirname "$FIXTURE/$relative_path")"
+  printf 'gateway-sensitive change\n' > "$FIXTURE/$relative_path"
+  git -C "$FIXTURE" add -- "$relative_path"
+  git -C "$FIXTURE" commit -q -m "impact $relative_path"
+  path_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+
+  if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$docs_sha" "$path_sha")" != "gateway" ]]; then
+    echo "Gateway-sensitive path was not classified for live verification: $relative_path" >&2
+    exit 1
+  fi
+}
+
+gateway_sensitive_paths=(
+  .github/pull_request_template.md
+  .github/workflows/live.yml
+  .githooks/pre-push
+  scripts/check-live.sh
+  scripts/check.sh
+  scripts/live-impact.sh
+  scripts/ios/openkeyboard-gateway.seed.env.example
+  scripts/ios/test.sh
+  OpenKeyboard/Info.plist
+  OpenKeyboard/Models/AppConfig.swift
+  OpenKeyboard/Models/KeyboardSuggestionModels.swift
+  OpenKeyboard/OpenKeyboardApp.swift
+  OpenKeyboard/Services/CanonicalGatewayClient.swift
+  OpenKeyboard/Services/NetworkManager.swift
+  OpenKeyboard/ViewModels/SettingsViewModel.swift
+  OpenKeyboardCore/Package.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayConfig.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift
+  OpenKeyboardExtension/Info.plist
+  OpenKeyboardExtension/KeyboardAIService.swift
+  OpenKeyboardExtension/KeyboardViewModel.swift
+  OpenKeyboard.xcodeproj/project.pbxproj
+  OpenKeyboard/OpenKeyboard.entitlements
+  OpenKeyboardExtension/OpenKeyboardExtension.entitlements
+)
+
+for gateway_sensitive_path in "${gateway_sensitive_paths[@]}"; do
+  assert_gateway_path "$gateway_sensitive_path"
+done
+
+gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
 if OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" invalid "$gateway_sha" >/dev/null 2>&1; then
   echo "Live-impact classification accepted an invalid revision." >&2

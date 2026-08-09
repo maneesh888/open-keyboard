@@ -38,11 +38,26 @@ git -C "$ROOT" diff \
 live_required="false"
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
-    OpenKeyboard/Models/AppConfig.swift | \
+    .github/pull_request_template.md | \
+      .github/workflows/live.yml | \
+      .githooks/pre-push | \
+      scripts/check-live.sh | \
+      scripts/check.sh | \
+      scripts/live-impact.sh | \
+      scripts/ios/openkeyboard-gateway.seed.env.example | \
+      scripts/ios/test.sh | \
+      OpenKeyboard/Info.plist | \
+      OpenKeyboard/Models/AppConfig.swift | \
+      OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
+      OpenKeyboard/OpenKeyboardApp.swift | \
       OpenKeyboard/Services/CanonicalGatewayClient.swift | \
       OpenKeyboard/Services/NetworkManager.swift | \
+      OpenKeyboard/ViewModels/SettingsViewModel.swift | \
       OpenKeyboardCore/Package.swift | \
       OpenKeyboardCore/Sources/OpenKeyboardCore/Gateway*.swift | \
+      OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift | \
+      OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift | \
+      OpenKeyboardExtension/Info.plist | \
       OpenKeyboardExtension/KeyboardAIService.swift | \
       OpenKeyboardExtension/KeyboardViewModel.swift | \
       OpenKeyboard.xcodeproj/project.pbxproj | \
