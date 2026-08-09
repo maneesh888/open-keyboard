@@ -25,6 +25,7 @@ Carthage/Build/
 
 # Local agent scratch files
 .agent/
+.ua/
 
 # Local CI artifacts
 .ci-results/
