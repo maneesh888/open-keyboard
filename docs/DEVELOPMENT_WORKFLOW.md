@@ -111,6 +111,21 @@ merge. A new commit invalidates the result and requires a fresh exact-head revie
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA and result in the PR brief; branch protection separately enforces GitHub checks and approvals.
 
+## Autonomous lifecycle and guarded merge
+
+A bounded implementation request continues through branch preparation, implementation, checks,
+commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
+confirmation at every stage. The latest `local only`, `do not commit`, `do not push`, `do not create
+a PR`, `keep draft`, or `do not merge` instruction stops the corresponding state change.
+
+After every exact-head gate passes, the root agent may invoke GitHub's native squash auto-merge with
+head-SHA matching. It immediately inspects the result. If GitHub queues the merge instead of
+completing it, the agent disables auto-merge and reports the blocker; queued unattended merging is
+not permitted. Ordinary GitHub Actions remain read-only and never merge pull requests.
+
+Deployment is outside this lifecycle and still requires explicit authorization plus approval in
+the protected `app-store-connect` environment.
+
 ## Planning and development automation
 
 `$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release

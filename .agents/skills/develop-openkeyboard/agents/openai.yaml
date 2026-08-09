@@ -1,4 +1,4 @@
 interface:
   display_name: "Develop OpenKeyboard"
   short_description: "Build and verify bounded OpenKeyboard changes"
-  default_prompt: "Use $develop-openkeyboard to execute the next bounded OpenKeyboard task with the repository's proof and lifecycle rules."
+  default_prompt: "Use $develop-openkeyboard to execute the next bounded OpenKeyboard task through its guarded repository lifecycle unless an explicit opt-out applies."

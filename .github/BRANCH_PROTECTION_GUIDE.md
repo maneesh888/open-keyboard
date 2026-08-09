@@ -20,7 +20,11 @@ Recommended repository merge settings:
 
 - Allow squash merge.
 - Delete head branches automatically after merge.
-- Allow auto-merge, but enable it deliberately per reviewed PR.
+- Allow auto-merge so the guarded root-agent lifecycle can invoke it for an exact reviewed head.
+
+This is not an unattended merger. The root agent may invoke GitHub's native auto-merge only after
+all exact-head gates pass, and must disable it immediately if GitHub queues rather than completes the
+merge. Ordinary pull-request workflows remain read-only and cannot merge.
 
 The live policy status is secretless. Gateway-impacting pull requests run
 `./scripts/check-live.sh gateway` locally and record the full tested head SHA in the PR body.

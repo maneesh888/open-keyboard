@@ -1,6 +1,6 @@
 ---
 name: review-verify-merge-pr
-description: Independently review OpenKeyboard pull requests and verify exact-head readiness. Use for PR review, release readiness, and guarded merge only when the user explicitly requests the corresponding state change.
+description: Independently review OpenKeyboard pull requests and verify exact-head readiness. Use for PR review and for autonomous implementation lifecycles reaching guarded readiness and merge; honor explicit draft or merge opt-outs.
 ---
 
 # Review, Verify, and Safely Merge an OpenKeyboard PR
@@ -9,11 +9,13 @@ Bind every review conclusion and state change to one exact pull-request head.
 
 ## Authority
 
-- Review and readiness assessment are read-only.
-- Publishing an implementation pull request does not authorize marking it ready or merging it.
+- Review, readiness assessment, and blocker requests are read-only.
+- A bounded implementation request starts the normal autonomous repository lifecycle through guarded merge.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
-- Require an explicit user request before changing draft state, enabling auto-merge, merging, or deploying.
+- Honor the latest explicit `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge` instruction.
+- Do not request another confirmation between requested lifecycle stages.
+- Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
 
 ## Establish the exact target
@@ -48,9 +50,11 @@ private user text, generated artifacts, and raw logs out of the packet.
 6. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence.
 7. Confirm GitHub reports `Required checks` and `Required live verification` as successful for the reviewed head.
 
-Review-only work reports findings and stops. During an implementation follow-up, the root agent may
-fix in-scope blockers while the PR remains open. Every new commit requires a fresh exact-head review
-and verification cycle.
+Review-only work reports findings and stops. During an autonomous implementation lifecycle, the
+root agent fixes in-scope blockers while the PR remains draft. Every new commit invalidates local
+Release evidence, live evidence, independent review, and GitHub gate conclusions. If the PR was
+already ready, immediately disable any auto-merge request and return it to draft, then refresh the
+PR brief and repeat the exact-head cycle.
 
 ## Readiness gate
 
@@ -71,15 +75,31 @@ readiness and merge.
 
 ## Guarded merge
 
-Run this section only when the user explicitly asks to merge.
+If the latest instruction says `keep draft`, leave the PR draft. If it says `do not merge`, a clean
+head may become ready but must remain unmerged.
 
-1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, and scope.
-2. Confirm all evidence remains bound to the same full SHA.
-3. Use GitHub's protected squash merge with head-SHA matching where supported.
-4. If GitHub queues auto-merge without an explicit request to leave it queued, disable it and report the blocker.
-5. If the head or any gate changes, stop and restart the exact-head cycle.
+Otherwise:
 
-Never force, use administrator bypass, dismiss valid feedback, or leave a deployment running.
+1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction.
+2. Confirm all evidence remains bound to the same full reviewed and locally verified SHA.
+3. Mark the draft ready.
+4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, or review mismatch, disable any queued auto-merge, return the PR to draft when applicable, and restart the exact-head cycle or report the blocker. On a late `keep draft`, disable auto-merge, return the PR to draft, verify it remains unmerged, and stop. On a late `do not merge`, disable auto-merge, verify the PR remains unmerged, and stop.
+5. Run GitHub's native guarded squash merge with exact-head matching:
+
+   ```bash
+   gh pr merge <number> --auto --squash --match-head-commit <reviewed-head-sha>
+   ```
+
+6. Inspect PR state immediately. If GitHub queues auto-merge instead of completing the merge, disable it, verify the PR remains unmerged, and report the unsatisfied gate.
+7. If the head changes before completion, disable auto-merge, return the PR to draft when applicable, and restart the exact-head cycle.
+
+Never force, use administrator bypass, dismiss valid feedback, leave a deployment running, or add a
+write-enabled unattended merger. Never leave queued auto-merge active.
+
+## After merge
+
+Record the PR URL and squash commit. Inspect resulting `main` CI when the change affects workflow,
+verification, signing, deployment, or another claim that depends on the resulting base branch.
 
 ## Reporting
 

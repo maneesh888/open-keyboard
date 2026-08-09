@@ -41,13 +41,25 @@ a higher cumulative gate without expanding the task's proof claim.
 7. Update affected documentation when a user-visible contract, proof route, workflow, or status source changes.
 8. Never claim evidence for an unexecuted simulator, extension lifecycle, device, gateway, signing, deployment, or release path.
 
-## Lifecycle boundaries
+## Lifecycle autonomy
 
-A bounded implementation request authorizes implementation and proportional verification. Commit,
-push, PR publication, readiness, merge, deployment, and destructive cleanup require the authority
-defined in `AGENTS.md` and the latest user instruction. Do not turn routine implementation details
-into extra questions, but stop for unavailable credentials, destructive actions, material scope
-expansion, ambiguous ownership of dirty work, or an external state change outside that authority.
+A bounded implementation request starts the normal repository lifecycle through guarded merge:
+branch/worktree preparation, edits, tests, commit, push, PR publication, in-scope review fixes,
+readiness, and merge. Continue without separate confirmation between those stages.
+
+Honor the latest explicit opt-out:
+
+- `local only`
+- `do not commit`
+- `do not push`
+- `do not create a PR`
+- `keep draft` or `do not mark ready`
+- `do not merge`
+
+Planning, review-only work, readiness assessment, and blocker requests remain read-only. Deployment
+and destructive cleanup remain separate external actions requiring explicit authority. Stop for
+unavailable credentials, destructive actions, material scope expansion, ambiguous ownership of
+dirty work, or an external state change outside that authority.
 
 Use available GitHub tooling for repository operations. Never add a write-enabled or secret-bearing
 ordinary pull-request workflow.
@@ -61,9 +73,9 @@ ordinary pull-request workflow.
 - Run `./scripts/check-live.sh gateway` only when the exact-head classifier selects gateway impact.
 - Never bypass hooks or scanners.
 
-Create PRs with a concise brief containing scope, requirement sources, verification, independent
-review state, live evidence, proof limits, and the full exact head SHA. For PR review, readiness, or
-merge, use `$review-verify-merge-pr`.
+Create PRs as drafts with a concise brief containing scope, requirement sources, verification,
+independent review state, live evidence, proof limits, and the full exact head SHA. For PR review,
+readiness, or merge, use `$review-verify-merge-pr`.
 
 ## Report compactly
 

@@ -168,8 +168,11 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
 - The project `pr-reviewer` is read-only and must review the exact GitHub head without inherited implementation context.
 - Run the independent review and GitHub checks concurrently where practical.
 - Any new commit invalidates the previous review, local full gate, and GitHub check conclusions.
-- Do not mark a PR ready, merge, enable auto-merge, or deploy unless the user explicitly requests that state change.
-- Before an authorized merge, require the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages.
+- Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`.
+- Planning, review-only work, readiness assessment, and blocker requests remain read-only and do not authorize state changes.
+- Before a guarded merge, require the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- Deployment remains a separate external state change and requires explicit authorization plus protected-environment approval.
 
 ## Repository Automation
 
@@ -181,7 +184,7 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
 
 ## Commit And Push Rules
 
-- Commit only when the user explicitly allows it after the task is clear.
+- Commit and push are part of the normal autonomous lifecycle for a bounded implementation unless the user opts out.
 - Install the committed hooks with `./scripts/install-hooks.sh` before the first commit or push in a worktree. Never bypass them with `--no-verify`.
 - Before commit:
   - run `git status --short --branch` from the active session worktree
@@ -190,7 +193,7 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
   - run `git diff --cached --name-only` and confirm every staged file belongs to the session
   - scan the staged diff for obvious secrets or generated artifacts
 - Use a concise commit message that describes the functional change.
-- Push only when explicitly asked. If the branch is ahead by earlier commits, say that pushing will publish all local commits ahead of origin.
+- If the branch is ahead by earlier unrelated commits, say that pushing will publish them and stop when their ownership or scope is ambiguous.
 - Do not batch-commit dirty files from the integration checkout. If existing dirty files need to be included, they must be explicitly assigned to the current session or moved into the session worktree intentionally.
 
 ## Reporting

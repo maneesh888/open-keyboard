@@ -95,6 +95,12 @@ an intentional upload.
 
 ## Auto-merge
 
-Enable GitHub's repository-level auto-merge setting if desired, then enable it deliberately on an
-individual reviewed pull request. This repository does not use an Actions workflow with write
-permissions to enable auto-merge for every PR.
+Enable GitHub's repository-level auto-merge setting. During an autonomous implementation lifecycle,
+the root agent invokes native squash auto-merge only after the exact head passes local Release
+verification, applicable live proof, independent review, required GitHub checks, thread resolution,
+mergeability, and branch-protection validation. If GitHub queues instead of immediately completing
+the merge, the agent disables auto-merge and reports the unsatisfied gate; it never leaves an
+unattended merge queued.
+
+This repository does not use an Actions workflow, write-enabled pull-request token, or PAT to merge
+pull requests.
