@@ -18,25 +18,31 @@ enum KeyboardPanelLayout {
     static let toolbarHeight: CGFloat = 38
     static let toolbarControlSize: CGFloat = 34
     static let toolbarRenderedHeight: CGFloat = toolbarHeight
-    static let toolbarSpacing: CGFloat = 6
+    static let toolbarSpacing: CGFloat = 10
     static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 6
-    static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 52
-    static let controlKeyHeight: CGFloat = 48
-    static let keyRowSpacing: CGFloat = 8
-    static let keyShadowAllowance: CGFloat = 2
+    static let outerTopPadding: CGFloat = 2
+    static let outerBottomPadding: CGFloat = 1
+    // Native keys use a 54 pt row pitch with a smaller visible cap inside the touch target.
+    static let letterKeyHeight: CGFloat = 54
+    static let controlKeyHeight: CGFloat = 54
+    static let keyCapHeight: CGFloat = 43
+    static let keyRowSpacing: CGFloat = 0
+    static let keyShadowAllowance: CGFloat = 0
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
     static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
-    static let improvePanelHeight: CGFloat = preferredKeyboardHeight + 104
+    static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
+    static let actionPanelScrollableResultHeight: CGFloat = 160
+    static let actionCarouselButtonHeight: CGFloat = 44
+    static let actionControlButtonHeight: CGFloat = 44
+    static let actionGroupedButtonWidth: CGFloat = 48
 
     static func keyboardHeight(
         for panelMode: KeyboardPanelMode,
         actionPanelState: KeyboardActionPanelState?
     ) -> CGFloat {
-        if panelMode == .actions, actionPanelState?.usesExpandedImprovePanel == true {
-            return improvePanelHeight
+        if panelMode == .actions, actionPanelState != nil {
+            return actionPanelHeight
         }
         return preferredKeyboardHeight
     }

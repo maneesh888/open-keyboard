@@ -406,7 +406,13 @@ private struct AIActionPanel: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(KeyboardColors.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
@@ -414,47 +420,40 @@ private struct AIActionPanel: View {
         .accessibilityIdentifier("ai_action_panel")
     }
 
-    private var usesScrollableImproveResult: Bool {
-        state.usesScrollableImproveResult
-    }
-
-    private var usesExpandedImprovePanel: Bool {
-        state.usesExpandedImprovePanel
+    private var usesScrollableActionResult: Bool {
+        state.usesScrollableActionResult
     }
 
     private var panelHeight: CGFloat {
-        usesExpandedImprovePanel ? KeyboardPanelLayout.improvePanelHeight : KeyboardPanelLayout.expandedPanelHeight
+        KeyboardPanelLayout.actionPanelHeight
     }
 
     private var suggestionHeight: CGFloat {
-        if usesExpandedImprovePanel {
-            return 200
-        }
-        return state.isCarouselVisible ? 72 : 132
+        KeyboardPanelLayout.actionPanelScrollableResultHeight
     }
 
     private var carouselHeight: CGFloat {
-        usesExpandedImprovePanel ? 32 : 38
+        KeyboardPanelLayout.actionCarouselButtonHeight
     }
 
     private var carouselBottomPadding: CGFloat {
-        usesExpandedImprovePanel ? 4 : 7
+        4
     }
 
     private var controlButtonSize: CGFloat {
-        usesExpandedImprovePanel ? 34 : 36
+        KeyboardPanelLayout.actionControlButtonHeight
     }
 
     private var groupedButtonWidth: CGFloat {
-        usesExpandedImprovePanel ? 38 : 40
+        KeyboardPanelLayout.actionGroupedButtonWidth
     }
 
     private var controlRowTopPadding: CGFloat {
-        usesExpandedImprovePanel ? 4 : 7
+        4
     }
 
     private var actionResultFontSize: CGFloat {
-        usesExpandedImprovePanel ? 15 : 19
+        15
     }
 
     private var header: some View {
@@ -505,13 +504,14 @@ private struct AIActionPanel: View {
 
     @ViewBuilder
     private func actionResultText(_ text: String) -> some View {
-        if usesScrollableImproveResult {
+        if usesScrollableActionResult {
             ScrollView(.vertical, showsIndicators: true) {
                 actionResultLabel(text, lineLimit: nil)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .clipped()
+            .accessibilityIdentifier("ai_action_result_scroll")
         } else {
             actionResultLabel(text, lineLimit: state.isCarouselVisible ? 4 : 6)
         }
@@ -558,7 +558,7 @@ private struct AIActionPanel: View {
                     .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 12)
-            .frame(height: 32, alignment: .center)
+            .frame(height: KeyboardPanelLayout.actionCarouselButtonHeight, alignment: .center)
             .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
             .overlay(
                 Capsule()
@@ -588,6 +588,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "arrow.clockwise",
                     foreground: OpenKeyboardTheme.Text.primary,
+                    accessibilityLabel: "Run again",
                     action: onRegenerate
                 )
                 .disabled(!actionsEnabled || state.isLoading)
@@ -596,6 +597,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "sparkles",
                     foreground: OpenKeyboardTheme.Semantic.primaryAction,
+                    accessibilityLabel: "Show or hide actions",
                     action: onToggleCarousel
                 )
                 .accessibilityIdentifier("ai_action_toggle_carousel")
@@ -603,6 +605,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "doc.on.doc",
                     foreground: OpenKeyboardTheme.Text.primary,
+                    accessibilityLabel: "Copy suggestion",
                     action: onCopy
                 )
                 .disabled(state.selectedOption == nil || state.isLoading)
@@ -611,6 +614,8 @@ private struct AIActionPanel: View {
             .frame(height: controlButtonSize)
             .background(KeyboardColors.overlayBackground.opacity(0.72), in: Capsule())
             .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ai_action_grouped_controls")
 
             Spacer(minLength: 0)
 
@@ -643,14 +648,24 @@ private struct AIActionPanel: View {
         .background(background, in: Circle())
     }
 
-    private func panelGroupedButton(systemImage: String, foreground: Color, action: @escaping () -> Void) -> some View {
+    private func panelGroupedButton(
+        systemImage: String,
+        foreground: Color,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: groupedButtonWidth, height: controlButtonSize)
         }
         .buttonStyle(.plain)
+        .frame(width: groupedButtonWidth, height: controlButtonSize)
+        .contentShape(Rectangle())
         .foregroundColor(foreground)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -735,7 +750,13 @@ private struct RewriteOptionsPanel: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(KeyboardColors.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
@@ -1278,10 +1299,12 @@ private struct KeyButton: View {
                 }
             }
             .foregroundColor(.primary)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+            .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.keyCapHeight, maxHeight: KeyboardPanelLayout.keyCapHeight)
             .background(backgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .top)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

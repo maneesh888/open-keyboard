@@ -1,5 +1,25 @@
 import XCTest
 
+final class GatewayStatusUITests: XCTestCase {
+    func testHomeGatewayLoaderIsRemovedWhenErrorIsShown() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--clear-gateway-config",
+            "--seed-gateway-config",
+            "--seed-gateway-error=Gateway timed out"
+        ]
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://mock.local.invalid"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = "mock-ui-test-key"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = "mock-ui-test-model"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Gateway needs attention"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["gateway_status_icon"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.descendants(matching: .any)["gateway_status_progress"].exists)
+    }
+}
+
 final class KeyboardExtensionConfiguredUITests: XCTestCase {
     private static let mockGatewayURL = "https://mock.local.invalid"
     private static let mockAPIKey = "mock-ui-test-key"
@@ -35,6 +55,40 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         input.tap()
         input.typeText(" hello")
         XCTAssertTrue((input.value as? String)?.contains("hello") == true, "Playground input should accept typed text")
+    }
+
+    func testRealKeyboardExtensionMatchesNativeTouchGeometry() throws {
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        let qKey = keyboardApp.buttons["q"]
+        let aKey = keyboardApp.buttons["a"]
+        let zKey = keyboardApp.buttons["z"]
+        let spaceKey = keyboardApp.buttons["space"]
+        for key in [qKey, aKey, zKey, spaceKey] {
+            XCTAssertTrue(key.waitForExistence(timeout: 2), "Expected real keyboard key to be visible")
+            XCTAssertEqual(key.frame.height, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        }
+        XCTAssertEqual(aKey.frame.minY - qKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        XCTAssertEqual(zKey.frame.minY - aKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        XCTAssertEqual(spaceKey.frame.minY - zKey.frame.minY, KeyboardPanelLayout.controlKeyHeight, accuracy: 1)
+        try captureRealKeyboardStep("real-extension-native-touch-geometry")
     }
 
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {
@@ -337,7 +391,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "--keyboard-host-test",
             "--keyboard-host-autofocus",
             "--keyboard-host-prefer-openkeyboard",
-            "--keyboard-host-text=\(encodedSource)"
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=improvePanel",
+            "--keyboard-initial-panel=actions"
         ])
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
@@ -352,18 +408,69 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
             "Open Keyboard extension did not appear"
         )
-        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
-
-        keyboardApp.buttons["ai_sparkle_action"].tap()
         XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["back_to_keyboard"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_rerun"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_toggle_carousel"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_copy"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_apply"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("02-real-keyboard-sparkle-improve-mode")
+        XCTAssertEqual(
+            keyboardApp.otherElements["ai_action_panel"].frame.height,
+            KeyboardPanelLayout.actionPanelHeight,
+            accuracy: 1
+        )
+        let resultText = keyboardApp.staticTexts["ai_action_result_text"]
+        XCTAssertTrue(resultText.waitForExistence(timeout: 5))
+        XCTAssertTrue(resultText.label.contains("SCROLL TEST START"))
+        XCTAssertTrue(resultText.label.contains("SCROLL TEST END"))
+
+        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_summarize"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+        }
+        for identifier in ["back_to_keyboard", "ai_action_apply"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
+        }
+        let groupedButtonIdentifiers = ["ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy"]
+        for identifier in groupedButtonIdentifiers {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertEqual(button.frame.width, KeyboardPanelLayout.actionGroupedButtonWidth, accuracy: 1)
+            XCTAssertEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight, accuracy: 1)
+        }
+        let groupedControls = keyboardApp.otherElements["ai_action_grouped_controls"]
+        XCTAssertTrue(groupedControls.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(groupedControls.frame.width, KeyboardPanelLayout.actionGroupedButtonWidth * 3)
+        XCTAssertGreaterThanOrEqual(groupedControls.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
+        let resultScroll = keyboardApp.scrollViews["ai_action_result_scroll"]
+        XCTAssertTrue(resultScroll.waitForExistence(timeout: 5))
+        XCTAssertEqual(resultScroll.frame.height, KeyboardPanelLayout.actionPanelScrollableResultHeight, accuracy: 1)
+
+        let fixedControlIdentifiers = [
+            "ai_action_improve",
+            "ai_action_rewrite",
+            "ai_action_summarize",
+            "back_to_keyboard",
+            "ai_action_grouped_controls",
+            "ai_action_apply"
+        ]
+        let initialFixedControlFrames = Dictionary(
+            uniqueKeysWithValues: fixedControlIdentifiers.map {
+                ($0, keyboardApp.descendants(matching: .any)[$0].frame)
+            }
+        )
+        try captureRealKeyboardStep("02-real-keyboard-long-improve-result-top")
+
+        let initialResultMinY = resultText.frame.minY
+        resultScroll.swipeUp()
+        XCTAssertLessThan(resultText.frame.minY, initialResultMinY - 20)
+        for identifier in fixedControlIdentifiers {
+            let initialFrame = try XCTUnwrap(initialFixedControlFrames[identifier])
+            let currentFrame = keyboardApp.descendants(matching: .any)[identifier].frame
+            XCTAssertEqual(currentFrame.minX, initialFrame.minX, accuracy: 1, "\(identifier) moved horizontally while scrolling")
+            XCTAssertEqual(currentFrame.minY, initialFrame.minY, accuracy: 1, "\(identifier) moved vertically while scrolling")
+            XCTAssertEqual(currentFrame.width, initialFrame.width, accuracy: 1, "\(identifier) width changed while scrolling")
+            XCTAssertEqual(currentFrame.height, initialFrame.height, accuracy: 1, "\(identifier) height changed while scrolling")
+        }
+        try captureRealKeyboardStep("03-real-keyboard-long-improve-result-scrolled")
     }
 
     func testRealKeyboardRewriteOptionsWorkflowScreenshotsWhenExplicitlyRequested() throws {
@@ -636,7 +743,8 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             dismissKnownKeyboardDialogs(in: springboard)
             if keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 1)
                 || keyboardApp.buttons["keyboard_openkeyboard_icon"].exists
-                || keyboardApp.buttons["keyboard_issue_count_badge"].exists {
+                || keyboardApp.buttons["keyboard_issue_count_badge"].exists
+                || keyboardApp.otherElements["ai_action_panel"].exists {
                 return true
             }
             switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: hostInput)

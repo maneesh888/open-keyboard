@@ -58,12 +58,26 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(state.issueCount, 0)
     }
 
-    func testKeyboardLayoutUsesLargerTypingTargets() {
-        XCTAssertEqual(KeyboardPanelLayout.letterKeyHeight, 52)
-        XCTAssertEqual(KeyboardPanelLayout.controlKeyHeight, 48)
-        XCTAssertEqual(KeyboardPanelLayout.outerTopPadding, 6)
-        XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 230)
-        XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 280)
+    func testKeyboardLayoutMatchesNativeKeyHeightAndRowPitch() {
+        XCTAssertEqual(KeyboardPanelLayout.letterKeyHeight, 54)
+        XCTAssertEqual(KeyboardPanelLayout.controlKeyHeight, 54)
+        XCTAssertEqual(KeyboardPanelLayout.keyCapHeight, 43)
+        XCTAssertEqual(KeyboardPanelLayout.keyRowSpacing, 0)
+        XCTAssertEqual(KeyboardPanelLayout.toolbarHeight, 38)
+        XCTAssertEqual(KeyboardPanelLayout.toolbarSpacing, 10)
+        XCTAssertEqual(KeyboardPanelLayout.outerTopPadding, 2)
+        XCTAssertEqual(KeyboardPanelLayout.outerBottomPadding, 1)
+        XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 216)
+        XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 267)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
+    }
+
+    func testActionPanelUsesMinimumTapTargetsWithoutGrowingViewport() {
+        XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 44)
+        XCTAssertEqual(KeyboardPanelLayout.actionControlButtonHeight, 44)
+        XCTAssertEqual(KeyboardPanelLayout.actionGroupedButtonWidth, 48)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelScrollableResultHeight, 160)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {

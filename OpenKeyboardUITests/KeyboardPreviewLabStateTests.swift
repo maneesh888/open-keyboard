@@ -2,6 +2,30 @@
 import XCTest
 
 final class KeyboardPreviewLabStateTests: XCTestCase {
+    func testPreviewGeometryMatchesRealKeyboardLayout() {
+        XCTAssertEqual(KeyboardVisualPreviewLayout.toolbarHeight, KeyboardPanelLayout.toolbarHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.toolbarControlSize, KeyboardPanelLayout.toolbarControlSize)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.toolbarSpacing, KeyboardPanelLayout.toolbarSpacing)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.outerHorizontalPadding, KeyboardPanelLayout.outerHorizontalPadding)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.outerTopPadding, KeyboardPanelLayout.outerTopPadding)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.outerBottomPadding, KeyboardPanelLayout.outerBottomPadding)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.letterKeyHeight, KeyboardPanelLayout.letterKeyHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.controlKeyHeight, KeyboardPanelLayout.controlKeyHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.keyCapHeight, KeyboardPanelLayout.keyCapHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.keyRowSpacing, KeyboardPanelLayout.keyRowSpacing)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.keyShadowAllowance, KeyboardPanelLayout.keyShadowAllowance)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.keyGridHeight, KeyboardPanelLayout.keyGridHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.expandedPanelHeight, KeyboardPanelLayout.expandedPanelHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionPanelHeight, KeyboardPanelLayout.actionPanelHeight)
+        XCTAssertEqual(
+            KeyboardVisualPreviewLayout.actionPanelScrollableResultHeight,
+            KeyboardPanelLayout.actionPanelScrollableResultHeight
+        )
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionCarouselButtonHeight, KeyboardPanelLayout.actionCarouselButtonHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionControlButtonHeight, KeyboardPanelLayout.actionControlButtonHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionGroupedButtonWidth, KeyboardPanelLayout.actionGroupedButtonWidth)
+    }
+
     func testPreviewLabStatesMapToScreenshotPanels() {
         XCTAssertEqual(KeyboardPreviewLabState.ready.previewPanel, .keyboard)
         XCTAssertEqual(KeyboardPreviewLabState.issue.previewPanel, .issue)

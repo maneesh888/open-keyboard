@@ -240,6 +240,16 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
+        XCTAssertFalse(viewModel.isGatewayValidationInProgress)
+    }
+
+    func testGatewayFailureTakesPrecedenceOverInFlightCheckingFlag() {
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
+        viewModel.isTestingConnection = true
+        viewModel.connectionStatus = .failure
+        viewModel.errorMessage = "Gateway timed out"
+
+        XCTAssertFalse(viewModel.isGatewayValidationInProgress)
     }
 
 
@@ -571,6 +581,8 @@ final class SettingsViewModelTests: XCTestCase {
         await viewModel.testConnection()
 
         XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.isTestingConnection)
+        XCTAssertFalse(viewModel.isGatewayValidationInProgress)
         XCTAssertEqual(viewModel.config.gatewayURL, "")
         XCTAssertEqual(viewModel.config.apiKey, "")
         XCTAssertEqual(viewModel.config.selectedModel, "")
