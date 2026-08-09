@@ -1,0 +1,36 @@
+# Branch Protection Guide
+
+Protect `main` with a branch ruleset or branch protection rule:
+
+1. Require a pull request before merging.
+2. Require at least one approval for product changes when multiple maintainers are available.
+3. Require conversation resolution.
+4. Require branches to be up to date before merging.
+5. Require these status checks:
+   - `Required checks`
+   - `Required live verification`
+6. Block force pushes and branch deletion.
+7. Disable bypass for administrators if the repository should enforce one merge path.
+
+Before an intentional merge, also run `$review-verify-merge-pr` and record its exact reviewed SHA
+and blocker result in the PR description. This independent Codex review is a process gate rather
+than a GitHub status check, so retain the GitHub approval requirement above.
+
+Recommended repository merge settings:
+
+- Allow squash merge.
+- Delete head branches automatically after merge.
+- Allow auto-merge so the guarded root-agent lifecycle can invoke it for an exact reviewed head.
+
+This is not an unattended merger. The root agent may invoke GitHub's native auto-merge only after
+all exact-head gates pass, and must disable it immediately if GitHub queues rather than completes the
+merge. Ordinary pull-request workflows remain read-only and cannot merge.
+
+The live policy status is secretless. Gateway-impacting pull requests run
+`./scripts/check-live.sh gateway` locally and record the full tested head SHA in the PR body.
+Any new commit invalidates that evidence until the local check and PR body are refreshed.
+
+Protect the `app-store-connect` environment with required reviewers. Keep all signing and App
+Store Connect secrets in that environment, not as ordinary CI inputs. Restrict its deployment refs
+to `main` and protected `v*` tags, and use a tag ruleset to limit `v*` creation to release maintainers
+while blocking tag updates and deletion.

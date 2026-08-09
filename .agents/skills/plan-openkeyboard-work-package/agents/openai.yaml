@@ -1,0 +1,6 @@
+interface:
+  display_name: "Plan OpenKeyboard Work Package"
+  short_description: "Create concise source-bound OpenKeyboard plans"
+  default_prompt: "Use $plan-openkeyboard-work-package to create a concise, source-bound work order for the next OpenKeyboard task."
+policy:
+  allow_implicit_invocation: false

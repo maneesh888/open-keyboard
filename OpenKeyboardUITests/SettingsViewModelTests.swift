@@ -109,6 +109,10 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testCleanValidatedSettingsHideConnectionActionsAndShowTrustedDetails() {
+        let suiteName = "SettingsViewModelTests.clean-validated.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
         let config = AppConfig(
             apiKey: "working-key",
             gatewayURL: "https://gateway.example",
@@ -117,15 +121,22 @@ final class SettingsViewModelTests: XCTestCase {
             supportsStructuredCorrections: true,
             structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
         )
-        let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
+        let viewModel = SettingsViewModel(
+            config: config,
+            gatewayTester: FakeGatewayTester(),
+            defaults: defaults
+        )
 
         XCTAssertFalse(viewModel.isEditingGatewayDraft)
-        XCTAssertTrue(viewModel.shouldShowConnectionActions)
+        XCTAssertFalse(viewModel.shouldShowConnectionActions)
         XCTAssertTrue(viewModel.canTestConnection)
-        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
-        XCTAssertEqual(viewModel.connectionStatus, .unknown)
-        XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
+        XCTAssertEqual(
+            viewModel.structuredCapabilityDisplay,
+            "openkeyboard.structured-corrections.v1"
+        )
     }
 
     func testEditingValidatedGatewayHidesTrustedDetailsAndShowsConnectionActions() {
