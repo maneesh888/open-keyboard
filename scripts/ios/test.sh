@@ -8,6 +8,7 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PROJECT="$REPO_ROOT/OpenKeyboard.xcodeproj"
 SCHEME="OpenKeyboard"
+BUILD_DESTINATION="generic/platform=iOS Simulator"
 DESTINATION="platform=iOS Simulator,name=iPhone 16"
 SE_DESTINATION="platform=iOS Simulator,name=iPhone SE (3rd generation)"
 CORE_PACKAGE="$REPO_ROOT/OpenKeyboardCore"
@@ -279,7 +280,7 @@ case "${1:-}" in
     run_xcodebuild xcodebuild build \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$BUILD_DESTINATION" \
       -configuration Debug \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
