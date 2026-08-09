@@ -118,6 +118,17 @@ rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
 rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
 rg --fixed-strings --quiet 'BUILD_DESTINATION="generic/platform=iOS Simulator"' "$ROOT/scripts/ios/test.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  build_case = source.match(/^  build\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
+  abort "The iOS test runner is missing its build mode." unless build_case
+  unless build_case.include?(%q{-destination "$BUILD_DESTINATION"})
+    abort "The build mode must use the generic simulator destination."
+  end
+  if build_case.include?(%q{-destination "$DESTINATION"})
+    abort "The build mode must not require a named simulator."
+  end
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
