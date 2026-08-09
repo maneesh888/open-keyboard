@@ -1,18 +1,29 @@
 import XCTest
 
-final class KeyboardExtensionConfiguredUITests: XCTestCase {
-    private static let mockGatewayURL = "https://mock.local.invalid"
-    private static let mockAPIKey = "mock-ui-test-key"
-    private static let mockModel = "mock-ui-test-model"
-
+final class GatewayStatusUITests: XCTestCase {
     func testHomeGatewayLoaderIsRemovedWhenErrorIsShown() {
-        let app = configuredContainingApp(extraArguments: ["--seed-gateway-error=Gateway timed out"])
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--clear-gateway-config",
+            "--seed-gateway-config",
+            "--seed-gateway-error=Gateway timed out"
+        ]
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://mock.local.invalid"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = "mock-ui-test-key"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = "mock-ui-test-model"
         app.launch()
 
         XCTAssertTrue(app.staticTexts["Gateway needs attention"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.descendants(matching: .any)["gateway_status_icon"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.descendants(matching: .any)["gateway_status_progress"].exists)
     }
+}
+
+final class KeyboardExtensionConfiguredUITests: XCTestCase {
+    private static let mockGatewayURL = "https://mock.local.invalid"
+    private static let mockAPIKey = "mock-ui-test-key"
+    private static let mockModel = "mock-ui-test-model"
 
     func testContainingAppSeedsSharedGatewayConfigForKeyboardExtension() {
         let app = configuredContainingApp()
