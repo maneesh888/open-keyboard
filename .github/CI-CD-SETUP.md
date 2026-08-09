@@ -65,6 +65,16 @@ Create `app-store-connect` with required reviewers. Scope these environment secr
 - `APP_STORE_CONNECT_API_KEY_ISSUER_ID`
 - `APP_STORE_CONNECT_API_KEY_P8`
 
+Set the environment's deployment branch/tag policy to **Selected branches and tags** and allow only:
+
+- branch `main`
+- protected release tags matching `v*`
+
+Add a repository tag ruleset for `v*` that restricts creation to release maintainers and blocks tag
+updates and deletion. The workflow also fails closed: manual dispatch must run from the exact current
+`main`, and every `v*` tag must resolve to a commit contained in `origin/main` before the protected
+environment job can start.
+
 OpenKeyboard requires separate App Store provisioning profiles for:
 
 - `com.maneesh.openkeyboard`
@@ -79,8 +89,9 @@ git tag v1.0.0 <main-commit-sha>
 git push origin v1.0.0
 ```
 
-The protected environment approval is the final human deployment gate. Manual dispatch may archive
-and validate without upload; set `upload_to_app_store_connect` only for an intentional upload.
+The protected environment approval is the final human deployment gate. Run manual dispatch only
+from `main`; it may archive and validate without upload. Set `upload_to_app_store_connect` only for
+an intentional upload.
 
 ## Auto-merge
 

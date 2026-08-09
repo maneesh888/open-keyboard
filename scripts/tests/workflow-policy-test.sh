@@ -16,6 +16,7 @@ PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
+DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 
 for required_file in \
   "$CI_WORKFLOW" \
@@ -31,7 +32,8 @@ for required_file in \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
-  "$LIVE_EVIDENCE_POLICY_TEST"; do
+  "$LIVE_EVIDENCE_POLICY_TEST" \
+  "$DEPLOY_SOURCE_POLICY_TEST"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Required workflow policy file is missing: $required_file" >&2
     exit 1
@@ -61,6 +63,10 @@ fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
 rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
+rg --quiet '^  validate-release-source:$' "$DEPLOY_WORKFLOW"
+rg --quiet 'refs/heads/main' "$DEPLOY_WORKFLOW"
+rg --quiet 'git merge-base --is-ancestor' "$DEPLOY_WORKFLOW"
+rg --quiet 'validate-release-source' "$DEPLOY_WORKFLOW"
 rg --quiet '^sandbox_mode = "read-only"$' "$REVIEWER_AGENT"
 rg --quiet 'Remain read-only' "$REVIEWER_AGENT"
 rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
@@ -83,6 +89,17 @@ rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
+if rg --quiet '\.derived-(live-gateway-smoke|real-keyboard-live)|\.ci-results/(live-gateway-smoke|real-keyboard-live)' "$ROOT/scripts/ios/test.sh"; then
+  echo "Live tests must not retain secret-bearing derived data or result bundles in the repository." >&2
+  exit 1
+fi
+if rg --fixed-strings --quiet 'clean-validated.\\(UUID().uuidString)' "$ROOT/OpenKeyboardUITests/SettingsViewModelTests.swift"; then
+  echo "The settings isolation suite must interpolate a unique UUID instead of retaining a literal expression." >&2
+  exit 1
+fi
 
 live_impact_patterns=(
   '.github/pull_request_template.md'

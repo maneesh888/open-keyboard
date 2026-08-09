@@ -81,6 +81,8 @@ The path must be `.githooks`.
   classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials
   stay in the ignored local seed and are never sent to GitHub.
+- Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
+  temporary workspace and remove that workspace plus exported credential variables on every exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 
 ## GitHub checks

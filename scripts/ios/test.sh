@@ -141,6 +141,36 @@ inject_xctestrun_gateway_env() {
   done
 }
 
+SENSITIVE_LIVE_WORKSPACE=""
+
+cleanup_sensitive_live_artifacts() {
+  unset \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_TEST_GATEWAY_URL \
+    OPEN_KEYBOARD_TEST_API_KEY \
+    OPEN_KEYBOARD_TEST_MODEL
+
+  if [[ -n "$SENSITIVE_LIVE_WORKSPACE" ]]; then
+    rm -rf -- "$SENSITIVE_LIVE_WORKSPACE"
+    SENSITIVE_LIVE_WORKSPACE=""
+  fi
+}
+
+begin_sensitive_live_workspace() {
+  local label="$1"
+
+  SENSITIVE_LIVE_WORKSPACE="$(
+    mktemp -d "${TMPDIR:-/tmp}/openkeyboard-$label.XXXXXX"
+  )"
+  trap cleanup_sensitive_live_artifacts EXIT
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  chmod 700 "$SENSITIVE_LIVE_WORKSPACE"
+}
+
 case "${1:-}" in
   core)
     echo -e "${YELLOW}Running OpenKeyboardCore package tests...${NC}"
@@ -215,8 +245,9 @@ case "${1:-}" in
     echo -e "${YELLOW}Running opt-in live gateway Test Connection smoke on iPhone 16...${NC}"
     require_xcodebuild
     seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
-    derived_data="$REPO_ROOT/.derived-live-gateway-smoke"
-    result_bundle="$REPO_ROOT/.ci-results/live-gateway-smoke-$(date +%Y%m%d_%H%M%S).xcresult"
+    begin_sensitive_live_workspace live-gateway-smoke
+    derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
+    result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-gateway-smoke.xcresult"
 
     if [[ ! -f "$seed_file" ]]; then
       echo -e "${RED}✗ Seed file not found: $seed_file${NC}"
@@ -238,7 +269,6 @@ case "${1:-}" in
       exit 1
     fi
 
-    mkdir -p "$REPO_ROOT/.ci-results"
     echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
@@ -265,7 +295,7 @@ case "${1:-}" in
       -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
       -resultBundlePath "$result_bundle"
     echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
-    echo "Result bundle: $result_bundle"
+    echo "Sensitive live-test artifacts will be removed before exit."
     ;;
 
   real-keyboard-live)
@@ -274,8 +304,9 @@ case "${1:-}" in
     seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
     simulator="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-$DEFAULT_REAL_KEYBOARD_SIMULATOR}"
     destination="$(simulator_destination "$simulator")"
-    derived_data="$REPO_ROOT/.derived-real-keyboard-live"
-    result_bundle="$REPO_ROOT/.ci-results/real-keyboard-live-$(date +%Y%m%d_%H%M%S).xcresult"
+    begin_sensitive_live_workspace real-keyboard-live
+    derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
+    result_bundle="$SENSITIVE_LIVE_WORKSPACE/real-keyboard-live.xcresult"
 
     if [[ ! -f "$seed_file" ]]; then
       echo -e "${RED}✗ Seed file not found: $seed_file${NC}"
@@ -288,7 +319,6 @@ case "${1:-}" in
       exit 1
     fi
 
-    mkdir -p "$REPO_ROOT/.ci-results"
     xcrun simctl boot "$simulator" >/dev/null 2>&1 || true
     xcrun simctl bootstatus "$simulator" -b >/dev/null
 
@@ -326,7 +356,7 @@ case "${1:-}" in
       -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured \
       -resultBundlePath "$result_bundle"
     echo -e "${GREEN}✓ Seeded real keyboard extension live test complete${NC}"
-    echo "Result bundle: $result_bundle"
+    echo "Sensitive live-test artifacts will be removed before exit."
     ;;
 
   screenshots)

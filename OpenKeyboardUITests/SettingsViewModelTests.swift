@@ -109,7 +109,7 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testCleanValidatedSettingsHideConnectionActionsAndShowTrustedDetails() {
-        let suiteName = "SettingsViewModelTests.clean-validated.\\(UUID().uuidString)"
+        let suiteName = "SettingsViewModelTests.clean-validated.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)

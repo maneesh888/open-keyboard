@@ -27,4 +27,6 @@ The live policy status is secretless. Gateway-impacting pull requests run
 Any new commit invalidates that evidence until the local check and PR body are refreshed.
 
 Protect the `app-store-connect` environment with required reviewers. Keep all signing and App
-Store Connect secrets in that environment, not as ordinary CI inputs.
+Store Connect secrets in that environment, not as ordinary CI inputs. Restrict its deployment refs
+to `main` and protected `v*` tags, and use a tag ruleset to limit `v*` creation to release maintainers
+while blocking tag updates and deletion.
