@@ -64,12 +64,15 @@ gateway_sensitive_paths=(
   OpenKeyboard/Views/PlaygroundView.swift
   OpenKeyboard/Views/LiveAITestHarnessView.swift
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
+  OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
   OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
   OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
+  OpenKeyboardCore/Sources/AnotherModule/RuntimeContract.json
   OpenKeyboardExtension/Info.plist
   OpenKeyboardExtension/KeyboardAIService.swift
   OpenKeyboardExtension/Nested/AnyExtensionRuntime.swift
+  OpenKeyboardExtension/Resources/RuntimeConfiguration.plist.template
   OpenKeyboardUITests/GatewayClientArchitectureTests.swift
   OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift
   OpenKeyboard.xcodeproj/project.pbxproj

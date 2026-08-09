@@ -49,17 +49,13 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/openkeyboard-gateway.seed.env.example | \
       scripts/ios/seed-simulator-gateway-config.sh | \
       scripts/ios/test.sh | \
-      OpenKeyboard/Info.plist | \
-      OpenKeyboard/*.swift | \
+      OpenKeyboard/* | \
       OpenKeyboardCore/Package.swift | \
-      OpenKeyboardCore/Sources/*.swift | \
-      OpenKeyboardExtension/Info.plist | \
-      OpenKeyboardExtension/*.swift | \
+      OpenKeyboardCore/Sources/* | \
+      OpenKeyboardExtension/* | \
       OpenKeyboardUITests/GatewayClientArchitectureTests.swift | \
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift | \
-      OpenKeyboard.xcodeproj/project.pbxproj | \
-      OpenKeyboard/*.entitlements | \
-      OpenKeyboardExtension/*.entitlements)
+      OpenKeyboard.xcodeproj/project.pbxproj)
       live_required="true"
       ;;
   esac

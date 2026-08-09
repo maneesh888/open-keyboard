@@ -101,6 +101,10 @@ runtime change, the pull request must retain the local pass marker and exact tes
 `Required live verification` job validates only that retained evidence. Local execution is
 contributor-attested; GitHub never receives the credential or gateway response.
 
+The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
+`OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
+live recheck over allowing a new resource or configuration format to bypass gateway verification.
+
 ## Independent pull-request review
 
 The repository-owned `.codex/agents/pr-reviewer.toml` defines a read-only reviewer specialized for

@@ -147,17 +147,13 @@ live_impact_patterns=(
   'scripts/ios/openkeyboard-gateway.seed.env.example'
   'scripts/ios/seed-simulator-gateway-config.sh'
   'scripts/ios/test.sh'
-  'OpenKeyboard/Info.plist'
-  'OpenKeyboard/*.swift'
+  'OpenKeyboard/*'
   'OpenKeyboardCore/Package.swift'
-  'OpenKeyboardCore/Sources/*.swift'
-  'OpenKeyboardExtension/Info.plist'
-  'OpenKeyboardExtension/*.swift'
+  'OpenKeyboardCore/Sources/*'
+  'OpenKeyboardExtension/*'
   'OpenKeyboardUITests/GatewayClientArchitectureTests.swift'
   'OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift'
   'OpenKeyboard.xcodeproj/project.pbxproj'
-  'OpenKeyboard/*.entitlements'
-  'OpenKeyboardExtension/*.entitlements'
 )
 
 for live_impact_pattern in "${live_impact_patterns[@]}"; do
