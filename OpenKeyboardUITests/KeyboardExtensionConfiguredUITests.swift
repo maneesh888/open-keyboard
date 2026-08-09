@@ -418,19 +418,47 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
         }
-        for identifier in ["ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy"] {
-            XCTAssertTrue(keyboardApp.buttons[identifier].waitForExistence(timeout: 5))
+        let groupedButtonIdentifiers = ["ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy"]
+        for identifier in groupedButtonIdentifiers {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertEqual(button.frame.width, KeyboardPanelLayout.actionGroupedButtonWidth, accuracy: 1)
+            XCTAssertEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight, accuracy: 1)
         }
         let groupedControls = keyboardApp.otherElements["ai_action_grouped_controls"]
         XCTAssertTrue(groupedControls.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(groupedControls.frame.width, KeyboardPanelLayout.actionGroupedButtonWidth * 3)
         XCTAssertGreaterThanOrEqual(groupedControls.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
-        try captureRealKeyboardStep("02-real-keyboard-long-improve-result-top")
-
         let resultScroll = keyboardApp.scrollViews["ai_action_result_scroll"]
         XCTAssertTrue(resultScroll.waitForExistence(timeout: 5))
+        XCTAssertEqual(resultScroll.frame.height, KeyboardPanelLayout.actionPanelScrollableResultHeight, accuracy: 1)
+
+        let fixedControlIdentifiers = [
+            "ai_action_improve",
+            "ai_action_rewrite",
+            "ai_action_summarize",
+            "back_to_keyboard",
+            "ai_action_grouped_controls",
+            "ai_action_apply"
+        ]
+        let initialFixedControlFrames = Dictionary(
+            uniqueKeysWithValues: fixedControlIdentifiers.map {
+                ($0, keyboardApp.descendants(matching: .any)[$0].frame)
+            }
+        )
+        try captureRealKeyboardStep("02-real-keyboard-long-improve-result-top")
+
         let initialResultMinY = resultText.frame.minY
         resultScroll.swipeUp()
         XCTAssertLessThan(resultText.frame.minY, initialResultMinY - 20)
+        for identifier in fixedControlIdentifiers {
+            let initialFrame = try XCTUnwrap(initialFixedControlFrames[identifier])
+            let currentFrame = keyboardApp.descendants(matching: .any)[identifier].frame
+            XCTAssertEqual(currentFrame.minX, initialFrame.minX, accuracy: 1, "\(identifier) moved horizontally while scrolling")
+            XCTAssertEqual(currentFrame.minY, initialFrame.minY, accuracy: 1, "\(identifier) moved vertically while scrolling")
+            XCTAssertEqual(currentFrame.width, initialFrame.width, accuracy: 1, "\(identifier) width changed while scrolling")
+            XCTAssertEqual(currentFrame.height, initialFrame.height, accuracy: 1, "\(identifier) height changed while scrolling")
+        }
         try captureRealKeyboardStep("03-real-keyboard-long-improve-result-scrolled")
     }
 

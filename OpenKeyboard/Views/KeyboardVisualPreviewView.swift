@@ -6,28 +6,6 @@
 
 import SwiftUI
 
-private enum KeyboardVisualPreviewLayout {
-    static let toolbarHeight: CGFloat = 38
-    static let toolbarControlSize: CGFloat = 34
-    static let toolbarSpacing: CGFloat = 6
-    static let outerHorizontalPadding: CGFloat = 6
-    static let outerTopPadding: CGFloat = 6
-    static let outerBottomPadding: CGFloat = 0
-    static let letterKeyHeight: CGFloat = 52
-    static let controlKeyHeight: CGFloat = 48
-    static let keyRowSpacing: CGFloat = 8
-    static let keyShadowAllowance: CGFloat = 2
-    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
-    static let expandedPanelHeight: CGFloat = 286
-    static let actionPanelHeight: CGFloat = 351
-    static let actionPanelScrollableResultHeight: CGFloat = 160
-    static let actionCarouselButtonHeight: CGFloat = 44
-    static let actionControlButtonHeight: CGFloat = 44
-    static let actionGroupedButtonWidth: CGFloat = 48
-    static let correctionDetailMinHeight: CGFloat = 232
-    static let correctionCompleteMinHeight: CGFloat = 226
-}
-
 struct KeyboardPreviewLabView: View {
     @State private var selectedState: KeyboardPreviewLabState = .ready
 
@@ -439,7 +417,13 @@ struct KeyboardVisualPreviewView: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
@@ -500,7 +484,13 @@ struct KeyboardVisualPreviewView: View {
             alignment: .topLeading
         )
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
                 .fill(OpenKeyboardTheme.Surface.overlayBackground)
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
@@ -599,10 +589,20 @@ struct KeyboardVisualPreviewView: View {
             }
         }
         .foregroundColor(.primary)
-        .frame(maxWidth: .infinity, minHeight: keyHeight(for: role), maxHeight: keyHeight(for: role))
+        .frame(
+            maxWidth: .infinity,
+            minHeight: KeyboardVisualPreviewLayout.keyCapHeight,
+            maxHeight: KeyboardVisualPreviewLayout.keyCapHeight
+        )
         .background(role == .modifier ? OpenKeyboardTheme.Surface.modifierKeyBackground : OpenKeyboardTheme.Surface.panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: keyHeight(for: role),
+            maxHeight: keyHeight(for: role),
+            alignment: .top
+        )
     }
 
     private func keyHeight(for role: PreviewKeyRole) -> CGFloat {

@@ -6,7 +6,31 @@
 //  Deterministic preview states for app lab and screenshot harness.
 //
 
+import CoreGraphics
 import Foundation
+
+enum KeyboardVisualPreviewLayout {
+    static let toolbarHeight: CGFloat = 38
+    static let toolbarControlSize: CGFloat = 34
+    static let toolbarSpacing: CGFloat = 10
+    static let outerHorizontalPadding: CGFloat = 6
+    static let outerTopPadding: CGFloat = 2
+    static let outerBottomPadding: CGFloat = 1
+    static let letterKeyHeight: CGFloat = 54
+    static let controlKeyHeight: CGFloat = 54
+    static let keyCapHeight: CGFloat = 43
+    static let keyRowSpacing: CGFloat = 0
+    static let keyShadowAllowance: CGFloat = 0
+    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
+    static let expandedPanelHeight: CGFloat = outerTopPadding + toolbarHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
+    static let actionPanelHeight: CGFloat = 351
+    static let actionPanelScrollableResultHeight: CGFloat = 160
+    static let actionCarouselButtonHeight: CGFloat = 44
+    static let actionControlButtonHeight: CGFloat = 44
+    static let actionGroupedButtonWidth: CGFloat = 48
+    static let correctionDetailMinHeight: CGFloat = 232
+    static let correctionCompleteMinHeight: CGFloat = 226
+}
 
 enum KeyboardVisualPreviewPanel: String {
     case keyboard

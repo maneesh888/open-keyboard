@@ -588,6 +588,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "arrow.clockwise",
                     foreground: OpenKeyboardTheme.Text.primary,
+                    accessibilityLabel: "Run again",
                     action: onRegenerate
                 )
                 .disabled(!actionsEnabled || state.isLoading)
@@ -596,6 +597,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "sparkles",
                     foreground: OpenKeyboardTheme.Semantic.primaryAction,
+                    accessibilityLabel: "Show or hide actions",
                     action: onToggleCarousel
                 )
                 .accessibilityIdentifier("ai_action_toggle_carousel")
@@ -603,6 +605,7 @@ private struct AIActionPanel: View {
                 panelGroupedButton(
                     systemImage: "doc.on.doc",
                     foreground: OpenKeyboardTheme.Text.primary,
+                    accessibilityLabel: "Copy suggestion",
                     action: onCopy
                 )
                 .disabled(state.selectedOption == nil || state.isLoading)
@@ -645,14 +648,24 @@ private struct AIActionPanel: View {
         .background(background, in: Circle())
     }
 
-    private func panelGroupedButton(systemImage: String, foreground: Color, action: @escaping () -> Void) -> some View {
+    private func panelGroupedButton(
+        systemImage: String,
+        foreground: Color,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 16, weight: .semibold))
                 .frame(width: groupedButtonWidth, height: controlButtonSize)
         }
         .buttonStyle(.plain)
+        .frame(width: groupedButtonWidth, height: controlButtonSize)
+        .contentShape(Rectangle())
         .foregroundColor(foreground)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
