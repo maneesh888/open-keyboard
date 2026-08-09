@@ -313,6 +313,15 @@ case "${1:-}" in
       -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests \
+      -skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests \
+      CODE_SIGN_IDENTITY="" \
+      CODE_SIGNING_REQUIRED=NO
+    run_xcodebuild xcodebuild test \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "$DESTINATION" \
+      -configuration Debug \
+      -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
     echo -e "${GREEN}✓ Deterministic UI-target tests complete${NC}"
