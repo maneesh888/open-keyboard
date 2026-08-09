@@ -72,6 +72,14 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testActionPanelUsesMinimumTapTargetsWithoutGrowingViewport() {
+        XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 44)
+        XCTAssertEqual(KeyboardPanelLayout.actionControlButtonHeight, 44)
+        XCTAssertEqual(KeyboardPanelLayout.actionGroupedButtonWidth, 48)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelScrollableResultHeight, 160)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
+    }
+
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {
         let state = KeyboardToolbarState.current(
             hasFullAccess: true,

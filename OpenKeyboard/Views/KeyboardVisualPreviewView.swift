@@ -19,7 +19,11 @@ private enum KeyboardVisualPreviewLayout {
     static let keyShadowAllowance: CGFloat = 2
     static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
     static let expandedPanelHeight: CGFloat = 286
-    static let improvePanelHeight: CGFloat = expandedPanelHeight + 104
+    static let actionPanelHeight: CGFloat = 351
+    static let actionPanelScrollableResultHeight: CGFloat = 160
+    static let actionCarouselButtonHeight: CGFloat = 44
+    static let actionControlButtonHeight: CGFloat = 44
+    static let actionGroupedButtonWidth: CGFloat = 48
     static let correctionDetailMinHeight: CGFloat = 232
     static let correctionCompleteMinHeight: CGFloat = 226
 }
@@ -111,7 +115,7 @@ struct KeyboardVisualPreviewView: View {
     var body: some View {
         let showsToolbar = panel != .actions && panel != .rewriteOptions
         let viewportHeight = panel == .actions
-            ? KeyboardVisualPreviewLayout.improvePanelHeight
+            ? KeyboardVisualPreviewLayout.actionPanelHeight
             : KeyboardVisualPreviewLayout.expandedPanelHeight
         let contentHeight = showsToolbar
             ? viewportHeight - KeyboardVisualPreviewLayout.outerTopPadding - KeyboardVisualPreviewLayout.outerBottomPadding
@@ -395,7 +399,12 @@ struct KeyboardVisualPreviewView: View {
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                     .accessibilityIdentifier("preview_action_result_text")
             }
-            .frame(maxWidth: .infinity, minHeight: 200, maxHeight: 200, alignment: .topLeading)
+            .frame(
+                maxWidth: .infinity,
+                minHeight: KeyboardVisualPreviewLayout.actionPanelScrollableResultHeight,
+                maxHeight: KeyboardVisualPreviewLayout.actionPanelScrollableResultHeight,
+                alignment: .topLeading
+            )
             .padding(.top, 10)
             .clipped()
 
@@ -409,7 +418,7 @@ struct KeyboardVisualPreviewView: View {
                 }
                 .padding(.horizontal, 1)
             }
-            .frame(height: 32)
+            .frame(height: KeyboardVisualPreviewLayout.actionCarouselButtonHeight)
             .padding(.bottom, 4)
             .layoutPriority(1)
             .accessibilityIdentifier("preview_ai_action_carousel")
@@ -425,8 +434,8 @@ struct KeyboardVisualPreviewView: View {
         .padding(.bottom, 8)
         .frame(
             maxWidth: .infinity,
-            minHeight: KeyboardVisualPreviewLayout.improvePanelHeight,
-            maxHeight: KeyboardVisualPreviewLayout.improvePanelHeight,
+            minHeight: KeyboardVisualPreviewLayout.actionPanelHeight,
+            maxHeight: KeyboardVisualPreviewLayout.actionPanelHeight,
             alignment: .topLeading
         )
         .background(
@@ -627,7 +636,7 @@ struct KeyboardVisualPreviewView: View {
                 .minimumScaleFactor(0.8)
         }
         .padding(.horizontal, 12)
-        .frame(height: 32, alignment: .center)
+        .frame(height: KeyboardVisualPreviewLayout.actionCarouselButtonHeight, alignment: .center)
         .background(OpenKeyboardTheme.Surface.overlayBackground.opacity(selected ? 0.98 : 0.72), in: Capsule())
         .overlay(
             Capsule()
@@ -638,8 +647,8 @@ struct KeyboardVisualPreviewView: View {
     }
 
     private func previewImproveControls(applyIdentifier: String, backIdentifier: String, compact: Bool = false) -> some View {
-        let buttonSize: CGFloat = compact ? 34 : 36
-        let groupedWidth: CGFloat = compact ? 38 : 40
+        let buttonSize = compact ? KeyboardVisualPreviewLayout.actionControlButtonHeight : 36
+        let groupedWidth = compact ? KeyboardVisualPreviewLayout.actionGroupedButtonWidth : 40
 
         return HStack(spacing: 8) {
             previewCircleControl(systemImage: "keyboard", foreground: OpenKeyboardTheme.Text.primary, background: OpenKeyboardTheme.Surface.overlayBackground.opacity(0.7), size: buttonSize)

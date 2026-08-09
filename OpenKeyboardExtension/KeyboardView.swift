@@ -429,11 +429,11 @@ private struct AIActionPanel: View {
     }
 
     private var suggestionHeight: CGFloat {
-        180
+        KeyboardPanelLayout.actionPanelScrollableResultHeight
     }
 
     private var carouselHeight: CGFloat {
-        32
+        KeyboardPanelLayout.actionCarouselButtonHeight
     }
 
     private var carouselBottomPadding: CGFloat {
@@ -441,11 +441,11 @@ private struct AIActionPanel: View {
     }
 
     private var controlButtonSize: CGFloat {
-        34
+        KeyboardPanelLayout.actionControlButtonHeight
     }
 
     private var groupedButtonWidth: CGFloat {
-        38
+        KeyboardPanelLayout.actionGroupedButtonWidth
     }
 
     private var controlRowTopPadding: CGFloat {
@@ -558,7 +558,7 @@ private struct AIActionPanel: View {
                     .minimumScaleFactor(0.8)
             }
             .padding(.horizontal, 12)
-            .frame(height: 32, alignment: .center)
+            .frame(height: KeyboardPanelLayout.actionCarouselButtonHeight, alignment: .center)
             .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
             .overlay(
                 Capsule()
@@ -611,6 +611,8 @@ private struct AIActionPanel: View {
             .frame(height: controlButtonSize)
             .background(KeyboardColors.overlayBackground.opacity(0.72), in: Capsule())
             .overlay(Capsule().stroke(OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: 1.1))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ai_action_grouped_controls")
 
             Spacer(minLength: 0)
 

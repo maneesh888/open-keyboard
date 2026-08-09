@@ -407,11 +407,23 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(resultText.waitForExistence(timeout: 5))
         XCTAssertTrue(resultText.label.contains("SCROLL TEST START"))
         XCTAssertTrue(resultText.label.contains("SCROLL TEST END"))
-        XCTAssertTrue(keyboardApp.buttons["back_to_keyboard"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_rerun"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_toggle_carousel"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_copy"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_apply"].waitForExistence(timeout: 5))
+
+        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_summarize"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+        }
+        for identifier in ["back_to_keyboard", "ai_action_apply"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
+        }
+        for identifier in ["ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy"] {
+            XCTAssertTrue(keyboardApp.buttons[identifier].waitForExistence(timeout: 5))
+        }
+        let groupedControls = keyboardApp.otherElements["ai_action_grouped_controls"]
+        XCTAssertTrue(groupedControls.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(groupedControls.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
         try captureRealKeyboardStep("02-real-keyboard-long-improve-result-top")
 
         let resultScroll = keyboardApp.scrollViews["ai_action_result_scroll"]

@@ -32,6 +32,10 @@ enum KeyboardPanelLayout {
     static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
     static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
+    static let actionPanelScrollableResultHeight: CGFloat = 160
+    static let actionCarouselButtonHeight: CGFloat = 44
+    static let actionControlButtonHeight: CGFloat = 44
+    static let actionGroupedButtonWidth: CGFloat = 48
 
     static func keyboardHeight(
         for panelMode: KeyboardPanelMode,
