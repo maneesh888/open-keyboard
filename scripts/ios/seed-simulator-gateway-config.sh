@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
+
 usage() {
   cat <<'USAGE'
 Usage: scripts/ios/seed-simulator-gateway-config.sh --seed-file <path> [--simulator <name-or-udid>] [--replace-existing-config]
@@ -124,19 +127,7 @@ if [[ -z "$seed_file" ]]; then
   exit 2
 fi
 
-if [[ ! -f "$seed_file" ]]; then
-  echo "Seed file not found: $seed_file" >&2
-  exit 2
-fi
-
-case "$seed_file" in
-  .agent/local-seeds/*|*/.agent/local-seeds/*) ;;
-  *)
-    echo "Refusing seed file outside ignored .agent/local-seeds/: $seed_file" >&2
-    echo "Move the real seed file to .agent/local-seeds/openkeyboard-gateway.env" >&2
-    exit 2
-    ;;
-esac
+seed_file="$(openkeyboard_require_local_seed_file "$REPO_ROOT" "$seed_file")" || exit 2
 
 load_seed_file
 
@@ -154,7 +145,7 @@ done
 
 api_key_length=${#OPEN_KEYBOARD_SIMULATOR_API_KEY}
 if [[ "$api_key_length" -lt 8 ]]; then
-  echo "Refusing suspiciously short API key; length=$api_key_length" >&2
+  echo "Refusing suspiciously short API key." >&2
   exit 2
 fi
 
@@ -162,9 +153,9 @@ bundle_id="com.maneesh.openkeyboard"
 
 echo "Seeding OpenKeyboard simulator gateway config explicitly."
 echo "Simulator: $simulator"
-echo "Gateway URL: $OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
-echo "Model: $OPEN_KEYBOARD_SIMULATOR_MODEL"
-echo "API key: <redacted length=$api_key_length>"
+echo "Gateway URL: <configured>"
+echo "Model: <configured>"
+echo "API key: <configured>"
 if [[ "$replace_existing_config" == true ]]; then
   echo "Existing simulator config: replace requested; app will clear before seeding."
 else
@@ -193,7 +184,7 @@ xcrun simctl launch \
   "$simulator" \
   "$bundle_id" \
   "${launch_arguments[@]}" \
-  >/tmp/openkeyboard-simulator-seed.log
+  >/dev/null
 
-echo "Seed launch completed. Simulator launch output: /tmp/openkeyboard-simulator-seed.log"
+echo "Seed launch completed."
 echo "No API key value was printed by this script."

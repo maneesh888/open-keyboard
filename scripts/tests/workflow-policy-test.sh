@@ -17,6 +17,8 @@ PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/opena
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
 DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
+LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
+LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 
 for required_file in \
   "$CI_WORKFLOW" \
@@ -33,7 +35,9 @@ for required_file in \
   "$PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
-  "$DEPLOY_SOURCE_POLICY_TEST"; do
+  "$DEPLOY_SOURCE_POLICY_TEST" \
+  "$LIVE_TEST_SAFETY" \
+  "$LIVE_TEST_SAFETY_POLICY_TEST"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Required workflow policy file is missing: $required_file" >&2
     exit 1
@@ -96,6 +100,32 @@ rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/s
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"
+rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
+rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/check-live.sh"
+rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
+rg --quiet 'testRealKeyboardImproveReplacesTextWhenGatewayConfigured' "$ROOT/scripts/ios/test.sh"
+if rg --quiet 'testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured' "$ROOT/scripts/ios/test.sh"; then
+  echo "The live route still selects the removed real-keyboard test name." >&2
+  exit 1
+fi
+if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts/ios/test.sh")" -ne 2 ]]; then
+  echo "Both credentialed live routes must require exactly one passing xcresult test." >&2
+  exit 1
+fi
+rg --quiet 'SENSITIVE_LIVE_SIMULATOR' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'SENSITIVE_LIVE_SOURCE_WAS_BOOTED' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'restore_sensitive_live_source_simulator' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl clone' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl shutdown' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl bootstatus' "$ROOT/scripts/ios/test.sh"
+rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
+if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
+  echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2
+  exit 1
+fi
 if rg --quiet '\.derived-(live-gateway-smoke|real-keyboard-live)|\.ci-results/(live-gateway-smoke|real-keyboard-live)' "$ROOT/scripts/ios/test.sh"; then
   echo "Live tests must not retain secret-bearing derived data or result bundles in the repository." >&2
   exit 1
@@ -112,22 +142,19 @@ live_impact_patterns=(
   'scripts/check-live.sh'
   'scripts/check.sh'
   'scripts/live-impact.sh'
+  'scripts/ios/enable-openkeyboard-simulator-keyboard.sh'
+  'scripts/ios/live-test-safety.sh'
   'scripts/ios/openkeyboard-gateway.seed.env.example'
+  'scripts/ios/seed-simulator-gateway-config.sh'
   'scripts/ios/test.sh'
   'OpenKeyboard/Info.plist'
-  'OpenKeyboard/Models/AppConfig.swift'
-  'OpenKeyboard/Models/KeyboardSuggestionModels.swift'
-  'OpenKeyboard/OpenKeyboardApp.swift'
-  'OpenKeyboard/Services/CanonicalGatewayClient.swift'
-  'OpenKeyboard/Services/NetworkManager.swift'
-  'OpenKeyboard/ViewModels/SettingsViewModel.swift'
+  'OpenKeyboard/*.swift'
   'OpenKeyboardCore/Package.swift'
-  'OpenKeyboardCore/Sources/OpenKeyboardCore/Gateway*.swift'
-  'OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift'
-  'OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift'
+  'OpenKeyboardCore/Sources/*.swift'
   'OpenKeyboardExtension/Info.plist'
-  'OpenKeyboardExtension/KeyboardAIService.swift'
-  'OpenKeyboardExtension/KeyboardViewModel.swift'
+  'OpenKeyboardExtension/*.swift'
+  'OpenKeyboardUITests/GatewayClientArchitectureTests.swift'
+  'OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift'
   'OpenKeyboard.xcodeproj/project.pbxproj'
   'OpenKeyboard/*.entitlements'
   'OpenKeyboardExtension/*.entitlements'

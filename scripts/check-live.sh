@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${1:-}"
 DEFAULT_SEED_FILE="$ROOT/.agent/local-seeds/openkeyboard-gateway.env"
+source "$ROOT/scripts/ios/live-test-safety.sh"
 
 usage() {
   cat <<'EOF'
@@ -60,17 +61,11 @@ if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ || "$EXPECTED_SHA" != "$HEAD_SHA" ]]; 
   fail "Live verification HEAD does not match OPEN_KEYBOARD_LIVE_EXPECTED_SHA."
 fi
 
-SEED_FILE="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SEED_FILE}"
-case "$SEED_FILE" in
-  "$ROOT"/.agent/local-seeds/*)
-    ;;
-  *)
-    fail "Live verification requires a seed beneath .agent/local-seeds/."
-    ;;
-esac
-if [[ ! -f "$SEED_FILE" ]]; then
-  fail "Live gateway seed file is missing. Create it from scripts/ios/openkeyboard-gateway.seed.env.example."
-fi
+SEED_FILE="$(
+  openkeyboard_require_local_seed_file \
+    "$ROOT" \
+    "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SEED_FILE}"
+)" || fail "Live gateway seed validation failed."
 
 echo "Running deterministic gateway prerequisites for exact HEAD."
 env \

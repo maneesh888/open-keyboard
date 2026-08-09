@@ -83,6 +83,11 @@ The path must be `.githooks`.
   stay in the ignored local seed and are never sent to GitHub.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
+- Each live route parses its `.xcresult` and requires exactly one passing test with no failures,
+  skips, or expected failures; a successful `xcodebuild` process alone is not accepted as proof.
+- The real-keyboard route clones the selected simulator, immediately restores the source to its
+  prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
+  and deletes the clone on every handled exit. Source gateway configuration is not modified.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 
 ## GitHub checks

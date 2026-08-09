@@ -55,23 +55,23 @@ gateway_sensitive_paths=(
   scripts/check-live.sh
   scripts/check.sh
   scripts/live-impact.sh
+  scripts/ios/enable-openkeyboard-simulator-keyboard.sh
+  scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
+  scripts/ios/seed-simulator-gateway-config.sh
   scripts/ios/test.sh
   OpenKeyboard/Info.plist
-  OpenKeyboard/Models/AppConfig.swift
-  OpenKeyboard/Models/KeyboardSuggestionModels.swift
-  OpenKeyboard/OpenKeyboardApp.swift
-  OpenKeyboard/Services/CanonicalGatewayClient.swift
-  OpenKeyboard/Services/NetworkManager.swift
-  OpenKeyboard/ViewModels/SettingsViewModel.swift
+  OpenKeyboard/Views/PlaygroundView.swift
+  OpenKeyboard/Views/LiveAITestHarnessView.swift
+  OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboardCore/Package.swift
   OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
-  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayConfig.swift
-  OpenKeyboardCore/Sources/OpenKeyboardCore/URLSessionHTTPClient.swift
-  OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift
+  OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
   OpenKeyboardExtension/Info.plist
   OpenKeyboardExtension/KeyboardAIService.swift
-  OpenKeyboardExtension/KeyboardViewModel.swift
+  OpenKeyboardExtension/Nested/AnyExtensionRuntime.swift
+  OpenKeyboardUITests/GatewayClientArchitectureTests.swift
+  OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift
   OpenKeyboard.xcodeproj/project.pbxproj
   OpenKeyboard/OpenKeyboard.entitlements
   OpenKeyboardExtension/OpenKeyboardExtension.entitlements
