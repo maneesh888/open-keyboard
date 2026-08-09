@@ -1278,10 +1278,12 @@ private struct KeyButton: View {
                 }
             }
             .foregroundColor(.primary)
-            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+            .frame(maxWidth: .infinity, minHeight: KeyboardPanelLayout.keyCapHeight, maxHeight: KeyboardPanelLayout.keyCapHeight)
             .background(backgroundColor)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
+            .frame(maxWidth: .infinity, minHeight: height, maxHeight: height, alignment: .top)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)

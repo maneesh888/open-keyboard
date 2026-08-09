@@ -5,6 +5,15 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     private static let mockAPIKey = "mock-ui-test-key"
     private static let mockModel = "mock-ui-test-model"
 
+    func testHomeGatewayLoaderIsRemovedWhenErrorIsShown() {
+        let app = configuredContainingApp(extraArguments: ["--seed-gateway-error=Gateway timed out"])
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Gateway needs attention"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["gateway_status_icon"].waitForExistence(timeout: 2))
+        XCTAssertFalse(app.descendants(matching: .any)["gateway_status_progress"].exists)
+    }
+
     func testContainingAppSeedsSharedGatewayConfigForKeyboardExtension() {
         let app = configuredContainingApp()
         app.launch()
@@ -35,6 +44,40 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         input.tap()
         input.typeText(" hello")
         XCTAssertTrue((input.value as? String)?.contains("hello") == true, "Playground input should accept typed text")
+    }
+
+    func testRealKeyboardExtensionMatchesNativeTouchGeometry() throws {
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        let qKey = keyboardApp.buttons["q"]
+        let aKey = keyboardApp.buttons["a"]
+        let zKey = keyboardApp.buttons["z"]
+        let spaceKey = keyboardApp.buttons["space"]
+        for key in [qKey, aKey, zKey, spaceKey] {
+            XCTAssertTrue(key.waitForExistence(timeout: 2), "Expected real keyboard key to be visible")
+            XCTAssertEqual(key.frame.height, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        }
+        XCTAssertEqual(aKey.frame.minY - qKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        XCTAssertEqual(zKey.frame.minY - aKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
+        XCTAssertEqual(spaceKey.frame.minY - zKey.frame.minY, KeyboardPanelLayout.controlKeyHeight, accuracy: 1)
+        try captureRealKeyboardStep("real-extension-native-touch-geometry")
     }
 
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {

@@ -112,6 +112,11 @@ class SettingsViewModel: ObservableObject {
         hasSavedGatewayConfig && !showsValidatedGatewayDetails && !hasConnectionError
     }
 
+    var isGatewayValidationInProgress: Bool {
+        guard !hasConnectionError else { return false }
+        return isTestingConnection || connectionStatus == .checking || shouldShowGatewayValidationPending
+    }
+
     var shouldShowConnectionActions: Bool {
         isTestingConnection || hasConnectionError || !showsValidatedGatewayDetails || isEditingGatewayDraft
     }
@@ -202,6 +207,7 @@ class SettingsViewModel: ObservableObject {
         showsValidatedGatewayDetails = false
         diagnosticReport = nil
         isTestingConnection = true
+        defer { isTestingConnection = false }
         connectionStatus = .checking
         errorMessage = nil
         await Task.yield()
@@ -226,7 +232,6 @@ class SettingsViewModel: ObservableObject {
                 let candidates = AppConfig.gatewayModelCandidates(from: availableModels, currentModel: config.selectedModel)
                 guard !candidates.isEmpty else {
                     failConnection(with: "No models returned by gateway")
-                    isTestingConnection = false
                     return
                 }
 
@@ -248,7 +253,6 @@ class SettingsViewModel: ObservableObject {
                         guard saveSettings() else {
                             config = previousConfig
                             failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
-                            isTestingConnection = false
                             return
                         }
 
@@ -257,7 +261,6 @@ class SettingsViewModel: ObservableObject {
                         AppConfig.clearGatewayConnectionError(from: defaults)
                         AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
                         showsValidatedGatewayDetails = true
-                        isTestingConnection = false
                         return
                     } catch {
                         lastSmokeError = error
@@ -277,7 +280,6 @@ class SettingsViewModel: ObservableObject {
             }
         }
 
-        isTestingConnection = false
     }
 
     func runDiagnostics() async {
