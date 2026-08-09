@@ -4,13 +4,16 @@
 
 ```text
 Pull request
-  -> Repository hygiene
-  -> OpenKeyboardCore tests
-  -> iOS app + keyboard extension build
+  -> Exact-head local full gate
+  -> Independent read-only PR reviewer
+  -> GitHub repository hygiene
+  -> GitHub OpenKeyboardCore tests
+  -> GitHub iOS app + keyboard extension build
   -> Required checks
   -> Required live verification
      -> pass immediately when gateway runtime is unaffected
      -> otherwise require exact-head local gateway evidence in the PR
+  -> Human approval and protected merge
 
 Version tag or manual deployment
   -> Reusable OpenKeyboard CI
@@ -22,6 +25,28 @@ Version tag or manual deployment
 
 Normal CI is read-only and secretless. It does not run live gateway calls or receive gateway
 credentials. GitHub Actions are pinned to full commit SHAs.
+
+## Independent reviewer
+
+OpenKeyboard includes `.codex/agents/pr-reviewer.toml` and the `$review-verify-merge-pr` project
+skill. For release readiness, invoke the skill with the PR identity and a neutral exact-head packet.
+The reviewer is sandboxed read-only and cannot mutate GitHub or the checkout.
+
+Record the full reviewed SHA and whether blocking findings remain in the PR description. Any new
+commit invalidates the review. This process gate complements GitHub approval and required checks;
+it does not create a GitHub status or replace maintainer review.
+
+## Repository automation set
+
+The CI/CD files are paired with the complete repository-owned Codex automation set:
+
+- `$develop-openkeyboard`: implementation routing and proportional verification.
+- `work-package-planner` plus `$plan-openkeyboard-work-package`: read-only, digest-bound planning.
+- `pr-reviewer` plus `$review-verify-merge-pr`: independent exact-head review and guarded readiness.
+
+The planner and reviewer are sandboxed read-only. GitHub Actions remain the remote enforcement
+layer; these agents cannot replace required checks, approvals, protected environments, signing, or
+deployment evidence.
 
 ## Required environments
 

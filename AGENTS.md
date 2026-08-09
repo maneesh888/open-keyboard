@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboard extension, CI, optional MCP/ClawMaster verification, and commit work. Keep each session focused, repo-aware, tied to the real scripts/proof routes, and safe to commit when the user allows it.
+Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboard extension, CI, independent pull-request review, optional MCP/ClawMaster verification, and commit work. Keep each session focused, repo-aware, tied to the real scripts/proof routes, and safe to commit when the user allows it.
 
 ## Start Every Task
 
@@ -29,14 +29,15 @@ Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboa
    - If the default sibling directory is not writable, set `OPEN_KEYBOARD_WORKTREE_ROOT` to a writable location for that machine. If the configured remote, network, or base ref is unavailable, report that constraint and ask before falling back to a different local base.
 4. If the integration checkout has uncommitted or staged changes, do not commit them from the integration checkout. Ask whether those changes belong to the current task, or create a clean worktree and leave them untouched.
 5. Preserve unrelated user or agent changes. Do not revert, restage, or clean files you did not intentionally touch.
-6. If the user gives plain text, convert it internally into a bounded work order:
+6. If the user asks what to do next or explicitly requests a plan, invoke the read-only `work-package-planner` without inherited conversation. It uses `$plan-openkeyboard-work-package` and returns a digest-bound work order.
+7. If the user gives a clear implementation request, use `$develop-openkeyboard` and convert it internally into a bounded work order without adding a planning gate:
    - objective
    - likely files/modules
    - out-of-scope areas
    - verification required
    - whether screenshots or real simulator proof are needed
    - whether commit/push is allowed
-7. Ask only when scope, destructive action, credentials, external deployment, base branch, dirty-checkout ownership, or commit/push permission is ambiguous.
+8. Ask only when scope, destructive action, credentials, external deployment, base branch, dirty-checkout ownership, or commit/push permission is ambiguous.
 
 ## Session Worktree Cleanup
 
@@ -57,6 +58,8 @@ Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboa
 
 Use the repo scripts before hand-written commands unless a targeted command is clearly narrower:
 
+- Repository implementation workflow: `$develop-openkeyboard`
+- Read-only source-bound planner: project `work-package-planner` via `$plan-openkeyboard-work-package`
 - Repository hygiene: `./scripts/check.sh --hygiene`
 - Standard deterministic gate: `./scripts/check.sh --quick`
 - Exact-head release gate: `./scripts/check.sh --full`
@@ -72,6 +75,7 @@ Use the repo scripts before hand-written commands unless a targeted command is c
 - Exact-head live gateway gate: `./scripts/check-live.sh gateway`
 - Opt-in real keyboard extension live test: `./scripts/ios/test.sh real-keyboard-live`
 - Opt-in live AI harness tests: `./scripts/ios/test.sh live-ui`
+- Independent exact-head PR review: project `pr-reviewer` via `$review-verify-merge-pr`
 
 Remote GitHub CI runs hygiene, `core`, and `build` from `.github/workflows/ci.yml`, then reports the stable `Required checks` status. `.github/workflows/live.yml` enforces retained exact-head local evidence for gateway-impacting changes without receiving credentials. Do not imply remote CI proves simulator UI, screenshots, real keyboard extension behavior, live gateway execution, signing, or deployment.
 
@@ -157,6 +161,23 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
 - Live gateway contract/performance: `./scripts/ios/test.sh live-gateway-smoke`, app diagnostics, or explicit live Xcode proof. Report timing separately from correctness.
 - Pre-commit broad check: `./scripts/check.sh --quick`, then any task-specific UI/live/screenshot route.
 - Pre-push/release check: `./scripts/check.sh --full`; gateway-impacting changes also require `./scripts/check-live.sh gateway`.
+
+## Pull Request Review
+
+- Use `$review-verify-merge-pr` for independent PR review and release-readiness assessment.
+- The project `pr-reviewer` is read-only and must review the exact GitHub head without inherited implementation context.
+- Run the independent review and GitHub checks concurrently where practical.
+- Any new commit invalidates the previous review, local full gate, and GitHub check conclusions.
+- Do not mark a PR ready, merge, enable auto-merge, or deploy unless the user explicitly requests that state change.
+- Before an authorized merge, require the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+
+## Repository Automation
+
+- `$develop-openkeyboard` routes bounded implementation through the correct local checks and proof boundaries.
+- `$plan-openkeyboard-work-package` creates compact digest-bound plans only when planning is requested.
+- The project `work-package-planner` is read-only and cannot edit, test, access GitHub, or invoke other agents.
+- `$review-verify-merge-pr` prepares exact-head evidence and invokes the read-only project `pr-reviewer`.
+- Custom-agent output never substitutes for GitHub required checks, maintainer approval, live proof, signing, deployment, or App Review.
 
 ## Commit And Push Rules
 

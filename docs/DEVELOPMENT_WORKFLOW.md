@@ -6,6 +6,10 @@ OpenKeyboard uses proportional local checks and exact-head release evidence. Thi
 verification selection and proof boundaries. `AGENTS.md` owns repository behavior and
 `.github/BRANCH_PROTECTION_GUIDE.md` owns the GitHub merge settings.
 
+Repository automation is split across `$develop-openkeyboard`, the read-only
+`$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
+work but do not weaken the proof requirements below.
+
 ## Proof levels
 
 Keep these claims separate:
@@ -15,7 +19,8 @@ Keep these claims separate:
 3. **Deterministic UI-target proof:** non-live UI-target tests pass on the documented simulator.
 4. **Real extension proof:** the installed keyboard extension completes its real lifecycle.
 5. **Live gateway proof:** an exact committed head completes the local gateway smoke.
-6. **Deployment proof:** a signed archive exports, validates, and uploads through App Store Connect.
+6. **Independent review proof:** the read-only reviewer finds no blocker on the same exact head.
+7. **Deployment proof:** a signed archive exports, validates, and uploads through App Store Connect.
 
 Never infer a stronger proof level from a weaker one. Normal GitHub CI proves behavior and build,
 not UI quality, real keyboard lifecycle, live gateway behavior, signing, or deployment.
@@ -31,6 +36,9 @@ Run targeted tests while editing, then run the highest cumulative gate required 
 | Release | `./scripts/check.sh --full` on exact `HEAD` | PR readiness, tag, or release |
 
 Calling `./scripts/check.sh` without an argument runs `--full`.
+
+Release readiness additionally requires exact-head GitHub checks and an independent review through
+`$review-verify-merge-pr`; the local full gate alone is insufficient.
 
 - `--hygiene`: environment preflight, shell/YAML syntax, secret and policy regressions,
   tracked and untracked whitespace.
@@ -85,6 +93,32 @@ It runs repository hygiene, OpenKeyboardCore tests, and the iOS app/extension bu
 runtime change, the pull request must retain the local pass marker and exact tested SHA. The stable
 `Required live verification` job validates only that retained evidence. Local execution is
 contributor-attested; GitHub never receives the credential or gateway response.
+
+## Independent pull-request review
+
+The repository-owned `.codex/agents/pr-reviewer.toml` defines a read-only reviewer specialized for
+OpenKeyboard. `$review-verify-merge-pr` builds a neutral packet from the request, PR brief, exact
+diff, requirement sources, and bounded evidence, then invokes that reviewer without inherited
+implementation context.
+
+The reviewer checks correctness, regressions, MVVM and persistence boundaries, gateway and secret
+handling, keyboard-extension lifecycle, signing/deployment safety, test coverage, and truthful
+proof claims. It reports findings but cannot edit, approve, comment, change PR state, deploy, or
+merge. A new commit invalidates the result and requires a fresh exact-head review.
+
+Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
+SHA and result in the PR brief; branch protection separately enforces GitHub checks and approvals.
+
+## Planning and development automation
+
+`$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release
+mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
+change to the repository scripts above.
+
+When planning is explicitly requested, the read-only `work-package-planner` invokes
+`$plan-openkeyboard-work-package`. It reads only current status, work-queue, completion-plan, and
+directly relevant focused-plan sections, then returns a compact work order with source-object
+digests. A clear implementation request bypasses this planning route.
 
 ## Deployment
 

@@ -12,6 +12,10 @@ Protect `main` with a branch ruleset or branch protection rule:
 6. Block force pushes and branch deletion.
 7. Disable bypass for administrators if the repository should enforce one merge path.
 
+Before an intentional merge, also run `$review-verify-merge-pr` and record its exact reviewed SHA
+and blocker result in the PR description. This independent Codex review is a process gate rather
+than a GitHub status check, so retain the GitHub approval requirement above.
+
 Recommended repository merge settings:
 
 - Allow squash merge.

@@ -16,6 +16,13 @@
 
 -
 
+## Independent review
+
+- Reviewer: pending
+- Exact reviewed head: pending
+- Blocking findings: pending
+- Residual proof limits: pending
+
 ## Live gateway evidence
 
 <!-- For no gateway impact, write "Local live verification: not required". -->
@@ -33,4 +40,4 @@
 ## Exact head SHA
 
 <!-- Use the full 40-character SHA and refresh it after every head change. -->
-`<full-commit-sha`>
+`<full-commit-sha>`

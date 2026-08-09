@@ -1,0 +1,4 @@
+interface:
+  display_name: "Review, Verify, and Merge PR"
+  short_description: "Independently review and gate OpenKeyboard PRs"
+  default_prompt: "Use $review-verify-merge-pr to review the exact OpenKeyboard pull-request head and report blockers. Change readiness or merge state only when explicitly requested."
