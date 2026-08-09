@@ -60,6 +60,8 @@ rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFL
 rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
+rg --quiet 'local_live_verification_count' "$LIVE_WORKFLOW"
+rg --quiet 'live_verification_target_count' "$LIVE_WORKFLOW"
 rg --quiet 'live_tested_head_count' "$LIVE_WORKFLOW"
 rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_WORKFLOW"
 if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORKFLOW"; then

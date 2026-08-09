@@ -41,6 +41,14 @@ EOF
 stale_body="${valid_body/Exact live-tested head: $HEAD_SHA/Exact live-tested head: $STALE_SHA}"
 duplicate_body="$valid_body
 - Exact live-tested head: $HEAD_SHA"
+contradictory_pass_body="${valid_body/Local live verification: passed/Local live verification: failed}
+Prose mention: Local live verification: passed"
+duplicate_pass_body="$valid_body
+- Local live verification: failed"
+contradictory_target_body="${valid_body/Live verification target: gateway/Live verification target: none}
+Prose mention: Live verification target: gateway"
+duplicate_target_body="$valid_body
+- Live verification target: none"
 
 run_policy() {
   local body="$1"
@@ -64,6 +72,23 @@ fi
 
 if run_policy "$duplicate_body"; then
   echo "Duplicate live-tested head fields were accepted." >&2
+  exit 1
+fi
+
+if run_policy "$contradictory_pass_body"; then
+  echo "A prose pass marker overrode a failing canonical live-verification field." >&2
+  exit 1
+fi
+if run_policy "$duplicate_pass_body"; then
+  echo "Contradictory local live-verification fields were accepted." >&2
+  exit 1
+fi
+if run_policy "$contradictory_target_body"; then
+  echo "A prose target marker overrode a different canonical live target." >&2
+  exit 1
+fi
+if run_policy "$duplicate_target_body"; then
+  echo "Contradictory live-verification target fields were accepted." >&2
   exit 1
 fi
 

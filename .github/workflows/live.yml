@@ -133,27 +133,46 @@ jobs:
             exit 1
           fi
 
-          if [[ "$PR_BODY" != *"Local live verification: passed"* ]]; then
-            echo "The pull request must record 'Local live verification: passed'."
-            exit 1
-          fi
-          if [[ "$PR_BODY" != *"Live verification target: gateway"* ]]; then
-            echo "The pull request must record the gateway verification target."
-            exit 1
-          fi
-
+          local_live_verification=""
+          local_live_verification_count=0
+          live_verification_target=""
+          live_verification_target_count=0
           live_tested_head=""
           live_tested_head_count=0
+          retention_boundary_count=0
+          trust_boundary_count=0
           while IFS= read -r body_line; do
             body_line="${body_line%$'\r'}"
             case "$body_line" in
+              '- Local live verification: '*)
+                local_live_verification="${body_line#- Local live verification: }"
+                ((local_live_verification_count += 1))
+                ;;
+              '- Live verification target: '*)
+                live_verification_target="${body_line#- Live verification target: }"
+                ((live_verification_target_count += 1))
+                ;;
               '- Exact live-tested head: '*)
                 live_tested_head="${body_line#- Exact live-tested head: }"
                 ((live_tested_head_count += 1))
                 ;;
+              '- No credential or gateway response body retained.')
+                ((retention_boundary_count += 1))
+                ;;
+              '- Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.')
+                ((trust_boundary_count += 1))
+                ;;
             esac
           done <<< "$PR_BODY"
 
+          if [[ "$local_live_verification_count" -ne 1 || "$local_live_verification" != "passed" ]]; then
+            echo "The pull request must record exactly one passing local live-verification field."
+            exit 1
+          fi
+          if [[ "$live_verification_target_count" -ne 1 || "$live_verification_target" != "gateway" ]]; then
+            echo "The pull request must record exactly one gateway live-verification target."
+            exit 1
+          fi
           if [[ "$live_tested_head_count" -ne 1 ]]; then
             echo "The pull request must record exactly one exact live-tested head."
             exit 1
@@ -162,12 +181,12 @@ jobs:
             echo "Local live evidence is not bound to this exact head."
             exit 1
           fi
-          if [[ "$PR_BODY" != *"No credential or gateway response body retained."* ]]; then
-            echo "The pull request must record the live-proof retention boundary."
+          if [[ "$retention_boundary_count" -ne 1 ]]; then
+            echo "The pull request must record exactly one live-proof retention boundary."
             exit 1
           fi
-          if [[ "$PR_BODY" != *"Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only."* ]]; then
-            echo "The pull request must acknowledge the live-proof trust boundary."
+          if [[ "$trust_boundary_count" -ne 1 ]]; then
+            echo "The pull request must record exactly one live-proof trust boundary."
             exit 1
           fi
 

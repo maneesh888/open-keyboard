@@ -97,8 +97,9 @@ It runs repository hygiene, OpenKeyboardCore tests, and the iOS app/extension bu
 `Required checks` job is the ordinary branch-protection status.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
-runtime change, the pull request must retain the local pass marker and exact tested SHA. The stable
-`Required live verification` job validates only that retained evidence. Local execution is
+runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
+exact-tested-SHA fields. The stable `Required live verification` job rejects duplicate or
+contradictory fields and validates only that retained evidence. Local execution is
 contributor-attested; GitHub never receives the credential or gateway response.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
