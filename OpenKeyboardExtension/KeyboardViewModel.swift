@@ -492,7 +492,11 @@ final class KeyboardViewModel: ObservableObject {
               !state.isLoading else {
             return
         }
-        let replacementPlan = currentReplacementPlan() ?? state.replacementPlan
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
         if replacementPlan != state.replacementPlan {
             state = KeyboardActionPanelState(
                 sourceText: replacementPlan.textForAI,
@@ -510,6 +514,22 @@ final class KeyboardViewModel: ObservableObject {
     func applySelectedActionPanelAction() {
         guard let state = actionPanelState,
               let selectedOption = state.selectedOption else {
+            return
+        }
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
+        guard replacementPlan == state.replacementPlan else {
+            actionPanelState = KeyboardActionPanelState(
+                sourceText: replacementPlan.textForAI,
+                replacementPlan: replacementPlan,
+                selectedAction: state.selectedAction,
+                isCarouselVisible: state.isCarouselVisible,
+                isLoading: state.selectedAction.isReadyForRequest
+            )
+            requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
             return
         }
         actionPanelTask?.cancel()
@@ -1574,6 +1594,11 @@ final class KeyboardViewModel: ObservableObject {
             return bufferPlan
         }
         return contextPlan ?? bufferPlan
+    }
+
+    private func currentActionPanelReplacementPlan() -> KeyboardReplacementPlan? {
+        guard textDocumentProxy.hasText else { return nil }
+        return currentReplacementPlan()
     }
 
     private func currentDocumentTextForAnalysis() -> String? {
