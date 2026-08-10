@@ -10,11 +10,11 @@ import Foundation
 enum KeyboardGatewayActionContract {
     static let structuredSystemPrompt = """
     You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
+    Contract: {"operation":"fix_grammar|summarize|rewrite|translate","results":[{"id":"...","type":"correction|suggestion|summary|translation|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
     Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
     """
 
-    static func prompt(operation: String, text: String) -> String {
+    static func prompt(operation: String, text: String, translationLanguage: String? = nil) -> String {
         switch operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "fix_grammar":
             return """
@@ -36,6 +36,16 @@ enum KeyboardGatewayActionContract {
             return """
             Operation: summarize
             Summarize this text concisely. Return structured JSON with a summary item.
+
+            Text:
+            \(text)
+            """
+        case "translate":
+            let requestedLanguage = translationLanguage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let language = requestedLanguage.isEmpty ? "the requested target language" : requestedLanguage
+            return """
+            Operation: translate
+            Translate this text into \(language). Preserve its meaning, tone, paragraph breaks, punctuation, and emoji. Return structured JSON with one translation item and corrected_text containing only the complete translated replacement. Do not add commentary or include the source text unless it is naturally unchanged in the target language.
 
             Text:
             \(text)
@@ -63,7 +73,7 @@ enum KeyboardGatewayActionContract {
         switch operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "fix_grammar":
             return 5_000
-        case "rewrite", "improve":
+        case "rewrite", "improve", "translate":
             return 3_000
         case "summarize":
             return 2_000

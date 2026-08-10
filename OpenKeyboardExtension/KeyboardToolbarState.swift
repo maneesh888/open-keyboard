@@ -34,6 +34,11 @@ enum KeyboardPanelLayout {
     static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
     static let actionPanelScrollableResultHeight: CGFloat = 160
     static let actionCarouselButtonHeight: CGFloat = 44
+    static let actionContextSelectorHeight: CGFloat = actionCarouselButtonHeight
+    static let actionContextSelectorSpacing: CGFloat = 8
+    static let actionPanelContextualResultHeight: CGFloat = actionPanelScrollableResultHeight
+        - actionContextSelectorHeight
+        - actionContextSelectorSpacing
     static let actionControlButtonHeight: CGFloat = 44
     static let actionGroupedButtonWidth: CGFloat = 48
 
@@ -71,6 +76,13 @@ struct KeyboardCompletionPanelState: Equatable {
         title: "Improvement applied",
         message: "The selected improvement replaced the original text."
     )
+
+    static func translationApplied(language: String) -> KeyboardCompletionPanelState {
+        KeyboardCompletionPanelState(
+            title: "Translation applied",
+            message: "The \(language) translation replaced the original text."
+        )
+    }
 }
 
 struct KeyboardToolbarState: Equatable {

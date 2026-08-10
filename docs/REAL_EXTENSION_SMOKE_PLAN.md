@@ -20,7 +20,7 @@ This is not a broad screenshot suite. It is the release-readiness guardrail for 
 The keyboard toolbar has two independent workflows:
 
 - Left status/logo lane: grammar and typo correction review. The OpenKeyboard logo, issue count badge, and correction status belong to this lane. When correction results exist, tapping it opens the correction review/details flow.
-- Right sparkle lane: generative writing actions. Improve, Rephrase, Summarize, and future Translate actions belong here. This lane opens the action/options panel and should not immediately replace text without an explicit user Apply step.
+- Right sparkle lane: generative writing actions. Improve, Rephrase, Summarize, and Translate belong here. Translate requires an explicit target-language choice before requesting output. This lane opens the action/options panel and should not immediately replace text without an explicit user Apply step.
 
 Real-extension proof should keep these lanes separate: a sparkle workflow pass does not prove correction review, and a correction badge pass does not prove Improve/Rephrase actions.
 
@@ -29,19 +29,25 @@ Real-extension proof should keep these lanes separate: a sparkle workflow pass d
 Focused host command used by ClawMaster/MCP host verification:
 
 ```bash
+SIMULATOR_ID="$(xcrun simctl list devices available | sed -n 's/^[[:space:]]*iPhone 17 Pro (\([0-9A-F-]*\)) (.*$/\1/p' | head -n 1)"
+SCREENSHOT_DIR="${TMPDIR:-/tmp}/openkeyboard-translate-smoke"
+xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
+xcrun simctl spawn "$SIMULATOR_ID" launchctl setenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR "$SCREENSHOT_DIR"
 xcodebuild test \
   -project OpenKeyboard.xcodeproj \
   -scheme OpenKeyboard \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
   -configuration Debug \
-  -only-testing:OpenKeyboardUITests/AcceptanceScreenshotUITests/testRealKeyboardExtensionLogoActionMenuScreenshotOrExplicitBlocker \
+  -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested \
   CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+xcrun simctl spawn "$SIMULATOR_ID" launchctl unsetenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR
 ```
 
 Expected pass attachment:
 
 ```text
-acceptance-ui-test-logo-action-menu-real-extension
+04-real-keyboard-translate-dutch.png
 ```
 
 ## Current state
@@ -52,7 +58,8 @@ The real-extension route should now prove these visible states independently:
 - QWERTY keys are visible in the real extension hierarchy.
 - In configured state, the left `keyboard_openkeyboard_icon` status/logo lane is present and enabled.
 - The right `ai_sparkle_action` lane is present and opens the generative action panel.
-- The sparkle action panel exposes source text plus selectable Improve/Rephrase/Summarize actions.
+- The sparkle action panel exposes source text plus selectable Improve/Rephrase/Summarize/Translate actions.
+- Translate exposes Dutch, Simplified Chinese, and American English target chips without changing the fixed keyboard viewport.
 
 Historical config-visibility evidence remains useful when diagnosing App Group or gateway seeding regressions. The original machine-local reports are not repository dependencies; retain only these artifact IDs for traceability:
 
@@ -72,7 +79,7 @@ A pass requires all of the following:
 - the left correction status/logo lane is present and not visually disabled in normal configured state;
 - `ai_sparkle_action` or the intended real sparkle action/menu trigger is available;
 - sparkle action menu opens with source text and selectable generative actions;
-- screenshot attachment `acceptance-ui-test-logo-action-menu-real-extension` is exported.
+- screenshot `04-real-keyboard-translate-dutch.png` is exported and inspected.
 
 ## What does not count
 

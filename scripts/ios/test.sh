@@ -396,6 +396,16 @@ case "${1:-}" in
   real-keyboard-live)
     echo -e "${YELLOW}Running seeded real keyboard extension live test...${NC}"
     require_xcodebuild
+    live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
+    case "$live_test_identifier" in
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured|\
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured)
+        ;;
+      *)
+        echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"
+        exit 2
+        ;;
+    esac
     begin_sensitive_live_workspace real-keyboard-live
     seed_file="$(
       openkeyboard_require_local_seed_file \
@@ -455,7 +465,7 @@ case "${1:-}" in
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
-      -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured \
+      -only-testing:"$live_test_identifier" \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
     echo -e "${GREEN}✓ Seeded real keyboard extension live test complete${NC}"

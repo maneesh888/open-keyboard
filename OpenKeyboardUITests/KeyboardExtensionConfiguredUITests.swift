@@ -143,6 +143,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].waitForExistence(timeout: 2))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
 
         let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
         XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))
@@ -419,7 +420,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(resultText.label.contains("SCROLL TEST START"))
         XCTAssertTrue(resultText.label.contains("SCROLL TEST END"))
 
-        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_summarize"] {
+        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_summarize", "ai_action_translate"] {
             let button = keyboardApp.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
@@ -448,6 +449,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "ai_action_improve",
             "ai_action_rewrite",
             "ai_action_summarize",
+            "ai_action_translate",
             "back_to_keyboard",
             "ai_action_grouped_controls",
             "ai_action_apply"
@@ -471,6 +473,144 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             XCTAssertEqual(currentFrame.height, initialFrame.height, accuracy: 1, "\(identifier) height changed while scrolling")
         }
         try captureRealKeyboardStep("03-real-keyboard-long-improve-result-scrolled")
+    }
+
+    func testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard Translate screenshots.")
+        }
+
+        let sourceText = "Good morning, I hope you are well."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=translatePanel",
+            "--keyboard-initial-panel=actions"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear for Translate screenshot proof"
+        )
+
+        let panel = keyboardApp.otherElements["ai_action_panel"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertEqual(panel.frame.height, KeyboardPanelLayout.actionPanelHeight, accuracy: 1)
+
+        let translate = keyboardApp.buttons["ai_action_translate"]
+        XCTAssertTrue(translate.waitForExistence(timeout: 5))
+        XCTAssertEqual(translate.value as? String, "Selected")
+        XCTAssertGreaterThanOrEqual(translate.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+
+        let targetCarousel = keyboardApp.scrollViews["ai_translation_target_carousel"]
+        XCTAssertTrue(targetCarousel.waitForExistence(timeout: 5))
+        XCTAssertEqual(targetCarousel.frame.height, KeyboardPanelLayout.actionContextSelectorHeight, accuracy: 1)
+
+        for identifier in [
+            "ai_translation_target_nl",
+            "ai_translation_target_zh-Hans",
+            "ai_translation_target_en-US"
+        ] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionContextSelectorHeight)
+        }
+        XCTAssertEqual(keyboardApp.buttons["ai_translation_target_nl"].value as? String, "Selected")
+
+        let resultText = keyboardApp.staticTexts["ai_action_result_text"]
+        XCTAssertTrue(resultText.waitForExistence(timeout: 5))
+        XCTAssertEqual(resultText.label, "Goedemorgen, ik hoop dat het goed met je gaat.")
+        let resultScroll = keyboardApp.scrollViews["ai_action_result_scroll"]
+        XCTAssertTrue(resultScroll.waitForExistence(timeout: 5))
+        XCTAssertEqual(resultScroll.frame.height, KeyboardPanelLayout.actionPanelContextualResultHeight, accuracy: 1)
+
+        for identifier in ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
+        }
+
+        let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
+        XCTAssertTrue(actionCarousel.waitForExistence(timeout: 5))
+        actionCarousel.swipeLeft()
+        XCTAssertLessThanOrEqual(translate.frame.maxX, panel.frame.maxX + 1)
+
+        try captureRealKeyboardStep("04-real-keyboard-translate-dutch")
+    }
+
+    func testRealKeyboardTranslateReplacesTextWhenGatewayConfigured() throws {
+        let sourceText = "Good morning, I hope you are well."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(
+            extraArguments: [
+                "--keyboard-host-test",
+                "--keyboard-host-autofocus",
+                "--keyboard-host-prefer-openkeyboard",
+                "--keyboard-host-text=\(encodedSource)",
+                "--keyboard-suggestion-state=translatePanel",
+                "--keyboard-initial-panel=actions"
+            ],
+            requiresInjectedGatewayCredentials: true
+        )
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear for live Translate verification"
+        )
+
+        let resultText = keyboardApp.staticTexts["ai_action_result_text"]
+        XCTAssertTrue(resultText.waitForExistence(timeout: 5))
+        let seededResult = resultText.label
+        let simplifiedChinese = keyboardApp.buttons["ai_translation_target_zh-Hans"]
+        XCTAssertTrue(simplifiedChinese.waitForExistence(timeout: 5))
+        simplifiedChinese.tap()
+
+        XCTAssertTrue(
+            waitForChangedLabel(resultText, originalLabel: seededResult, timeout: 90),
+            "Live Simplified Chinese translation did not replace the deterministic seed result"
+        )
+        XCTAssertFalse(resultText.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(resultText.label.contains("{\"operation\""))
+        XCTAssertTrue(
+            resultText.label.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) },
+            "Live translation did not contain Simplified Chinese characters"
+        )
+        XCTAssertEqual(simplifiedChinese.value as? String, "Selected")
+
+        let apply = keyboardApp.buttons["ai_action_apply"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 5))
+        XCTAssertTrue(apply.isEnabled)
+        apply.tap()
+
+        let translated = NSPredicate(format: "value != %@", sourceText)
+        expectation(for: translated, evaluatedWith: input)
+        waitForExpectations(timeout: 10)
+        XCTAssertTrue(keyboardApp.staticTexts["Translation applied"].waitForExistence(timeout: 5))
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = "live-gateway-real-keyboard-simplified-chinese-translation"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testRealKeyboardRewriteOptionsWorkflowScreenshotsWhenExplicitlyRequested() throws {
@@ -701,8 +841,6 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let switcherCandidates = [
             keyboardApp.buttons["Next keyboard"],
-            keyboardApp.buttons["Emoji"],
-            keyboardApp.buttons["🌐"],
             keyboardApp.keys["Next keyboard"],
             keyboardApp.keys["Emoji"],
             keyboardApp.keys["🌐"]
@@ -760,6 +898,17 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
                trigger.isEnabled,
                !keyboardApp.staticTexts["Analyzing..."].exists,
                !keyboardApp.staticTexts["Checking..."].exists {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return false
+    }
+
+    private func waitForChangedLabel(_ element: XCUIElement, originalLabel: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.waitForExistence(timeout: 1), element.label != originalLabel, !element.label.isEmpty {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))

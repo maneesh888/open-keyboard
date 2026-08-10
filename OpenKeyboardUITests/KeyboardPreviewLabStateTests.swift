@@ -22,6 +22,9 @@ final class KeyboardPreviewLabStateTests: XCTestCase {
             KeyboardPanelLayout.actionPanelScrollableResultHeight
         )
         XCTAssertEqual(KeyboardVisualPreviewLayout.actionCarouselButtonHeight, KeyboardPanelLayout.actionCarouselButtonHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionContextSelectorHeight, KeyboardPanelLayout.actionContextSelectorHeight)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionContextSelectorSpacing, KeyboardPanelLayout.actionContextSelectorSpacing)
+        XCTAssertEqual(KeyboardVisualPreviewLayout.actionPanelContextualResultHeight, KeyboardPanelLayout.actionPanelContextualResultHeight)
         XCTAssertEqual(KeyboardVisualPreviewLayout.actionControlButtonHeight, KeyboardPanelLayout.actionControlButtonHeight)
         XCTAssertEqual(KeyboardVisualPreviewLayout.actionGroupedButtonWidth, KeyboardPanelLayout.actionGroupedButtonWidth)
     }
