@@ -544,6 +544,13 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
         XCTAssertTrue(actionCarousel.waitForExistence(timeout: 5))
+        XCTAssertLessThanOrEqual(resultScroll.frame.maxY, targetCarousel.frame.minY)
+        XCTAssertLessThan(targetCarousel.frame.maxY, actionCarousel.frame.minY)
+        XCTAssertEqual(
+            actionCarousel.frame.minY - targetCarousel.frame.maxY,
+            KeyboardPanelLayout.actionContextSelectorSpacing,
+            accuracy: 1
+        )
         actionCarousel.swipeLeft()
         XCTAssertLessThanOrEqual(translate.frame.maxX, panel.frame.maxX + 1)
 

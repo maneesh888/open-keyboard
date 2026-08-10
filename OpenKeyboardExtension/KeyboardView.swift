@@ -389,7 +389,12 @@ private struct AIActionPanel: View {
             suggestionBlock
             Spacer(minLength: 0)
             if state.isCarouselVisible {
-                actionCarousel
+                VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
+                    if state.showsTranslationTargetSelector {
+                        translationTargetCarousel
+                    }
+                    actionCarousel
+                }
                 .padding(.bottom, carouselBottomPadding)
                 .layoutPriority(1)
             }
@@ -428,10 +433,6 @@ private struct AIActionPanel: View {
 
     private var panelHeight: CGFloat {
         KeyboardPanelLayout.actionPanelHeight
-    }
-
-    private var suggestionHeight: CGFloat {
-        KeyboardPanelLayout.actionPanelScrollableResultHeight
     }
 
     private var carouselHeight: CGFloat {
@@ -473,24 +474,12 @@ private struct AIActionPanel: View {
     }
 
     private var suggestionBlock: some View {
-        VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
-            if state.showsTranslationTargetSelector {
-                translationTargetCarousel
-            }
-            suggestionContent
-                .frame(
-                    maxWidth: .infinity,
-                    minHeight: state.actionResultViewportHeight,
-                    maxHeight: state.actionResultViewportHeight,
-                    alignment: state.selectedOption == nil ? .center : .topLeading
-                )
-                .clipped()
-        }
+        suggestionContent
         .frame(
             maxWidth: .infinity,
-            minHeight: suggestionHeight,
-            maxHeight: suggestionHeight,
-            alignment: .topLeading
+            minHeight: state.actionResultViewportHeight,
+            maxHeight: state.actionResultViewportHeight,
+            alignment: state.selectedOption == nil ? .center : .topLeading
         )
         .padding(.top, 10)
         .clipped()

@@ -1,6 +1,6 @@
 # Real Keyboard Extension Smoke Plan
 
-Last updated: 2026-07-03
+Last updated: 2026-08-10
 
 ## Goal
 
@@ -66,7 +66,7 @@ The focused command above proves only these visible states:
 
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - The seeded Translate action panel renders inside the real extension process.
-- Translate exposes Dutch, Simplified Chinese, and American English target chips without changing the fixed keyboard viewport.
+- Translate exposes Dutch, Simplified Chinese, and American English target chips in a language carousel directly above the action carousel without changing the fixed keyboard viewport.
 - The fresh `04-real-keyboard-translate-dutch.png` artifact comes from the current test invocation.
 
 Because this test directly seeds the Translate panel, it does not prove QWERTY visibility, the enabled left correction lane, the right `ai_sparkle_action` trigger, or navigation from that trigger into the action panel. Use the broader configured real-extension workflow for those states; do not cite this focused screenshot as proof of them.
@@ -85,7 +85,7 @@ A pass of the focused Translate screenshot command requires all of the following
 - real extension lifecycle, not Preview Lab/component route;
 - focused host text input is active;
 - OpenKeyboard extension process is active;
-- the directly seeded Translate panel shows target chips, a selected Dutch result, and fixed bottom controls;
+- the directly seeded Translate panel shows a selected Dutch result, the language carousel directly above the action carousel, and fixed bottom controls;
 - screenshot `04-real-keyboard-translate-dutch.png` is exported and inspected.
 
 ## What does not count
