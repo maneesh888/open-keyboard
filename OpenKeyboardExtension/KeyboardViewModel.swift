@@ -106,7 +106,12 @@ struct KeyboardActionPanelState: Equatable {
     var isCarouselVisible: Bool
     var isLoading: Bool
 
-    static let availableActions: [KeyboardAIAction] = [.improve, .rewrite, .summarize, .translate(nil)]
+    static let availableActions: [KeyboardAIAction] = [
+        .improve,
+        .rewrite,
+        // .summarize, // Keep the operation available internally, but omit it from the keyboard carousel.
+        .translate(nil)
+    ]
 
     init(
         sourceText: String,
@@ -1972,12 +1977,12 @@ final class KeyboardViewModel: ObservableObject {
                     leadingWhitespace: "",
                     trailingWhitespace: ""
                 ),
-                selectedAction: .translate(.dutch),
+                selectedAction: .translate(.arabic),
                 options: [
                     KeyboardRewriteOption(
                         id: "translate-result-1",
-                        title: "Dutch translation",
-                        text: "Goedemorgen, ik hoop dat het goed met je gaat."
+                        title: "Arabic translation",
+                        text: "صباح الخير، أتمنى أن تكون بخير."
                     )
                 ],
                 isCarouselVisible: true,

@@ -352,8 +352,8 @@ M2 action-panel model:
   - `Improve` -> Fix Grammar
   - `Rephrase` -> Rewrite
   - `Translate` -> current translate operation with explicit target-language selection
-  - Summarize can live in the mode selector or overflow.
-- Current implementation exposes Improve/Rephrase/Summarize/Translate; Translate waits for a target before making a request.
+  - Summarize remains implemented but is intentionally omitted from the visible mode selector.
+- Current implementation exposes Improve/Rephrase/Translate; Translate waits for a target before making a request.
 
 ### M2 correction: move action buttons out of keyboard bar
 
@@ -371,8 +371,8 @@ Updated toolbar/panel split:
 - Sparkle overlay/action panel:
   - Improve -> current Fix Grammar
   - Rephrase -> current Rewrite
-  - Summarize -> current Summarize
-  - Translate -> current Translate action with Dutch, Simplified Chinese, and American English targets
+  - Summarize remains implemented but is intentionally omitted from the visible selector
+  - Translate -> current Translate action with a 15-language starter catalog, including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil
 
 Implementation priority:
 1. Remove permanent action-button look from the top keyboard bar.
