@@ -518,6 +518,24 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testTranslateStructuredResultReturnsSafeReplacement() throws {
+        let result = try KeyboardActionOperationResult.parse(
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Goedemorgen","replacement":"Goedemorgen"}],"corrected_text":"Goedemorgen"}"#,
+            operation: "translate",
+            fallbackText: "Good morning"
+        )
+
+        XCTAssertEqual(result.operation, "translate")
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "translate",
+                result: result,
+                sourceText: "Good morning"
+            ),
+            .replaceText("Goedemorgen")
+        )
+    }
+
     func testRewriteOptionsDeduplicateTrimAndFilterUnsafeCandidates() throws {
         let json = #"""
         {

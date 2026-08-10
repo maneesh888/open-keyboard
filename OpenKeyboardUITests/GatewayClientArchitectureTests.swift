@@ -107,6 +107,65 @@ final class GatewayClientArchitectureTests: XCTestCase {
             KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: "i has a apple").trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
+
+    func testKeyboardAIServiceBuildsTypedTranslationRequest() async throws {
+        let assistantContent = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Goedemorgen","replacement":"Goedemorgen"}],"corrected_text":"Goedemorgen"}"#
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [["message": ["role": "assistant", "content": assistantContent]]]
+        ])
+        let transport = CanonicalGatewayClientTestTransport(data: responseBody, statusCode: 200)
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+        let config = AppConfig(
+            apiKey: "test-api-key",
+            gatewayURL: "https://gateway.example/v1",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        let result = try await service.performResult(
+            action: .translate(.dutch),
+            on: "Good morning",
+            config: config
+        )
+
+        XCTAssertEqual(result.operation, "translate")
+        XCTAssertEqual(result.displayText, "Goedemorgen")
+        let request = try XCTUnwrap(transport.requests.first)
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["operation"] as? String, "translate")
+        XCTAssertEqual(json["input_text"] as? String, "Good morning")
+        XCTAssertEqual(json["max_tokens"] as? Int, KeyboardGatewayActionContract.maxTokens(operation: "translate"))
+        let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
+        let userPrompt = try XCTUnwrap(messages.last?["content"] as? String)
+        XCTAssertTrue(userPrompt.contains("Operation: translate"))
+        XCTAssertTrue(userPrompt.contains("Dutch"))
+        XCTAssertTrue(userPrompt.contains("Good morning"))
+        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("translate"))
+    }
+
+    func testKeyboardAIServiceRejectsTranslationWithoutTargetBeforeTransport() async throws {
+        let transport = CanonicalGatewayClientTestTransport(data: Data(), statusCode: 200)
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+        let config = AppConfig(
+            apiKey: "test-api-key",
+            gatewayURL: "https://gateway.example/v1",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+
+        do {
+            _ = try await service.performResult(action: .translate(nil), on: "Good morning", config: config)
+            XCTFail("Expected a missing target error")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error.errorDescription, "Choose a language")
+        }
+        XCTAssertTrue(transport.requests.isEmpty)
+    }
 }
 
 final class NetworkManagerGatewayTests: XCTestCase {

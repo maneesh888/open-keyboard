@@ -53,6 +53,7 @@ struct KeyboardView: View {
                         state: state,
                         actionsEnabled: viewModel.canRunAIAction,
                         onSelect: { viewModel.selectActionPanelAction($0) },
+                        onSelectTranslationTarget: { viewModel.selectActionPanelTranslationTarget($0) },
                         onRegenerate: { viewModel.rerunSelectedActionPanelAction() },
                         onToggleCarousel: { viewModel.toggleActionPanelCarousel() },
                         onCopy: { viewModel.copySelectedActionPanelSuggestion() },
@@ -372,6 +373,7 @@ private struct AIActionPanel: View {
     let state: KeyboardActionPanelState
     let actionsEnabled: Bool
     let onSelect: (KeyboardAIAction) -> Void
+    let onSelectTranslationTarget: (KeyboardTranslationTarget) -> Void
     let onRegenerate: () -> Void
     let onToggleCarousel: () -> Void
     let onCopy: () -> Void
@@ -471,6 +473,31 @@ private struct AIActionPanel: View {
     }
 
     private var suggestionBlock: some View {
+        VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
+            if state.showsTranslationTargetSelector {
+                translationTargetCarousel
+            }
+            suggestionContent
+                .frame(
+                    maxWidth: .infinity,
+                    minHeight: state.actionResultViewportHeight,
+                    maxHeight: state.actionResultViewportHeight,
+                    alignment: state.selectedOption == nil ? .center : .topLeading
+                )
+                .clipped()
+        }
+        .frame(
+            maxWidth: .infinity,
+            minHeight: suggestionHeight,
+            maxHeight: suggestionHeight,
+            alignment: .topLeading
+        )
+        .padding(.top, 10)
+        .clipped()
+    }
+
+    @ViewBuilder
+    private var suggestionContent: some View {
         Group {
             if state.isLoading {
                 HStack(spacing: 10) {
@@ -485,21 +512,53 @@ private struct AIActionPanel: View {
             } else if let selectedOption = state.selectedOption {
                 actionResultText(selectedOption.text)
             } else {
-                Text("No suggestion yet")
+                Text(state.isWaitingForTranslationTarget ? "Choose a language" : "No suggestion yet")
                     .font(.system(size: 18, weight: .regular))
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(2)
                     .accessibilityIdentifier("ai_action_empty_text")
             }
         }
-        .frame(
-            maxWidth: .infinity,
-            minHeight: suggestionHeight,
-            maxHeight: suggestionHeight,
-            alignment: state.selectedOption == nil ? .center : .topLeading
-        )
-        .padding(.top, 10)
-        .clipped()
+    }
+
+    private var translationTargetCarousel: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(KeyboardTranslationTarget.allCases) { target in
+                    translationTargetCard(target)
+                }
+            }
+            .padding(.horizontal, 1)
+        }
+        .frame(height: KeyboardPanelLayout.actionContextSelectorHeight)
+        .accessibilityIdentifier("ai_translation_target_carousel")
+    }
+
+    private func translationTargetCard(_ target: KeyboardTranslationTarget) -> some View {
+        let isSelected = target == state.selectedTranslationTarget
+        return Button {
+            onSelectTranslationTarget(target)
+        } label: {
+            Text(target.displayName)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 14)
+                .frame(height: KeyboardPanelLayout.actionContextSelectorHeight, alignment: .center)
+                .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            isSelected ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.95) : OpenKeyboardTheme.Stroke.control.opacity(0.9),
+                            lineWidth: isSelected ? 1.5 : 1
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!actionsEnabled || state.isLoading)
+        .accessibilityIdentifier("ai_translation_target_\(target.rawValue)")
+        .accessibilityValue(isSelected ? "Selected" : "")
     }
 
     @ViewBuilder
@@ -541,7 +600,7 @@ private struct AIActionPanel: View {
     }
 
     private func actionCard(_ action: KeyboardAIAction) -> some View {
-        let isSelected = action == state.selectedAction
+        let isSelected = action.representsSameMode(as: state.selectedAction)
         return Button {
             onSelect(action)
         } label: {
@@ -591,7 +650,7 @@ private struct AIActionPanel: View {
                     accessibilityLabel: "Run again",
                     action: onRegenerate
                 )
-                .disabled(!actionsEnabled || state.isLoading)
+                .disabled(!actionsEnabled || state.isLoading || !state.selectedAction.isReadyForRequest)
                 .accessibilityIdentifier("ai_action_rerun")
 
                 panelGroupedButton(
@@ -676,6 +735,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "Fix grammar."
         case .rewrite: return "Rephrase text."
         case .summarize: return "Summarize text."
+        case .translate(let target): return target.map { "Translate to \($0.displayName)." } ?? "Translate text."
         }
     }
 
@@ -685,6 +745,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "Find grammar and spelling fixes."
         case .rewrite: return "Generate alternatives before replacing."
         case .summarize: return "Shorten the source text."
+        case .translate: return "Choose a target language before replacing."
         }
     }
 
@@ -694,6 +755,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "Fix"
         case .rewrite: return "Rephrase"
         case .summarize: return "Summarize"
+        case .translate: return "Translate"
         }
     }
 
@@ -703,6 +765,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "Correct"
         case .rewrite: return "Alternatives"
         case .summarize: return "Shorten"
+        case .translate: return "Language"
         }
     }
 
@@ -712,6 +775,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "checkmark.seal.fill"
         case .rewrite: return "arrow.triangle.2.circlepath"
         case .summarize: return "text.bubble"
+        case .translate: return "character.bubble"
         }
     }
 }

@@ -201,6 +201,36 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testSeededTranslatePanelStateIsOneShot() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            let seededAt = Date().timeIntervalSince1970
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("translatePanel", forKey: "keyboardExtension.suggestionState")
+            defaults.set("translate-seed", forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "Good morning, I hope you are well."),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway }
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .actions)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(.dutch))
+            XCTAssertEqual(viewModel.actionPanelState?.selectedTranslationTarget, .dutch)
+            XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
+            XCTAssertEqual(
+                viewModel.actionPanelState?.selectedOption?.text,
+                "Goedemorgen, ik hoop dat het goed met je gaat."
+            )
+            XCTAssertNil(viewModel.rewriteOptionsState)
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt"))
+        }
+    }
+
     func testActionPanelUsesOneHeightAndScrollsLoadedResultsForEveryAction() {
         let sourceText = "Please make this clearer."
         let replacementPlan = KeyboardReplacementPlan(
@@ -374,6 +404,194 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.selectedOption?.text, "Please make this clearer.")
         XCTAssertEqual(proxy.text, sourceText)
+    }
+
+    func testTranslateWaitsForTargetThenAppliesSelectedLanguageResult() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredTranslationResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+
+        viewModel.selectActionPanelAction(.translate(nil))
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(nil))
+        XCTAssertTrue(viewModel.actionPanelState?.isWaitingForTranslationTarget ?? false)
+        XCTAssertFalse(viewModel.actionPanelState?.isLoading ?? true)
+        XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertEqual(viewModel.aiStatus, "Choose a language")
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.selectActionPanelTranslationTarget(.dutch)
+        await waitUntil {
+            service.requestedActions.count == 2
+                && viewModel.actionPanelState?.selectedOption?.text == "Goedemorgen, ik hoop dat het goed met je gaat."
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.dutch)])
+        XCTAssertEqual(viewModel.actionPanelState?.selectedTranslationTarget, .dutch)
+        XCTAssertEqual(viewModel.actionPanelState?.actionResultViewportHeight, KeyboardPanelLayout.actionPanelContextualResultHeight)
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(proxy.text, "Goedemorgen, ik hoop dat het goed met je gaat.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState.title, "Translation applied")
+        XCTAssertEqual(
+            viewModel.completionPanelState.message,
+            "The Dutch translation replaced the original text."
+        )
+    }
+
+    func testTranslationTargetSelectionDoesNotReuseCapturedTextAfterHostClears() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredTranslationResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelAction(.translate(nil))
+
+        proxy.replaceTextForTest("")
+        viewModel.selectActionPanelTranslationTarget(.dutch)
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
+    func testActionSwitchDoesNotRequestCapturedTextAfterHostClears() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest("")
+        viewModel.selectActionPanelAction(.summarize)
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
+    func testActionRerunDoesNotRequestCapturedTextAfterHostClears() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest("")
+        viewModel.rerunSelectedActionPanelAction()
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
+    func testTranslationApplyRefreshesResultInsteadOfReplacingChangedHostText() async {
+        let sourceText = "Good morning, I hope you are well."
+        let changedText = "This host text changed before Apply."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredTranslationResult(),
+            Self.structuredTranslationResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelAction(.translate(nil))
+        viewModel.selectActionPanelTranslationTarget(.dutch)
+        await waitUntil {
+            service.requestedActions.count == 2
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        proxy.replaceTextForTest(changedText)
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(proxy.text, changedText)
+        XCTAssertEqual(viewModel.actionPanelState?.sourceText, changedText)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(.dutch))
+        await waitUntil {
+            service.requestedActions.count == 3
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
+        XCTAssertEqual(service.requestedTexts, [sourceText, sourceText, changedText])
+        XCTAssertEqual(proxy.text, changedText)
+
+        viewModel.applySelectedActionPanelAction()
+
+        XCTAssertEqual(proxy.text, "Goedemorgen, ik hoop dat het goed met je gaat.")
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
+    func testTranslationTargetsMatchInitialScreenshotCatalog() {
+        XCTAssertEqual(
+            KeyboardTranslationTarget.allCases.map(\.displayName),
+            ["Dutch", "Chinese (Simplified)", "English (American)"]
+        )
+        XCTAssertTrue(
+            KeyboardActionPanelState.availableActions.contains { $0.representsSameMode(as: .translate(nil)) }
+        )
     }
 
     func testActionPanelCopyToggleAndApplyGeneratedSuggestion() async {
@@ -1424,6 +1642,23 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
                 )
             ],
             correctedText: "Please make this clearer.",
+            isStructuredResponse: true
+        )
+    }
+
+    private static func structuredTranslationResult() -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "translate",
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "translation-1",
+                    type: "translation",
+                    title: "Dutch translation",
+                    text: "Goedemorgen, ik hoop dat het goed met je gaat.",
+                    replacement: "Goedemorgen, ik hoop dat het goed met je gaat."
+                )
+            ],
+            correctedText: "Goedemorgen, ik hoop dat het goed met je gaat.",
             isStructuredResponse: true
         )
     }

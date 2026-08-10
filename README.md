@@ -40,7 +40,7 @@ Open Keyboard is built for people who want AI writing help while keeping control
 - Provides a custom iOS keyboard extension for everyday typing.
 - Connects to a user-controlled LLM Gateway using a gateway URL and API key.
 - Loads the selected model from the configured gateway.
-- Separates grammar and typo correction from broader AI writing tools such as Improve, Rephrase, and Summarize.
+- Separates grammar and typo correction from broader AI writing tools such as Improve, Rephrase, Summarize, and Translate.
 - Stores the gateway API key in a shared Keychain access group.
 - Shares non-sensitive gateway settings with the keyboard extension through App Group storage.
 - Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
@@ -88,8 +88,9 @@ The keyboard extension currently includes:
 - Full Access and gateway-configuration state in the toolbar
 - separate toolbar workflows for correction review and AI writing actions:
   - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
-  - AI writing tools handle Improve, Rephrase, and Summarize without mixing those actions into the correction review flow.
+  - AI writing tools handle Improve, Rephrase, Summarize, and Translate without mixing those actions into the correction review flow.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
+- a Translate workflow with explicit Dutch, Simplified Chinese, and American English target selection before any request is sent
 - rewrite/improvement options that are shown before replacement, with selected option state
 - replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
@@ -222,10 +223,11 @@ The project still needs broader real-device, live-gateway, prompt-quality, relea
 
 - [x] Core prompt builders for grammar, rewrite, summarize, translate, continue writing, and custom templates
 - [x] Gateway chat-completion client in core
-- [x] Extension workflows for grammar correction, Improve/Rephrase, and Summarize
+- [x] Extension workflows for grammar correction, Improve/Rephrase, Summarize, and Translate
 - [x] Suggestion selection, retry, copy, and accept controls for AI-generated writing improvements
 - [x] Regression coverage for grammar loading and correction replacement behavior
-- [ ] Continue writing and translate actions in the extension UI
+- [x] Translate action with explicit target-language selection in the extension UI
+- [ ] Continue writing action in the extension UI
 - [ ] Broader offline, rate-limit, invalid-key, and guidance polish
 - [ ] Prompt-quality evaluation suite
 - [ ] Latency and quality checks across local and hosted models

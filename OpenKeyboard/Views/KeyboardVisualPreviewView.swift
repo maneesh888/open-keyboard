@@ -393,6 +393,7 @@ struct KeyboardVisualPreviewView: View {
                     previewAction("Improve", systemImage: "sparkles", selected: true, identifier: "preview_ai_action_improve")
                     previewAction("Rephrase", systemImage: "arrow.triangle.2.circlepath", selected: false, identifier: "preview_ai_action_rewrite")
                     previewAction("Summarize", systemImage: "text.bubble", selected: false, identifier: "preview_ai_action_summarize")
+                    previewAction("Translate", systemImage: "character.bubble", selected: false, identifier: "preview_ai_action_translate")
                 }
                 .padding(.horizontal, 1)
             }

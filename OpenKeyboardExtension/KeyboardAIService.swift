@@ -5,13 +5,75 @@
 
 import Foundation
 
-enum KeyboardAIAction: String, CaseIterable, Identifiable {
+enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case dutch = "nl"
+    case chineseSimplified = "zh-Hans"
+    case englishAmerican = "en-US"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .dutch: return "Dutch"
+        case .chineseSimplified: return "Chinese (Simplified)"
+        case .englishAmerican: return "English (American)"
+        }
+    }
+
+    var promptLanguage: String {
+        switch self {
+        case .dutch: return "Dutch"
+        case .chineseSimplified: return "Simplified Chinese"
+        case .englishAmerican: return "American English"
+        }
+    }
+}
+
+enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
     case improve
     case fixGrammar
     case rewrite
     case summarize
+    case translate(KeyboardTranslationTarget?)
+
+    static let allCases: [KeyboardAIAction] = [
+        .improve,
+        .fixGrammar,
+        .rewrite,
+        .summarize,
+        .translate(nil)
+    ]
+
+    var rawValue: String {
+        switch self {
+        case .improve: return "improve"
+        case .fixGrammar: return "fixGrammar"
+        case .rewrite: return "rewrite"
+        case .summarize: return "summarize"
+        case .translate: return "translate"
+        }
+    }
 
     var id: String { rawValue }
+
+    var translationTarget: KeyboardTranslationTarget? {
+        guard case .translate(let target) = self else { return nil }
+        return target
+    }
+
+    var isTranslation: Bool {
+        if case .translate = self { return true }
+        return false
+    }
+
+    var isReadyForRequest: Bool {
+        !isTranslation || translationTarget != nil
+    }
+
+    func representsSameMode(as other: KeyboardAIAction) -> Bool {
+        if isTranslation, other.isTranslation { return true }
+        return self == other
+    }
 
     var operationName: String {
         switch self {
@@ -19,6 +81,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .fixGrammar: return "fix_grammar"
         case .rewrite: return "rewrite"
         case .summarize: return "summarize"
+        case .translate: return "translate"
         }
     }
 
@@ -28,6 +91,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .fixGrammar: return "Fix Grammar"
         case .rewrite: return "Rewrite"
         case .summarize: return "Summarize"
+        case .translate: return "Translate"
         }
     }
 
@@ -37,6 +101,7 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         case .fixGrammar: return "checkmark.seal.fill"
         case .rewrite: return "wand.and.stars"
         case .summarize: return "text.bubble.fill"
+        case .translate: return "character.bubble"
         }
     }
 
@@ -44,9 +109,17 @@ enum KeyboardAIAction: String, CaseIterable, Identifiable {
         KeyboardGatewayActionContract.maxTokens(operation: operationName)
     }
 
-    func prompt(for text: String) -> String {
+    func prompt(for text: String) -> String? {
         if self == .improve {
             return KeyboardGatewayActionContract.prompt(operation: "improve", text: text)
+        }
+        if case .translate(let target) = self {
+            guard let target else { return nil }
+            return KeyboardGatewayActionContract.prompt(
+                operation: operationName,
+                text: text,
+                translationLanguage: target.promptLanguage
+            )
         }
         return KeyboardGatewayActionContract.prompt(operation: operationName, text: text)
     }
@@ -65,6 +138,7 @@ enum KeyboardAIError: LocalizedError {
     case unauthorized
     case server(String)
     case invalidResponse
+    case missingTranslationTarget
 
     var errorDescription: String? {
         switch self {
@@ -80,6 +154,8 @@ enum KeyboardAIError: LocalizedError {
             return message
         case .invalidResponse:
             return "No AI response"
+        case .missingTranslationTarget:
+            return "Choose a language"
         }
     }
 }
@@ -122,11 +198,14 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        guard let prompt = action.prompt(for: text) else {
+            throw KeyboardAIError.missingTranslationTarget
+        }
         let output: String
         do {
             output = try await gatewayClient.chatCompletionContent(
                 systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-                userPrompt: action.prompt(for: text),
+                userPrompt: prompt,
                 operation: action.operationName,
                 inputText: text,
                 maxTokens: action.maxTokens,

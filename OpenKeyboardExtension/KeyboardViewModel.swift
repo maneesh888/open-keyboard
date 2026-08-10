@@ -106,7 +106,7 @@ struct KeyboardActionPanelState: Equatable {
     var isCarouselVisible: Bool
     var isLoading: Bool
 
-    static let availableActions: [KeyboardAIAction] = [.improve, .rewrite, .summarize]
+    static let availableActions: [KeyboardAIAction] = [.improve, .rewrite, .summarize, .translate(nil)]
 
     init(
         sourceText: String,
@@ -146,9 +146,35 @@ struct KeyboardActionPanelState: Equatable {
         selectedOption != nil && !isLoading
     }
 
+    var selectedTranslationTarget: KeyboardTranslationTarget? {
+        selectedAction.translationTarget
+    }
+
+    var showsTranslationTargetSelector: Bool {
+        isCarouselVisible && selectedAction.isTranslation
+    }
+
+    var isWaitingForTranslationTarget: Bool {
+        selectedAction.isTranslation && selectedTranslationTarget == nil && !isLoading
+    }
+
+    var actionResultViewportHeight: CGFloat {
+        showsTranslationTargetSelector
+            ? KeyboardPanelLayout.actionPanelContextualResultHeight
+            : KeyboardPanelLayout.actionPanelScrollableResultHeight
+    }
+
     mutating func selectAction(_ action: KeyboardAIAction) {
-        guard Self.availableActions.contains(action) else { return }
+        guard Self.availableActions.contains(where: { $0.representsSameMode(as: action) }) else { return }
         selectedAction = action
+        options = []
+        selectedOptionID = ""
+        isLoading = action.isReadyForRequest
+    }
+
+    mutating func selectTranslationTarget(_ target: KeyboardTranslationTarget) {
+        guard selectedAction.isTranslation else { return }
+        selectedAction = .translate(target)
         beginLoading()
     }
 
@@ -439,23 +465,76 @@ final class KeyboardViewModel: ObservableObject {
     func selectActionPanelAction(_ action: KeyboardAIAction) {
         guard var state = actionPanelState else { return }
         guard !state.isLoading else { return }
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        isPerformingAIAction = false
+        guard let currentPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
         state.selectAction(action)
-        if let currentPlan = currentReplacementPlan(), currentPlan != state.replacementPlan {
+        if currentPlan != state.replacementPlan {
             state = KeyboardActionPanelState(
                 sourceText: currentPlan.textForAI,
                 replacementPlan: currentPlan,
-                selectedAction: action,
+                selectedAction: state.selectedAction,
                 isCarouselVisible: state.isCarouselVisible,
-                isLoading: true
+                isLoading: state.selectedAction.isReadyForRequest
             )
         }
         actionPanelState = state
-        requestActionPanelResult(action, replacementPlan: state.replacementPlan)
+        guard state.selectedAction.isReadyForRequest else {
+            aiStatus = "Choose a language"
+            return
+        }
+        requestActionPanelResult(state.selectedAction, replacementPlan: state.replacementPlan)
+    }
+
+    func selectActionPanelTranslationTarget(_ target: KeyboardTranslationTarget) {
+        guard var state = actionPanelState,
+              state.selectedAction.isTranslation,
+              !state.isLoading else {
+            return
+        }
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
+        if replacementPlan != state.replacementPlan {
+            state = KeyboardActionPanelState(
+                sourceText: replacementPlan.textForAI,
+                replacementPlan: replacementPlan,
+                selectedAction: .translate(nil),
+                isCarouselVisible: state.isCarouselVisible,
+                isLoading: false
+            )
+        }
+        state.selectTranslationTarget(target)
+        actionPanelState = state
+        requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
     }
 
     func applySelectedActionPanelAction() {
         guard let state = actionPanelState,
               let selectedOption = state.selectedOption else {
+            return
+        }
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
+        guard replacementPlan == state.replacementPlan else {
+            actionPanelState = KeyboardActionPanelState(
+                sourceText: replacementPlan.textForAI,
+                replacementPlan: replacementPlan,
+                selectedAction: state.selectedAction,
+                isCarouselVisible: state.isCarouselVisible,
+                isLoading: state.selectedAction.isReadyForRequest
+            )
+            requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
             return
         }
         actionPanelTask?.cancel()
@@ -467,14 +546,28 @@ final class KeyboardViewModel: ObservableObject {
         hasNoIssueAnalysisResult = false
         lastAnalyzedText = nil
         shouldResumeAutomaticAnalysisOnKeyboardReturn = true
-        completionPanelState = state.selectedAction == .improve ? .improvementApplied : .rewriteApplied
+        if state.selectedAction == .improve {
+            completionPanelState = .improvementApplied
+        } else if let target = state.selectedTranslationTarget {
+            completionPanelState = .translationApplied(language: target.displayName)
+        } else {
+            completionPanelState = .rewriteApplied
+        }
         aiStatus = state.selectedAction == .improve ? "Improvement applied" : "\(state.selectedAction.title) applied"
         panelMode = .correctionComplete
     }
 
     func rerunSelectedActionPanelAction() {
-        guard let state = actionPanelState, !state.isLoading else { return }
-        let replacementPlan = currentReplacementPlan() ?? state.replacementPlan
+        guard let state = actionPanelState,
+              !state.isLoading,
+              state.selectedAction.isReadyForRequest else {
+            return
+        }
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
         if replacementPlan != state.replacementPlan {
             actionPanelState = KeyboardActionPanelState(
                 sourceText: replacementPlan.textForAI,
@@ -925,13 +1018,16 @@ final class KeyboardViewModel: ObservableObject {
     func refreshSeededSuggestionStateForUITests() {
         guard let seededSuggestionState = Self.loadSeededSuggestionState() else { return }
         suggestionState = seededSuggestionState.suggestionState
+        actionPanelState = seededSuggestionState.actionPanelState
         rewriteOptionsState = seededSuggestionState.rewriteOptionsState
         panelMode = seededSuggestionState.panelMode
         aiStatus = seededSuggestionState.aiStatus
         isPerformingAIAction = seededSuggestionState.isPerformingAIAction
         hasNoIssueAnalysisResult = seededSuggestionState.hasNoIssueAnalysisResult
         completionPanelState = seededSuggestionState.completionPanelState
-        if seededSuggestionState.suggestionState != nil || seededSuggestionState.rewriteOptionsState != nil {
+        if seededSuggestionState.suggestionState != nil
+            || seededSuggestionState.actionPanelState != nil
+            || seededSuggestionState.rewriteOptionsState != nil {
             hasFullAccess = true
         }
     }
@@ -948,6 +1044,11 @@ final class KeyboardViewModel: ObservableObject {
         isGrammarCorrectionLoading = false
         guard !isPerformingAIAction else {
             recordDebugEvent("action_ignored_busy")
+            return
+        }
+        guard action.isReadyForRequest else {
+            aiStatus = "Choose a language"
+            recordDebugEvent("action_blocked_missing_translation_target")
             return
         }
         guard hasFullAccess else {
@@ -1094,6 +1195,11 @@ final class KeyboardViewModel: ObservableObject {
 
     private func requestActionPanelResult(_ action: KeyboardAIAction, replacementPlan: KeyboardReplacementPlan) {
         actionPanelTask?.cancel()
+        guard action.isReadyForRequest else {
+            isPerformingAIAction = false
+            aiStatus = "Choose a language"
+            return
+        }
         guard hasFullAccess else {
             aiStatus = "Enable Allow Full Access"
             return
@@ -1499,6 +1605,11 @@ final class KeyboardViewModel: ObservableObject {
         return contextPlan ?? bufferPlan
     }
 
+    private func currentActionPanelReplacementPlan() -> KeyboardReplacementPlan? {
+        guard textDocumentProxy.hasText else { return nil }
+        return currentReplacementPlan()
+    }
+
     private func currentDocumentTextForAnalysis() -> String? {
         KeyboardReplacementPlanner.plan(
             contextBeforeInput: textDocumentProxy.documentContextBeforeInput,
@@ -1706,6 +1817,15 @@ final class KeyboardViewModel: ObservableObject {
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
+            case "translatePanel":
+                panelMode = .actions
+                suggestionState = nil
+                actionPanelState = Self.translateActionPanelState
+                rewriteOptionsState = nil
+                aiStatus = "Translate ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "correctionCard", "correctionDetail", "correctionCarousel":
                 panelMode = .correctionDetail
                 suggestionState = KeyboardSuggestionState(
@@ -1841,6 +1961,29 @@ final class KeyboardViewModel: ObservableObject {
                 isLoading: false
             )
         }
+
+        private static var translateActionPanelState: KeyboardActionPanelState {
+            let sourceText = "Good morning, I hope you are well."
+            return KeyboardActionPanelState(
+                sourceText: sourceText,
+                replacementPlan: KeyboardReplacementPlan(
+                    textToDelete: sourceText,
+                    textForAI: sourceText,
+                    leadingWhitespace: "",
+                    trailingWhitespace: ""
+                ),
+                selectedAction: .translate(.dutch),
+                options: [
+                    KeyboardRewriteOption(
+                        id: "translate-result-1",
+                        title: "Dutch translation",
+                        text: "Goedemorgen, ik hoop dat het goed met je gaat."
+                    )
+                ],
+                isCarouselVisible: true,
+                isLoading: false
+            )
+        }
     }
 
     private static var debugStateEnabled: Bool {
@@ -1865,6 +2008,7 @@ private extension KeyboardAIAction {
         case .fixGrammar: return "Corrected"
         case .rewrite: return "Rephrased"
         case .summarize: return "Summary"
+        case .translate(let target): return target.map { "\($0.displayName) translation" } ?? "Translation"
         }
     }
 }
