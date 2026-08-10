@@ -70,7 +70,7 @@ The focused command above proves only these visible states:
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - The seeded Translate action panel renders inside the real extension process.
 - Translate exposes a 15-language starter catalog—including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil—in a carousel directly above the action carousel without changing the fixed keyboard viewport.
-- The fresh Dutch-state and Malayalam-option screenshots come from the current test invocation.
+- The fresh Arabic/Malayalam and Indian-language screenshots come from the current test invocation.
 
 Because this test directly seeds the Translate panel, it does not prove QWERTY visibility, the enabled left correction lane, the right `ai_sparkle_action` trigger, or navigation from that trigger into the action panel. Use the broader configured real-extension workflow for those states; do not cite this focused screenshot as proof of them.
 
