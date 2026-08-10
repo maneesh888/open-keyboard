@@ -484,6 +484,60 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
     }
 
+    func testActionSwitchDoesNotRequestCapturedTextAfterHostClears() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest("")
+        viewModel.selectActionPanelAction(.summarize)
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
+    func testActionRerunDoesNotRequestCapturedTextAfterHostClears() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest("")
+        viewModel.rerunSelectedActionPanelAction()
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(service.requestedTexts, [sourceText])
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+    }
+
     func testTranslationApplyRefreshesResultInsteadOfReplacingChangedHostText() async {
         let sourceText = "Good morning, I hope you are well."
         let changedText = "This host text changed before Apply."

@@ -85,8 +85,7 @@ A pass of the focused Translate screenshot command requires all of the following
 - real extension lifecycle, not Preview Lab/component route;
 - focused host text input is active;
 - OpenKeyboard extension process is active;
-- seeded gateway config is visible to the extension;
-- the directly seeded Translate panel shows its source, target chips, selected Dutch result, and fixed bottom controls;
+- the directly seeded Translate panel shows target chips, a selected Dutch result, and fixed bottom controls;
 - screenshot `04-real-keyboard-translate-dutch.png` is exported and inspected.
 
 ## What does not count

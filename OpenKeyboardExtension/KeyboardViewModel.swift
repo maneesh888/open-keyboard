@@ -468,8 +468,13 @@ final class KeyboardViewModel: ObservableObject {
         actionPanelTask?.cancel()
         actionPanelTask = nil
         isPerformingAIAction = false
+        guard let currentPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
         state.selectAction(action)
-        if let currentPlan = currentReplacementPlan(), currentPlan != state.replacementPlan {
+        if currentPlan != state.replacementPlan {
             state = KeyboardActionPanelState(
                 sourceText: currentPlan.textForAI,
                 replacementPlan: currentPlan,
@@ -558,7 +563,11 @@ final class KeyboardViewModel: ObservableObject {
               state.selectedAction.isReadyForRequest else {
             return
         }
-        let replacementPlan = currentReplacementPlan() ?? state.replacementPlan
+        guard let replacementPlan = currentActionPanelReplacementPlan() else {
+            clearComposingBuffer()
+            showAllDoneForEmptyText()
+            return
+        }
         if replacementPlan != state.replacementPlan {
             actionPanelState = KeyboardActionPanelState(
                 sourceText: replacementPlan.textForAI,
