@@ -519,19 +519,31 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertEqual(targetCarousel.frame.height, KeyboardPanelLayout.actionContextSelectorHeight, accuracy: 1)
 
         for identifier in [
-            "ai_translation_target_nl",
+            "ai_translation_target_ar",
+            "ai_translation_target_ml",
+            "ai_translation_target_hi",
+            "ai_translation_target_ur",
+            "ai_translation_target_en-US",
+            "ai_translation_target_bn",
+            "ai_translation_target_mr",
+            "ai_translation_target_te",
+            "ai_translation_target_ta",
             "ai_translation_target_zh-Hans",
-            "ai_translation_target_en-US"
+            "ai_translation_target_es",
+            "ai_translation_target_fr",
+            "ai_translation_target_pt",
+            "ai_translation_target_ru",
+            "ai_translation_target_nl"
         ] {
             let button = keyboardApp.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionContextSelectorHeight)
         }
-        XCTAssertEqual(keyboardApp.buttons["ai_translation_target_nl"].value as? String, "Selected")
+        XCTAssertEqual(keyboardApp.buttons["ai_translation_target_ar"].value as? String, "Selected")
 
         let resultText = keyboardApp.staticTexts["ai_action_result_text"]
         XCTAssertTrue(resultText.waitForExistence(timeout: 5))
-        XCTAssertEqual(resultText.label, "Goedemorgen, ik hoop dat het goed met je gaat.")
+        XCTAssertEqual(resultText.label, "صباح الخير، أتمنى أن تكون بخير.")
         let resultScroll = keyboardApp.scrollViews["ai_action_result_scroll"]
         XCTAssertTrue(resultScroll.waitForExistence(timeout: 5))
         XCTAssertEqual(resultScroll.frame.height, KeyboardPanelLayout.actionPanelContextualResultHeight, accuracy: 1)
@@ -559,7 +571,16 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(improve.frame.minX, panel.frame.minX - 1)
         XCTAssertLessThanOrEqual(translate.frame.maxX, panel.frame.maxX + 1)
 
-        try captureRealKeyboardStep("04-real-keyboard-translate-dutch")
+        try captureRealKeyboardStep("04-real-keyboard-translate-arabic-malayalam")
+
+        let telugu = keyboardApp.buttons["ai_translation_target_te"]
+        var scrollAttempts = 0
+        while !telugu.isHittable && scrollAttempts < 4 {
+            targetCarousel.swipeLeft()
+            scrollAttempts += 1
+        }
+        XCTAssertTrue(telugu.isHittable, "More Indian languages should be reachable in the language carousel")
+        try captureRealKeyboardStep("05-real-keyboard-translate-indian-languages")
     }
 
     func testRealKeyboardTranslateReplacesTextWhenGatewayConfigured() throws {
@@ -593,21 +614,28 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let resultText = keyboardApp.staticTexts["ai_action_result_text"]
         XCTAssertTrue(resultText.waitForExistence(timeout: 5))
         let seededResult = resultText.label
-        let simplifiedChinese = keyboardApp.buttons["ai_translation_target_zh-Hans"]
-        XCTAssertTrue(simplifiedChinese.waitForExistence(timeout: 5))
-        simplifiedChinese.tap()
+        let targetCarousel = keyboardApp.scrollViews["ai_translation_target_carousel"]
+        XCTAssertTrue(targetCarousel.waitForExistence(timeout: 5))
+        let malayalam = keyboardApp.buttons["ai_translation_target_ml"]
+        XCTAssertTrue(malayalam.waitForExistence(timeout: 5))
+        XCTAssertTrue(malayalam.isHittable, "Malayalam should be immediately visible beside Arabic")
+        tapCenter(of: malayalam)
+        XCTAssertTrue(
+            waitForAccessibilityValue("Selected", on: malayalam, timeout: 5),
+            "Malayalam did not become the selected translation target"
+        )
 
         XCTAssertTrue(
             waitForChangedLabel(resultText, originalLabel: seededResult, timeout: 90),
-            "Live Simplified Chinese translation did not replace the deterministic seed result"
+            "Live Malayalam translation did not replace the deterministic seed result"
         )
         XCTAssertFalse(resultText.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertFalse(resultText.label.contains("{\"operation\""))
         XCTAssertTrue(
-            resultText.label.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) },
-            "Live translation did not contain Simplified Chinese characters"
+            resultText.label.unicodeScalars.contains { (0x0D00...0x0D7F).contains($0.value) },
+            "Live translation did not contain Malayalam characters"
         )
-        XCTAssertEqual(simplifiedChinese.value as? String, "Selected")
+        XCTAssertEqual(malayalam.value as? String, "Selected")
 
         let apply = keyboardApp.buttons["ai_action_apply"]
         XCTAssertTrue(apply.waitForExistence(timeout: 5))
@@ -620,7 +648,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.staticTexts["Translation applied"].waitForExistence(timeout: 5))
 
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "live-gateway-real-keyboard-simplified-chinese-translation"
+        attachment.name = "live-gateway-real-keyboard-malayalam-translation"
         attachment.lifetime = .keepAlways
         add(attachment)
     }
@@ -921,6 +949,17 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if element.waitForExistence(timeout: 1), element.label != originalLabel, !element.label.isEmpty {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        return false
+    }
+
+    private func waitForAccessibilityValue(_ value: String, on element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if element.waitForExistence(timeout: 1), element.value as? String == value {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))

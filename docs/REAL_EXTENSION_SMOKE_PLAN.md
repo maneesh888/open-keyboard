@@ -49,15 +49,18 @@ Focused host command used by ClawMaster/MCP host verification:
     -configuration Debug \
     -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested \
     CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
-  test -f "$SCREENSHOT_DIR/04-real-keyboard-translate-dutch.png"
-  echo "Screenshot: $SCREENSHOT_DIR/04-real-keyboard-translate-dutch.png"
+  test -f "$SCREENSHOT_DIR/04-real-keyboard-translate-arabic-malayalam.png"
+  test -f "$SCREENSHOT_DIR/05-real-keyboard-translate-indian-languages.png"
+  echo "Screenshot: $SCREENSHOT_DIR/04-real-keyboard-translate-arabic-malayalam.png"
+  echo "Screenshot: $SCREENSHOT_DIR/05-real-keyboard-translate-indian-languages.png"
 )
 ```
 
 Expected pass attachment:
 
 ```text
-04-real-keyboard-translate-dutch.png
+04-real-keyboard-translate-arabic-malayalam.png
+05-real-keyboard-translate-indian-languages.png
 ```
 
 ## Focused Translate screenshot scope
@@ -66,8 +69,8 @@ The focused command above proves only these visible states:
 
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - The seeded Translate action panel renders inside the real extension process.
-- Translate exposes Dutch, Simplified Chinese, and American English target chips in a language carousel directly above the action carousel without changing the fixed keyboard viewport.
-- The fresh `04-real-keyboard-translate-dutch.png` artifact comes from the current test invocation.
+- Translate exposes a 15-language starter catalog—including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil—in a carousel directly above the action carousel without changing the fixed keyboard viewport.
+- The fresh Dutch-state and Malayalam-option screenshots come from the current test invocation.
 
 Because this test directly seeds the Translate panel, it does not prove QWERTY visibility, the enabled left correction lane, the right `ai_sparkle_action` trigger, or navigation from that trigger into the action panel. Use the broader configured real-extension workflow for those states; do not cite this focused screenshot as proof of them.
 
@@ -85,8 +88,8 @@ A pass of the focused Translate screenshot command requires all of the following
 - real extension lifecycle, not Preview Lab/component route;
 - focused host text input is active;
 - OpenKeyboard extension process is active;
-- the directly seeded Translate panel shows a selected Dutch result, the language carousel directly above the Improve/Rephrase/Translate carousel, and fixed bottom controls;
-- screenshot `04-real-keyboard-translate-dutch.png` is exported and inspected.
+- the directly seeded Translate panel shows a selected Arabic result with Malayalam immediately visible, the language carousel directly above the Improve/Rephrase/Translate carousel, and fixed bottom controls;
+- screenshots `04-real-keyboard-translate-arabic-malayalam.png` and `05-real-keyboard-translate-indian-languages.png` are exported and inspected.
 
 ## What does not count
 

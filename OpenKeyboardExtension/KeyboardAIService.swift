@@ -6,25 +6,61 @@
 import Foundation
 
 enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Sendable {
-    case dutch = "nl"
-    case chineseSimplified = "zh-Hans"
+    case arabic = "ar"
+    case malayalam = "ml"
+    case hindi = "hi"
+    case urdu = "ur"
     case englishAmerican = "en-US"
+    case bengali = "bn"
+    case marathi = "mr"
+    case telugu = "te"
+    case tamil = "ta"
+    case chineseSimplified = "zh-Hans"
+    case spanish = "es"
+    case french = "fr"
+    case portuguese = "pt"
+    case russian = "ru"
+    case dutch = "nl"
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
+        case .arabic: return "Arabic"
         case .dutch: return "Dutch"
         case .chineseSimplified: return "Chinese (Simplified)"
         case .englishAmerican: return "English (American)"
+        case .hindi: return "Hindi"
+        case .malayalam: return "Malayalam"
+        case .urdu: return "Urdu"
+        case .bengali: return "Bengali"
+        case .marathi: return "Marathi"
+        case .telugu: return "Telugu"
+        case .tamil: return "Tamil"
+        case .spanish: return "Spanish"
+        case .french: return "French"
+        case .portuguese: return "Portuguese"
+        case .russian: return "Russian"
         }
     }
 
     var promptLanguage: String {
         switch self {
+        case .arabic: return "Modern Standard Arabic"
         case .dutch: return "Dutch"
         case .chineseSimplified: return "Simplified Chinese"
         case .englishAmerican: return "American English"
+        case .hindi: return "Hindi"
+        case .malayalam: return "Malayalam"
+        case .urdu: return "Urdu"
+        case .bengali: return "Bengali"
+        case .marathi: return "Marathi"
+        case .telugu: return "Telugu"
+        case .tamil: return "Tamil"
+        case .spanish: return "Spanish"
+        case .french: return "French"
+        case .portuguese: return "Portuguese"
+        case .russian: return "Russian"
         }
     }
 }

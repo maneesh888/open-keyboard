@@ -372,7 +372,7 @@ Updated toolbar/panel split:
   - Improve -> current Fix Grammar
   - Rephrase -> current Rewrite
   - Summarize remains implemented but is intentionally omitted from the visible selector
-  - Translate -> current Translate action with Dutch, Simplified Chinese, and American English targets
+  - Translate -> current Translate action with a 15-language starter catalog, including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil
 
 Implementation priority:
 1. Remove permanent action-button look from the top keyboard bar.

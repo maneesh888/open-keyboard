@@ -217,12 +217,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             )
 
             XCTAssertEqual(viewModel.panelMode, .actions)
-            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(.dutch))
-            XCTAssertEqual(viewModel.actionPanelState?.selectedTranslationTarget, .dutch)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(.arabic))
+            XCTAssertEqual(viewModel.actionPanelState?.selectedTranslationTarget, .arabic)
             XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
             XCTAssertEqual(
                 viewModel.actionPanelState?.selectedOption?.text,
-                "Goedemorgen, ik hoop dat het goed met je gaat."
+                "صباح الخير، أتمنى أن تكون بخير."
             )
             XCTAssertNil(viewModel.rewriteOptionsState)
             XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
@@ -584,10 +584,50 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
     }
 
-    func testTranslationTargetsMatchInitialScreenshotCatalog() {
+    func testTranslationTargetsMatchPopularStarterCatalog() {
         XCTAssertEqual(
             KeyboardTranslationTarget.allCases.map(\.displayName),
-            ["Dutch", "Chinese (Simplified)", "English (American)"]
+            [
+                "Arabic",
+                "Malayalam",
+                "Hindi",
+                "Urdu",
+                "English (American)",
+                "Bengali",
+                "Marathi",
+                "Telugu",
+                "Tamil",
+                "Chinese (Simplified)",
+                "Spanish",
+                "French",
+                "Portuguese",
+                "Russian",
+                "Dutch"
+            ]
+        )
+        XCTAssertEqual(
+            KeyboardTranslationTarget.allCases.map(\.rawValue),
+            ["ar", "ml", "hi", "ur", "en-US", "bn", "mr", "te", "ta", "zh-Hans", "es", "fr", "pt", "ru", "nl"]
+        )
+        XCTAssertEqual(
+            KeyboardTranslationTarget.allCases.map(\.promptLanguage),
+            [
+                "Modern Standard Arabic",
+                "Malayalam",
+                "Hindi",
+                "Urdu",
+                "American English",
+                "Bengali",
+                "Marathi",
+                "Telugu",
+                "Tamil",
+                "Simplified Chinese",
+                "Spanish",
+                "French",
+                "Portuguese",
+                "Russian",
+                "Dutch"
+            ]
         )
         XCTAssertTrue(
             KeyboardActionPanelState.availableActions.contains { $0.representsSameMode(as: .translate(nil)) }
@@ -599,6 +639,16 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(
             KeyboardActionPanelState.availableActions.contains { $0.representsSameMode(as: .summarize) }
         )
+    }
+
+    func testMalayalamTranslationTargetBuildsTypedPrompt() throws {
+        let prompt = try XCTUnwrap(
+            KeyboardAIAction.translate(.malayalam).prompt(for: "Please translate this sentence.")
+        )
+
+        XCTAssertTrue(prompt.contains("Operation: translate"))
+        XCTAssertTrue(prompt.contains("Translate this text into Malayalam"))
+        XCTAssertTrue(prompt.contains("Please translate this sentence."))
     }
 
     func testActionPanelCopyToggleAndApplyGeneratedSuggestion() async {

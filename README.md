@@ -90,7 +90,7 @@ The keyboard extension currently includes:
   - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
   - AI writing tools expose Improve, Rephrase, and Translate without mixing those actions into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
-- a Translate workflow with explicit Dutch, Simplified Chinese, and American English target selection before any request is sent
+- a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - rewrite/improvement options that are shown before replacement, with selected option state
 - replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
