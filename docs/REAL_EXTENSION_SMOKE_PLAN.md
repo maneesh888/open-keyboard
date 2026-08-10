@@ -20,7 +20,7 @@ This is not a broad screenshot suite. It is the release-readiness guardrail for 
 The keyboard toolbar has two independent workflows:
 
 - Left status/logo lane: grammar and typo correction review. The OpenKeyboard logo, issue count badge, and correction status belong to this lane. When correction results exist, tapping it opens the correction review/details flow.
-- Right sparkle lane: generative writing actions. Improve, Rephrase, Summarize, and Translate belong here. Translate requires an explicit target-language choice before requesting output. This lane opens the action/options panel and should not immediately replace text without an explicit user Apply step.
+- Right sparkle lane: generative writing actions. Improve, Rephrase, and Translate belong here. Summarize remains implemented but is intentionally omitted from the visible carousel. Translate requires an explicit target-language choice before requesting output. This lane opens the action/options panel and should not immediately replace text without an explicit user Apply step.
 
 Real-extension proof should keep these lanes separate: a sparkle workflow pass does not prove correction review, and a correction badge pass does not prove Improve/Rephrase actions.
 
@@ -85,7 +85,7 @@ A pass of the focused Translate screenshot command requires all of the following
 - real extension lifecycle, not Preview Lab/component route;
 - focused host text input is active;
 - OpenKeyboard extension process is active;
-- the directly seeded Translate panel shows a selected Dutch result, the language carousel directly above the action carousel, and fixed bottom controls;
+- the directly seeded Translate panel shows a selected Dutch result, the language carousel directly above the Improve/Rephrase/Translate carousel, and fixed bottom controls;
 - screenshot `04-real-keyboard-translate-dutch.png` is exported and inspected.
 
 ## What does not count

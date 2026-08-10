@@ -142,8 +142,8 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
-        XCTAssertTrue(keyboardApp.buttons["ai_action_summarize"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
+        XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
 
         let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
         XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))
@@ -420,11 +420,12 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(resultText.label.contains("SCROLL TEST START"))
         XCTAssertTrue(resultText.label.contains("SCROLL TEST END"))
 
-        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_summarize", "ai_action_translate"] {
+        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_translate"] {
             let button = keyboardApp.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
         }
+        XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
         for identifier in ["back_to_keyboard", "ai_action_apply"] {
             let button = keyboardApp.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
@@ -448,7 +449,6 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let fixedControlIdentifiers = [
             "ai_action_improve",
             "ai_action_rewrite",
-            "ai_action_summarize",
             "ai_action_translate",
             "back_to_keyboard",
             "ai_action_grouped_controls",
@@ -544,6 +544,11 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
         XCTAssertTrue(actionCarousel.waitForExistence(timeout: 5))
+        let improve = keyboardApp.buttons["ai_action_improve"]
+        let rephrase = keyboardApp.buttons["ai_action_rewrite"]
+        XCTAssertTrue(improve.waitForExistence(timeout: 5))
+        XCTAssertTrue(rephrase.waitForExistence(timeout: 5))
+        XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
         XCTAssertLessThanOrEqual(resultScroll.frame.maxY, targetCarousel.frame.minY)
         XCTAssertLessThan(targetCarousel.frame.maxY, actionCarousel.frame.minY)
         XCTAssertEqual(
@@ -551,7 +556,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             KeyboardPanelLayout.actionContextSelectorSpacing,
             accuracy: 1
         )
-        actionCarousel.swipeLeft()
+        XCTAssertGreaterThanOrEqual(improve.frame.minX, panel.frame.minX - 1)
         XCTAssertLessThanOrEqual(translate.frame.maxX, panel.frame.maxX + 1)
 
         try captureRealKeyboardStep("04-real-keyboard-translate-dutch")

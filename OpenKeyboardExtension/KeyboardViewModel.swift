@@ -106,7 +106,12 @@ struct KeyboardActionPanelState: Equatable {
     var isCarouselVisible: Bool
     var isLoading: Bool
 
-    static let availableActions: [KeyboardAIAction] = [.improve, .rewrite, .summarize, .translate(nil)]
+    static let availableActions: [KeyboardAIAction] = [
+        .improve,
+        .rewrite,
+        // .summarize, // Keep the operation available internally, but omit it from the keyboard carousel.
+        .translate(nil)
+    ]
 
     init(
         sourceText: String,

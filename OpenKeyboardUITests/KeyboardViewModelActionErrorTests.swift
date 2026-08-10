@@ -592,6 +592,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(
             KeyboardActionPanelState.availableActions.contains { $0.representsSameMode(as: .translate(nil)) }
         )
+        XCTAssertEqual(
+            KeyboardActionPanelState.availableActions.map(\.rawValue),
+            ["improve", "rewrite", "translate"]
+        )
+        XCTAssertFalse(
+            KeyboardActionPanelState.availableActions.contains { $0.representsSameMode(as: .summarize) }
+        )
     }
 
     func testActionPanelCopyToggleAndApplyGeneratedSuggestion() async {
