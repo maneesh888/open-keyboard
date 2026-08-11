@@ -65,10 +65,90 @@ enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Se
     }
 }
 
+enum KeyboardRewriteStyle: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case shorten
+    case friendly
+    case formal
+    case compassionate
+    case confident
+    case engaging
+    case fluent
+    case diplomatic
+    case empathetic
+    case exciting
+    case cooperative
+    case assertive
+    case detailed
+    case casual
+    case professional
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        rawValue.capitalized
+    }
+
+    var emoji: String {
+        switch self {
+        case .shorten: return "✂️"
+        case .friendly: return "😊"
+        case .formal: return "👔"
+        case .compassionate: return "🤗"
+        case .confident: return "🤝"
+        case .engaging: return "🎯"
+        case .fluent: return "🌊"
+        case .diplomatic: return "😎"
+        case .empathetic: return "😇"
+        case .exciting: return "🤩"
+        case .cooperative: return "👋"
+        case .assertive: return "☝️"
+        case .detailed: return "📊"
+        case .casual: return "👕"
+        case .professional: return "💼"
+        }
+    }
+
+    var promptInstruction: String {
+        switch self {
+        case .shorten:
+            return "Make the text shorter and more concise while preserving its meaning."
+        case .friendly:
+            return "Rewrite the text in a warm, friendly tone."
+        case .formal:
+            return "Rewrite the text in a formal tone."
+        case .compassionate:
+            return "Rewrite the text in a compassionate and considerate tone."
+        case .confident:
+            return "Rewrite the text in a confident and assured tone."
+        case .engaging:
+            return "Rewrite the text to be engaging and hold the reader's attention."
+        case .fluent:
+            return "Rewrite the text so it reads fluently and naturally."
+        case .diplomatic:
+            return "Rewrite the text in a tactful and diplomatic tone."
+        case .empathetic:
+            return "Rewrite the text in an empathetic and understanding tone."
+        case .exciting:
+            return "Rewrite the text in an energetic and exciting tone."
+        case .cooperative:
+            return "Rewrite the text in a collaborative and cooperative tone."
+        case .assertive:
+            return "Rewrite the text in a clear and assertive tone without being aggressive."
+        case .detailed:
+            return "Rewrite the text with useful detail and specificity without changing its meaning."
+        case .casual:
+            return "Rewrite the text in a relaxed, casual tone."
+        case .professional:
+            return "Rewrite the text in a polished, professional tone."
+        }
+    }
+}
+
 enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
     case improve
     case fixGrammar
     case rewrite
+    case rewriteStyle(KeyboardRewriteStyle)
     case summarize
     case translate(KeyboardTranslationTarget?)
 
@@ -84,7 +164,7 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "improve"
         case .fixGrammar: return "fixGrammar"
-        case .rewrite: return "rewrite"
+        case .rewrite, .rewriteStyle: return "rewrite"
         case .summarize: return "summarize"
         case .translate: return "translate"
         }
@@ -97,17 +177,34 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         return target
     }
 
+    var rewriteStyle: KeyboardRewriteStyle? {
+        guard case .rewriteStyle(let style) = self else { return nil }
+        return style
+    }
+
     var isTranslation: Bool {
         if case .translate = self { return true }
         return false
+    }
+
+    var isRewrite: Bool {
+        switch self {
+        case .rewrite, .rewriteStyle: return true
+        default: return false
+        }
     }
 
     var isReadyForRequest: Bool {
         !isTranslation || translationTarget != nil
     }
 
+    var isReadyForActionPanelRequest: Bool {
+        isReadyForRequest && self != .rewrite
+    }
+
     func representsSameMode(as other: KeyboardAIAction) -> Bool {
         if isTranslation, other.isTranslation { return true }
+        if isRewrite, other.isRewrite { return true }
         return self == other
     }
 
@@ -115,7 +212,7 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "rewrite"
         case .fixGrammar: return "fix_grammar"
-        case .rewrite: return "rewrite"
+        case .rewrite, .rewriteStyle: return "rewrite"
         case .summarize: return "summarize"
         case .translate: return "translate"
         }
@@ -125,7 +222,7 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "Improve"
         case .fixGrammar: return "Fix Grammar"
-        case .rewrite: return "Rewrite"
+        case .rewrite, .rewriteStyle: return "Rewrite"
         case .summarize: return "Summarize"
         case .translate: return "Translate"
         }
@@ -135,7 +232,7 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "sparkles"
         case .fixGrammar: return "checkmark.seal.fill"
-        case .rewrite: return "wand.and.stars"
+        case .rewrite, .rewriteStyle: return "wand.and.stars"
         case .summarize: return "text.bubble.fill"
         case .translate: return "character.bubble"
         }
@@ -155,6 +252,13 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
                 operation: operationName,
                 text: text,
                 translationLanguage: target.promptLanguage
+            )
+        }
+        if case .rewriteStyle(let style) = self {
+            return KeyboardGatewayActionContract.prompt(
+                operation: operationName,
+                text: text,
+                rewriteInstruction: style.promptInstruction
             )
         }
         return KeyboardGatewayActionContract.prompt(operation: operationName, text: text)

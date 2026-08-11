@@ -231,6 +231,34 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testSeededRewriteStylePanelStateIsOneShot() throws {
+        try withSharedKeyboardDebugSeedDefaults { defaults in
+            let seededAt = Date().timeIntervalSince1970
+            defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+            defaults.set("rewriteStylePanel", forKey: "keyboardExtension.suggestionState")
+            defaults.set("rewrite-style-seed", forKey: "keyboardExtension.suggestionStateSeedID")
+            defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+            defaults.synchronize()
+
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: FakeTextDocumentProxy(text: "Please send the customer an update about the delivery."),
+                aiService: FailingKeyboardAIService(),
+                loadConfig: { Self.configuredGateway }
+            )
+
+            XCTAssertEqual(viewModel.panelMode, .actions)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+            XCTAssertTrue(viewModel.actionPanelState?.isWaitingForRewriteStyle ?? false)
+            XCTAssertEqual(viewModel.actionPanelState?.contextSelectionPrompt, "Choose a rewrite style")
+            XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
+            XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+            XCTAssertNil(viewModel.rewriteOptionsState)
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+            XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
+            XCTAssertNil(defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt"))
+        }
+    }
+
     func testActionPanelUsesOneHeightAndScrollsLoadedResultsForEveryAction() {
         let sourceText = "Please make this clearer."
         let replacementPlan = KeyboardReplacementPlan(
@@ -370,9 +398,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testActionPanelStartsImproveFromTopRightTrigger() async {
         let sourceText = "All of these are no bulb in the universe."
         let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            Self.structuredRewriteResult()
+        ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredRewriteResult()),
+            aiService: service,
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -397,11 +429,24 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
         XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
-        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
+        XCTAssertTrue(viewModel.actionPanelState?.isWaitingForRewriteStyle ?? false)
+        XCTAssertFalse(viewModel.actionPanelState?.isLoading ?? true)
+        XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertEqual(viewModel.aiStatus, "Choose a rewrite style")
+        XCTAssertEqual(service.requestedActions, [.improve])
 
-        await waitUntil { viewModel.actionPanelState?.selectedAction == .rewrite && viewModel.actionPanelState?.selectedOption != nil && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelRewriteStyle(.professional)
+        await waitUntil {
+            service.requestedActions.count == 2
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
 
         XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(service.requestedActions, [.improve, .rewriteStyle(.professional)])
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewriteStyle(.professional))
+        XCTAssertEqual(viewModel.actionPanelState?.selectedRewriteStyle, .professional)
+        XCTAssertEqual(viewModel.actionPanelState?.actionResultViewportHeight, KeyboardPanelLayout.actionPanelContextualResultHeight)
         XCTAssertEqual(viewModel.actionPanelState?.selectedOption?.text, "Please make this clearer.")
         XCTAssertEqual(proxy.text, sourceText)
     }
@@ -649,6 +694,39 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Operation: translate"))
         XCTAssertTrue(prompt.contains("Translate this text into Malayalam"))
         XCTAssertTrue(prompt.contains("Please translate this sentence."))
+    }
+
+    func testRewriteStylesMatchScreenshotCatalogAndBuildTypedPrompt() throws {
+        XCTAssertEqual(
+            KeyboardRewriteStyle.allCases.map(\.displayName),
+            [
+                "Shorten",
+                "Friendly",
+                "Formal",
+                "Compassionate",
+                "Confident",
+                "Engaging",
+                "Fluent",
+                "Diplomatic",
+                "Empathetic",
+                "Exciting",
+                "Cooperative",
+                "Assertive",
+                "Detailed",
+                "Casual",
+                "Professional"
+            ]
+        )
+
+        let prompt = try XCTUnwrap(
+            KeyboardAIAction.rewriteStyle(.professional).prompt(for: "send the customer an update")
+        )
+
+        XCTAssertTrue(prompt.contains("Operation: rewrite"))
+        XCTAssertTrue(prompt.contains("polished, professional tone"))
+        XCTAssertTrue(prompt.contains("send the customer an update"))
+        XCTAssertEqual(KeyboardAIAction.rewriteStyle(.professional).operationName, "rewrite")
+        XCTAssertTrue(KeyboardAIAction.rewrite.representsSameMode(as: .rewriteStyle(.professional)))
     }
 
     func testActionPanelCopyToggleAndApplyGeneratedSuggestion() async {

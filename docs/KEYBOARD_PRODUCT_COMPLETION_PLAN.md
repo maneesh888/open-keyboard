@@ -350,10 +350,10 @@ M2 action-panel model:
 - Sparkle tap should eventually switch from key grid to `aiActionPanel`.
 - Existing features map naturally:
   - `Improve` -> Fix Grammar
-  - `Rephrase` -> Rewrite
+  - `Rephrase` -> Rewrite with a 15-style starter catalog: Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional
   - `Translate` -> current translate operation with explicit target-language selection
   - Summarize remains implemented but is intentionally omitted from the visible mode selector.
-- Current implementation exposes Improve/Rephrase/Translate; Translate waits for a target before making a request.
+- Current implementation exposes Improve/Rephrase/Translate; Rephrase waits for a rewrite style and Translate waits for a target language before making a request.
 
 ### M2 correction: move action buttons out of keyboard bar
 
@@ -370,7 +370,7 @@ Updated toolbar/panel split:
   - no permanent Fix/Rewrite/Summarize button row
 - Sparkle overlay/action panel:
   - Improve -> current Fix Grammar
-  - Rephrase -> current Rewrite
+  - Rephrase -> current Rewrite with the same 15-style starter catalog
   - Summarize remains implemented but is intentionally omitted from the visible selector
   - Translate -> current Translate action with a 15-language starter catalog, including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil
 

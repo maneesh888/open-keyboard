@@ -73,13 +73,13 @@ final class KeyboardToolbarStateTests: XCTestCase {
     }
 
     func testActionPanelUsesMinimumTapTargetsWithoutGrowingViewport() {
-        XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 44)
+        XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 52)
         XCTAssertEqual(KeyboardPanelLayout.actionControlButtonHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionGroupedButtonWidth, 48)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelScrollableResultHeight, 160)
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorSpacing, 8)
-        XCTAssertEqual(KeyboardPanelLayout.actionPanelContextualResultHeight, 108)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelContextualResultHeight, 56)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 

@@ -475,6 +475,78 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("03-real-keyboard-long-improve-result-scrolled")
     }
 
+    func testRealKeyboardRewriteStyleModeScreenshotWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard Rephrase style screenshots.")
+        }
+
+        let sourceText = "Please send the customer an update about the delivery."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=rewriteStylePanel",
+            "--keyboard-initial-panel=actions"
+        ]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear for Rephrase style screenshot proof"
+        )
+
+        let panel = keyboardApp.otherElements["ai_action_panel"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertEqual(panel.frame.height, KeyboardPanelLayout.actionPanelHeight, accuracy: 1)
+
+        let rephrase = keyboardApp.buttons["ai_action_rewrite"]
+        XCTAssertTrue(rephrase.waitForExistence(timeout: 5))
+        XCTAssertEqual(rephrase.value as? String, "Selected")
+        XCTAssertGreaterThanOrEqual(rephrase.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+
+        let styleCarousel = keyboardApp.scrollViews["ai_rewrite_style_carousel"]
+        XCTAssertTrue(styleCarousel.waitForExistence(timeout: 5))
+        XCTAssertEqual(styleCarousel.frame.height, KeyboardPanelLayout.actionContextSelectorHeight, accuracy: 1)
+
+        for style in KeyboardRewriteStyle.allCases {
+            let button = keyboardApp.buttons["ai_rewrite_style_\(style.rawValue)"]
+            XCTAssertTrue(button.waitForExistence(timeout: 5), "\(style.displayName) rewrite style was missing")
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionContextSelectorHeight)
+        }
+
+        let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
+        XCTAssertTrue(actionCarousel.waitForExistence(timeout: 5))
+        XCTAssertLessThan(styleCarousel.frame.maxY, actionCarousel.frame.minY)
+        XCTAssertEqual(
+            actionCarousel.frame.minY - styleCarousel.frame.maxY,
+            KeyboardPanelLayout.actionContextSelectorSpacing,
+            accuracy: 1
+        )
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_empty_text"].waitForExistence(timeout: 5))
+        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "Choose a rewrite style")
+        XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
+
+        for identifier in ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"] {
+            let button = keyboardApp.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
+        }
+
+        try captureRealKeyboardStep("06-real-keyboard-rewrite-styles")
+    }
+
     func testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested() throws {
         let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !screenshotDirectory.isEmpty else {

@@ -63,9 +63,41 @@ Expected pass attachment:
 05-real-keyboard-translate-indian-languages.png
 ```
 
+### Focused Rephrase style layout command
+
+This separate focused route directly seeds the Rephrase style-selection panel. It does not clear or replace gateway configuration and does not make a gateway request.
+
+```bash
+(
+  set -euo pipefail
+  SIMULATOR_ID="$(xcrun simctl list devices available | sed -n 's/^[[:space:]]*iPhone 17 Pro (\([0-9A-F-]*\)) (.*$/\1/p' | head -n 1)"
+  test -n "$SIMULATOR_ID"
+  SCREENSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openkeyboard-rewrite-style-smoke.XXXXXX")"
+  cleanup_rewrite_style_smoke() {
+    xcrun simctl spawn "$SIMULATOR_ID" launchctl unsetenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR >/dev/null 2>&1 || true
+  }
+  trap cleanup_rewrite_style_smoke EXIT
+
+  xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
+  xcrun simctl spawn "$SIMULATOR_ID" launchctl setenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR "$SCREENSHOT_DIR"
+  xcodebuild test \
+    -project OpenKeyboard.xcodeproj \
+    -scheme OpenKeyboard \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+    -configuration Debug \
+    -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardRewriteStyleModeScreenshotWhenExplicitlyRequested \
+    CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+  test -f "$SCREENSHOT_DIR/06-real-keyboard-rewrite-styles.png"
+  echo "Screenshot: $SCREENSHOT_DIR/06-real-keyboard-rewrite-styles.png"
+)
+```
+
+This route proves only that the real extension renders the 15 rewrite styles directly above the larger Improve/Rephrase/Translate action row while keeping the bottom controls fixed and Summarize hidden. Because it directly seeds the Rephrase panel, it does not prove sparkle navigation, gateway availability, a live rewrite response, or Apply behavior.
+
 ## Focused Translate screenshot scope
 
-The focused command above proves only these visible states:
+The focused Translate command proves only these visible states:
 
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - The seeded Translate action panel renders inside the real extension process.
