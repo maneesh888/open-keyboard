@@ -95,7 +95,7 @@ This separate focused route directly seeds the action panel. It does not clear o
 )
 ```
 
-This route proves only that the real extension renders Improve, simple Rephrase, Translate, and the 15 independent rewrite actions in one larger horizontal carousel while keeping the bottom controls fixed, Summarize hidden, and contextual sub-carousels absent. Because it directly seeds the action panel, it does not prove sparkle navigation, gateway availability, a live rewrite response, or Apply behavior.
+This route proves only that the real extension renders Improve, simple Rephrase, Translate, and the 15 independent rewrite actions in one 44-point horizontal carousel while keeping the bottom controls fixed, Summarize hidden, and contextual sub-carousels absent. Because it directly seeds the action panel, it does not prove sparkle navigation, gateway availability, a live rewrite response, or Apply behavior.
 
 ## Focused Translate screenshot scope
 
