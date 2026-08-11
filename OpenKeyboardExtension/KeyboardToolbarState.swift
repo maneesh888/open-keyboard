@@ -34,7 +34,7 @@ enum KeyboardPanelLayout {
     static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
     static let actionPanelScrollableResultHeight: CGFloat = 160
     static let actionCarouselButtonHeight: CGFloat = 44
-    static let actionContextSelectorHeight: CGFloat = actionCarouselButtonHeight
+    static let actionContextSelectorHeight: CGFloat = 44
     static let actionContextSelectorSpacing: CGFloat = 8
     static let actionPanelContextualResultHeight: CGFloat = actionPanelScrollableResultHeight
         - actionContextSelectorHeight

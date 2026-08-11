@@ -14,7 +14,12 @@ enum KeyboardGatewayActionContract {
     Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
     """
 
-    static func prompt(operation: String, text: String, translationLanguage: String? = nil) -> String {
+    static func prompt(
+        operation: String,
+        text: String,
+        translationLanguage: String? = nil,
+        rewriteInstruction: String? = nil
+    ) -> String {
         switch operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
         case "fix_grammar":
             return """
@@ -25,9 +30,13 @@ enum KeyboardGatewayActionContract {
             \(text)
             """
         case "rewrite":
+            let requestedInstruction = rewriteInstruction?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let instruction = requestedInstruction.isEmpty
+                ? "Rewrite this text in a clear, friendly tone."
+                : requestedInstruction
             return """
             Operation: rewrite
-            Rewrite this text in a clear, friendly tone. Return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
+            \(instruction) Preserve the original meaning. Return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
 
             Text:
             \(text)

@@ -501,7 +501,7 @@ private struct AIActionPanel: View {
             } else if let selectedOption = state.selectedOption {
                 actionResultText(selectedOption.text)
             } else {
-                Text(state.isWaitingForTranslationTarget ? "Choose a language" : "No suggestion yet")
+                Text(state.contextSelectionPrompt ?? "No suggestion yet")
                     .font(.system(size: 18, weight: .regular))
                     .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     .lineLimit(2)
@@ -594,10 +594,7 @@ private struct AIActionPanel: View {
             onSelect(action)
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: action.actionPanelSystemImage)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 18, height: 18)
-                    .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+                actionIcon(action, isSelected: isSelected)
 
                 Text(action.actionPanelDisplayName)
                     .font(.system(size: 14, weight: .semibold))
@@ -617,6 +614,21 @@ private struct AIActionPanel: View {
         .disabled(!actionsEnabled || state.isLoading)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
         .accessibilityValue(isSelected ? "Selected" : "")
+    }
+
+    @ViewBuilder
+    private func actionIcon(_ action: KeyboardAIAction, isSelected: Bool) -> some View {
+        if let style = action.rewriteStyle {
+            Text(style.emoji)
+                .font(.system(size: 15))
+                .frame(width: 18, height: 18)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: action.actionPanelSystemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+        }
     }
 
     private var controlRow: some View {
@@ -639,7 +651,7 @@ private struct AIActionPanel: View {
                     accessibilityLabel: "Run again",
                     action: onRegenerate
                 )
-                .disabled(!actionsEnabled || state.isLoading || !state.selectedAction.isReadyForRequest)
+                .disabled(!actionsEnabled || state.isLoading || !state.selectedAction.isReadyForActionPanelRequest)
                 .accessibilityIdentifier("ai_action_rerun")
 
                 panelGroupedButton(
@@ -723,6 +735,7 @@ private extension KeyboardAIAction {
         case .improve: return "Improve grammar and clarity."
         case .fixGrammar: return "Fix grammar."
         case .rewrite: return "Rephrase text."
+        case .rewriteStyle(let style): return "\(style.displayName) text."
         case .summarize: return "Summarize text."
         case .translate(let target): return target.map { "Translate to \($0.displayName)." } ?? "Translate text."
         }
@@ -733,6 +746,7 @@ private extension KeyboardAIAction {
         case .improve: return "Choose an action for the text below."
         case .fixGrammar: return "Find grammar and spelling fixes."
         case .rewrite: return "Generate alternatives before replacing."
+        case .rewriteStyle(let style): return "Rewrite using the \(style.displayName.lowercased()) style."
         case .summarize: return "Shorten the source text."
         case .translate: return "Choose a target language before replacing."
         }
@@ -743,6 +757,7 @@ private extension KeyboardAIAction {
         case .improve: return "Improve"
         case .fixGrammar: return "Fix"
         case .rewrite: return "Rephrase"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Summarize"
         case .translate: return "Translate"
         }
@@ -752,7 +767,8 @@ private extension KeyboardAIAction {
         switch self {
         case .improve: return "Clearer"
         case .fixGrammar: return "Correct"
-        case .rewrite: return "Alternatives"
+        case .rewrite: return "Rephrase"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Shorten"
         case .translate: return "Language"
         }
@@ -762,7 +778,7 @@ private extension KeyboardAIAction {
         switch self {
         case .improve: return "sparkles"
         case .fixGrammar: return "checkmark.seal.fill"
-        case .rewrite: return "arrow.triangle.2.circlepath"
+        case .rewrite, .rewriteStyle: return "arrow.triangle.2.circlepath"
         case .summarize: return "text.bubble"
         case .translate: return "character.bubble"
         }

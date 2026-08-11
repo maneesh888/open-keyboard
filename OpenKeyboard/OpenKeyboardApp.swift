@@ -216,7 +216,7 @@ struct OpenKeyboardApp: App {
         }
 
         let state = stateArgument.replacingOccurrences(of: "--keyboard-suggestion-state=", with: "")
-        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "rewriteOptions", "improvePanel", "translatePanel", "allGood", "analysisFailed", "analyzing"]
+        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "rewriteOptions", "improvePanel", "actionCarouselPanel", "translatePanel", "allGood", "analysisFailed", "analyzing"]
         if allowedStates.contains(state) {
             sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")

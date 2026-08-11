@@ -63,9 +63,43 @@ Expected pass attachment:
 05-real-keyboard-translate-indian-languages.png
 ```
 
+### Focused action carousel layout command
+
+This separate focused route directly seeds the action panel. It does not clear or replace gateway configuration and does not make a gateway request.
+
+```bash
+(
+  set -euo pipefail
+  SIMULATOR_ID="$(xcrun simctl list devices available | sed -n 's/^[[:space:]]*iPhone 17 Pro (\([0-9A-F-]*\)) (.*$/\1/p' | head -n 1)"
+  test -n "$SIMULATOR_ID"
+  SCREENSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openkeyboard-action-carousel-smoke.XXXXXX")"
+  cleanup_action_carousel_smoke() {
+    xcrun simctl spawn "$SIMULATOR_ID" launchctl unsetenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR >/dev/null 2>&1 || true
+  }
+  trap cleanup_action_carousel_smoke EXIT
+
+  xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
+  xcrun simctl spawn "$SIMULATOR_ID" launchctl setenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR "$SCREENSHOT_DIR"
+  xcodebuild test \
+    -project OpenKeyboard.xcodeproj \
+    -scheme OpenKeyboard \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+    -configuration Debug \
+    -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardActionCarouselScreenshotWhenExplicitlyRequested \
+    CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+  test -f "$SCREENSHOT_DIR/06-real-keyboard-actions-start.png"
+  test -f "$SCREENSHOT_DIR/07-real-keyboard-actions-styles.png"
+  echo "Screenshot: $SCREENSHOT_DIR/06-real-keyboard-actions-start.png"
+  echo "Screenshot: $SCREENSHOT_DIR/07-real-keyboard-actions-styles.png"
+)
+```
+
+This route proves only that the real extension renders Improve, simple Rephrase, Translate, and the 15 independent rewrite actions in one 44-point horizontal carousel while keeping the bottom controls fixed, Summarize hidden, and contextual sub-carousels absent. Because it directly seeds the action panel, it does not prove sparkle navigation, gateway availability, a live rewrite response, or Apply behavior.
+
 ## Focused Translate screenshot scope
 
-The focused command above proves only these visible states:
+The focused Translate command proves only these visible states:
 
 - Real OpenKeyboard extension can become active from the system/Emoji keyboard path.
 - The seeded Translate action panel renders inside the real extension process.
