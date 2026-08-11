@@ -79,7 +79,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelScrollableResultHeight, 160)
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorSpacing, 8)
-        XCTAssertEqual(KeyboardPanelLayout.actionPanelContextualResultHeight, 64)
+        XCTAssertEqual(KeyboardPanelLayout.actionPanelContextualResultHeight, 108)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 

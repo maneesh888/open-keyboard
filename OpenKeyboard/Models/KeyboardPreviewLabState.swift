@@ -30,7 +30,6 @@ enum KeyboardVisualPreviewLayout {
     static let actionContextSelectorSpacing: CGFloat = 8
     static let actionPanelContextualResultHeight: CGFloat = actionPanelScrollableResultHeight
         - actionContextSelectorHeight
-        - actionCarouselButtonHeight
         - actionContextSelectorSpacing
     static let actionControlButtonHeight: CGFloat = 44
     static let actionGroupedButtonWidth: CGFloat = 48
