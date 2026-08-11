@@ -475,10 +475,10 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("03-real-keyboard-long-improve-result-scrolled")
     }
 
-    func testRealKeyboardRewriteStyleModeScreenshotWhenExplicitlyRequested() throws {
+    func testRealKeyboardActionCarouselScreenshotWhenExplicitlyRequested() throws {
         let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         guard !screenshotDirectory.isEmpty else {
-            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard Rephrase style screenshots.")
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard action carousel screenshots.")
         }
 
         let sourceText = "Please send the customer an update about the delivery."
@@ -490,7 +490,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "--keyboard-host-autofocus",
             "--keyboard-host-prefer-openkeyboard",
             "--keyboard-host-text=\(encodedSource)",
-            "--keyboard-suggestion-state=rewriteStylePanel",
+            "--keyboard-suggestion-state=actionCarouselPanel",
             "--keyboard-initial-panel=actions"
         ]
         app.launch()
@@ -504,47 +504,63 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let keyboardApp = XCUIApplication()
         XCTAssertTrue(
             waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
-            "Open Keyboard extension did not appear for Rephrase style screenshot proof"
+            "Open Keyboard extension did not appear for action carousel screenshot proof"
         )
 
         let panel = keyboardApp.otherElements["ai_action_panel"]
         XCTAssertTrue(panel.waitForExistence(timeout: 5))
         XCTAssertEqual(panel.frame.height, KeyboardPanelLayout.actionPanelHeight, accuracy: 1)
 
-        let rephrase = keyboardApp.buttons["ai_action_rewrite"]
-        XCTAssertTrue(rephrase.waitForExistence(timeout: 5))
-        XCTAssertEqual(rephrase.value as? String, "Selected")
-        XCTAssertGreaterThanOrEqual(rephrase.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
-
-        let styleCarousel = keyboardApp.scrollViews["ai_rewrite_style_carousel"]
-        XCTAssertTrue(styleCarousel.waitForExistence(timeout: 5))
-        XCTAssertEqual(styleCarousel.frame.height, KeyboardPanelLayout.actionContextSelectorHeight, accuracy: 1)
-
-        for style in KeyboardRewriteStyle.allCases {
-            let button = keyboardApp.buttons["ai_rewrite_style_\(style.rawValue)"]
-            XCTAssertTrue(button.waitForExistence(timeout: 5), "\(style.displayName) rewrite style was missing")
-            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionContextSelectorHeight)
-        }
-
         let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
         XCTAssertTrue(actionCarousel.waitForExistence(timeout: 5))
-        XCTAssertLessThan(styleCarousel.frame.maxY, actionCarousel.frame.minY)
-        XCTAssertEqual(
-            actionCarousel.frame.minY - styleCarousel.frame.maxY,
-            KeyboardPanelLayout.actionContextSelectorSpacing,
-            accuracy: 1
-        )
+        XCTAssertEqual(actionCarousel.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight, accuracy: 1)
+        XCTAssertFalse(keyboardApp.scrollViews["ai_rewrite_style_carousel"].exists)
+        XCTAssertFalse(keyboardApp.scrollViews["ai_translation_target_carousel"].exists)
+
+        let improve = actionCarousel.buttons["ai_action_improve"]
+        XCTAssertTrue(improve.waitForExistence(timeout: 5))
+        XCTAssertEqual(improve.value as? String, "Selected")
+        XCTAssertGreaterThanOrEqual(improve.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+
+        for style in KeyboardRewriteStyle.allCases {
+            let button = actionCarousel.buttons["ai_action_rewrite_\(style.rawValue)"]
+            XCTAssertTrue(button.waitForExistence(timeout: 5), "\(style.displayName) action was missing from the primary carousel")
+            XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+        }
+
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_empty_text"].waitForExistence(timeout: 5))
-        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "Choose a rewrite style")
+        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "No suggestion yet")
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
 
-        for identifier in ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"] {
+        let fixedControlIdentifiers = ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"]
+        for identifier in fixedControlIdentifiers {
             let button = keyboardApp.buttons[identifier]
             XCTAssertTrue(button.waitForExistence(timeout: 5))
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionControlButtonHeight)
         }
 
-        try captureRealKeyboardStep("06-real-keyboard-rewrite-styles")
+        let initialControlFrames = Dictionary(
+            uniqueKeysWithValues: fixedControlIdentifiers.map {
+                ($0, keyboardApp.buttons[$0].frame)
+            }
+        )
+        try captureRealKeyboardStep("06-real-keyboard-actions-start")
+
+        let professional = actionCarousel.buttons["ai_action_rewrite_professional"]
+        for _ in 0..<8 where !professional.isHittable {
+            actionCarousel.swipeLeft()
+        }
+        XCTAssertTrue(professional.isHittable, "Professional action did not scroll into view in the primary carousel")
+        XCTAssertEqual(actionCarousel.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight, accuracy: 1)
+        for identifier in fixedControlIdentifiers {
+            let initialFrame = try XCTUnwrap(initialControlFrames[identifier])
+            let currentFrame = keyboardApp.buttons[identifier].frame
+            XCTAssertEqual(currentFrame.minX, initialFrame.minX, accuracy: 1, "\(identifier) moved horizontally while scrolling actions")
+            XCTAssertEqual(currentFrame.minY, initialFrame.minY, accuracy: 1, "\(identifier) moved vertically while scrolling actions")
+            XCTAssertEqual(currentFrame.width, initialFrame.width, accuracy: 1, "\(identifier) width changed while scrolling actions")
+            XCTAssertEqual(currentFrame.height, initialFrame.height, accuracy: 1, "\(identifier) height changed while scrolling actions")
+        }
+        try captureRealKeyboardStep("07-real-keyboard-actions-styles")
     }
 
     func testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested() throws {

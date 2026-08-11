@@ -158,13 +158,14 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         .rewrite,
         .summarize,
         .translate(nil)
-    ]
+    ] + KeyboardRewriteStyle.allCases.map(KeyboardAIAction.rewriteStyle)
 
     var rawValue: String {
         switch self {
         case .improve: return "improve"
         case .fixGrammar: return "fixGrammar"
-        case .rewrite, .rewriteStyle: return "rewrite"
+        case .rewrite: return "rewrite"
+        case .rewriteStyle(let style): return "rewrite_\(style.rawValue)"
         case .summarize: return "summarize"
         case .translate: return "translate"
         }
@@ -199,12 +200,11 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
     }
 
     var isReadyForActionPanelRequest: Bool {
-        isReadyForRequest && self != .rewrite
+        isReadyForRequest
     }
 
     func representsSameMode(as other: KeyboardAIAction) -> Bool {
         if isTranslation, other.isTranslation { return true }
-        if isRewrite, other.isRewrite { return true }
         return self == other
     }
 
@@ -222,7 +222,8 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "Improve"
         case .fixGrammar: return "Fix Grammar"
-        case .rewrite, .rewriteStyle: return "Rewrite"
+        case .rewrite: return "Rewrite"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Summarize"
         case .translate: return "Translate"
         }

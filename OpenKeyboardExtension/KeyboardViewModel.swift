@@ -111,7 +111,7 @@ struct KeyboardActionPanelState: Equatable {
         .rewrite,
         // .summarize, // Keep the operation available internally, but omit it from the keyboard carousel.
         .translate(nil)
-    ]
+    ] + KeyboardRewriteStyle.allCases.map(KeyboardAIAction.rewriteStyle)
 
     init(
         sourceText: String,
@@ -155,38 +155,21 @@ struct KeyboardActionPanelState: Equatable {
         selectedAction.translationTarget
     }
 
-    var selectedRewriteStyle: KeyboardRewriteStyle? {
-        selectedAction.rewriteStyle
-    }
-
     var showsTranslationTargetSelector: Bool {
         isCarouselVisible && selectedAction.isTranslation
-    }
-
-    var showsRewriteStyleSelector: Bool {
-        isCarouselVisible && selectedAction.isRewrite
-    }
-
-    var showsContextSelector: Bool {
-        showsTranslationTargetSelector || showsRewriteStyleSelector
     }
 
     var isWaitingForTranslationTarget: Bool {
         selectedAction.isTranslation && selectedTranslationTarget == nil && !isLoading
     }
 
-    var isWaitingForRewriteStyle: Bool {
-        selectedAction == .rewrite && !isLoading
-    }
-
     var contextSelectionPrompt: String? {
         if isWaitingForTranslationTarget { return "Choose a language" }
-        if isWaitingForRewriteStyle { return "Choose a rewrite style" }
         return nil
     }
 
     var actionResultViewportHeight: CGFloat {
-        showsContextSelector
+        showsTranslationTargetSelector
             ? KeyboardPanelLayout.actionPanelContextualResultHeight
             : KeyboardPanelLayout.actionPanelScrollableResultHeight
     }
@@ -202,12 +185,6 @@ struct KeyboardActionPanelState: Equatable {
     mutating func selectTranslationTarget(_ target: KeyboardTranslationTarget) {
         guard selectedAction.isTranslation else { return }
         selectedAction = .translate(target)
-        beginLoading()
-    }
-
-    mutating func selectRewriteStyle(_ style: KeyboardRewriteStyle) {
-        guard selectedAction.isRewrite else { return }
-        selectedAction = .rewriteStyle(style)
         beginLoading()
     }
 
@@ -545,31 +522,6 @@ final class KeyboardViewModel: ObservableObject {
             )
         }
         state.selectTranslationTarget(target)
-        actionPanelState = state
-        requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
-    }
-
-    func selectActionPanelRewriteStyle(_ style: KeyboardRewriteStyle) {
-        guard var state = actionPanelState,
-              state.selectedAction.isRewrite,
-              !state.isLoading else {
-            return
-        }
-        guard let replacementPlan = currentActionPanelReplacementPlan() else {
-            clearComposingBuffer()
-            showAllDoneForEmptyText()
-            return
-        }
-        if replacementPlan != state.replacementPlan {
-            state = KeyboardActionPanelState(
-                sourceText: replacementPlan.textForAI,
-                replacementPlan: replacementPlan,
-                selectedAction: .rewrite,
-                isCarouselVisible: state.isCarouselVisible,
-                isLoading: false
-            )
-        }
-        state.selectRewriteStyle(style)
         actionPanelState = state
         requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
     }
@@ -1259,8 +1211,6 @@ final class KeyboardViewModel: ObservableObject {
             isPerformingAIAction = false
             if action.isTranslation {
                 aiStatus = "Choose a language"
-            } else if action.isRewrite {
-                aiStatus = "Choose a rewrite style"
             }
             return
         }
@@ -1881,12 +1831,12 @@ final class KeyboardViewModel: ObservableObject {
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
-            case "rewriteStylePanel":
+            case "actionCarouselPanel":
                 panelMode = .actions
                 suggestionState = nil
-                actionPanelState = Self.rewriteStyleActionPanelState
+                actionPanelState = Self.actionCarouselPanelState
                 rewriteOptionsState = nil
-                aiStatus = "Choose a rewrite style"
+                aiStatus = "Actions ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -2058,7 +2008,7 @@ final class KeyboardViewModel: ObservableObject {
             )
         }
 
-        private static var rewriteStyleActionPanelState: KeyboardActionPanelState {
+        private static var actionCarouselPanelState: KeyboardActionPanelState {
             let sourceText = "Please send the customer an update about the delivery."
             return KeyboardActionPanelState(
                 sourceText: sourceText,
@@ -2068,7 +2018,7 @@ final class KeyboardViewModel: ObservableObject {
                     leadingWhitespace: "",
                     trailingWhitespace: ""
                 ),
-                selectedAction: .rewrite,
+                selectedAction: .improve,
                 isCarouselVisible: true,
                 isLoading: false
             )
@@ -2095,7 +2045,8 @@ private extension KeyboardAIAction {
         switch self {
         case .improve: return "Improved"
         case .fixGrammar: return "Corrected"
-        case .rewrite, .rewriteStyle: return "Rephrased"
+        case .rewrite: return "Rephrased"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Summary"
         case .translate(let target): return target.map { "\($0.displayName) translation" } ?? "Translation"
         }

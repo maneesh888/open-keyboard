@@ -54,7 +54,6 @@ struct KeyboardView: View {
                         actionsEnabled: viewModel.canRunAIAction,
                         onSelect: { viewModel.selectActionPanelAction($0) },
                         onSelectTranslationTarget: { viewModel.selectActionPanelTranslationTarget($0) },
-                        onSelectRewriteStyle: { viewModel.selectActionPanelRewriteStyle($0) },
                         onRegenerate: { viewModel.rerunSelectedActionPanelAction() },
                         onToggleCarousel: { viewModel.toggleActionPanelCarousel() },
                         onCopy: { viewModel.copySelectedActionPanelSuggestion() },
@@ -375,7 +374,6 @@ private struct AIActionPanel: View {
     let actionsEnabled: Bool
     let onSelect: (KeyboardAIAction) -> Void
     let onSelectTranslationTarget: (KeyboardTranslationTarget) -> Void
-    let onSelectRewriteStyle: (KeyboardRewriteStyle) -> Void
     let onRegenerate: () -> Void
     let onToggleCarousel: () -> Void
     let onCopy: () -> Void
@@ -391,11 +389,9 @@ private struct AIActionPanel: View {
             suggestionBlock
             Spacer(minLength: 0)
             if state.isCarouselVisible {
-                VStack(spacing: state.showsContextSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
+                VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
                     if state.showsTranslationTargetSelector {
                         translationTargetCarousel
-                    } else if state.showsRewriteStyleSelector {
-                        rewriteStyleCarousel
                     }
                     actionCarousel
                 }
@@ -554,53 +550,6 @@ private struct AIActionPanel: View {
         .accessibilityValue(isSelected ? "Selected" : "")
     }
 
-    private var rewriteStyleCarousel: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(KeyboardRewriteStyle.allCases) { style in
-                    rewriteStyleCard(style)
-                }
-            }
-            .padding(.horizontal, 1)
-        }
-        .frame(height: KeyboardPanelLayout.actionContextSelectorHeight)
-        .accessibilityIdentifier("ai_rewrite_style_carousel")
-    }
-
-    private func rewriteStyleCard(_ style: KeyboardRewriteStyle) -> some View {
-        let isSelected = style == state.selectedRewriteStyle
-        return Button {
-            onSelectRewriteStyle(style)
-        } label: {
-            HStack(spacing: 7) {
-                Text(style.emoji)
-                    .font(.system(size: 15))
-                    .accessibilityHidden(true)
-
-                Text(style.displayName)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(OpenKeyboardTheme.Text.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.78)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: KeyboardPanelLayout.actionContextSelectorHeight, alignment: .center)
-            .background(KeyboardColors.overlayBackground.opacity(isSelected ? 0.98 : 0.72), in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(
-                        isSelected ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.95) : OpenKeyboardTheme.Stroke.control.opacity(0.9),
-                        lineWidth: isSelected ? 1.5 : 1
-                    )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(!actionsEnabled || state.isLoading)
-        .accessibilityIdentifier("ai_rewrite_style_\(style.rawValue)")
-        .accessibilityLabel(style.displayName)
-        .accessibilityValue(isSelected ? "Selected" : "")
-    }
-
     @ViewBuilder
     private func actionResultText(_ text: String) -> some View {
         if usesScrollableActionResult {
@@ -645,10 +594,7 @@ private struct AIActionPanel: View {
             onSelect(action)
         } label: {
             HStack(spacing: 7) {
-                Image(systemName: action.actionPanelSystemImage)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 18, height: 18)
-                    .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+                actionIcon(action, isSelected: isSelected)
 
                 Text(action.actionPanelDisplayName)
                     .font(.system(size: 14, weight: .semibold))
@@ -668,6 +614,21 @@ private struct AIActionPanel: View {
         .disabled(!actionsEnabled || state.isLoading)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
         .accessibilityValue(isSelected ? "Selected" : "")
+    }
+
+    @ViewBuilder
+    private func actionIcon(_ action: KeyboardAIAction, isSelected: Bool) -> some View {
+        if let style = action.rewriteStyle {
+            Text(style.emoji)
+                .font(.system(size: 15))
+                .frame(width: 18, height: 18)
+                .accessibilityHidden(true)
+        } else {
+            Image(systemName: action.actionPanelSystemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .foregroundColor(isSelected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
+        }
     }
 
     private var controlRow: some View {
@@ -774,7 +735,7 @@ private extension KeyboardAIAction {
         case .improve: return "Improve grammar and clarity."
         case .fixGrammar: return "Fix grammar."
         case .rewrite: return "Rephrase text."
-        case .rewriteStyle(let style): return "Rephrase · \(style.displayName)"
+        case .rewriteStyle(let style): return "\(style.displayName) text."
         case .summarize: return "Summarize text."
         case .translate(let target): return target.map { "Translate to \($0.displayName)." } ?? "Translate text."
         }
@@ -795,7 +756,8 @@ private extension KeyboardAIAction {
         switch self {
         case .improve: return "Improve"
         case .fixGrammar: return "Fix"
-        case .rewrite, .rewriteStyle: return "Rephrase"
+        case .rewrite: return "Rephrase"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Summarize"
         case .translate: return "Translate"
         }
@@ -805,7 +767,8 @@ private extension KeyboardAIAction {
         switch self {
         case .improve: return "Clearer"
         case .fixGrammar: return "Correct"
-        case .rewrite, .rewriteStyle: return "Style"
+        case .rewrite: return "Rephrase"
+        case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Shorten"
         case .translate: return "Language"
         }

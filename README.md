@@ -88,10 +88,10 @@ The keyboard extension currently includes:
 - Full Access and gateway-configuration state in the toolbar
 - separate toolbar workflows for correction review and AI writing actions:
   - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
-  - AI writing tools expose Improve, Rephrase, and Translate without mixing those actions into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
+  - AI writing tools expose Improve, simple Rephrase, Translate, and independent rewrite-style actions without mixing them into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
-- a Rephrase workflow with explicit Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional style selection before any request is sent
+- a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
 - rewrite/improvement options that are shown before replacement, with selected option state
 - replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
