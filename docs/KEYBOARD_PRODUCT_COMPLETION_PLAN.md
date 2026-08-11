@@ -371,7 +371,7 @@ Updated toolbar/panel split:
   - no permanent Fix/Rewrite/Summarize button row
 - Sparkle overlay/action panel:
   - Improve -> current Fix Grammar
-  - Rephrase -> current Rewrite with the same 15-style starter catalog
+  - Rephrase -> current simple Rewrite request; the 15 rewrite styles remain independent actions in the same carousel
   - Summarize remains implemented but is intentionally omitted from the visible selector
   - Translate -> current Translate action with a 15-language starter catalog, including Arabic, Malayalam, Urdu, Hindi, Bengali, Marathi, Telugu, and Tamil
 
