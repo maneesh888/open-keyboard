@@ -152,9 +152,11 @@ when invoked from a linked worktree; values must never be printed.
 - Canonical per-machine live seed: `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`.
   Live scripts resolve the primary checkout through Git's common directory and read this file
   directly; they never copy credentials into linked worktrees.
-- Git does not synchronize ignored files. Each machine and clone needs its own mode-`600` seed; a
-  trusted secret manager may materialize it at the canonical path when cross-machine synchronization
-  is desired, but agents must not transport it through Git or disposable worktrees.
+- Git does not synchronize ignored files. Each machine and clone needs its own mode-`600` seed in
+  a current-user-owned directory chain that is not writable by group or other users and has no
+  extended ACL entries; a trusted secret manager may materialize it at the canonical path when
+  cross-machine synchronization is desired, but agents must not transport it through Git or
+  disposable worktrees.
 - The only accepted simulator seed keys are `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`, `OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL`.
 - Use `scripts/ios/openkeyboard-gateway.seed.env.example` as the template. Do not commit the filled seed.
 

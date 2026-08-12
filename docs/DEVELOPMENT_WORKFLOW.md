@@ -76,11 +76,13 @@ per-machine simulator gateway seed:
 `scripts/check-live.sh gateway`, `scripts/ios/test.sh live-gateway-smoke`,
 `scripts/ios/test.sh real-keyboard-live`, and `scripts/ios/seed-simulator-gateway-config.sh` all use
 the shared safety helper to resolve it. The helper derives Git's common directory, validates the
-primary checkout, and accepts only a regular, ignored, untracked file below the canonical
-`.agent/local-seeds/` directory with no group or other access. It rejects traversal, external paths,
-unsafe symlinks, tracked files, unexpected variables, and overly broad permissions without logging
-values. The optional `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override remains confined to that
-same directory.
+primary checkout, and accepts only a current-user-owned regular, ignored, untracked file below the
+canonical `.agent/local-seeds/` directory with no group or other access or extended ACL entries.
+The trusted directory chain must also be current-user-owned, non-writable by group or other users,
+and free of extended ACL entries. The helper rejects any `..` traversal, external paths, unsafe
+symlinks, files tracked by either the primary or executing worktree, unexpected variables, and
+overly broad permissions without logging values. The optional
+`OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override remains confined to that same directory.
 
 Ignored files are not synchronized by Git and are not copied into linked worktrees. Each machine
 and clone therefore needs its own canonical seed. A trusted secret manager may synchronize the

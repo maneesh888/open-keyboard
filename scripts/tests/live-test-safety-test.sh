@@ -29,6 +29,7 @@ initialize_repository() {
   local repository="$1"
 
   mkdir -p "$repository/.agent/local-seeds"
+  chmod 700 "$repository/.agent/local-seeds"
   git -C "$repository" init -q
   git -C "$repository" config user.name "OpenKeyboard Policy Test"
   git -C "$repository" config user.email "policy-test@example.invalid"
@@ -161,12 +162,70 @@ if openkeyboard_require_local_seed_file \
 fi
 assert_output_excludes_secret "$PERMISSIVE_OUTPUT" "Permission rejection"
 
+ACL_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/acl.env"
+write_valid_seed "$ACL_SEED"
+ACL_OUTPUT="$FIXTURE/acl-output.log"
+if chmod +a "everyone allow read" "$ACL_SEED" 2>/dev/null; then
+  if openkeyboard_require_local_seed_file \
+    "$PRIMARY_CHECKOUT" \
+    '.agent/local-seeds/acl.env' > "$ACL_OUTPUT" 2>&1; then
+    echo "A seed file with an extended read ACL was accepted." >&2
+    exit 1
+  fi
+  assert_output_excludes_secret "$ACL_OUTPUT" "ACL rejection"
+elif command -v setfacl >/dev/null 2>&1 && setfacl -m u:nobody:r "$ACL_SEED" 2>/dev/null; then
+  if openkeyboard_require_local_seed_file \
+    "$PRIMARY_CHECKOUT" \
+    '.agent/local-seeds/acl.env' > "$ACL_OUTPUT" 2>&1; then
+    echo "A seed file with an extended read ACL was accepted." >&2
+    exit 1
+  fi
+  assert_output_excludes_secret "$ACL_OUTPUT" "ACL rejection"
+fi
+
+chmod 777 "$PRIMARY_CHECKOUT/.agent/local-seeds"
+DIRECTORY_PERMISSION_OUTPUT="$FIXTURE/directory-permission-output.log"
+if openkeyboard_require_local_seed_file \
+  "$PRIMARY_CHECKOUT" \
+  '.agent/local-seeds/openkeyboard-gateway.env' > "$DIRECTORY_PERMISSION_OUTPUT" 2>&1; then
+  echo "A seed inside a world-writable canonical directory was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$DIRECTORY_PERMISSION_OUTPUT" "Directory permission rejection"
+chmod 700 "$PRIMARY_CHECKOUT/.agent/local-seeds"
+
+CURRENT_UID="$(id -u)"
+stat() {
+  if [[ ( "$1" == "-f" || "$1" == "-c" ) && "$2" == "%u" ]]; then
+    printf '%s\n' "$((CURRENT_UID + 1))"
+    return 0
+  fi
+  command stat "$@"
+}
+DIRECTORY_OWNER_OUTPUT="$FIXTURE/directory-owner-output.log"
+if openkeyboard_require_local_seed_file \
+  "$PRIMARY_CHECKOUT" \
+  '.agent/local-seeds/openkeyboard-gateway.env' > "$DIRECTORY_OWNER_OUTPUT" 2>&1; then
+  echo "A seed in a canonical directory owned by another user was accepted." >&2
+  exit 1
+fi
+unset -f stat
+assert_output_excludes_secret "$DIRECTORY_OWNER_OUTPUT" "Directory owner rejection"
+
 OUTSIDE_SEED="$PRIMARY_CHECKOUT/outside.env"
 write_valid_seed "$OUTSIDE_SEED"
 if openkeyboard_require_local_seed_file \
   "$LINKED_WORKTREE" \
   '.agent/local-seeds/../../outside.env' >/dev/null 2>&1; then
   echo "Traversal outside the primary checkout's local-seeds directory was accepted." >&2
+  exit 1
+fi
+mkdir -p "$PRIMARY_CHECKOUT/.agent/local-seeds/subdirectory"
+chmod 700 "$PRIMARY_CHECKOUT/.agent/local-seeds/subdirectory"
+if openkeyboard_require_local_seed_file \
+  "$LINKED_WORKTREE" \
+  '.agent/local-seeds/subdirectory/../openkeyboard-gateway.env' >/dev/null 2>&1; then
+  echo "Traversal within the primary checkout's local-seeds directory was accepted." >&2
   exit 1
 fi
 if openkeyboard_require_local_seed_file \
@@ -220,6 +279,20 @@ if openkeyboard_require_local_seed_file \
   echo "A tracked seed file was accepted." >&2
   exit 1
 fi
+
+LINKED_TRACKED_SEED="$LINKED_WORKTREE/.agent/local-seeds/openkeyboard-gateway.env"
+mkdir -p "$(dirname "$LINKED_TRACKED_SEED")"
+write_valid_seed "$LINKED_TRACKED_SEED"
+git -C "$LINKED_WORKTREE" add -f .agent/local-seeds/openkeyboard-gateway.env
+git -C "$LINKED_WORKTREE" commit -q -m linked-tracked-seed
+LINKED_TRACKED_OUTPUT="$FIXTURE/linked-tracked-output.log"
+if openkeyboard_require_local_seed_file \
+  "$LINKED_WORKTREE" \
+  '.agent/local-seeds/openkeyboard-gateway.env' > "$LINKED_TRACKED_OUTPUT" 2>&1; then
+  echo "A seed tracked by the executing linked worktree was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$LINKED_TRACKED_OUTPUT" "Linked-worktree tracked-file rejection"
 
 SECOND_PRIMARY="$FIXTURE/different machine location/OpenKeyboard checkout"
 initialize_repository "$SECOND_PRIMARY"

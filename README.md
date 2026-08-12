@@ -182,9 +182,11 @@ simulator routes instead read one persistent per-machine file:
 <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
 ```
 
-Create it from `scripts/ios/openkeyboard-gateway.seed.env.example` in the primary checkout and set
-mode `600`. Git-ignored files are not copied into linked worktrees or synchronized by Git. The live
-scripts derive the primary checkout from `git rev-parse --path-format=absolute --git-common-dir`, so
+Create it from `scripts/ios/openkeyboard-gateway.seed.env.example` in the primary checkout, set the
+file to mode `600`, and keep its current-user-owned directory chain non-writable by group or other
+users and free of extended ACL entries. Git-ignored files are not copied into linked worktrees or
+synchronized by Git. The live scripts derive the primary checkout from
+`git rev-parse --path-format=absolute --git-common-dir`, so
 the same canonical file is used from the primary checkout and every linked worktree without copying
 credentials. Every machine and clone needs its own file. For cross-machine synchronization, use a
 trusted secret manager to materialize the allowlisted values into this path on each machine; never
