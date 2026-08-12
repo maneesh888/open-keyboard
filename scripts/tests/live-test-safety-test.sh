@@ -95,6 +95,16 @@ if [[ "$resolved_linked_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
   exit 1
 fi
 
+HOOK_GIT_DIR="$(git -C "$LINKED_WORKTREE" rev-parse --path-format=absolute --git-dir)"
+resolved_hook_primary="$(
+  GIT_DIR="$HOOK_GIT_DIR" \
+    openkeyboard_primary_checkout_root "$LINKED_WORKTREE"
+)"
+if [[ "$resolved_hook_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
+  echo "Linked worktree did not resolve the primary checkout from a Git hook environment." >&2
+  exit 1
+fi
+
 resolved_linked_seed="$(
   openkeyboard_require_local_seed_file \
     "$LINKED_WORKTREE" \
@@ -102,6 +112,17 @@ resolved_linked_seed="$(
 )"
 if [[ "$resolved_linked_seed" != "$(realpath "$VALID_SEED")" ]]; then
   echo "Linked worktree did not reuse the primary checkout seed." >&2
+  exit 1
+fi
+
+resolved_hook_seed="$(
+  GIT_DIR="$HOOK_GIT_DIR" \
+    openkeyboard_require_local_seed_file \
+      "$LINKED_WORKTREE" \
+      '.agent/local-seeds/openkeyboard-gateway.env'
+)"
+if [[ "$resolved_hook_seed" != "$(realpath "$VALID_SEED")" ]]; then
+  echo "Git hook execution did not reuse the primary checkout seed." >&2
   exit 1
 fi
 

@@ -1,5 +1,18 @@
 #!/usr/bin/env bash
 
+openkeyboard_repository_git() (
+  local git_environment_name
+
+  # Git exports repository-local variables while running hooks. Clear them so
+  # -C selects the repository supplied by this helper instead of the hook's
+  # linked-worktree Git directory.
+  while IFS= read -r git_environment_name; do
+    unset "$git_environment_name"
+  done < <(command git rev-parse --local-env-vars)
+
+  command git "$@"
+)
+
 openkeyboard_restore_booted_simulator() {
   local simulator="$1"
 
@@ -13,7 +26,7 @@ openkeyboard_primary_checkout_root() {
   local canonical_primary_checkout primary_git_directory
 
   common_directory="$(
-    git -C "$repository_root" \
+    openkeyboard_repository_git -C "$repository_root" \
       rev-parse --path-format=absolute --git-common-dir 2>/dev/null
   )" || {
     echo "Live verification requires a Git checkout." >&2
@@ -38,7 +51,7 @@ openkeyboard_primary_checkout_root() {
     return 1
   }
   primary_git_directory="$(
-    git -C "$canonical_primary_checkout" \
+    openkeyboard_repository_git -C "$canonical_primary_checkout" \
       rev-parse --path-format=absolute --git-dir 2>/dev/null
   )" || {
     echo "Live verification could not validate the primary checkout." >&2
@@ -173,7 +186,7 @@ openkeyboard_require_local_seed_file() {
   local execution_checkout primary_checkout seed_root expected_seed candidate candidate_parent
   local canonical_seed_root canonical_candidate_parent canonical_file relative_path
 
-  execution_checkout="$(git -C "$repository_root" rev-parse --show-toplevel 2>/dev/null)" || {
+  execution_checkout="$(openkeyboard_repository_git -C "$repository_root" rev-parse --show-toplevel 2>/dev/null)" || {
     echo "Live verification requires a Git checkout." >&2
     return 1
   }
@@ -240,13 +253,13 @@ openkeyboard_require_local_seed_file() {
   openkeyboard_require_private_seed_permissions "$canonical_file" || return 1
 
   relative_path="${canonical_file#"$primary_checkout"/}"
-  if git -C "$primary_checkout" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1 || \
-      git -C "$execution_checkout" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1; then
+  if openkeyboard_repository_git -C "$primary_checkout" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1 || \
+      openkeyboard_repository_git -C "$execution_checkout" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1; then
     echo "Live verification refuses a tracked seed file." >&2
     return 1
   fi
-  if ! git -C "$primary_checkout" check-ignore --quiet -- "$relative_path" || \
-      ! git -C "$execution_checkout" check-ignore --quiet -- "$relative_path"; then
+  if ! openkeyboard_repository_git -C "$primary_checkout" check-ignore --quiet -- "$relative_path" || \
+      ! openkeyboard_repository_git -C "$execution_checkout" check-ignore --quiet -- "$relative_path"; then
     echo "Live verification requires an ignored local seed file." >&2
     return 1
   fi
