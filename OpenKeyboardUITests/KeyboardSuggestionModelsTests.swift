@@ -345,6 +345,38 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testCorrectionCardsRejectOneWordStylisticSynonyms() throws {
+        let source = "They reply quickly."
+        let wordChoice = KeyboardCorrectionSuggestion(
+            label: "Word choice",
+            original: "reply",
+            replacement: "respond",
+            explanation: "Use a more formal word.",
+            category: "word_choice"
+        )
+        let disguisedSynonym = KeyboardCorrectionSuggestion(
+            label: "Grammar correction",
+            original: "reply",
+            replacement: "respond"
+        )
+        let spelling = KeyboardCorrectionSuggestion(
+            label: "Correction",
+            original: "recieve",
+            replacement: "receive"
+        )
+
+        XCTAssertFalse(wordChoice.isAtomicCorrection(for: source))
+        XCTAssertFalse(disguisedSynonym.isAtomicCorrection(for: source))
+        XCTAssertTrue(spelling.isAtomicCorrection(for: "They recieve updates."))
+        XCTAssertTrue(
+            KeyboardCorrectionSuggestion(
+                label: "Grammar",
+                original: "team need",
+                replacement: "team needs"
+            ).isAtomicCorrection(for: "The team need notes.")
+        )
+    }
+
     func testCorrectionCardsKeepOnlyExactAtomicSourceEdits() throws {
         let source = "Our support team definately need clearer notes."
         let json = #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix spelling.","original":"definately","replacement":"definitely"},{"id":"rewrite","type":"correction","title":"Rewrite","text":"Rewrite sentence.","original":"Our support team definately need clearer notes.","replacement":"The support team definitely needs clearer notes."},{"id":"invented","type":"correction","title":"Word choice","text":"Replace missing source.","original":"customer response","replacement":"client reply"}],"corrected_text":"The support team definitely needs clearer documentation."}"#

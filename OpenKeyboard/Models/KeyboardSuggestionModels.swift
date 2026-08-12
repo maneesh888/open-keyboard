@@ -300,7 +300,50 @@ extension KeyboardCorrectionSuggestion {
         }
         let originalWordCount = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).count
         let replacementWordCount = cleanReplacement.split(whereSeparator: { $0.isWhitespace }).count
-        return originalWordCount <= 3 && replacementWordCount <= 3
+        guard originalWordCount <= 3, replacementWordCount <= 3 else { return false }
+
+        let metadata = [label, category ?? "", explanation ?? ""]
+            .joined(separator: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .lowercased()
+        let stylisticMarkers = [
+            "word choice", "vocabulary", "synonym", "style", "tone", "clarity",
+            "formal", "friendly", "concise", "professional", "rewrite", "rephrase"
+        ]
+        guard !stylisticMarkers.contains(where: metadata.contains) else { return false }
+
+        let mechanicalMarkers = [
+            "spell", "capital", "punct", "grammar", "agreement", "article",
+            "missing", "extra word", "word form", "inflection", "contraction",
+            "pronoun", "tense", "plural", "singular"
+        ]
+        let editDistance = Self.characterEditDistance(cleanOriginal.lowercased(), cleanReplacement.lowercased())
+        let longerLength = max(cleanOriginal.count, cleanReplacement.count)
+        if originalWordCount == 1, replacementWordCount == 1 {
+            return editDistance <= max(2, longerLength / 3)
+        }
+
+        guard mechanicalMarkers.contains(where: metadata.contains) else { return false }
+        return editDistance <= max(3, longerLength / 3)
+    }
+
+    private static func characterEditDistance(_ lhs: String, _ rhs: String) -> Int {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        var previous = Array(0...right.count)
+        for (leftIndex, leftCharacter) in left.enumerated() {
+            var current = [leftIndex + 1]
+            for (rightIndex, rightCharacter) in right.enumerated() {
+                current.append(min(
+                    current[rightIndex] + 1,
+                    previous[rightIndex + 1] + 1,
+                    previous[rightIndex] + (leftCharacter == rightCharacter ? 0 : 1)
+                ))
+            }
+            previous = current
+        }
+        return previous.last ?? 0
     }
 
     func applying(to text: String) -> String? {
