@@ -418,6 +418,33 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(transport.requests.suffix(6).map { $0.url?.path }, Array(repeating: "/v1/chat/completions", count: 6))
     }
 
+    func testGatewayDiagnosticsRetriesTransientRequiredCorrectionValidation() async throws {
+        let transport = NetworkManagerTestTransport([
+            .rawJSON(#"{"status":"ok"}"#),
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: "not json"),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Use received.","original":"recieved","replacement":"received"}],"corrected_text":"i received teh refnd."}"#),
+            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Spelling","text":"Use the.","original":"teh","replacement":"the"},{"id":"2","type":"correction","title":"Spelling","text":"Use client.","original":"cliant","replacement":"client"}],"corrected_text":"the client recieve a refnd"}"#),
+            .chat(content: "unsupported"),
+            .chat(content: "unsupported"),
+            .chat(content: "unsupported")
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        let report = await manager.runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        let correctionCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
+        XCTAssertEqual(correctionCheck.status, .passed)
+        XCTAssertTrue(correctionCheck.message.contains("Passed after 2 attempts."))
+        XCTAssertFalse(report.hasFailures)
+        XCTAssertEqual(transport.requests.count, 9)
+    }
+
     func testGatewayDiagnosticsFailsPlainTextActionBecauseJSONIsRequired() async throws {
         let transport = NetworkManagerTestTransport([
             .rawJSON(#"{"status":"ok"}"#),

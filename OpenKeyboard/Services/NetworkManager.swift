@@ -235,7 +235,8 @@ class NetworkManager {
             apiKey: apiKey,
             systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
             userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: settingsSmokeInput),
-            maxTokens: 1600
+            maxTokens: 1600,
+            validationAttempts: 2
         ) { content in
             _ = try Self.validateAtomicCorrectionContent(content, inputText: settingsSmokeInput, minimumCount: 1)
             return "Correction smoke returned usable structured JSON for: \"\(settingsSmokeInput)\""
@@ -252,7 +253,8 @@ class NetworkManager {
             apiKey: apiKey,
             systemPrompt: SemanticPromptContract.keyboardSuggestionsSystemInstruction,
             userPrompt: KeyboardSuggestionParser.prompt(for: suggestionInput),
-            maxTokens: 1_200
+            maxTokens: 1_200,
+            validationAttempts: 2
         ) { content in
             let parsed = try KeyboardSuggestionParser.parseAssistantContent(content)
             let corrections = parsed.corrections.filter { $0.isAtomicCorrection(for: suggestionInput) }
@@ -271,7 +273,8 @@ class NetworkManager {
             apiKey: apiKey,
             systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
             userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: complexGrammarInput),
-            maxTokens: 5_000
+            maxTokens: 5_000,
+            validationAttempts: 2
         ) { content in
             let result = try Self.validateAtomicCorrectionContent(content, inputText: complexGrammarInput, minimumCount: 2)
             let correctionCount = result.suggestionResponse(sourceText: complexGrammarInput).corrections.count
@@ -531,29 +534,41 @@ class NetworkManager {
         userPrompt: String,
         maxTokens: Int,
         optionalForSelectedModel: Bool = false,
+        validationAttempts: Int = 1,
         validation: (String) throws -> String
     ) async -> GatewayDiagnosticCheck {
         let started = Date()
         do {
-            let content = try await chatCompletionContent(
-                gatewayURL: gatewayURL,
-                apiKey: apiKey,
-                model: model,
-                operation: operation,
-                inputText: inputText,
-                systemPrompt: systemPrompt,
-                userPrompt: userPrompt,
-                maxTokens: maxTokens,
-                timeoutInterval: 90
-            )
-            return GatewayDiagnosticCheck(
-                id: id,
-                title: title,
-                endpoint: "POST /v1/chat/completions",
-                status: .passed,
-                durationMilliseconds: Self.durationMilliseconds(since: started),
-                message: try validation(content)
-            )
+            let attempts = max(1, validationAttempts)
+            var lastValidationError: Error?
+            for attempt in 1...attempts {
+                let content = try await chatCompletionContent(
+                    gatewayURL: gatewayURL,
+                    apiKey: apiKey,
+                    model: model,
+                    operation: operation,
+                    inputText: inputText,
+                    systemPrompt: systemPrompt,
+                    userPrompt: userPrompt,
+                    maxTokens: maxTokens,
+                    timeoutInterval: 90
+                )
+                do {
+                    let message = try validation(content)
+                    return GatewayDiagnosticCheck(
+                        id: id,
+                        title: title,
+                        endpoint: "POST /v1/chat/completions",
+                        status: .passed,
+                        durationMilliseconds: Self.durationMilliseconds(since: started),
+                        message: attempt == 1 ? message : "\(message) Passed after \(attempt) attempts."
+                    )
+                } catch {
+                    lastValidationError = error
+                    guard attempt < attempts, Self.isModelCapabilityValidationError(error) else { throw error }
+                }
+            }
+            throw lastValidationError ?? GatewayDiagnosticValidationError.noUsableOutput(operation ?? title)
         } catch {
             let isOptionalCapabilityGap = optionalForSelectedModel && Self.isModelCapabilityValidationError(error)
             let message = Self.diagnosticMessage(for: error)
