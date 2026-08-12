@@ -1282,7 +1282,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.panelMode == .correctionDetail && viewModel.currentCorrection != nil }
 
         XCTAssertEqual(service.requestedActions, [.fixGrammar, .fixGrammar])
-        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
+        XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Spelling")
     }
 
     func testGrammarCorrectionFailureShowsMiddleErrorState() async {

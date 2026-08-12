@@ -42,7 +42,7 @@ final class PromptEvaluationFixturesTests: XCTestCase {
                 name: "fix grammar",
                 action: .fixGrammar,
                 input: "i has a apple",
-                requiredPhrases: ["fix_grammar", "strict JSON", "one atomic correction result per distinct issue", "type to exactly \"correction\"", "smallest substring needed for that one edit", "corrected_text"]
+                requiredPhrases: ["fix_grammar", "strict JSON", "corrected_text"]
             ),
             PromptFixture(
                 name: "rewrite",

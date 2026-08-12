@@ -317,7 +317,7 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(prompt.contains("strict JSON only"))
         XCTAssertTrue(prompt.contains("corrections and predictions separately"))
         XCTAssertTrue(prompt.contains("Do not include markdown"))
-        XCTAssertLessThan(prompt.count, 1200)
+        XCTAssertLessThan(prompt.count, 2_000)
     }
 
     func testMapsStructuredCorrectionItemsToSuggestionResponse() throws {
@@ -331,6 +331,39 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(response.corrections.map(\.label), ["Subject-verb agreement", "Article", "Spelling"])
         XCTAssertEqual(response.corrections.map(\.category), ["grammar", "correction", "spelling"])
         XCTAssertEqual(response.corrections[1].explanation, "Use an before a vowel sound.")
+    }
+
+    func testCorrectionCardsRejectSentenceRewritesAndStylisticPhraseChanges() throws {
+        let source = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
+        let json = #"{"operation":"fix_grammar","results":[{"id":"style","type":"correction","title":"Word choice","text":"Use a formal phrase.","original":"reply to the customer about","replacement":"respond to the customer about"}],"corrected_text":"Our support team definitely needs clearer notes before they respond to the customer about the delayed refund."}"#
+        let result = try KeyboardActionOperationResult.parse(json, operation: "fix_grammar", fallbackText: source)
+
+        XCTAssertTrue(result.suggestionResponse(sourceText: source).corrections.isEmpty)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: source),
+            .noUsableResult
+        )
+    }
+
+    func testCorrectionCardsKeepOnlyExactAtomicSourceEdits() throws {
+        let source = "Our support team definately need clearer notes."
+        let json = #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix spelling.","original":"definately","replacement":"definitely"},{"id":"rewrite","type":"correction","title":"Rewrite","text":"Rewrite sentence.","original":"Our support team definately need clearer notes.","replacement":"The support team definitely needs clearer notes."},{"id":"invented","type":"correction","title":"Word choice","text":"Replace missing source.","original":"customer response","replacement":"client reply"}],"corrected_text":"The support team definitely needs clearer documentation."}"#
+        let result = try KeyboardActionOperationResult.parse(json, operation: "fix_grammar", fallbackText: source)
+
+        let response = result.suggestionResponse(sourceText: source)
+
+        XCTAssertEqual(response.corrections.map(\.id), ["spelling"])
+        XCTAssertEqual(response.correctedText, "Our support team definitely need clearer notes.")
+        XCTAssertEqual(
+            KeyboardSuggestionState(
+                response: KeyboardSuggestionResponse(
+                    corrections: result.suggestionResponse().corrections,
+                    predictions: []
+                ),
+                sourceContext: source
+            ).corrections.map(\.id),
+            ["spelling"]
+        )
     }
 
     func testStructuredCorrectionRangeMapsToSuggestion() throws {

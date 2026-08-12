@@ -154,9 +154,15 @@ struct KeyboardSuggestionState: Equatable {
     private(set) var currentCorrectionIndex: Int
 
     init(response: KeyboardSuggestionResponse, sourceContext: String? = nil, currentCorrectionIndex: Int = 0) {
-        self.corrections = response.corrections
+        if let sourceContext, !sourceContext.isEmpty {
+            let filteredCorrections = response.corrections.filter { $0.isAtomicCorrection(for: sourceContext) }
+            self.corrections = filteredCorrections
+            self.correctedText = Self.textByApplying(filteredCorrections, to: sourceContext)
+        } else {
+            self.corrections = response.corrections
+            self.correctedText = response.correctedText
+        }
         self.predictions = Self.filteredPredictions(response.predictions, sourceContext: sourceContext)
-        self.correctedText = response.correctedText
         if response.corrections.isEmpty {
             self.currentCorrectionIndex = 0
         } else {
@@ -253,6 +259,13 @@ struct KeyboardSuggestionState: Equatable {
         return predictions.filter { !isRedundantPrediction($0.text, sourceContext: sourceContext) }
     }
 
+    private static func textByApplying(_ corrections: [KeyboardCorrectionSuggestion], to sourceText: String) -> String? {
+        let corrected = corrections.reduce(sourceText) { text, correction in
+            correction.applying(to: text) ?? text
+        }
+        return corrected == sourceText ? nil : corrected
+    }
+
     static func isRedundantPrediction(_ prediction: String, sourceContext: String) -> Bool {
         let normalizedPrediction = normalizeText(prediction)
         guard !normalizedPrediction.isEmpty else { return true }
@@ -275,6 +288,21 @@ struct KeyboardSuggestionState: Equatable {
 }
 
 extension KeyboardCorrectionSuggestion {
+    func isAtomicCorrection(for sourceText: String) -> Bool {
+        let cleanOriginal = original.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanReplacement = replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanOriginal.isEmpty,
+              !cleanReplacement.isEmpty,
+              cleanOriginal != cleanReplacement,
+              cleanOriginal != sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
+              sourceText.range(of: cleanOriginal) != nil else {
+            return false
+        }
+        let originalWordCount = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).count
+        let replacementWordCount = cleanReplacement.split(whereSeparator: { $0.isWhitespace }).count
+        return originalWordCount <= 3 && replacementWordCount <= 3
+    }
+
     func applying(to text: String) -> String? {
         guard !original.isEmpty, !replacement.isEmpty else { return nil }
         let range = range.flatMap { text.correctionRange(of: original, near: $0.start) } ?? text.correctionRange(of: original)
@@ -390,12 +418,29 @@ struct KeyboardActionOperationResult: Equatable {
         self.isNoChangeResult = isNoChangeResult
     }
 
-    func suggestionResponse() -> KeyboardSuggestionResponse {
-        KeyboardSuggestionResponse(
-            corrections: items.compactMap(\.correctionSuggestion),
+    func suggestionResponse(sourceText: String? = nil) -> KeyboardSuggestionResponse {
+        let mappedCorrections = items.compactMap(\.correctionSuggestion)
+        let corrections: [KeyboardCorrectionSuggestion]
+        let safeCorrectedText: String?
+        if let sourceText, !sourceText.isEmpty {
+            corrections = mappedCorrections.filter { $0.isAtomicCorrection(for: sourceText) }
+            safeCorrectedText = Self.textByApplying(corrections, to: sourceText)
+        } else {
+            corrections = mappedCorrections
+            safeCorrectedText = correctedText
+        }
+        return KeyboardSuggestionResponse(
+            corrections: corrections,
             predictions: [],
-            correctedText: correctedText
+            correctedText: safeCorrectedText
         )
+    }
+
+    private static func textByApplying(_ corrections: [KeyboardCorrectionSuggestion], to sourceText: String) -> String? {
+        let corrected = corrections.reduce(sourceText) { text, correction in
+            correction.applying(to: text) ?? text
+        }
+        return corrected == sourceText ? nil : corrected
     }
 
     var displayText: String {
@@ -730,13 +775,14 @@ enum KeyboardActionResultHandler {
     static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalizedOperation == "fix_grammar" {
-            let response = result.suggestionResponse()
+            let response = result.suggestionResponse(sourceText: sourceText)
             if !response.corrections.isEmpty {
                 return .showCorrections(response)
             }
             if result.isStructuredGrammarNoChange {
                 return .noChanges
             }
+            return .noUsableResult
         }
         if normalizedOperation == "rewrite" {
             let options = result.rewriteOptions(sourceText: sourceText)

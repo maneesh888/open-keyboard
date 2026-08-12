@@ -741,7 +741,7 @@ final class KeyboardViewModel: ObservableObject {
                         return
                     }
                     applyGrammarCorrectionResult(
-                        KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result),
+                        KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: sourceText),
                         sourceText: sourceText
                     )
                     recordDebugEvent("grammar_correction_request_success")
@@ -1396,7 +1396,7 @@ final class KeyboardViewModel: ObservableObject {
                 return
             }
             applyAutomaticAnalysisResult(
-                KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result),
+                KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: analysisText),
                 sourceText: analysisText
             )
             recordDebugEvent("automatic_analysis_success")
