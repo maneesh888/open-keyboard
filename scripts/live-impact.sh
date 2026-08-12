@@ -41,15 +41,18 @@ while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
     .github/pull_request_template.md | \
       .github/workflows/live.yml | \
+      .gitmodules | \
       .githooks/pre-push | \
       scripts/check-live.sh | \
       scripts/check.sh | \
+      scripts/check-semantic-prompt-contract.sh | \
       scripts/live-impact.sh | \
       scripts/ios/enable-openkeyboard-simulator-keyboard.sh | \
       scripts/ios/live-test-safety.sh | \
       scripts/ios/openkeyboard-gateway.seed.env.example | \
       scripts/ios/seed-simulator-gateway-config.sh | \
       scripts/ios/test.sh | \
+      Vendor/semantic-prompt-contract | \
       OpenKeyboard/* | \
       OpenKeyboardCore/Package.swift | \
       OpenKeyboardCore/Sources/* | \

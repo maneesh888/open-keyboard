@@ -20,6 +20,8 @@ DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
+SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
+SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
 for required_file in \
   "$CI_WORKFLOW" \
@@ -39,7 +41,9 @@ for required_file in \
   "$DEPLOY_SOURCE_POLICY_TEST" \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
-  "$LIVE_TEST_SAFETY_POLICY_TEST"; do
+  "$LIVE_TEST_SAFETY_POLICY_TEST" \
+  "$SEMANTIC_CONTRACT_CHECK" \
+  "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
     echo "Required workflow policy file is missing: $required_file" >&2
     exit 1
@@ -69,6 +73,12 @@ if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORK
   exit 1
 fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
+rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
+rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
+rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
+rg --quiet '^## Shared Semantic Prompt Contract$' "$ROOT/AGENTS.md"
+rg --quiet 'only canonical home' "$ROOT/AGENTS.md"
+git -C "$ROOT" ls-files --stage Vendor/semantic-prompt-contract | rg --quiet '^160000 '
 rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
 rg --quiet '^  validate-release-source:$' "$DEPLOY_WORKFLOW"
@@ -118,6 +128,7 @@ rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
 rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
 rg --fixed-strings --quiet 'BUILD_DESTINATION="generic/platform=iOS Simulator"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'DETERMINISTIC_UI_DERIVED_DATA="$REPO_ROOT/.build/deterministic-ui/DerivedData"' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   build_case = source.match(/^  build\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
@@ -134,6 +145,15 @@ rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/sc
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping' "$ROOT/scripts/ios/test.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  deterministic_case = source.match(/^  deterministic-ui\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
+  abort "The iOS test runner is missing deterministic-ui mode." unless deterministic_case
+  expected = %q{-derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA"}
+  unless deterministic_case.scan(expected).length == 2
+    abort "Both deterministic UI invocations must use worktree-scoped DerivedData."
+  end
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
@@ -176,15 +196,18 @@ fi
 live_impact_patterns=(
   '.github/pull_request_template.md'
   '.github/workflows/live.yml'
+  '.gitmodules'
   '.githooks/pre-push'
   'scripts/check-live.sh'
   'scripts/check.sh'
+  'scripts/check-semantic-prompt-contract.sh'
   'scripts/live-impact.sh'
   'scripts/ios/enable-openkeyboard-simulator-keyboard.sh'
   'scripts/ios/live-test-safety.sh'
   'scripts/ios/openkeyboard-gateway.seed.env.example'
   'scripts/ios/seed-simulator-gateway-config.sh'
   'scripts/ios/test.sh'
+  'Vendor/semantic-prompt-contract'
   'OpenKeyboard/*'
   'OpenKeyboardCore/Package.swift'
   'OpenKeyboardCore/Sources/*'

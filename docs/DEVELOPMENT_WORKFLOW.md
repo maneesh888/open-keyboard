@@ -1,5 +1,18 @@
 # Development Workflow
 
+## Semantic prompt contract changes
+
+`Vendor/semantic-prompt-contract` is a pinned Git submodule and the only canonical home for writing
+and bounded-suggestion prompt wording, semantic operation identifiers, parameter rules, response
+schemas, fixtures, and deterministic rendering metadata. OpenKeyboard owns UI, networking,
+authentication, persistence, parser compatibility, and response presentation.
+
+Initialize submodules before building. For a contract upgrade, change the contract repository first,
+run its Node and Swift suites, inspect golden rendering changes, update the OpenKeyboard gitlink, and
+run `./scripts/check-semantic-prompt-contract.sh`. Contract or adapter changes are gateway-impacting
+and require the normal exact-head live gateway evidence before release. Generated adapters must
+derive from canonical JSON; do not edit them or add fallback prompt copies in this repository.
+
 ## Purpose
 
 OpenKeyboard uses proportional local checks and exact-head release evidence. This file owns

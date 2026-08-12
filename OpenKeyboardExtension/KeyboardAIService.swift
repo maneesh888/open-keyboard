@@ -108,40 +108,6 @@ enum KeyboardRewriteStyle: String, CaseIterable, Hashable, Identifiable, Sendabl
         }
     }
 
-    var promptInstruction: String {
-        switch self {
-        case .shorten:
-            return "Make the text shorter and more concise while preserving its meaning."
-        case .friendly:
-            return "Rewrite the text in a warm, friendly tone."
-        case .formal:
-            return "Rewrite the text in a formal tone."
-        case .compassionate:
-            return "Rewrite the text in a compassionate and considerate tone."
-        case .confident:
-            return "Rewrite the text in a confident and assured tone."
-        case .engaging:
-            return "Rewrite the text to be engaging and hold the reader's attention."
-        case .fluent:
-            return "Rewrite the text so it reads fluently and naturally."
-        case .diplomatic:
-            return "Rewrite the text in a tactful and diplomatic tone."
-        case .empathetic:
-            return "Rewrite the text in an empathetic and understanding tone."
-        case .exciting:
-            return "Rewrite the text in an energetic and exciting tone."
-        case .cooperative:
-            return "Rewrite the text in a collaborative and cooperative tone."
-        case .assertive:
-            return "Rewrite the text in a clear and assertive tone without being aggressive."
-        case .detailed:
-            return "Rewrite the text with useful detail and specificity without changing its meaning."
-        case .casual:
-            return "Rewrite the text in a relaxed, casual tone."
-        case .professional:
-            return "Rewrite the text in a polished, professional tone."
-        }
-    }
 }
 
 enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
@@ -257,9 +223,8 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         }
         if case .rewriteStyle(let style) = self {
             return KeyboardGatewayActionContract.prompt(
-                operation: operationName,
-                text: text,
-                rewriteInstruction: style.promptInstruction
+                operation: "rewrite_\(style.rawValue)",
+                text: text
             )
         }
         return KeyboardGatewayActionContract.prompt(operation: operationName, text: text)
@@ -316,7 +281,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     private func performRawSuggestionRequest(prompt: String, config: AppConfig) async throws -> String {
         do {
             return try await gatewayClient.chatCompletionContent(
-                systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.",
+                systemPrompt: SemanticPromptContract.keyboardSuggestionsSystemInstruction,
                 userPrompt: prompt,
                 operation: nil,
                 inputText: nil,

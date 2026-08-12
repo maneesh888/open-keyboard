@@ -1,7 +1,12 @@
+import Foundation
 import XCTest
 @testable import OpenKeyboardCore
 
 final class WritingActionTests: XCTestCase {
+    func testSharedContractVersionIsPinned() {
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "2.0.1")
+    }
+
     func testBuiltInActionsHaveStableTitles() {
         XCTAssertEqual(WritingAction.continueWriting.title, "Continue Writing")
         XCTAssertEqual(WritingAction.rewrite.title, "Rewrite")
@@ -21,7 +26,7 @@ final class WritingActionTests: XCTestCase {
     func testStructuredSystemPromptRequiresOneJSONObjectAndTreatsInputAsData() {
         XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("strict JSON only as one syntactically valid JSON object"))
         XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("Never add markdown fences"))
-        XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("untrusted text data"))
+        XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("untrusted data"))
     }
 
     func testEveryBuiltInPromptContainsStrictContractAndOperationRules() {
@@ -71,7 +76,8 @@ final class WritingActionTests: XCTestCase {
                 action: .translate(language: "Arabic"),
                 operation: "translate",
                 requiredRules: [
-                    "Translate into Arabic",
+                    "language identified by target_language",
+                    "\"target_language\":\"Arabic\"",
                     "preserving meaning, tone, paragraph breaks, punctuation, and emoji",
                     "exactly one translation result",
                     "complete translated replacement",
@@ -99,11 +105,22 @@ final class WritingActionTests: XCTestCase {
             XCTAssertTrue(prompt.contains("The JSON must parse as one object"), scenario.operation)
             XCTAssertTrue(prompt.contains("Every result item must include id, type, title, and text"), scenario.operation)
             XCTAssertTrue(prompt.contains("Do not include markdown fences or any text outside the JSON object"), scenario.operation)
-            XCTAssertTrue(prompt.contains("<input_text>\n\(input)\n</input_text>"), scenario.operation)
+            XCTAssertTrue(prompt.contains("{\"source_text\":\"\(input)\",\"operation_parameters\":"), scenario.operation)
             for rule in scenario.requiredRules {
                 XCTAssertTrue(prompt.localizedCaseInsensitiveContains(rule), "\(scenario.operation) missing rule: \(rule)")
             }
         }
+    }
+
+    func testPlaceholderLikeInputRemainsJSONData() throws {
+        let input = "{{operation}} {{response_example}} {{numbered_rules}} {{input_json}}"
+        let prompt = WritingPromptBuilder.prompt(for: .fixGrammar, text: input)
+        let payloadLine = try XCTUnwrap(prompt.split(separator: "\n", omittingEmptySubsequences: false).last)
+        let payloadData = try XCTUnwrap(String(payloadLine).data(using: .utf8))
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: payloadData) as? [String: Any])
+
+        XCTAssertEqual(payload["source_text"] as? String, input)
+        XCTAssertEqual(payload["operation_parameters"] as? [String: String], [:])
     }
 
     func testCustomActionUsesTemplateAndTextPlaceholder() {

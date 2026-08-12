@@ -87,6 +87,16 @@ Remote GitHub CI runs hygiene, `core`, and `build` from `.github/workflows/ci.ym
 - Keep edits tightly scoped to the task. Do not fold unrelated cleanup into the same change.
 - Never print or commit API keys, Authorization headers, private env values, seed files, raw logs, `.xcresult`, generated screenshots, DerivedData, `.ci-results`, or secrets.
 
+## Shared Semantic Prompt Contract
+
+- Treat the pinned `Vendor/semantic-prompt-contract` Git submodule as the only canonical home for semantic operation identifiers, prompt wording, parameters, rendering rules, response-format requirements, schemas, examples, and contract fixtures.
+- Initialize submodules before planning or verification. Confirm the submodule worktree matches the recorded gitlink; never build against an adjacent mutable checkout or an unrecorded package commit.
+- Keep UI, networking, gateway URL/key handling, model selection, persistence, parsing compatibility, and response presentation in OpenKeyboard. Do not move them into the contract package.
+- Do not add fallback or copied canonical prompt wording to Swift sources or tests. Generated adapters must derive from the canonical JSON and remain synchronized through the package generator.
+- For a contract change, update and test the shared package first, classify the semantic-version impact, inspect golden rendering changes, advance the consumer gitlink intentionally, and run `./scripts/check-semantic-prompt-contract.sh`.
+- Treat `.gitmodules`, the contract gitlink, generated-adapter wiring, and semantic prompt request changes as gateway-impacting. They require the same exact-head live gateway evidence and proof boundaries as other production prompt changes.
+- The gateway may consume package-owned diagnostic fixtures, but it must preserve exact client messages and must not regain production OpenKeyboard prompt construction.
+
 ## Verification Rules
 
 Run verification proportional to the change:

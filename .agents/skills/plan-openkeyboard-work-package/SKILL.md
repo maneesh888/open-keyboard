@@ -15,8 +15,9 @@ Produce one compact read-only work order without editing files or changing proje
 4. Read the relevant milestone or next-slice section in `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md` when it covers the requested surface.
 5. Follow links to a focused plan such as `docs/REAL_EXTENSION_SMOKE_PLAN.md` or `docs/plans/*.md` only when directly relevant.
 6. Read only the purpose, modes, applicable targeted-routing row, and proof boundaries in `docs/DEVELOPMENT_WORKFLOW.md`.
-7. Treat historical research, CI logs, and old status documents as context rather than current authority unless the current queue links to them.
-8. Compute source digests with `git hash-object` for every source used in the final work order.
+7. For semantic prompt, schema, adapter, or gateway diagnostic work, include the pinned `Vendor/semantic-prompt-contract` manifest, changelog, and relevant canonical pack as requirement sources.
+8. Treat historical research, CI logs, and old status documents as context rather than current authority unless the current queue links to them.
+9. Compute source digests with `git hash-object` for every source used in the final work order.
 
 Read complete source files only when targeted sections are materially ambiguous or inconsistent.
 

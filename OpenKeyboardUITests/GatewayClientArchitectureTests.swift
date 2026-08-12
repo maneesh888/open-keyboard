@@ -1,6 +1,15 @@
 import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
+    func testSharedContractVersionAndRewriteStylesArePinned() throws {
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "2.0.1")
+        let prompts = try KeyboardRewriteStyle.allCases.map { style in
+            try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).prompt(for: "Source text"))
+        }
+        XCTAssertEqual(Set(prompts).count, KeyboardRewriteStyle.allCases.count)
+        XCTAssertTrue(prompts.allSatisfy { $0.contains("Operation: rewrite") })
+    }
+
     func testProductionPromptBuilderContainsAllFiveOperationContracts() {
         let scenarios: [(operation: String, prompt: String, requiredRules: [String])] = [
             (
@@ -21,7 +30,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
             (
                 "translate",
                 KeyboardGatewayActionContract.prompt(operation: "translate", text: "Good morning", translationLanguage: "Dutch"),
-                ["Translate into Dutch", "exactly one translation result", "complete translated replacement"]
+                ["language identified by target_language", "\"target_language\":\"Dutch\"", "exactly one translation result", "complete translated replacement"]
             ),
             (
                 "continue_writing",
@@ -31,7 +40,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         ]
 
         XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("strict JSON only as one syntactically valid JSON object"))
-        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("untrusted text data"))
+        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("untrusted data"))
         for scenario in scenarios {
             XCTAssertTrue(scenario.prompt.contains("Operation: \(scenario.operation)"), scenario.operation)
             XCTAssertTrue(scenario.prompt.contains("Return strict JSON only"), scenario.operation)

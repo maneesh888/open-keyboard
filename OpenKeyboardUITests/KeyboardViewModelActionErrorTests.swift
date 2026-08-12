@@ -725,7 +725,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         XCTAssertTrue(prompt.contains("Operation: translate"))
-        XCTAssertTrue(prompt.contains("Translate into Malayalam"))
+        XCTAssertTrue(prompt.contains("language identified by target_language"))
+        XCTAssertTrue(prompt.contains("\"target_language\":\"Malayalam\""))
         XCTAssertTrue(prompt.contains("Please translate this sentence."))
     }
 

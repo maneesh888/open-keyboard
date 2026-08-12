@@ -25,6 +25,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
 
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install --yes ripgrep
@@ -41,6 +42,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
 
       - name: Run core Swift package tests
         run: ./scripts/ios/test.sh core
@@ -54,9 +56,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
 
       - name: Build OpenKeyboard app and extension
         run: ./scripts/ios/test.sh build
+
+  semantic-contract:
+    name: Semantic prompt contract
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact candidate and pinned contract
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: Vendor/semantic-prompt-contract/package-lock.json
+
+      - name: Validate pinned semantic contract
+        run: ./scripts/check-semantic-prompt-contract.sh
 
   required-checks:
     name: Required checks
@@ -66,20 +90,24 @@ jobs:
       - hygiene
       - core-tests
       - ios-build
+      - semantic-contract
     steps:
       - name: Confirm required jobs passed
         env:
           HYGIENE_RESULT: ${{ needs.hygiene.result }}
           CORE_TESTS_RESULT: ${{ needs.core-tests.result }}
           IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
+          SEMANTIC_CONTRACT_RESULT: ${{ needs.semantic-contract.result }}
         run: |
           if [[ "$HYGIENE_RESULT" != "success" ||
                 "$CORE_TESTS_RESULT" != "success" ||
-                "$IOS_BUILD_RESULT" != "success" ]]; then
+                "$IOS_BUILD_RESULT" != "success" ||
+                "$SEMANTIC_CONTRACT_RESULT" != "success" ]]; then
             echo "Required checks did not pass."
             echo "hygiene=$HYGIENE_RESULT"
             echo "core-tests=$CORE_TESTS_RESULT"
             echo "ios-build=$IOS_BUILD_RESULT"
+            echo "semantic-contract=$SEMANTIC_CONTRACT_RESULT"
             exit 1
           fi
 
