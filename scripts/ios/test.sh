@@ -12,7 +12,7 @@ BUILD_DESTINATION="generic/platform=iOS Simulator"
 DESTINATION="platform=iOS Simulator,name=iPhone 16"
 SE_DESTINATION="platform=iOS Simulator,name=iPhone SE (3rd generation)"
 CORE_PACKAGE="$REPO_ROOT/OpenKeyboardCore"
-DEFAULT_SIMULATOR_GATEWAY_SEED_FILE="$REPO_ROOT/.agent/local-seeds/openkeyboard-gateway.env"
+DEFAULT_SIMULATOR_GATEWAY_SEED_FILE=".agent/local-seeds/openkeyboard-gateway.env"
 DEFAULT_REAL_KEYBOARD_SIMULATOR="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-iPhone 17 Pro}"
 source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
 
@@ -50,69 +50,6 @@ simulator_destination() {
   else
     printf 'platform=iOS Simulator,name=%s' "$simulator"
   fi
-}
-
-trim() {
-  local value="$1"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "$value"
-}
-
-is_allowed_simulator_seed_key() {
-  case "$1" in
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL|OPEN_KEYBOARD_SIMULATOR_API_KEY|OPEN_KEYBOARD_SIMULATOR_MODEL)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-load_simulator_gateway_seed() {
-  local seed_file="$1"
-  local line line_number key value
-  line_number=0
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_number=$((line_number + 1))
-    line="$(trim "$line")"
-
-    if [[ -z "$line" || "$line" == \#* ]]; then
-      continue
-    fi
-
-    if [[ "$line" == export[[:space:]]* ]]; then
-      line="$(trim "${line#export}")"
-    fi
-
-    if [[ "$line" != *=* ]]; then
-      echo -e "${RED}✗ Invalid seed file line $line_number: expected KEY=value${NC}" >&2
-      exit 2
-    fi
-
-    key="$(trim "${line%%=*}")"
-    value="$(trim "${line#*=}")"
-
-    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      echo -e "${RED}✗ Invalid seed variable name on line $line_number${NC}" >&2
-      exit 2
-    fi
-
-    if ! is_allowed_simulator_seed_key "$key"; then
-      echo -e "${RED}✗ Unsupported seed variable on line $line_number: $key${NC}" >&2
-      exit 2
-    fi
-
-    if [[ ${#value} -ge 2 && "$value" == \"*\" && "$value" == *\" ]]; then
-      value="${value:1:${#value}-2}"
-    elif [[ ${#value} -ge 2 && "$value" == \'*\' && "$value" == *\' ]]; then
-      value="${value:1:${#value}-2}"
-    fi
-
-    printf -v "$key" '%s' "$value"
-  done < "$seed_file"
 }
 
 plist_set_or_add_string() {
@@ -357,7 +294,7 @@ case "${1:-}" in
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-gateway-smoke.xcresult"
 
-    load_simulator_gateway_seed "$seed_file"
+    openkeyboard_load_simulator_gateway_seed "$seed_file"
     if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
       echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
       exit 1
@@ -418,7 +355,7 @@ case "${1:-}" in
     destination="$(simulator_destination "$simulator")"
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/real-keyboard-live.xcresult"
-    load_simulator_gateway_seed "$seed_file"
+    openkeyboard_load_simulator_gateway_seed "$seed_file"
     if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
       echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
       exit 1

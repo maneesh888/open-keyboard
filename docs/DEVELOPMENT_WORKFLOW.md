@@ -79,8 +79,11 @@ The path must be `.githooks`.
 - Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`.
 - Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
   classifies gateway impact against `origin/main`.
-- Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials
-  stay in the ignored local seed and are never sent to GitHub.
+- Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
+  `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`, which live scripts resolve from
+  Git's common directory and read directly from every linked worktree. The seed is never copied to
+  a linked worktree or sent to GitHub. An alternate
+  `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
 - Each live route parses its `.xcresult` and requires exactly one passing test with no failures,
