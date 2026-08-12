@@ -175,7 +175,34 @@ Individual checks:
 ./scripts/ios/test.sh screenshots
 ```
 
-Live gateway tests are opt-in:
+The quick and full repository checks are deterministic and credential-free. Credential-gated
+simulator routes instead read one persistent per-machine file:
+
+```text
+<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
+```
+
+Create it from `scripts/ios/openkeyboard-gateway.seed.env.example` in the primary checkout, set the
+file to mode `600`, and keep its current-user-owned directory chain non-writable by group or other
+users and free of extended ACL entries. Git-ignored files are not copied into linked worktrees or
+synchronized by Git. The live scripts derive the primary checkout from
+`git rev-parse --path-format=absolute --git-common-dir`, so
+the same canonical file is used from the primary checkout and every linked worktree without copying
+credentials. Every machine and clone needs its own file. For cross-machine synchronization, use a
+trusted secret manager to materialize the allowlisted values into this path on each machine; never
+commit or copy the seed through disposable worktrees.
+
+These commands use the canonical seed and are credential-gated:
+
+```bash
+./scripts/check-live.sh gateway
+./scripts/ios/test.sh live-gateway-smoke
+./scripts/ios/test.sh real-keyboard-live
+```
+
+`OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` may select another regular, ignored, untracked, private
+file, but it must remain under the primary checkout's `.agent/local-seeds/` directory. Direct Swift
+package live tests remain opt-in through ephemeral environment variables:
 
 ```bash
 OPEN_KEYBOARD_LIVE_GATEWAY_URL=http://localhost:8080 \
@@ -184,7 +211,8 @@ OPEN_KEYBOARD_LIVE_MODEL=... \
 swift test --package-path OpenKeyboardCore --filter LiveGatewayTests
 ```
 
-Do not commit live keys, local config, `.xctestrun` files containing secrets, or live logs.
+Do not commit live keys, local config, `.xctestrun` files containing secrets, or live logs. Missing
+seed diagnostics report the dynamically resolved expected path, never values.
 
 ## Current Verification
 

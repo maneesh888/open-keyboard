@@ -140,7 +140,8 @@ For live configured keyboard behavior, prefer:
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
-This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be printed.
+This reads `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env` directly, including
+when invoked from a linked worktree; values must never be printed.
 
 ## Mock And Real Gateway Boundary
 
@@ -148,7 +149,14 @@ This uses `.agent/local-seeds/openkeyboard-gateway.env`; values must never be pr
 - Real gateway diagnostics are for checking the deployed server/model contract and performance.
 - If mock and real disagree, treat that as a contract issue to investigate, not as proof that the app is fine.
 - For OpenKeyboard LLM operations, keep operation names aligned with the gateway-supported contract. Do not invent client-only operation names without backend support.
-- Local live seed file path: `.agent/local-seeds/openkeyboard-gateway.env`.
+- Canonical per-machine live seed: `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`.
+  Live scripts resolve the primary checkout through Git's common directory and read this file
+  directly; they never copy credentials into linked worktrees.
+- Git does not synchronize ignored files. Each machine and clone needs its own mode-`600` seed in
+  a current-user-owned directory chain that is not writable by group or other users and has no
+  extended ACL entries; a trusted secret manager may materialize it at the canonical path when
+  cross-machine synchronization is desired, but agents must not transport it through Git or
+  disposable worktrees.
 - The only accepted simulator seed keys are `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`, `OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL`.
 - Use `scripts/ios/openkeyboard-gateway.seed.env.example` as the template. Do not commit the filled seed.
 

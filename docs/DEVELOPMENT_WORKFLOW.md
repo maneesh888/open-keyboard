@@ -64,6 +64,33 @@ credential-free push gate.
 | Gateway runtime or contract | `./scripts/check-live.sh gateway` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
+## Persistent local configuration
+
+The only repository-local, Git-ignored credential file consumed by OpenKeyboard scripts is the
+per-machine simulator gateway seed:
+
+```text
+<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
+```
+
+`scripts/check-live.sh gateway`, `scripts/ios/test.sh live-gateway-smoke`,
+`scripts/ios/test.sh real-keyboard-live`, and `scripts/ios/seed-simulator-gateway-config.sh` all use
+the shared safety helper to resolve it. The helper derives Git's common directory, validates the
+primary checkout, and accepts only a current-user-owned regular, ignored, untracked file below the
+canonical `.agent/local-seeds/` directory with no group or other access or extended ACL entries.
+The trusted directory chain must also be current-user-owned, non-writable by group or other users,
+and free of extended ACL entries. The helper rejects any `..` traversal, external paths, unsafe
+symlinks, files tracked by either the primary or executing worktree, unexpected variables, and
+overly broad permissions without logging values. The optional
+`OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override remains confined to that same directory.
+
+Ignored files are not synchronized by Git and are not copied into linked worktrees. Each machine
+and clone therefore needs its own canonical seed. A trusted secret manager may synchronize the
+values across machines by materializing a mode-`600` file at the canonical path on each machine;
+Git and disposable worktrees must not transport it. Protected release signing uses GitHub
+environment secrets instead of a local ignored file. Other live test routes that accept environment
+variables do not persist them in the repository.
+
 ## Hooks
 
 Enable committed hooks once per clone or worktree before the first commit or push:
@@ -79,8 +106,11 @@ The path must be `.githooks`.
 - Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`.
 - Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
   classifies gateway impact against `origin/main`.
-- Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials
-  stay in the ignored local seed and are never sent to GitHub.
+- Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
+  `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`, which live scripts resolve from
+  Git's common directory and read directly from every linked worktree. The seed is never copied to
+  a linked worktree or sent to GitHub. An alternate
+  `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
 - Each live route parses its `.xcresult` and requires exactly one passing test with no failures,

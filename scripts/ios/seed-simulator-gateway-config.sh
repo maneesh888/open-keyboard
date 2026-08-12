@@ -22,73 +22,11 @@ Required seed file variables:
   OPEN_KEYBOARD_SIMULATOR_API_KEY=your-real-key
   OPEN_KEYBOARD_SIMULATOR_MODEL=your-model
 
-The real seed file must live in an ignored local path such as:
-  .agent/local-seeds/openkeyboard-gateway.env
+The real seed file must live in the primary checkout's ignored local path:
+  <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
 
 The script intentionally redacts API key values in logs.
 USAGE
-}
-
-trim() {
-  local value="$1"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "$value"
-}
-
-is_allowed_seed_key() {
-  case "$1" in
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL|OPEN_KEYBOARD_SIMULATOR_API_KEY|OPEN_KEYBOARD_SIMULATOR_MODEL)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-load_seed_file() {
-  local line line_number key value
-  line_number=0
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_number=$((line_number + 1))
-    line="$(trim "$line")"
-
-    if [[ -z "$line" || "$line" == \#* ]]; then
-      continue
-    fi
-
-    if [[ "$line" == export[[:space:]]* ]]; then
-      line="$(trim "${line#export}")"
-    fi
-
-    if [[ "$line" != *=* ]]; then
-      echo "Invalid seed file line $line_number: expected KEY=value" >&2
-      exit 2
-    fi
-
-    key="$(trim "${line%%=*}")"
-    value="$(trim "${line#*=}")"
-
-    if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-      echo "Invalid seed variable name on line $line_number" >&2
-      exit 2
-    fi
-
-    if ! is_allowed_seed_key "$key"; then
-      echo "Unsupported seed variable on line $line_number: $key" >&2
-      exit 2
-    fi
-
-    if [[ ${#value} -ge 2 && "$value" == \"*\" && "$value" == *\" ]]; then
-      value="${value:1:${#value}-2}"
-    elif [[ ${#value} -ge 2 && "$value" == \'*\' && "$value" == *\' ]]; then
-      value="${value:1:${#value}-2}"
-    fi
-
-    printf -v "$key" '%s' "$value"
-  done < "$seed_file"
 }
 
 seed_file=""
@@ -129,7 +67,7 @@ fi
 
 seed_file="$(openkeyboard_require_local_seed_file "$REPO_ROOT" "$seed_file")" || exit 2
 
-load_seed_file
+openkeyboard_load_simulator_gateway_seed "$seed_file"
 
 required=(
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL

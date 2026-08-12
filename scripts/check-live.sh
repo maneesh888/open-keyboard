@@ -3,18 +3,19 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TARGET="${1:-}"
-DEFAULT_SEED_FILE="$ROOT/.agent/local-seeds/openkeyboard-gateway.env"
+DEFAULT_SEED_FILE=".agent/local-seeds/openkeyboard-gateway.env"
 source "$ROOT/scripts/ios/live-test-safety.sh"
 
 usage() {
   cat <<'EOF'
 Usage: ./scripts/check-live.sh gateway
 
-The gateway check uses the ignored local seed file:
-  .agent/local-seeds/openkeyboard-gateway.env
+The gateway check reads the persistent ignored seed in the primary checkout:
+  <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
 
 Optional:
-  OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE  Alternate ignored seed path.
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE  Alternate ignored seed beneath the
+                                             primary checkout's local-seeds directory.
   OPEN_KEYBOARD_LIVE_EXPECTED_SHA            Exact 40-character expected HEAD.
 EOF
 }
