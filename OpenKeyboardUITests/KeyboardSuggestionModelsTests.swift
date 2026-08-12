@@ -359,6 +359,11 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             original: "reply",
             replacement: "respond"
         )
+        let closeSynonym = KeyboardCorrectionSuggestion(
+            label: "Grammar correction",
+            original: "slim",
+            replacement: "trim"
+        )
         let spelling = KeyboardCorrectionSuggestion(
             label: "Correction",
             original: "recieve",
@@ -367,7 +372,29 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
 
         XCTAssertFalse(wordChoice.isAtomicCorrection(for: source))
         XCTAssertFalse(disguisedSynonym.isAtomicCorrection(for: source))
+        XCTAssertFalse(closeSynonym.isAtomicCorrection(for: "Use a slim border."))
+        XCTAssertFalse(
+            KeyboardCorrectionSuggestion(
+                label: "Grammar correction",
+                original: "a slim",
+                replacement: "a trim"
+            ).isAtomicCorrection(for: "Use a slim border.")
+        )
         XCTAssertTrue(spelling.isAtomicCorrection(for: "They recieve updates."))
+        XCTAssertTrue(
+            KeyboardCorrectionSuggestion(
+                label: "Agreement",
+                original: "is",
+                replacement: "are"
+            ).isAtomicCorrection(for: "They is ready.")
+        )
+        XCTAssertTrue(
+            KeyboardCorrectionSuggestion(
+                label: "Punctuation",
+                original: ",",
+                replacement: "."
+            ).isAtomicCorrection(for: "Ready,")
+        )
         XCTAssertTrue(
             KeyboardCorrectionSuggestion(
                 label: "Grammar",

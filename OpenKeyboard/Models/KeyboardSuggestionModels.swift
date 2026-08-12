@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum KeyboardGatewayActionContract {
     static let contractVersion = SemanticPromptContract.version
@@ -298,8 +299,10 @@ extension KeyboardCorrectionSuggestion {
               sourceText.range(of: cleanOriginal) != nil else {
             return false
         }
-        let originalWordCount = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).count
-        let replacementWordCount = cleanReplacement.split(whereSeparator: { $0.isWhitespace }).count
+        let originalWords = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let replacementWords = cleanReplacement.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let originalWordCount = originalWords.count
+        let replacementWordCount = replacementWords.count
         guard originalWordCount <= 3, replacementWordCount <= 3 else { return false }
 
         let metadata = [label, category ?? "", explanation ?? ""]
@@ -318,14 +321,109 @@ extension KeyboardCorrectionSuggestion {
             "missing", "extra word", "word form", "inflection", "contraction",
             "pronoun", "tense", "plural", "singular"
         ]
-        let editDistance = Self.characterEditDistance(cleanOriginal.lowercased(), cleanReplacement.lowercased())
-        let longerLength = max(cleanOriginal.count, cleanReplacement.count)
-        if originalWordCount == 1, replacementWordCount == 1 {
-            return editDistance <= max(2, longerLength / 3)
+        let hasMechanicalMarker = mechanicalMarkers.contains(where: metadata.contains)
+        if originalWordCount == replacementWordCount {
+            let changedTokens = zip(originalWords, replacementWords).filter { pair in pair.0 != pair.1 }
+            guard changedTokens.count == 1, let changedToken = changedTokens.first else { return false }
+            return Self.isMechanicalTokenReplacement(
+                original: changedToken.0,
+                replacement: changedToken.1,
+                hasMechanicalMarker: hasMechanicalMarker
+            )
         }
 
-        guard mechanicalMarkers.contains(where: metadata.contains) else { return false }
-        return editDistance <= max(3, longerLength / 3)
+        guard hasMechanicalMarker, abs(originalWordCount - replacementWordCount) == 1 else { return false }
+        return Self.isSingleMechanicalInsertionOrRemoval(originalWords, replacementWords)
+    }
+
+    private static func isMechanicalTokenReplacement(
+        original: String,
+        replacement: String,
+        hasMechanicalMarker: Bool
+    ) -> Bool {
+        let lowerOriginal = original.lowercased()
+        let lowerReplacement = replacement.lowercased()
+        if lowerOriginal == lowerReplacement { return true }
+
+        let letterSet = CharacterSet.letters.union(.decimalDigits)
+        let originalCore = lowerOriginal.trimmingCharacters(in: letterSet.inverted)
+        let replacementCore = lowerReplacement.trimmingCharacters(in: letterSet.inverted)
+        if !originalCore.isEmpty, originalCore == replacementCore { return true }
+        if originalCore.isEmpty, replacementCore.isEmpty { return hasMechanicalMarker }
+        if isLikelySpellingCorrection(originalCore, replacementCore) { return true }
+
+        guard hasMechanicalMarker else { return false }
+        if grammaticalWordFamilies.contains(where: { $0.contains(originalCore) && $0.contains(replacementCore) }) {
+            return true
+        }
+        return !inflectionStems(for: originalCore).isDisjoint(with: inflectionStems(for: replacementCore))
+    }
+
+    private static func isSingleMechanicalInsertionOrRemoval(_ lhs: [String], _ rhs: [String]) -> Bool {
+        let shorter = lhs.count < rhs.count ? lhs : rhs
+        let longer = lhs.count < rhs.count ? rhs : lhs
+        let allowedInsertedWords: Set<String> = ["a", "an", "the"]
+        for skippedIndex in longer.indices {
+            let candidate = longer.enumerated().compactMap { index, word in
+                index == skippedIndex ? nil : word.lowercased()
+            }
+            if candidate == shorter.map({ $0.lowercased() }),
+               allowedInsertedWords.contains(longer[skippedIndex].lowercased()) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static let grammaticalWordFamilies: [Set<String>] = [
+        ["am", "is", "are", "was", "were", "be", "been", "being"],
+        ["have", "has", "had", "having"],
+        ["do", "does", "did", "done", "doing"]
+    ]
+
+    private static func inflectionStems(for word: String) -> Set<String> {
+        guard !word.isEmpty else { return [] }
+        var stems: Set<String> = [word]
+        let suffixes = ["ing", "ed", "es", "s"]
+        for suffix in suffixes where word.hasSuffix(suffix) && word.count > suffix.count + 1 {
+            let stem = String(word.dropLast(suffix.count))
+            stems.insert(stem)
+            if suffix == "ing" {
+                stems.insert(stem + "e")
+                if stem.count > 2, stem.last == stem.dropLast().last {
+                    stems.insert(String(stem.dropLast()))
+                }
+            }
+        }
+        if word.hasSuffix("ies"), word.count > 4 {
+            stems.insert(String(word.dropLast(3)) + "y")
+        }
+        return stems
+    }
+
+    private static func isLikelySpellingCorrection(_ original: String, _ replacement: String) -> Bool {
+        guard !original.isEmpty, !replacement.isEmpty else { return false }
+        let editDistance = characterEditDistance(original, replacement)
+        guard editDistance <= max(2, max(original.count, replacement.count) / 3) else { return false }
+
+        let checker = UITextChecker()
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredCheckerLanguages = UITextChecker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
+        }
+        let languages = Set(preferredCheckerLanguages + ["en_US", "en_GB"])
+        let originalRange = NSRange(location: 0, length: original.utf16.count)
+        for language in languages {
+            let guesses = checker.guesses(
+                forWordRange: originalRange,
+                in: original,
+                language: language
+            ) ?? []
+            if guesses.contains(where: { $0.caseInsensitiveCompare(replacement) == .orderedSame }) {
+                return true
+            }
+        }
+        return false
     }
 
     private static func characterEditDistance(_ lhs: String, _ rhs: String) -> Int {
