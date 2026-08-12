@@ -123,7 +123,11 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 - proxies OpenAI-compatible `/v1/*` requests to Ollama-compatible backends
 - can route selected models to an optional Apfel backend
 
-The gateway is the trust boundary for model access, API keys, rate limits, logs, and upstream model routing.
+The Open Keyboard client owns the operation-specific instructions, strict JSON contract, response
+parsing, and UI behavior. Structured actions send the client-built messages with
+`response_format: {"type":"json_object"}` where the selected backend supports it. The gateway is
+the trust boundary for model access, API keys, rate limits, logs, and upstream model routing; it
+does not inject Open Keyboard prompts or rebuild the message conversation.
 
 ## Pairing Flow
 

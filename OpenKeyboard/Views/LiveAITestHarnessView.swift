@@ -118,9 +118,10 @@ struct LiveAITestHarnessView: View {
             operation: action,
             inputText: String(text.prefix(500)),
             messages: [
-                ChatMessage(role: "system", content: Self.structuredOperationSystemPrompt),
-                ChatMessage(role: "user", content: prompt(for: action, text: text))
+                ChatMessage(role: "system", content: KeyboardGatewayActionContract.structuredSystemPrompt),
+                ChatMessage(role: "user", content: KeyboardGatewayActionContract.prompt(operation: action, text: text))
             ],
+            responseFormat: .jsonObject,
             maxTokens: maxTokens(for: action),
             temperature: 0.1,
             stream: false
@@ -146,43 +147,6 @@ struct LiveAITestHarnessView: View {
             throw LiveAITestHarnessError.invalidResponse
         }
         return output
-    }
-
-    private static let structuredOperationSystemPrompt = """
-    You are an iOS keyboard text editing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
-    Use the requested operation and current text only. Unknown item types are allowed. Do not include markdown.
-    """
-
-    private func prompt(for action: String, text: String) throws -> String {
-        switch action {
-        case "fix_grammar":
-            return """
-            Operation: fix_grammar
-            Analyze this text and return structured JSON with a results array of correction items. Include category on each correction when possible. Preserve the original meaning and include corrected_text when you can safely produce the full corrected text.
-
-            Text:
-            \(text)
-            """
-        case "rewrite":
-            return """
-            Operation: rewrite
-            Improve this text for clarity, tone, and readability. Preserve the original meaning and return structured JSON with a rewrite/suggestion item and corrected_text for the full replacement.
-
-            Text:
-            \(text)
-            """
-        case "summarize":
-            return """
-            Operation: summarize
-            Summarize this text concisely. Return structured JSON with a summary item.
-
-            Text:
-            \(text)
-            """
-        default:
-            throw LiveAITestHarnessError.unsupportedAction
-        }
     }
 
     private func maxTokens(for action: String) throws -> Int {
@@ -237,6 +201,7 @@ private struct ChatRequest: Encodable {
     let operation: String
     let inputText: String
     let messages: [ChatMessage]
+    let responseFormat: ChatResponseFormat
     let maxTokens: Int
     let temperature: Double
     let stream: Bool
@@ -246,10 +211,17 @@ private struct ChatRequest: Encodable {
         case operation
         case inputText = "input_text"
         case messages
+        case responseFormat = "response_format"
         case maxTokens = "max_tokens"
         case temperature
         case stream
     }
+}
+
+private struct ChatResponseFormat: Encodable {
+    let type: String
+
+    static let jsonObject = ChatResponseFormat(type: "json_object")
 }
 
 private struct ChatMessage: Codable {

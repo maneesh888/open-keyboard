@@ -109,14 +109,16 @@ struct CanonicalGatewayClient {
         request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let normalizedOperation = operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
-            operation: operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            operation: normalizedOperation,
             inputText: inputText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)
             ],
+            responseFormat: normalizedOperation == nil ? nil : .jsonObject,
             maxTokens: maxTokens,
             temperature: temperature,
             stream: false
@@ -182,6 +184,7 @@ private struct CanonicalChatCompletionRequest: Encodable {
     let operation: String?
     let inputText: String?
     let messages: [CanonicalChatMessage]
+    let responseFormat: CanonicalChatResponseFormat?
     let maxTokens: Int
     let temperature: Double
     let stream: Bool
@@ -190,8 +193,15 @@ private struct CanonicalChatCompletionRequest: Encodable {
         case model, messages, temperature, stream
         case operation
         case inputText = "input_text"
+        case responseFormat = "response_format"
         case maxTokens = "max_tokens"
     }
+}
+
+private struct CanonicalChatResponseFormat: Encodable {
+    let type: String
+
+    static let jsonObject = CanonicalChatResponseFormat(type: "json_object")
 }
 
 private struct CanonicalChatMessage: Codable {

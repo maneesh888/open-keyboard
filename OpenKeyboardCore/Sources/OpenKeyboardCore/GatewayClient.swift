@@ -149,9 +149,16 @@ public final class GatewayClient: Sendable {
             operation: action.operationName,
             inputText: text,
             messages: [
-                ChatMessage(role: "system", content: Self.structuredResultSystemPrompt),
+                ChatMessage(
+                    role: "system",
+                    content: action.requiresStructuredJSON
+                        ? WritingPromptBuilder.structuredSystemPrompt
+                        : "You are an iOS keyboard writing assistant. Follow the user request and return only the requested text."
+                ),
                 ChatMessage(role: "user", content: prompt)
             ],
+            responseFormat: action.requiresStructuredJSON ? .jsonObject : nil,
+            temperature: action.requiresStructuredJSON ? 0.1 : nil,
             stream: false
         )
 
@@ -172,12 +179,6 @@ public final class GatewayClient: Sendable {
 
         return try Self.parseWritingActionResult(content, operation: action.operationName, fallbackText: text)
     }
-
-    private static let structuredResultSystemPrompt = """
-    You are an iOS keyboard writing assistant. Return strict JSON only.
-    Contract: {"operation":"fix_grammar|summarize|rewrite|...","results":[{"id":"...","type":"correction|suggestion|summary|warning|explanation","title":"...","text":"...","original":"...","replacement":"...","range":{"start":0,"end":0},"confidence":0.0,"explanation":"...","category":"..."}],"summary":"...","corrected_text":"..."}
-    Use the requested operation and current text only. Unknown fields are allowed. Do not include markdown.
-    """
 
     private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
         let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -395,6 +396,8 @@ private struct ChatCompletionRequest: Encodable {
     let operation: String
     let inputText: String
     let messages: [ChatMessage]
+    let responseFormat: ChatCompletionResponseFormat?
+    let temperature: Double?
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -402,8 +405,16 @@ private struct ChatCompletionRequest: Encodable {
         case operation
         case inputText = "input_text"
         case messages
+        case responseFormat = "response_format"
+        case temperature
         case stream
     }
+}
+
+private struct ChatCompletionResponseFormat: Encodable {
+    let type: String
+
+    static let jsonObject = ChatCompletionResponseFormat(type: "json_object")
 }
 
 private struct ChatMessage: Codable {
@@ -451,11 +462,11 @@ private struct RawWritingActionResult: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        operation = try container.decodeIfPresent(String.self, forKey: .operation)
-        results = try container.decodeIfPresent([RawWritingActionResultItem].self, forKey: .results)
-        rawItems = try container.decodeIfPresent([RawWritingActionResultItem].self, forKey: .rawItems)
-        rawResult = try? container.decodeIfPresent(RawWritingActionResultItem.self, forKey: .rawResult)
-        summary = try container.decodeIfPresent(String.self, forKey: .summary)
+        operation = try? container.decode(String.self, forKey: .operation)
+        results = try? container.decode([RawWritingActionResultItem].self, forKey: .results)
+        rawItems = try? container.decode([RawWritingActionResultItem].self, forKey: .rawItems)
+        rawResult = try? container.decode(RawWritingActionResultItem.self, forKey: .rawResult)
+        summary = try? container.decode(String.self, forKey: .summary)
         correctedText = Self.firstString(in: container, keys: [.correctedText, .correctedTextCamel])
         topLevelDisplayText = Self.firstString(in: container, keys: [.rawResult, .rewrittenText, .rewrittenTextCamel, .improvedText, .improvedTextCamel, .replacement, .text, .output])
     }
@@ -480,9 +491,51 @@ private struct RawWritingActionResultItem: Decodable {
     let range: WritingActionTextRange?
     let confidence: Double?
     let explanation: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, type, title, text, original, replacement, range, confidence, explanation
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? container.decode(String.self, forKey: .id)
+        type = try? container.decode(String.self, forKey: .type)
+        title = try? container.decode(String.self, forKey: .title)
+        text = try? container.decode(String.self, forKey: .text)
+        original = try? container.decode(String.self, forKey: .original)
+        replacement = try? container.decode(String.self, forKey: .replacement)
+        range = try? container.decode(WritingActionTextRange.self, forKey: .range)
+        confidence = Self.decodeConfidence(from: container)
+        explanation = try? container.decode(String.self, forKey: .explanation)
+    }
+
+    private static func decodeConfidence(from container: KeyedDecodingContainer<CodingKeys>) -> Double? {
+        if let value = try? container.decode(Double.self, forKey: .confidence) { return value }
+        guard let value = try? container.decode(String.self, forKey: .confidence) else { return nil }
+        return Double(value)
+    }
 }
 
-extension WritingActionTextRange: Decodable {}
+extension WritingActionTextRange: Decodable {
+    enum CodingKeys: String, CodingKey {
+        case start, end
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard let start = Self.decodeOffset(from: container, forKey: .start),
+              let end = Self.decodeOffset(from: container, forKey: .end) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Text range offsets must be integers."))
+        }
+        self.init(start: start, end: end)
+    }
+
+    private static func decodeOffset(from container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Int? {
+        if let value = try? container.decode(Int.self, forKey: key) { return value }
+        guard let value = try? container.decode(String.self, forKey: key) else { return nil }
+        return Int(value)
+    }
+}
 
 private struct ModelsResponse: Decodable {
     let data: [Model]
