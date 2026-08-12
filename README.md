@@ -132,15 +132,31 @@ does not inject Open Keyboard prompts or rebuild the message conversation.
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `1.0.0`. The immutable gitlink
-selects the exact package commit. `OpenKeyboardCore` consumes its Swift package product, while the
-app, extension, and UI tests compile the same generated Swift adapter. UI, request transport,
-gateway authentication, model routing, response parsing, and product presentation remain local.
+`Vendor/semantic-prompt-contract` Git submodule at contract version `1.0.0`. This path is a checkout
+of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
+commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
+and UI tests compile the same generated Swift adapter. UI, request transport, gateway
+authentication, model routing, response parsing, and product presentation remain local.
 
-Initialize the package after cloning with `git submodule update --init --recursive`. To upgrade,
-review the contract changelog and rendering-equivalence fixtures, move the gitlink to an intentional
-version, regenerate adapters in the package, then run `./scripts/check.sh --full` and the applicable
-live gateway gate. Never copy canonical prompt wording back into an OpenKeyboard source file.
+For a fresh checkout, clone with the submodule initialized:
+
+```bash
+git clone --recurse-submodules https://github.com/maneesh888/open-keyboard.git
+```
+
+For an existing clone, or if `Vendor/semantic-prompt-contract` is empty, recover the pinned checkout
+from the OpenKeyboard repository root:
+
+```bash
+git submodule update --init --recursive
+```
+
+Contract validation requires Git, npm with Node.js `^22.12.0` or `^24.0.0`, and a Swift toolchain
+provided by Xcode. Do not edit the vendored checkout directly. Make contract changes in the
+standalone `semantic-prompt-contract` repository, validate and version them there, then deliberately
+advance this repository's submodule gitlink after reviewing the changelog and
+rendering-equivalence fixtures. Run `./scripts/check.sh --full` and the applicable live gateway gate
+after an upgrade. Never copy canonical prompt wording back into an OpenKeyboard source file.
 
 ## Pairing Flow
 
