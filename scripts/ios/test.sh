@@ -12,6 +12,7 @@ BUILD_DESTINATION="generic/platform=iOS Simulator"
 DESTINATION="platform=iOS Simulator,name=iPhone 16"
 SE_DESTINATION="platform=iOS Simulator,name=iPhone SE (3rd generation)"
 CORE_PACKAGE="$REPO_ROOT/OpenKeyboardCore"
+DETERMINISTIC_UI_DERIVED_DATA="$REPO_ROOT/.build/deterministic-ui/DerivedData"
 DEFAULT_SIMULATOR_GATEWAY_SEED_FILE=".agent/local-seeds/openkeyboard-gateway.env"
 DEFAULT_REAL_KEYBOARD_SIMULATOR="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-iPhone 17 Pro}"
 source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
@@ -246,6 +247,7 @@ case "${1:-}" in
       -scheme "$SCHEME" \
       -destination "$DESTINATION" \
       -configuration Debug \
+      -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
       -only-testing:OpenKeyboardUITests \
       -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
@@ -258,6 +260,7 @@ case "${1:-}" in
       -scheme "$SCHEME" \
       -destination "$DESTINATION" \
       -configuration Debug \
+      -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
       -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO

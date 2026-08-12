@@ -55,6 +55,9 @@
 		OKPRODSTATEHOST0002 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKPRODSTATEHOST0001 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift */; };
 		OKSETVMTEST00000002 /* OpenKeyboardUITests/SettingsViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSETVMTEST00000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */; };
 		OKSETVMUITEST000002 /* OpenKeyboard/ViewModels/SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D79951F7327AC0D1CA1BDA /* OpenKeyboard/ViewModels/SettingsViewModel.swift */; };
+		OKSEMCONAPP00000002 /* SemanticPromptContract.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSEMCON0000000001 /* SemanticPromptContract.generated.swift */; };
+		OKSEMCONEXT00000002 /* SemanticPromptContract.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSEMCON0000000001 /* SemanticPromptContract.generated.swift */; };
+		OKSEMCONTEST0000002 /* SemanticPromptContract.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSEMCON0000000001 /* SemanticPromptContract.generated.swift */; };
 		OKSUGMODELAPP0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
 		OKSUGMODELEXT0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
 		OKSUGMODELTEST0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */; };
@@ -144,6 +147,7 @@
 		OKPLAYGROUND0000001 /* OpenKeyboard/Views/PlaygroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/PlaygroundView.swift; sourceTree = SOURCE_ROOT; };
 		OKPRODSTATEHOST0001 /* OpenKeyboard/Views/ProductionKeyboardStateHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/ProductionKeyboardStateHostView.swift; sourceTree = SOURCE_ROOT; };
 		OKSETVMTEST00000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/SettingsViewModelTests.swift; sourceTree = SOURCE_ROOT; };
+		OKSEMCON0000000001 /* SemanticPromptContract.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Vendor/semantic-prompt-contract/adapters/swift/Sources/SemanticPromptContract/SemanticPromptContract.generated.swift; sourceTree = SOURCE_ROOT; };
 		OKSUGMODEL000000001 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Models/KeyboardSuggestionModels.swift; sourceTree = SOURCE_ROOT; };
 		OKSUGMODELTESTCASE1 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift; sourceTree = SOURCE_ROOT; };
 		OKTHEME000000000000001 /* OpenKeyboardTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardTheme.swift; sourceTree = SOURCE_ROOT; };
@@ -181,6 +185,7 @@
 		1907F0F8DF9C0B5C3BCFA307 = {
 			isa = PBXGroup;
 			children = (
+				OKSEMCON0000000001 /* SemanticPromptContract.generated.swift */,
 				OKCANONGW000000000001 /* OpenKeyboard/Services/CanonicalGatewayClient.swift */,
 				OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */,
 				OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */,
@@ -380,6 +385,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				OKSEMCONAPP00000002 /* SemanticPromptContract.generated.swift in Sources */,
 				OKLIVE000000000000000002 /* OpenKeyboard/Views/LiveAITestHarnessView.swift in Sources */,
 				OKHOST000000000000000002 /* OpenKeyboard/Views/KeyboardExtensionHostTestView.swift in Sources */,
 				OKVISPREV000000000002 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift in Sources */,
@@ -404,6 +410,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				OKSEMCONTEST0000002 /* SemanticPromptContract.generated.swift in Sources */,
 				OKCGARCHTEST0000000002 /* OpenKeyboardUITests/GatewayClientArchitectureTests.swift in Sources */,
 				OKCANONGWTEST0000000002 /* OpenKeyboard/Services/CanonicalGatewayClient.swift in Sources */,
 				OKDEBUGPOLICYTEST0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
@@ -439,6 +446,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				OKSEMCONEXT00000002 /* SemanticPromptContract.generated.swift in Sources */,
 				OKDEBUGPOLICY0000002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
 				4AA7F5EC8066C0C5DAC5080AB /* OpenKeyboardExtension/KeyboardViewController.swift in Sources */,
 				572626087CD519914B6B58B5B /* OpenKeyboardExtension/KeyboardView.swift in Sources */,

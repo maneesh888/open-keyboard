@@ -2,6 +2,10 @@ import XCTest
 @testable import OpenKeyboardCore
 
 final class WritingActionTests: XCTestCase {
+    func testSharedContractVersionIsPinned() {
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "1.0.0")
+    }
+
     func testBuiltInActionsHaveStableTitles() {
         XCTAssertEqual(WritingAction.continueWriting.title, "Continue Writing")
         XCTAssertEqual(WritingAction.rewrite.title, "Rewrite")

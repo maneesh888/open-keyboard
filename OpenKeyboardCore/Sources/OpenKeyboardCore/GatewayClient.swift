@@ -1,4 +1,5 @@
 import Foundation
+import SemanticPromptContract
 
 public struct HTTPRequest: Equatable, Sendable {
     public var method: String
@@ -153,7 +154,7 @@ public final class GatewayClient: Sendable {
                     role: "system",
                     content: action.requiresStructuredJSON
                         ? WritingPromptBuilder.structuredSystemPrompt
-                        : "You are an iOS keyboard writing assistant. Follow the user request and return only the requested text."
+                        : SemanticPromptContract.unstructuredWritingSystemInstruction
                 ),
                 ChatMessage(role: "user", content: prompt)
             ],

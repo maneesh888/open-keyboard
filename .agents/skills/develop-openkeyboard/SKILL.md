@@ -17,6 +17,7 @@ gateway, and proof boundaries.
 5. Otherwise read only the requested work package, acceptance, verification, and proof-limit sections needed for the change.
 6. Read `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md` and focused plans only when their surface is affected or status sources are ambiguous.
 7. Read `docs/DEVELOPMENT_WORKFLOW.md` when selecting checks or changing workflow, hooks, CI, signing, deployment, or external-tool behavior.
+8. For semantic prompts, schemas, generated adapters, or gateway diagnostic fixtures, initialize the pinned `Vendor/semantic-prompt-contract` submodule and treat its canonical JSON as the source of truth.
 
 Preserve unrelated work. Use an isolated worktree when exact-head operations would disturb a dirty
 checkout.
@@ -40,6 +41,7 @@ a higher cumulative gate without expanding the task's proof claim.
 6. Keep deterministic, screenshot, real-extension, live-gateway, signing, deployment, and App Review evidence distinct.
 7. Update affected documentation when a user-visible contract, proof route, workflow, or status source changes.
 8. Never claim evidence for an unexecuted simulator, extension lifecycle, device, gateway, signing, deployment, or release path.
+9. Never add fallback prompt copies. Make semantic changes in the shared package, classify version impact, regenerate adapters, inspect equivalence fixtures, and advance the consumer gitlink intentionally.
 
 ## Lifecycle autonomy
 
@@ -70,6 +72,7 @@ ordinary pull-request workflow.
 - Run `./scripts/check.sh --hygiene` for a Fast handoff with file changes.
 - Run `./scripts/check.sh --quick` for Standard; mandatory hooks may supply it at commit.
 - Run `./scripts/check.sh --full` for Release and before an authorized push.
+- Run `./scripts/check-semantic-prompt-contract.sh` whenever the contract gitlink, canonical semantics, schemas, fixtures, or generated-adapter wiring changes.
 - Run `./scripts/check-live.sh gateway` only when the exact-head classifier selects gateway impact.
 - Never bypass hooks or scanners.
 

@@ -247,7 +247,7 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: "You are an iOS keyboard writing assistant. Return strict JSON only.",
+            systemPrompt: SemanticPromptContract.keyboardSuggestionsSystemInstruction,
             userPrompt: KeyboardSuggestionParser.prompt(for: suggestionInput),
             maxTokens: 1_200
         ) { content in

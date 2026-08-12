@@ -129,6 +129,19 @@ parsing, and UI behavior. Structured actions send the client-built messages with
 the trust boundary for model access, API keys, rate limits, logs, and upstream model routing; it
 does not inject Open Keyboard prompts or rebuild the message conversation.
 
+### Shared semantic prompt contract
+
+Canonical writing-action and bounded-suggestion semantics live in the pinned
+`Vendor/semantic-prompt-contract` Git submodule at contract version `1.0.0`. The immutable gitlink
+selects the exact package commit. `OpenKeyboardCore` consumes its Swift package product, while the
+app, extension, and UI tests compile the same generated Swift adapter. UI, request transport,
+gateway authentication, model routing, response parsing, and product presentation remain local.
+
+Initialize the package after cloning with `git submodule update --init --recursive`. To upgrade,
+review the contract changelog and rendering-equivalence fixtures, move the gitlink to an intentional
+version, regenerate adapters in the package, then run `./scripts/check.sh --full` and the applicable
+live gateway gate. Never copy canonical prompt wording back into an OpenKeyboard source file.
+
 ## Pairing Flow
 
 1. Run LLM Gateway locally or on a host reachable by the iPhone/simulator.

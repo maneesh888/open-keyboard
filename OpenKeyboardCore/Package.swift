@@ -10,8 +10,16 @@ let package = Package(
     products: [
         .library(name: "OpenKeyboardCore", targets: ["OpenKeyboardCore"])
     ],
+    dependencies: [
+        .package(path: "../Vendor/semantic-prompt-contract")
+    ],
     targets: [
-        .target(name: "OpenKeyboardCore"),
+        .target(
+            name: "OpenKeyboardCore",
+            dependencies: [
+                .product(name: "SemanticPromptContract", package: "semantic-prompt-contract")
+            ]
+        ),
         .testTarget(name: "OpenKeyboardCoreTests", dependencies: ["OpenKeyboardCore"])
     ]
 )

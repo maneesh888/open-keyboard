@@ -1,6 +1,15 @@
 import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
+    func testSharedContractVersionAndRewriteStylesArePinned() throws {
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "1.0.0")
+        let prompts = try KeyboardRewriteStyle.allCases.map { style in
+            try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).prompt(for: "Source text"))
+        }
+        XCTAssertEqual(Set(prompts).count, KeyboardRewriteStyle.allCases.count)
+        XCTAssertTrue(prompts.allSatisfy { $0.contains("Operation: rewrite") })
+    }
+
     func testProductionPromptBuilderContainsAllFiveOperationContracts() {
         let scenarios: [(operation: String, prompt: String, requiredRules: [String])] = [
             (
