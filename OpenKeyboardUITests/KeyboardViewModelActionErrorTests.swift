@@ -1700,7 +1700,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.completionPanelState, .noIssues)
     }
 
-    func testAcceptingStaleArticleCorrectionDoesNotDuplicateAlreadyCorrectedText() async {
+    func testStaleArticleCorrectionIsFilteredBeforePresentation() async {
         let text = "Yesterday I has an apple before the meeting, and this message still sound wrong."
         let proxy = FakeTextDocumentProxy(text: text)
         let viewModel = KeyboardViewModel(
@@ -1713,12 +1713,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.performAIAction(.fixGrammar)
         await waitUntil { !viewModel.isPerformingAIAction }
 
-        XCTAssertEqual(viewModel.currentCorrection?.id, "article")
-        viewModel.applyCurrentCorrection()
-
+        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
         XCTAssertEqual(proxy.text, text)
         XCTAssertFalse(proxy.text.contains("ann apple"))
-        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
     }
 
     private func assertGatewayFailureShowsErrorAndPreservesText(for action: KeyboardAIAction, file: StaticString = #filePath, line: UInt = #line) async {

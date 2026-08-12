@@ -388,6 +388,27 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 replacement: "are"
             ).isAtomicCorrection(for: "They is ready.")
         )
+        XCTAssertFalse(
+            KeyboardCorrectionSuggestion(
+                label: "Agreement",
+                original: "is",
+                replacement: "are"
+            ).isAtomicCorrection(for: "This works.")
+        )
+        XCTAssertTrue(
+            KeyboardCorrectionSuggestion(
+                label: "Missing word",
+                original: "want go",
+                replacement: "want to go"
+            ).isAtomicCorrection(for: "I want go now.")
+        )
+        XCTAssertTrue(
+            KeyboardCorrectionSuggestion(
+                label: "Extra word",
+                original: "of of delays",
+                replacement: "of delays"
+            ).isAtomicCorrection(for: "Because of of delays.")
+        )
         XCTAssertTrue(
             KeyboardCorrectionSuggestion(
                 label: "Punctuation",

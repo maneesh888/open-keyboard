@@ -296,7 +296,7 @@ extension KeyboardCorrectionSuggestion {
               !cleanReplacement.isEmpty,
               cleanOriginal != cleanReplacement,
               cleanOriginal != sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
-              sourceText.range(of: cleanOriginal) != nil else {
+              sourceText.correctionRange(of: cleanOriginal) != nil else {
             return false
         }
         let originalWords = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).map(String.init)
@@ -362,7 +362,10 @@ extension KeyboardCorrectionSuggestion {
     private static func isSingleMechanicalInsertionOrRemoval(_ lhs: [String], _ rhs: [String]) -> Bool {
         let shorter = lhs.count < rhs.count ? lhs : rhs
         let longer = lhs.count < rhs.count ? rhs : lhs
-        let allowedInsertedWords: Set<String> = ["a", "an", "the"]
+        let allowedInsertedWords: Set<String> = [
+            "a", "an", "the", "to", "of", "in", "on", "at", "for", "from",
+            "with", "by", "and", "or", "but", "as", "than", "that", "if", "so", "not"
+        ]
         for skippedIndex in longer.indices {
             let candidate = longer.enumerated().compactMap { index, word in
                 index == skippedIndex ? nil : word.lowercased()
