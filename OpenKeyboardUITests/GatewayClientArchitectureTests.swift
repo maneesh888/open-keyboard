@@ -2,7 +2,7 @@ import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
-        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "2.0.0")
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "2.0.1")
         let prompts = try KeyboardRewriteStyle.allCases.map { style in
             try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).prompt(for: "Source text"))
         }
