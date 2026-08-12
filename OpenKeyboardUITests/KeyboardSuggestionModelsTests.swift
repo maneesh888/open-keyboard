@@ -624,6 +624,21 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         }
     }
 
+    func testStructuredOperationToleratesNoncanonicalOptionalMetadata() throws {
+        let json = #"{"operation":"fix_grammar","results":[{"id":1,"type":"correction","title":"Spelling","text":"Fix typo","original":"teh","replacement":"the","range":{"start":"0","end":"3"},"confidence":"0.97"}],"summary":{"unexpected":true},"corrected_text":"the message"}"#
+
+        let result = try KeyboardActionOperationResult.parse(json, operation: "fix_grammar", fallbackText: "teh message")
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(result.items.count, 1)
+        XCTAssertEqual(result.items[0].id, "item-1")
+        XCTAssertEqual(result.items[0].replacement, "the")
+        XCTAssertEqual(result.items[0].range, KeyboardTextRange(start: 0, end: 3))
+        XCTAssertEqual(result.items[0].confidence, 0.97)
+        XCTAssertNil(result.summary)
+        XCTAssertEqual(result.correctedText, "the message")
+    }
+
     func testCorrectionSmokeAcceptsStructuredJSONResponses() {
         XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse(#"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#))
         XCTAssertTrue(NetworkManager.isUsableCorrectionSmokeResponse(#"{"operation":"fix_grammar","results":[{"type":"correction","original":"has","replacement":"have"},{"type":"correction","original":"a apple","replacement":"an apple"}]}"#))

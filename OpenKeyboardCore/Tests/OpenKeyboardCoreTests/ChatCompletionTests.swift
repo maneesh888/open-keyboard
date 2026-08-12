@@ -20,11 +20,34 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(json["stream"] as? Bool, false)
         XCTAssertEqual(json["operation"] as? String, "fix_grammar")
         XCTAssertEqual(json["input_text"] as? String, "i has a apple")
+        let responseFormat = try XCTUnwrap(json["response_format"] as? [String: String])
+        XCTAssertEqual(responseFormat, ["type": "json_object"])
+        XCTAssertEqual(json["temperature"] as? Double, 0.1)
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
         XCTAssertEqual(messages.first?["role"], "system")
-        XCTAssertTrue(messages.first?["content"]?.contains("results") == true)
+        XCTAssertEqual(messages.first?["content"], WritingPromptBuilder.structuredSystemPrompt)
         XCTAssertEqual(messages.last?["role"], "user")
-        XCTAssertTrue(messages.last?["content"]?.contains("i has a apple") == true)
+        XCTAssertEqual(messages.last?["content"], WritingPromptBuilder.prompt(for: .fixGrammar, text: "i has a apple"))
+    }
+
+    func testCustomWritingActionKeepsPlainTextContractWithoutResponseFormat() async throws {
+        let server = DummyGatewayServer(.chatPlainText("Friendly text."))
+        let client = GatewayClient(config: validConfig, httpClient: server)
+        let action = WritingAction.custom(
+            id: "friendly",
+            title: "Make Friendly",
+            promptTemplate: "Make this friendly:\n{{text}}"
+        )
+
+        let output = try await client.performWritingAction(action, text: "No.", model: "test-model")
+
+        XCTAssertEqual(output, "Friendly text.")
+        let request = try XCTUnwrap(server.requests.first)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.body)) as? [String: Any])
+        XCTAssertNil(json["response_format"])
+        XCTAssertNil(json["temperature"])
+        let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
+        XCTAssertEqual(messages.last?["content"], "Make this friendly:\nNo.")
     }
 
     func testPerformWritingActionResultParsesMultipleStructuredItems() async throws {
@@ -144,6 +167,22 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertTrue(result.items.contains { $0.original == "a apple" && $0.replacement == "an apple" })
         XCTAssertTrue(result.items.contains { $0.original == "nt" && $0.replacement == "not" })
         XCTAssertTrue(result.items.contains { $0.original == "god" && $0.replacement == "good" })
+    }
+
+    func testStructuredOperationResultToleratesNoncanonicalOptionalMetadata() async throws {
+        let content = #"{"operation":"fix_grammar","results":[{"id":1,"type":"correction","title":"Spelling","text":"Fix typo","original":"teh","replacement":"the","range":{"start":"0","end":"3"},"confidence":"0.97"}],"summary":{"unexpected":true},"corrected_text":"the message"}"#
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
+
+        let result = try await client.performWritingActionResult(.fixGrammar, text: "teh message", model: "test-model")
+
+        XCTAssertTrue(result.isStructuredResponse)
+        XCTAssertEqual(result.items.count, 1)
+        XCTAssertEqual(result.items[0].id, "item-1")
+        XCTAssertEqual(result.items[0].replacement, "the")
+        XCTAssertEqual(result.items[0].range, WritingActionTextRange(start: 0, end: 3))
+        XCTAssertEqual(result.items[0].confidence, 0.97)
+        XCTAssertNil(result.summary)
+        XCTAssertEqual(result.correctedText, "the message")
     }
 
 

@@ -7,7 +7,7 @@ final class UserFlowTests: XCTestCase {
             action: .fixGrammar,
             typedText: "i has a apple",
             modelResponse: "I have an apple.",
-            expectedPromptFragments: ["Operation: fix_grammar", "structured JSON", "results array", "i has a apple"],
+            expectedPromptFragments: ["Operation: fix_grammar", "Return strict JSON only", "one atomic correction result per distinct issue", "i has a apple"],
             replacementStrategy: .replaceAll
         )
 
@@ -47,7 +47,7 @@ final class UserFlowTests: XCTestCase {
             action: .continueWriting,
             typedText: "Once the keyboard connects",
             modelResponse: ", it can suggest the next sentence.",
-            expectedPromptFragments: ["Continue writing", "Return only the continuation", "Once the keyboard connects"],
+            expectedPromptFragments: ["Operation: continue_writing", "only the new continuation", "Once the keyboard connects"],
             replacementStrategy: .appendToCursor
         )
 

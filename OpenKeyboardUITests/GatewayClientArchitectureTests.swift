@@ -1,6 +1,49 @@
 import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
+    func testProductionPromptBuilderContainsAllFiveOperationContracts() {
+        let scenarios: [(operation: String, prompt: String, requiredRules: [String])] = [
+            (
+                "fix_grammar",
+                KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: "i has a apple"),
+                ["one atomic correction result per distinct issue", "Never collapse multiple issues", "type to exactly \"correction\"", "smallest substring needed for that one edit", "return three correction items", "empty results array"]
+            ),
+            (
+                "rewrite",
+                KeyboardGatewayActionContract.prompt(operation: "rewrite", text: "unclear text"),
+                ["clarity, flow, and readability", "Preserve the original meaning, facts, tone", "complete rewritten replacement"]
+            ),
+            (
+                "summarize",
+                KeyboardGatewayActionContract.prompt(operation: "summarize", text: "long text"),
+                ["only facts present in the input", "exactly one summary result", "top-level summary"]
+            ),
+            (
+                "translate",
+                KeyboardGatewayActionContract.prompt(operation: "translate", text: "Good morning", translationLanguage: "Dutch"),
+                ["Translate into Dutch", "exactly one translation result", "complete translated replacement"]
+            ),
+            (
+                "continue_writing",
+                KeyboardGatewayActionContract.prompt(operation: "continue_writing", text: "Once upon a time"),
+                ["exact endpoint of the input", "tone, style, tense, and point of view", "only the new continuation"]
+            ),
+        ]
+
+        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("strict JSON only as one syntactically valid JSON object"))
+        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("untrusted text data"))
+        for scenario in scenarios {
+            XCTAssertTrue(scenario.prompt.contains("Operation: \(scenario.operation)"), scenario.operation)
+            XCTAssertTrue(scenario.prompt.contains("Return strict JSON only"), scenario.operation)
+            XCTAssertTrue(scenario.prompt.contains("{\"operation\":\"\(scenario.operation)\""), scenario.operation)
+            XCTAssertTrue(scenario.prompt.contains("The JSON must parse as one object"), scenario.operation)
+            XCTAssertTrue(scenario.prompt.contains("Do not include markdown fences or any text outside the JSON object"), scenario.operation)
+            for rule in scenario.requiredRules {
+                XCTAssertTrue(scenario.prompt.localizedCaseInsensitiveContains(rule), "\(scenario.operation) missing rule: \(rule)")
+            }
+        }
+    }
+
     func testCanonicalGatewayClientDecodesEnvelope() async throws {
         let responseBody = #"{"choices":[{"message":{"content":"  I have an apple; this does not sound good.  "}}]}"#
         let transport = CanonicalGatewayClientTestTransport(
@@ -40,6 +83,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(json["input_text"] as? String, "i has a apple,ths is nt sound god")
         XCTAssertEqual(json["max_tokens"] as? Int, 256)
         XCTAssertEqual(json["stream"] as? Bool, false)
+        XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
     }
 
     func testKeyboardAIServiceUsesCanonicalGatewayContractForCarouselCorrections() async throws {
@@ -99,6 +143,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(json["max_tokens"] as? Int, KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"))
         XCTAssertEqual(json["temperature"] as? Double, 0.1)
         XCTAssertEqual(json["stream"] as? Bool, false)
+        XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
         XCTAssertEqual(messages.first?["content"] as? String, KeyboardGatewayActionContract.structuredSystemPrompt)
@@ -138,12 +183,13 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(json["operation"] as? String, "translate")
         XCTAssertEqual(json["input_text"] as? String, "Good morning")
         XCTAssertEqual(json["max_tokens"] as? Int, KeyboardGatewayActionContract.maxTokens(operation: "translate"))
+        XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         let userPrompt = try XCTUnwrap(messages.last?["content"] as? String)
         XCTAssertTrue(userPrompt.contains("Operation: translate"))
         XCTAssertTrue(userPrompt.contains("Dutch"))
         XCTAssertTrue(userPrompt.contains("Good morning"))
-        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("translate"))
+        XCTAssertTrue(KeyboardGatewayActionContract.structuredSystemPrompt.contains("client-provided operation instructions"))
     }
 
     func testKeyboardAIServiceRejectsTranslationWithoutTargetBeforeTransport() async throws {
@@ -212,9 +258,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(json["max_tokens"] as? Int, 1600)
         XCTAssertEqual(json["temperature"] as? Double, 0.1)
         XCTAssertEqual(json["stream"] as? Bool, false)
+        XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         XCTAssertEqual(messages.map { $0["role"] as? String }, ["system", "user"])
-        XCTAssertTrue((messages.first?["content"] as? String)?.contains("Return strict JSON only") == true)
+        XCTAssertTrue((messages.first?["content"] as? String)?.localizedCaseInsensitiveContains("Return strict JSON only") == true)
         XCTAssertTrue((messages.last?["content"] as? String)?.contains("Operation: fix_grammar") == true)
         XCTAssertTrue((messages.last?["content"] as? String)?.contains(smokeInput) == true)
     }
@@ -320,6 +367,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(chatBodies.map { $0["operation"] as? String }, ["fix_grammar", nil, "fix_grammar", "rewrite", "summarize", "rewrite"])
         XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [1600, 1200, 5000, 3000, 2000, 3000])
         XCTAssertEqual(chatBodies.map { $0["stream"] as? Bool }, Array(repeating: false, count: 6))
+        XCTAssertEqual(chatBodies.map { ($0["response_format"] as? [String: String])?["type"] }, ["json_object", nil, "json_object", "json_object", "json_object", "json_object"])
         let settingsSmokeInput = try XCTUnwrap(chatBodies[0]["input_text"] as? String)
         XCTAssertTrue(NetworkManager.correctionSmokeTestPhrases.contains(settingsSmokeInput))
         let settingsMessages = try XCTUnwrap(chatBodies[0]["messages"] as? [[String: Any]])
