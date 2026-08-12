@@ -364,7 +364,7 @@ extension KeyboardCorrectionSuggestion {
         let longer = lhs.count < rhs.count ? rhs : lhs
         let allowedInsertedWords: Set<String> = [
             "a", "an", "the", "to", "of", "in", "on", "at", "for", "from",
-            "with", "by", "and", "or", "but", "as", "than", "that", "if", "so", "not"
+            "with", "by", "and", "or", "but", "as", "than", "that", "if", "so"
         ]
         for skippedIndex in longer.indices {
             let candidate = longer.enumerated().compactMap { index, word in
