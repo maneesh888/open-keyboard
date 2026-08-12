@@ -53,6 +53,21 @@ openkeyboard_primary_checkout_root() {
   printf '%s\n' "$canonical_primary_checkout"
 }
 
+openkeyboard_require_private_seed_permissions() {
+  local seed_file="$1"
+  local file_mode
+
+  file_mode="$(stat -f '%Lp' "$seed_file" 2>/dev/null)" || \
+    file_mode="$(stat -c '%a' "$seed_file" 2>/dev/null)" || {
+      echo "Live verification could not validate local seed permissions." >&2
+      return 1
+    }
+  if [[ ! "$file_mode" =~ ^[0-7]{3,4}$ ]] || (( (8#$file_mode & 077) != 0 )); then
+    echo "Live verification requires local seed permissions to block group and other access (for example, chmod 600)." >&2
+    return 1
+  fi
+}
+
 openkeyboard_require_local_seed_file() {
   local repository_root="$1"
   local requested_path="$2"
@@ -111,6 +126,7 @@ openkeyboard_require_local_seed_file() {
       return 1
       ;;
   esac
+  openkeyboard_require_private_seed_permissions "$canonical_file" || return 1
 
   relative_path="${canonical_file#"$primary_checkout"/}"
   if git -C "$primary_checkout" ls-files --error-unmatch -- "$relative_path" >/dev/null 2>&1; then

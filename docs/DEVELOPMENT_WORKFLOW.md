@@ -64,6 +64,31 @@ credential-free push gate.
 | Gateway runtime or contract | `./scripts/check-live.sh gateway` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
+## Persistent local configuration
+
+The only repository-local, Git-ignored credential file consumed by OpenKeyboard scripts is the
+per-machine simulator gateway seed:
+
+```text
+<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
+```
+
+`scripts/check-live.sh gateway`, `scripts/ios/test.sh live-gateway-smoke`,
+`scripts/ios/test.sh real-keyboard-live`, and `scripts/ios/seed-simulator-gateway-config.sh` all use
+the shared safety helper to resolve it. The helper derives Git's common directory, validates the
+primary checkout, and accepts only a regular, ignored, untracked file below the canonical
+`.agent/local-seeds/` directory with no group or other access. It rejects traversal, external paths,
+unsafe symlinks, tracked files, unexpected variables, and overly broad permissions without logging
+values. The optional `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override remains confined to that
+same directory.
+
+Ignored files are not synchronized by Git and are not copied into linked worktrees. Each machine
+and clone therefore needs its own canonical seed. A trusted secret manager may synchronize the
+values across machines by materializing a mode-`600` file at the canonical path on each machine;
+Git and disposable worktrees must not transport it. Protected release signing uses GitHub
+environment secrets instead of a local ignored file. Other live test routes that accept environment
+variables do not persist them in the repository.
+
 ## Hooks
 
 Enable committed hooks once per clone or worktree before the first commit or push:

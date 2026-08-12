@@ -7,6 +7,33 @@ The gateway is **complete and ready to test**.
 
 ---
 
+## Persistent Per-Machine Live Configuration
+
+Deterministic commands such as `./scripts/check.sh --quick`, `./scripts/check.sh --full`, and normal
+GitHub CI do not require local credentials. The credential-gated simulator commands use:
+
+```text
+<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
+```
+
+Create that file from `scripts/ios/openkeyboard-gateway.seed.env.example` in the primary checkout
+and run `chmod 600` on it. Git-ignored files are not copied into linked worktrees or synchronized by
+Git. The scripts resolve the primary checkout through Git's common directory, so linked worktrees
+reuse the canonical file directly and deleting them cannot delete it. Every machine and clone needs
+its own seed. If cross-machine synchronization is needed, use a trusted secret manager to create the
+mode-`600` file at the canonical path on each machine rather than committing or copying it through a
+worktree.
+
+The file accepts only `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`,
+`OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL`. An
+`OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override must still resolve to a private, ignored,
+untracked regular file below the primary checkout's `.agent/local-seeds/` directory. Run
+`./scripts/check-live.sh gateway`, `./scripts/ios/test.sh live-gateway-smoke`, or
+`./scripts/ios/test.sh real-keyboard-live` only when local credentials are intentionally available.
+Missing or rejected configuration reports a path or policy reason without printing values.
+
+---
+
 ## 1. Test LLM Gateway
 
 ### Start the Gateway

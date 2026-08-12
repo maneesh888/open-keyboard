@@ -38,14 +38,27 @@ initialize_repository() {
   git -C "$repository" commit -q -m base
 }
 
+SECRET_SENTINEL='test-only-secret-value-that-must-never-be-logged'
+
 write_valid_seed() {
   local seed_file="$1"
 
   printf '%s\n' \
     'OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=https://gateway.example.invalid' \
-    'OPEN_KEYBOARD_SIMULATOR_API_KEY=test-only-value' \
+    "OPEN_KEYBOARD_SIMULATOR_API_KEY=$SECRET_SENTINEL" \
     'OPEN_KEYBOARD_SIMULATOR_MODEL=test-model' \
     > "$seed_file"
+  chmod 600 "$seed_file"
+}
+
+assert_output_excludes_secret() {
+  local output_file="$1"
+  local context="$2"
+
+  if grep -Fq -- "$SECRET_SENTINEL" "$output_file"; then
+    echo "$context emitted a secret value." >&2
+    exit 1
+  fi
 }
 
 PRIMARY_CHECKOUT="$FIXTURE/machine one/Open Keyboard"
@@ -60,11 +73,15 @@ if [[ "$resolved_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
   exit 1
 fi
 
-resolved_seed="$(
-  openkeyboard_require_local_seed_file \
-    "$PRIMARY_CHECKOUT" \
-    '.agent/local-seeds/openkeyboard-gateway.env'
-)"
+NORMAL_OUTPUT="$FIXTURE/normal-output.log"
+if ! openkeyboard_require_local_seed_file \
+  "$PRIMARY_CHECKOUT" \
+  '.agent/local-seeds/openkeyboard-gateway.env' > "$NORMAL_OUTPUT" 2>&1; then
+  echo "Primary checkout did not accept its canonical local seed." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$NORMAL_OUTPUT" "Normal seed validation"
+IFS= read -r resolved_seed < "$NORMAL_OUTPUT"
 if [[ "$resolved_seed" != "$(realpath "$VALID_SEED")" ]]; then
   echo "Primary checkout did not resolve its canonical local seed." >&2
   exit 1
@@ -101,7 +118,12 @@ if [[ "$resolved_alternate_seed" != "$(realpath "$ALTERNATE_SEED")" ]]; then
   exit 1
 fi
 
-openkeyboard_load_simulator_gateway_seed "$VALID_SEED"
+LOAD_OUTPUT="$FIXTURE/load-output.log"
+if ! openkeyboard_load_simulator_gateway_seed "$VALID_SEED" > "$LOAD_OUTPUT" 2>&1; then
+  echo "The valid simulator seed could not be loaded." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$LOAD_OUTPUT" "Normal seed loading"
 if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || \
       -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || \
       -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
@@ -114,11 +136,30 @@ unset \
   OPEN_KEYBOARD_SIMULATOR_MODEL
 
 UNSUPPORTED_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/unsupported.env"
-printf 'OPEN_KEYBOARD_SIMULATOR_UNDOCUMENTED=test-only-value\n' > "$UNSUPPORTED_SEED"
-if openkeyboard_load_simulator_gateway_seed "$UNSUPPORTED_SEED" >/dev/null 2>&1; then
+write_valid_seed "$UNSUPPORTED_SEED"
+printf 'OPEN_KEYBOARD_SIMULATOR_UNDOCUMENTED=test-only-value\n' >> "$UNSUPPORTED_SEED"
+UNSUPPORTED_OUTPUT="$FIXTURE/unsupported-output.log"
+if openkeyboard_load_simulator_gateway_seed "$UNSUPPORTED_SEED" > "$UNSUPPORTED_OUTPUT" 2>&1; then
   echo "An undocumented simulator seed key was accepted." >&2
   exit 1
 fi
+assert_output_excludes_secret "$UNSUPPORTED_OUTPUT" "Failing seed loading"
+unset \
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+  OPEN_KEYBOARD_SIMULATOR_API_KEY \
+  OPEN_KEYBOARD_SIMULATOR_MODEL
+
+PERMISSIVE_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/permissive.env"
+write_valid_seed "$PERMISSIVE_SEED"
+chmod 644 "$PERMISSIVE_SEED"
+PERMISSIVE_OUTPUT="$FIXTURE/permissive-output.log"
+if openkeyboard_require_local_seed_file \
+  "$PRIMARY_CHECKOUT" \
+  '.agent/local-seeds/permissive.env' > "$PERMISSIVE_OUTPUT" 2>&1; then
+  echo "A seed file readable by group or other users was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$PERMISSIVE_OUTPUT" "Permission rejection"
 
 OUTSIDE_SEED="$PRIMARY_CHECKOUT/outside.env"
 write_valid_seed "$OUTSIDE_SEED"
@@ -193,6 +234,10 @@ if missing_output="$(
 fi
 if [[ "$missing_output" != *"$EXPECTED_MISSING_SEED"* ]]; then
   echo "Missing-seed diagnostics did not report the dynamically resolved expected path." >&2
+  exit 1
+fi
+if [[ "$missing_output" == *"$SECRET_SENTINEL"* ]]; then
+  echo "Missing-seed diagnostics emitted a secret value." >&2
   exit 1
 fi
 
