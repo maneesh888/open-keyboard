@@ -471,6 +471,19 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(correction.range, KeyboardTextRange(start: 6, end: 7))
     }
 
+    func testStructuredCorrectionUsesRequiredTextAsCardExplanation() throws {
+        let json = """
+        {"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Correct the misspelling.","original":"teh","replacement":"the"}],"corrected_text":"the message"}
+        """
+        let result = try KeyboardActionOperationResult.parse(json, operation: "fix_grammar", fallbackText: "teh message")
+
+        let correction = try XCTUnwrap(result.suggestionResponse().corrections.first)
+        let card = KeyboardCorrectionCard(correction: correction)
+
+        XCTAssertEqual(correction.explanation, "Correct the misspelling.")
+        XCTAssertEqual(card.explanation, "Correct the misspelling.")
+    }
+
     func testStructuredResultWithoutCorrectedTextStillCreatesCorrections() throws {
         let result = try KeyboardActionOperationResult.parse(Self.canonicalGrammarJSON(correctedText: nil), operation: "fix_grammar", fallbackText: "i has a apple ths")
 

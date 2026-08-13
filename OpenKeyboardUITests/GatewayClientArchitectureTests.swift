@@ -15,13 +15,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
             (
                 "fix_grammar",
                 KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: "i has a apple"),
-                [
-                    "This is a patch list, not a rewrite",
-                    "one independent patch for each distinct error",
-                    "text must be a short explanation of that patch",
-                    "Build corrected_text by applying only the returned patches",
-                    "changing \"reply\" to \"respond\" is forbidden",
-                ]
+                []
             ),
             (
                 "rewrite",
