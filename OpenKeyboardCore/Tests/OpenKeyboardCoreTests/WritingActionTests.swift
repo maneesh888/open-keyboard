@@ -4,7 +4,7 @@ import XCTest
 
 final class WritingActionTests: XCTestCase {
     func testSharedContractVersionIsPinned() {
-        XCTAssertEqual(WritingPromptBuilder.contractVersion, "2.0.2")
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "2.0.3")
     }
 
     func testBuiltInActionsHaveStableTitles() {
@@ -40,7 +40,13 @@ final class WritingActionTests: XCTestCase {
             Scenario(
                 action: .fixGrammar,
                 operation: "fix_grammar",
-                requiredRules: []
+                requiredRules: [
+                    "This is a patch list, not a rewrite",
+                    "one independent patch for each distinct error",
+                    "text must be a short explanation of that patch",
+                    "Build corrected_text by applying only the returned patches",
+                    "changing \"reply\" to \"respond\" is forbidden",
+                ]
             ),
             Scenario(
                 action: .rewrite,
