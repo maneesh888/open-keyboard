@@ -270,7 +270,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(json["operation"] as? String, "fix_grammar")
         let smokeInput = try XCTUnwrap(json["input_text"] as? String)
         XCTAssertEqual(smokeInput, NetworkManager.diagnosticSettingsCorrectionInput)
-        XCTAssertEqual(json["max_tokens"] as? Int, 1600)
+        XCTAssertEqual(json["max_tokens"] as? Int, 5000)
         XCTAssertEqual(json["temperature"] as? Double, 0.1)
         XCTAssertEqual(json["stream"] as? Bool, false)
         XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
@@ -402,7 +402,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         }
         XCTAssertEqual(chatBodies.compactMap { $0["model"] as? String }, Array(repeating: "gpt-oss:120b-cloud", count: 6))
         XCTAssertEqual(chatBodies.map { $0["operation"] as? String }, ["fix_grammar", nil, "fix_grammar", "rewrite", "summarize", "rewrite"])
-        XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [1600, 1200, 5000, 3000, 2000, 3000])
+        XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [5000, 1200, 5000, 3000, 2000, 3000])
         XCTAssertEqual(chatBodies.map { $0["stream"] as? Bool }, Array(repeating: false, count: 6))
         XCTAssertEqual(chatBodies.map { ($0["response_format"] as? [String: String])?["type"] }, ["json_object", nil, "json_object", "json_object", "json_object", "json_object"])
         let settingsSmokeInput = try XCTUnwrap(chatBodies[0]["input_text"] as? String)
