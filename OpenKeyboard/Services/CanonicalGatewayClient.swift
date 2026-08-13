@@ -6,6 +6,12 @@ protocol GatewayChatTransporting: AnyObject {
 
 extension URLSession: GatewayChatTransporting {}
 
+enum GatewayRequestTimeouts {
+    static let keyboardAction: TimeInterval = 15
+    static let modelCheckAttempt: TimeInterval = 20
+    static let diagnosticAction: TimeInterval = 90
+}
+
 enum CanonicalGatewayClientError: LocalizedError, Equatable {
     case invalidURL
     case notConfigured
@@ -66,12 +72,14 @@ struct CanonicalGatewayClient {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await transport.data(for: request)
+            (data, response) = try await fetchData(for: request, deadline: timeoutInterval)
         } catch let error as URLError where error.code == .cancelled {
             throw CancellationError()
         } catch let error as URLError where error.code == .timedOut {
             throw CanonicalGatewayClientError.timeout
         } catch let error as CancellationError {
+            throw error
+        } catch let error as CanonicalGatewayClientError {
             throw error
         } catch {
             throw CanonicalGatewayClientError.transport
@@ -85,6 +93,39 @@ struct CanonicalGatewayClient {
             throw CanonicalGatewayClientError.unusableCorrection
         }
         return content
+    }
+
+    private func fetchData(for request: URLRequest, deadline: TimeInterval) async throws -> (Data, URLResponse) {
+        let transport = self.transport
+        let nanoseconds = UInt64(max(0.001, deadline) * 1_000_000_000)
+        let race = GatewayRequestRace()
+
+        let result = try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                race.install(continuation)
+
+                let transportTask = Task {
+                    do {
+                        let (data, response) = try await transport.data(for: request)
+                        race.resolve(.success(GatewayTransportResponse(data: data, response: response)))
+                    } catch {
+                        race.resolve(.failure(error))
+                    }
+                }
+                let timeoutTask = Task {
+                    do {
+                        try await Task.sleep(nanoseconds: nanoseconds)
+                        race.resolve(.failure(CanonicalGatewayClientError.timeout))
+                    } catch {
+                        // The request or its caller completed first.
+                    }
+                }
+                race.installTasks(transportTask, timeoutTask)
+            }
+        } onCancel: {
+            race.resolve(.failure(CancellationError()))
+        }
+        return (result.data, result.response)
     }
 
     func chatCompletionRequest(
@@ -176,6 +217,64 @@ struct CanonicalGatewayClient {
             normalized.contains("i have a apple") ||
             normalized.contains("i had an apple") ||
             (normalized.contains("have") && normalized.contains("apple"))
+    }
+}
+
+private struct GatewayTransportResponse: @unchecked Sendable {
+    let data: Data
+    let response: URLResponse
+}
+
+private final class GatewayRequestRace: @unchecked Sendable {
+    typealias RaceResult = Result<GatewayTransportResponse, Error>
+
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<GatewayTransportResponse, Error>?
+    private var storedResult: RaceResult?
+    private var isResolved = false
+    private var tasks: [Task<Void, Never>] = []
+
+    func install(_ continuation: CheckedContinuation<GatewayTransportResponse, Error>) {
+        lock.lock()
+        if let storedResult {
+            self.storedResult = nil
+            lock.unlock()
+            continuation.resume(with: storedResult)
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    func installTasks(_ tasks: Task<Void, Never>...) {
+        lock.lock()
+        if isResolved {
+            lock.unlock()
+            tasks.forEach { $0.cancel() }
+            return
+        }
+        self.tasks = tasks
+        lock.unlock()
+    }
+
+    func resolve(_ result: RaceResult) {
+        lock.lock()
+        guard !isResolved else {
+            lock.unlock()
+            return
+        }
+        isResolved = true
+        let continuation = self.continuation
+        self.continuation = nil
+        if continuation == nil {
+            storedResult = result
+        }
+        let tasks = self.tasks
+        self.tasks = []
+        lock.unlock()
+
+        tasks.forEach { $0.cancel() }
+        continuation?.resume(with: result)
     }
 }
 
