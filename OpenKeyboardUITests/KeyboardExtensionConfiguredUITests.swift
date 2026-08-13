@@ -207,6 +207,40 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("empty-input-no-stale-corrections")
     }
 
+    func testRealKeyboardShowsModelNotCompatibleStateScreenshot() throws {
+        let sourceText = "Please keep this text unchanged."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-suggestion-state=modelCapabilityError",
+            "--keyboard-host-text=\(encodedSource)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            keyboardApp.staticTexts["ai_error_message"].label,
+            KeyboardActionErrorState.modelCapabilityMessage
+        )
+        XCTAssertEqual(input.value as? String, sourceText)
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+        try captureRealKeyboardStep("real-keyboard-model-not-compatible")
+    }
+
     func testSeededRealKeyboardCorrectionCarouselCanNavigateCards() throws {
         let seededCorrectionText = "i has a apple and ths sentence"
         let app = configuredContainingApp(extraArguments: [

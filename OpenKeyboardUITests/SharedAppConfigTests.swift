@@ -94,6 +94,21 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(extensionLoadedConfig.structuredCorrectionSchemaVersion, "")
     }
 
+    func testConfiguredGatewayPreservesMissingModelAsDistinctRuntimeState() {
+        secretStore.apiKey = "fake-shared-test-token"
+        defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set("", forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(false, forKey: AppConfig.supportsStructuredCorrectionsKey)
+
+        let extensionLoadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertTrue(extensionLoadedConfig.isConfigured)
+        XCTAssertTrue(extensionLoadedConfig.hasGatewayRuntimeConfig)
+        XCTAssertFalse(extensionLoadedConfig.hasCompleteGatewayRuntimeConfig)
+        XCTAssertEqual(extensionLoadedConfig.selectedModel, "")
+    }
+
     func testMainAppSaveDoesNotPublishConfiguredStateWhenSecretStoreSaveFails() throws {
         secretStore.shouldFailSave = true
         let mainAppConfig = AppConfig(

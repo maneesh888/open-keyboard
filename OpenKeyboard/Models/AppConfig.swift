@@ -377,9 +377,13 @@ extension AppConfig {
     }
 
     var hasCompleteGatewayRuntimeConfig: Bool {
+        hasGatewayRuntimeConfig
+            && !selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasGatewayRuntimeConfig: Bool {
         !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func runtimeNormalized() -> AppConfig {
@@ -389,7 +393,7 @@ extension AppConfig {
             copy.structuredCorrectionSchemaVersion = ""
             return copy
         }
-        guard !hasCompleteGatewayRuntimeConfig else { return self }
+        guard !hasGatewayRuntimeConfig else { return self }
 
         var copy = self
         copy.isConfigured = false

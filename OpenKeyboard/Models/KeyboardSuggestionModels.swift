@@ -512,13 +512,49 @@ private extension Character {
     }
 }
 
+enum KeyboardActionErrorKind: Equatable {
+    case gatewayUnavailable
+    case authentication
+    case modelUnavailable
+    case modelCapability
+
+    var title: String {
+        switch self {
+        case .gatewayUnavailable: return "AI unavailable"
+        case .authentication: return "Invalid API key"
+        case .modelUnavailable: return "Model unavailable"
+        case .modelCapability: return "Model not compatible"
+        }
+    }
+}
+
+enum KeyboardActionErrorScope: Equatable {
+    case global
+    case grammar
+    case writingAction
+}
+
 struct KeyboardActionErrorState: Equatable {
-    let title: String
+    static let modelCapabilityMessage = "The selected model is not capable of this AI action. Choose another model or retry the model check."
+
+    let kind: KeyboardActionErrorKind
+    let scope: KeyboardActionErrorScope
     let message: String
 
-    init(title: String = "Gateway error", message: String) {
-        self.title = title
-        self.message = Self.sanitized(message)
+    init(
+        kind: KeyboardActionErrorKind = .gatewayUnavailable,
+        scope: KeyboardActionErrorScope = .global,
+        message: String
+    ) {
+        self.kind = kind
+        self.scope = kind == .modelCapability ? scope : .global
+        self.message = kind == .modelCapability ? Self.modelCapabilityMessage : Self.sanitized(message)
+    }
+
+    var title: String { kind.title }
+
+    var blocksGrammarCorrection: Bool {
+        kind != .modelCapability || scope != .writingAction
     }
 
     static func sanitized(_ rawMessage: String) -> String {
@@ -634,7 +670,7 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     var isStructuredGrammarNoChange: Bool {
-        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
+        isStructuredResponse && isNoChangeResult
     }
 
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
@@ -691,10 +727,11 @@ struct KeyboardActionOperationResult: Equatable {
         }
 
         let finalCorrectedText = correctedText ?? topLevelDisplayText
-        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
         let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
+        let isNoChangeResult = operation == "fix_grammar"
+            && decoded.results?.isEmpty == true
+            && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
 
         return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
     }

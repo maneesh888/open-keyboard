@@ -4,7 +4,7 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
 
-        XCTAssertEqual(error.title, "Gateway error")
+        XCTAssertEqual(error.title, "AI unavailable")
         XCTAssertFalse(error.message.contains("{"))
         XCTAssertFalse(error.message.localizedCaseInsensitiveContains("api_key"))
         XCTAssertFalse(error.message.localizedCaseInsensitiveContains("token"))
@@ -737,6 +737,43 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(result.isStructuredGrammarNoChange)
         XCTAssertEqual(outcome, .noChanges)
         XCTAssertNotEqual(outcome, .replaceText("The app works well today."))
+    }
+
+    func testWarningOnlyStructuredGrammarResultIsNotNoChange() throws {
+        let source = "The app works well."
+        let result = try KeyboardActionOperationResult.parse(
+            #"{"operation":"fix_grammar","results":[{"id":"unsupported","type":"warning","title":"Unsupported","text":"This model could not produce corrections."}],"corrected_text":"The app works well."}"#,
+            operation: "fix_grammar",
+            fallbackText: source
+        )
+
+        XCTAssertFalse(result.isStructuredGrammarNoChange)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: source),
+            .noUsableResult
+        )
+    }
+
+    func testMissingOrUnusableGrammarResultsAreNotNoChange() throws {
+        let source = "The app works well."
+        let payloads = [
+            #"{"operation":"fix_grammar","summary":"No issues found."}"#,
+            #"{"operation":"fix_grammar","results":[{"id":"discarded","type":"warning"}],"corrected_text":"The app works well."}"#
+        ]
+
+        for payload in payloads {
+            let result = try KeyboardActionOperationResult.parse(
+                payload,
+                operation: "fix_grammar",
+                fallbackText: source
+            )
+
+            XCTAssertFalse(result.isStructuredGrammarNoChange)
+            XCTAssertEqual(
+                KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: source),
+                .noUsableResult
+            )
+        }
     }
 
     func testMalformedJSONLikeResponseDoesNotBecomeLegacyReplacementText() {
