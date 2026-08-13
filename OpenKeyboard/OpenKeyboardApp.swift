@@ -151,13 +151,14 @@ struct OpenKeyboardApp: App {
             return
         }
 
+        let hasVerifiedStructuredCorrections = !arguments.contains("--seed-unverified-model-capability")
         let config = AppConfig(
             apiKey: apiKey,
             gatewayURL: normalizeUITestGatewayURL(gatewayURL),
             selectedModel: selectedModel,
             isConfigured: true,
-            supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            supportsStructuredCorrections: hasVerifiedStructuredCorrections,
+            structuredCorrectionSchemaVersion: hasVerifiedStructuredCorrections ? "openkeyboard.structured-corrections.v1" : ""
         )
         if let sharedDefaults = AppConfig.sharedDefaults() {
             let didSeed = config.saveTestSeed(
@@ -169,6 +170,9 @@ struct OpenKeyboardApp: App {
                 // Keep UI-test seeded config visible to the keyboard extension even when
                 // the simulator proof configuration does not define DEBUG for the app target.
                 sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+                if !hasVerifiedStructuredCorrections {
+                    AppConfig.saveGatewayConnectionLastTestedAt(to: sharedDefaults)
+                }
                 sharedDefaults.synchronize()
             }
         }

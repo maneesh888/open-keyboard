@@ -94,7 +94,9 @@ struct SettingsView: View {
                                 .truncationMode(.middle)
                         }
 
-                        Text("Model and structured corrections are trusted from the latest successful Test Connection.")
+                        Text(viewModel.connectionStatus == .limited
+                             ? "The gateway and selected model are available, but structured corrections were not verified."
+                             : "Model and structured corrections are trusted from the latest successful Test Connection.")
                             .font(.footnote)
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
@@ -104,6 +106,13 @@ struct SettingsView: View {
                             .foregroundColor(OpenKeyboardTheme.Semantic.success)
                             .listRowBackground(OpenKeyboardTheme.Surface.successBackground)
                             .accessibilityIdentifier("settings_connection_success")
+                    }
+
+                    if viewModel.connectionStatus == .limited {
+                        Label(viewModel.modelCapabilityMessage, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                            .listRowBackground(OpenKeyboardTheme.Surface.warningBackground)
+                            .accessibilityIdentifier("settings_model_capability_warning")
                     }
 
                     if viewModel.connectionStatus == .failure {

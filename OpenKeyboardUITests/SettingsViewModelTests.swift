@@ -355,6 +355,34 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.trustedModelLoaded)
     }
 
+    func testRecentConnectedConfigPreservesUnverifiedModelCapabilityWithoutGatewayError() async {
+        let suiteName = "SettingsViewModelTests.saved-limited.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "gemma2:2b",
+            isConfigured: true,
+            supportsStructuredCorrections: false,
+            structuredCorrectionSchemaVersion: ""
+        )
+        let tester = FakeGatewayTester(models: ["gemma2:2b"], smokeSucceeds: false)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertTrue(viewModel.trustedModelLoaded)
+        XCTAssertFalse(viewModel.hasConnectionError)
+        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Not verified for selected model")
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 0)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+    }
+
     func testSavedConfigLaunchValidationRunsAgainAfterOneHourAndRefreshesTimestamp() async {
         let suiteName = "SettingsViewModelTests.saved-stale.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -568,28 +596,35 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.apiKey, "test-key")
     }
 
-    func testSmokeFailureDoesNotPersistDraftConfigOrModel() async {
+    func testUnusableCorrectionKeepsGatewayConnectedAndPersistsUnverifiedModelCapability() async {
+        let suiteName = "SettingsViewModelTests.model-capability.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let tester = FakeGatewayTester(
             healthSucceeds: true,
-            models: ["apple-foundationmodel"],
+            models: ["gemma2:2b"],
             smokeSucceeds: false
         )
-        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.gatewayURLInput = "https://gateway.example"
         viewModel.apiKeyInput = "test-key"
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
         XCTAssertFalse(viewModel.isTestingConnection)
         XCTAssertFalse(viewModel.isGatewayValidationInProgress)
-        XCTAssertEqual(viewModel.config.gatewayURL, "")
-        XCTAssertEqual(viewModel.config.apiKey, "")
-        XCTAssertEqual(viewModel.config.selectedModel, "")
-        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
+        XCTAssertEqual(viewModel.config.apiKey, "test-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
+        XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
-        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
-        XCTAssertFalse(viewModel.trustedModelLoaded)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertTrue(viewModel.trustedModelLoaded)
+        XCTAssertFalse(viewModel.hasConnectionError)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
     }
 
     func testDefaultGatewayInputShowsHTTPSHelpButCannotTestUntilHostExists() {

@@ -124,11 +124,13 @@ struct StatusCard: View {
     private var config: AppConfig { viewModel.config }
 
     private var isReady: Bool { viewModel.showsValidatedGatewayDetails && viewModel.connectionStatus == .success }
+    private var isLimited: Bool { viewModel.showsValidatedGatewayDetails && viewModel.connectionStatus == .limited }
     private var isChecking: Bool { viewModel.isGatewayValidationInProgress }
     private var isFailure: Bool { viewModel.connectionStatus == .failure }
 
     private var statusTitle: String {
         if isReady { return "Gateway Ready" }
+        if isLimited { return "Gateway Connected" }
         if isChecking { return "Checking gateway…" }
         if isFailure { return "Gateway needs attention" }
         return "Setup Required"
@@ -136,6 +138,7 @@ struct StatusCard: View {
 
     private var statusMessage: String {
         if isReady { return "Connection verified within the last hour." }
+        if isLimited { return "Connected, but this model did not verify structured corrections." }
         if isChecking { return "Testing your saved gateway before enabling AI features." }
         if isFailure { return viewModel.errorMessage ?? "Connection failed. Open Settings to retry." }
         return "Add your API key to unlock AI features."
@@ -143,6 +146,7 @@ struct StatusCard: View {
 
     private var statusImage: String {
         if isReady { return "checkmark.circle.fill" }
+        if isLimited { return "exclamationmark.triangle.fill" }
         if isChecking { return "arrow.triangle.2.circlepath" }
         if isFailure { return "xmark.circle.fill" }
         return "exclamationmark.triangle.fill"
@@ -191,8 +195,8 @@ struct StatusCard: View {
                 .padding(.top, 2)
             }
 
-            if isFailure, viewModel.hasSavedGatewayConfig {
-                Button("Retry gateway check") {
+            if (isFailure || isLimited), viewModel.hasSavedGatewayConfig {
+                Button(isLimited ? "Retry model check" : "Retry gateway check") {
                     Task { await viewModel.retrySavedGatewayValidation() }
                 }
                 .font(.footnote.weight(.semibold))
