@@ -76,9 +76,12 @@ ordinary pull-request workflow.
 - Run `./scripts/check-live.sh gateway` only when the exact-head classifier selects gateway impact.
 - Never bypass hooks or scanners.
 
-Create PRs as drafts with a concise brief containing scope, requirement sources, verification,
-independent review state, live evidence, proof limits, and the full exact head SHA. For PR review,
-readiness, or merge, use `$review-verify-merge-pr`.
+Create PRs as drafts with a concise brief containing a separate row for every in-scope requirement,
+its observable acceptance criterion, required proof type, exact evidence, and verification status.
+Include independent review state, live evidence, explicitly authorized out-of-scope limits, and the
+full exact head SHA. An unverified, ambiguous, skipped, stale, fallback, or wrong-target requirement
+is a blocker, not a residual limitation. For PR review, readiness, or merge, use
+`$review-verify-merge-pr`.
 
 ## Report compactly
 

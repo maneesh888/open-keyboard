@@ -136,14 +136,21 @@ The path must be `.githooks`.
 ## GitHub checks
 
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
-It runs repository hygiene, OpenKeyboardCore tests, and the iOS app/extension build. The stable
-`Required checks` job is the ordinary branch-protection status.
+It validates the requirement ledger and durable independent-review link, then runs repository
+hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
+stable `Required checks` job is the ordinary branch-protection status. A structurally valid ledger
+does not prove its own claims; the independent reviewer and a human approval from outside the
+identifiable implementation contributors remain required.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
-exact-tested-SHA fields. The stable `Required live verification` job rejects duplicate or
-contradictory fields and validates only that retained evidence. Local execution is
-contributor-attested; GitHub never receives the credential or gateway response.
+exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
+tested, and that no substitution occurred. Exact model requirements must match the tested-model
+list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
+must still record the actual tested model. The stable `Required live verification` job rejects
+duplicate, contradictory, fallback, and wrong-model fields and validates only that retained
+evidence. Local execution is contributor-attested; GitHub never receives the credential or gateway
+response.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
@@ -158,11 +165,27 @@ implementation context.
 
 The reviewer checks correctness, regressions, MVVM and persistence boundaries, gateway and secret
 handling, keyboard-extension lifecycle, signing/deployment safety, test coverage, and truthful
-proof claims. It reports findings but cannot edit, approve, comment, change PR state, deploy, or
-merge. A new commit invalidates the result and requires a fresh exact-head review.
+proof claims. Its packet and result use a requirement ledger: every in-scope requirement has a
+stable ID, observable acceptance criterion, required proof type, exact evidence, and a `VERIFIED`
+or `UNVERIFIED` status. Skipped, missing, stale, fallback, wrong-target, wrong-model, ambiguous, or
+contributor-attested-only material evidence is unverified. A generic model cannot satisfy an exact
+model requirement. An in-scope unverified row is always a blocker and cannot be moved into residual
+proof limits.
+
+The reviewer reports findings but cannot edit, approve, comment, change PR state, deploy, or merge.
+The root agent posts the review report as a durable GitHub `COMMENTED` review and links it from the
+PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
+exact-head review.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
-SHA and result in the PR brief; branch protection separately enforces GitHub checks and approvals.
+SHA, 100% in-scope coverage result, and durable review link in the PR brief. The required
+`Requirement evidence` CI job validates the complete ledger fields, but cannot establish truth by
+itself; branch protection separately requires GitHub checks and at least one human approval from
+outside the identifiable implementation contributors.
+
+No review can prove that unknown bugs are mathematically impossible. The fail-closed standard is
+that every stated in-scope requirement is verified with the correct proof and every material
+uncertainty is reported as a blocker.
 
 ## Autonomous lifecycle and guarded merge
 

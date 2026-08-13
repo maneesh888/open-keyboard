@@ -16,6 +16,10 @@ PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
+PR_REQUIREMENTS_VALIDATOR="$ROOT/scripts/validate-pr-requirements.sh"
+PR_REQUIREMENTS_POLICY_TEST="$ROOT/scripts/tests/pr-requirements-policy-test.sh"
+PR_REVIEW_RECORD_VALIDATOR="$ROOT/scripts/validate-pr-review-record.sh"
+PR_REVIEW_RECORD_POLICY_TEST="$ROOT/scripts/tests/pr-review-record-policy-test.sh"
 DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
@@ -38,6 +42,10 @@ for required_file in \
   "$PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
+  "$PR_REQUIREMENTS_VALIDATOR" \
+  "$PR_REQUIREMENTS_POLICY_TEST" \
+  "$PR_REVIEW_RECORD_VALIDATOR" \
+  "$PR_REVIEW_RECORD_POLICY_TEST" \
   "$DEPLOY_SOURCE_POLICY_TEST" \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
@@ -67,12 +75,26 @@ rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_WORKFLOW"
 rg --quiet 'live_verification_target_count' "$LIVE_WORKFLOW"
 rg --quiet 'live_tested_head_count' "$LIVE_WORKFLOW"
+rg --quiet 'required_live_models_count' "$LIVE_WORKFLOW"
+rg --quiet 'exact_live_tested_models_count' "$LIVE_WORKFLOW"
+rg --quiet 'live_model_substitutions_count' "$LIVE_WORKFLOW"
+rg --quiet 'required_live_models.*exact_live_tested_models' "$LIVE_WORKFLOW"
 rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_WORKFLOW"
 if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORKFLOW"; then
   echo "Live evidence must bind the dedicated exact-head field, not any PR-body occurrence." >&2
   exit 1
 fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
+rg --quiet '^  requirement-evidence:$' "$CI_WORKFLOW"
+rg --quiet 'validate-pr-requirements\.sh' "$CI_WORKFLOW"
+rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
+rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
+rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
+rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
+rg --quiet 'pull-request-commits\.json' "$CI_WORKFLOW"
+rg --quiet 'CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"
+rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$CI_WORKFLOW"
+rg --quiet 'REQUIREMENT_EVIDENCE_RESULT' "$CI_WORKFLOW"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
@@ -112,6 +134,10 @@ rg --quiet 'project `pr-reviewer`' "$REVIEW_SKILL"
 rg --quiet 'scripts/check\.sh --full' "$REVIEW_SKILL"
 rg --quiet 'Required checks' "$REVIEW_SKILL"
 rg --quiet 'Required live verification' "$REVIEW_SKILL"
+rg --quiet '100% requirement coverage' "$REVIEW_SKILL"
+rg --quiet 'wrong-model' "$REVIEW_SKILL"
+rg --quiet 'durable GitHub `COMMENTED` review' "$REVIEW_SKILL"
+rg --quiet 'at least one approving GitHub review' "$REVIEW_SKILL"
 rg --quiet 'bounded implementation request.*normal autonomous.*guarded merge' "$REVIEW_SKILL"
 rg --quiet 'keep draft.*do not merge' "$REVIEW_SKILL"
 rg --quiet 'gh pr merge <number> --auto --squash --match-head-commit <reviewed-head-sha>' "$REVIEW_SKILL"
@@ -124,6 +150,12 @@ rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
+rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
+rg --quiet 'Review requirement coverage:' "$PR_TEMPLATE"
+rg --quiet 'Independent review evidence:' "$PR_TEMPLATE"
+rg --quiet 'Required live models:' "$PR_TEMPLATE"
+rg --quiet 'Exact live-tested models:' "$PR_TEMPLATE"
+rg --quiet 'Live-model substitutions:' "$PR_TEMPLATE"
 rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
 rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
@@ -176,7 +208,12 @@ rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
 rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/check-live.sh"
+rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
+rg --quiet 'TESTED_MODEL.*REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
+rg --quiet 'required_model=\$REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
+rg --quiet 'tested_model=\$TESTED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
+rg --quiet 'exact seeded model without catalog fallback' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
 rg --quiet 'testRealKeyboardImproveReplacesTextWhenGatewayConfigured' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured' "$ROOT/scripts/ios/test.sh"; then
   echo "The live route still selects the removed real-keyboard test name." >&2
@@ -197,6 +234,14 @@ rg --quiet 'simctl bootstatus' "$LIVE_TEST_SAFETY"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
   echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2
+  exit 1
+fi
+if rg --quiet 'filter_map' "$PR_REQUIREMENTS_VALIDATOR"; then
+  echo "The PR requirements validator must remain compatible with the repository's supported host Ruby." >&2
+  exit 1
+fi
+if rg --quiet 'filter_map' "$PR_REVIEW_RECORD_VALIDATOR"; then
+  echo "The PR review-record validator must remain compatible with the repository's supported host Ruby." >&2
   exit 1
 fi
 if rg --quiet '\.derived-(live-gateway-smoke|real-keyboard-live)|\.ci-results/(live-gateway-smoke|real-keyboard-live)' "$ROOT/scripts/ios/test.sh"; then

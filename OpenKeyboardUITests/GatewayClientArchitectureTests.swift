@@ -726,7 +726,11 @@ final class LiveGatewaySmokeTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.gatewayURL.isEmpty)
-        XCTAssertFalse(viewModel.config.selectedModel.isEmpty)
+        XCTAssertEqual(
+            viewModel.config.selectedModel,
+            model,
+            "The live proof must exercise the exact seeded model without catalog fallback."
+        )
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), viewModel.config.gatewayURL)
         XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), viewModel.config.selectedModel)

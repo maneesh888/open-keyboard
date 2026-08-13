@@ -184,12 +184,16 @@ when invoked from a linked worktree; values must never be printed.
 
 - Use `$review-verify-merge-pr` for independent PR review and release-readiness assessment.
 - The project `pr-reviewer` is read-only and must review the exact GitHub head without inherited implementation context.
+- Give every in-scope user requirement a stable ID, observable acceptance criterion, required proof type, exact evidence, and `VERIFIED` or `UNVERIFIED` status. Do not combine independent requirements.
+- Treat ambiguous, skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. Every unverified in-scope requirement is a blocker, not a residual proof limit.
+- Exact-model requirements must run that exact model without catalog fallback or substitution. A different working model proves only that different model.
 - Run the independent review and GitHub checks concurrently where practical.
 - Any new commit invalidates the previous review, local full gate, and GitHub check conclusions.
 - A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages.
 - Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`.
 - Planning, review-only work, readiness assessment, and blocker requests remain read-only and do not authorize state changes.
-- Before a guarded merge, require the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- Before a guarded merge, require 100% verified in-scope requirements, a durable linked independent-review report, at least one GitHub approval from a human who is neither the PR author nor an identifiable implementing contributor, the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- Never claim that unknown defects are impossible. A clean review means all stated requirements are verified within the named evidence boundary and no material uncertainty remains.
 - Deployment remains a separate external state change and requires explicit authorization plus protected-environment approval.
 
 ## Repository Automation

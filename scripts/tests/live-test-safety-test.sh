@@ -157,6 +157,21 @@ unset \
   OPEN_KEYBOARD_SIMULATOR_API_KEY \
   OPEN_KEYBOARD_SIMULATOR_MODEL
 
+openkeyboard_require_exact_live_model 'gemma2:2b' 'gemma2:2b'
+openkeyboard_require_exact_live_model 'gpt-oss:120b-cloud' 'model-agnostic'
+if openkeyboard_require_exact_live_model 'gpt-oss:120b-cloud' 'gemma2:2b' >/dev/null 2>&1; then
+  echo "A different live model was accepted as exact Gemma proof." >&2
+  exit 1
+fi
+if openkeyboard_require_exact_live_model 'gemma2:2b unsafe' 'gemma2:2b unsafe' >/dev/null 2>&1; then
+  echo "An unsafe live model identifier was accepted." >&2
+  exit 1
+fi
+if openkeyboard_require_exact_live_model 'gemma2:2b' '' >/dev/null 2>&1; then
+  echo "An empty required live model was accepted." >&2
+  exit 1
+fi
+
 UNSUPPORTED_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/unsupported.env"
 write_valid_seed "$UNSUPPORTED_SEED"
 printf 'OPEN_KEYBOARD_SIMULATOR_UNDOCUMENTED=test-only-value\n' >> "$UNSUPPORTED_SEED"

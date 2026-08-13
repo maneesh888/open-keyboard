@@ -29,6 +29,9 @@ valid_body="$(cat <<EOF
 - Local live verification: passed
 - Live verification target: gateway
 - Exact live-tested head: $HEAD_SHA
+- Required live models: gemma2:2b
+- Exact live-tested models: gemma2:2b
+- Live-model substitutions: none
 - No credential or gateway response body retained.
 - Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
 
@@ -49,6 +52,11 @@ contradictory_target_body="${valid_body/Live verification target: gateway/Live v
 Prose mention: Live verification target: gateway"
 duplicate_target_body="$valid_body
 - Live verification target: none"
+wrong_model_body="${valid_body/Exact live-tested models: gemma2:2b/Exact live-tested models: gpt-oss:120b-cloud}"
+substituted_model_body="${valid_body/Live-model substitutions: none/Live-model substitutions: gemma2:2b -> gpt-oss:120b-cloud}"
+duplicate_models_body="$valid_body
+- Exact live-tested models: gemma2:2b"
+model_agnostic_body="${valid_body/Required live models: gemma2:2b/Required live models: model-agnostic}"
 
 run_policy() {
   local body="$1"
@@ -89,6 +97,22 @@ if run_policy "$contradictory_target_body"; then
 fi
 if run_policy "$duplicate_target_body"; then
   echo "Contradictory live-verification target fields were accepted." >&2
+  exit 1
+fi
+if run_policy "$wrong_model_body"; then
+  echo "Wrong-model live evidence was accepted for exact model coverage." >&2
+  exit 1
+fi
+if run_policy "$substituted_model_body"; then
+  echo "A live-model substitution was accepted as exact-model proof." >&2
+  exit 1
+fi
+if run_policy "$duplicate_models_body"; then
+  echo "Duplicate exact live-tested model fields were accepted." >&2
+  exit 1
+fi
+if ! run_policy "$model_agnostic_body"; then
+  echo "Model-agnostic gateway work rejected a named exact tested model." >&2
   exit 1
 fi
 

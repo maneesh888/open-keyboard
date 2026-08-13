@@ -3,7 +3,9 @@
 Protect `main` with a branch ruleset or branch protection rule:
 
 1. Require a pull request before merging.
-2. Require at least one approval for product changes when multiple maintainers are available.
+2. Require at least one approval from a human who is neither the pull-request author nor an
+   identifiable implementing contributor. Enable stale-review dismissal and do not permit the
+   implementing agent's self-attestation to substitute for that approval.
 3. Require conversation resolution.
 4. Require branches to be up to date before merging.
 5. Require these status checks:
@@ -12,9 +14,11 @@ Protect `main` with a branch ruleset or branch protection rule:
 6. Block force pushes and branch deletion.
 7. Disable bypass for administrators if the repository should enforce one merge path.
 
-Before an intentional merge, also run `$review-verify-merge-pr` and record its exact reviewed SHA
-and blocker result in the PR description. This independent Codex review is a process gate rather
-than a GitHub status check, so retain the GitHub approval requirement above.
+Before an intentional merge, also run `$review-verify-merge-pr`, post its requirement-coverage
+report as a durable GitHub `COMMENTED` review, and link that review plus its exact reviewed SHA from
+the PR description. Every in-scope requirement must be verified; skipped, missing, stale, fallback,
+wrong-target, or wrong-model evidence blocks readiness. This independent Codex review is a process
+gate rather than a GitHub status check, so retain the GitHub approval requirement above.
 
 Recommended repository merge settings:
 

@@ -3,6 +3,17 @@ name: OpenKeyboard CI
 on:
   workflow_call:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+      - dismissed
   push:
     branches:
       - main
@@ -10,12 +21,72 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
+  requirement-evidence:
+    name: Requirement evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare trusted requirement validators
+        id: validators
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          validator_root="$RUNNER_TEMP/requirement-validators"
+          mkdir -p "$validator_root"
+          for validator_name in validate-pr-requirements.sh validate-pr-review-record.sh; do
+            validator_path="$validator_root/$validator_name"
+            if git cat-file -e "$PR_BASE_SHA:scripts/$validator_name" 2>/dev/null; then
+              git show "$PR_BASE_SHA:scripts/$validator_name" > "$validator_path"
+            else
+              cp "scripts/$validator_name" "$validator_path"
+            fi
+            chmod +x "$validator_path"
+          done
+          echo "root=$validator_root" >> "$GITHUB_OUTPUT"
+
+      - name: Validate complete requirement coverage and independent review
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
+        run: |
+          "$VALIDATOR_ROOT/validate-pr-requirements.sh"
+          reviews_file="$RUNNER_TEMP/pull-request-reviews.json"
+          gh api \
+            --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
+            | jq --slurp 'add' > "$reviews_file"
+          contributors_file="$RUNNER_TEMP/pull-request-commits.json"
+          gh api \
+            --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" \
+            | jq --slurp 'add' > "$contributors_file"
+          REVIEWS_JSON_FILE="$reviews_file" CONTRIBUTORS_JSON_FILE="$contributors_file" \
+            "$VALIDATOR_ROOT/validate-pr-review-record.sh"
+
+      - name: Confirm non-PR invocation
+        if: github.event_name != 'pull_request' && github.event_name != 'pull_request_review'
+        run: echo "Requirement evidence is enforced on pull requests."
+
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
@@ -87,6 +158,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
+      - requirement-evidence
       - hygiene
       - core-tests
       - ios-build
@@ -94,16 +166,19 @@ jobs:
     steps:
       - name: Confirm required jobs passed
         env:
+          REQUIREMENT_EVIDENCE_RESULT: ${{ needs.requirement-evidence.result }}
           HYGIENE_RESULT: ${{ needs.hygiene.result }}
           CORE_TESTS_RESULT: ${{ needs.core-tests.result }}
           IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
           SEMANTIC_CONTRACT_RESULT: ${{ needs.semantic-contract.result }}
         run: |
-          if [[ "$HYGIENE_RESULT" != "success" ||
+          if [[ "$REQUIREMENT_EVIDENCE_RESULT" != "success" ||
+                "$HYGIENE_RESULT" != "success" ||
                 "$CORE_TESTS_RESULT" != "success" ||
                 "$IOS_BUILD_RESULT" != "success" ||
                 "$SEMANTIC_CONTRACT_RESULT" != "success" ]]; then
             echo "Required checks did not pass."
+            echo "requirement-evidence=$REQUIREMENT_EVIDENCE_RESULT"
             echo "hygiene=$HYGIENE_RESULT"
             echo "core-tests=$CORE_TESTS_RESULT"
             echo "ios-build=$IOS_BUILD_RESULT"
