@@ -730,7 +730,7 @@ struct KeyboardActionOperationResult: Equatable {
         let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
         let isNoChangeResult = operation == "fix_grammar"
-            && canonicalItems.isEmpty
+            && decoded.results?.isEmpty == true
             && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
 
         return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
