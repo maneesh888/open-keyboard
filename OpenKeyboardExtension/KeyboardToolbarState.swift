@@ -92,7 +92,7 @@ struct KeyboardToolbarState: Equatable {
         case actions(status: String)
         case loading(title: String)
         case correctionPreview(count: Int, explanation: String, replacement: String, original: String)
-        case error(message: String)
+        case error(kind: KeyboardActionErrorKind, message: String)
     }
 
     let kind: Kind
@@ -139,8 +139,8 @@ struct KeyboardToolbarState: Equatable {
             return title
         case .correctionPreview(let count, _, _, _):
             return count == 1 ? "1 writing suggestion" : "\(count) writing suggestions"
-        case .error:
-            return "AI unavailable"
+        case .error(let kind, _):
+            return kind.title
         }
     }
 
@@ -158,7 +158,7 @@ struct KeyboardToolbarState: Equatable {
             if !explanation.isEmpty { return explanation }
             if !replacement.isEmpty, !original.isEmpty { return "\(original) → \(replacement)" }
             return "Tap to apply"
-        case .error(let message):
+        case .error(_, let message):
             return message
         }
     }

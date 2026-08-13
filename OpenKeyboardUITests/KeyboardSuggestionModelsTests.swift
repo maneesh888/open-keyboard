@@ -4,7 +4,7 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
 
-        XCTAssertEqual(error.title, "Gateway error")
+        XCTAssertEqual(error.title, "AI unavailable")
         XCTAssertFalse(error.message.contains("{"))
         XCTAssertFalse(error.message.localizedCaseInsensitiveContains("api_key"))
         XCTAssertFalse(error.message.localizedCaseInsensitiveContains("token"))

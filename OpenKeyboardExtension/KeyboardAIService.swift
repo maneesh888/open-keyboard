@@ -237,11 +237,15 @@ protocol KeyboardAIServiceProviding: AnyObject {
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult
 }
 
-enum KeyboardAIError: LocalizedError {
+enum KeyboardAIError: LocalizedError, Equatable {
     case notConfigured
     case missingInput
     case invalidURL
     case unauthorized
+    case modelUnavailable
+    case modelCapability
+    case timeout
+    case transport
     case server(String)
     case invalidResponse
     case missingTranslationTarget
@@ -256,12 +260,33 @@ enum KeyboardAIError: LocalizedError {
             return "Invalid gateway URL"
         case .unauthorized:
             return "Invalid API key"
+        case .modelUnavailable:
+            return "The selected model is not available for this key."
+        case .modelCapability:
+            return KeyboardActionErrorState.modelCapabilityMessage
+        case .timeout:
+            return "The gateway request timed out. Check the gateway and try again."
+        case .transport:
+            return "Gateway request failed. Check settings and try again."
         case .server(let message):
             return message
         case .invalidResponse:
             return "No AI response"
         case .missingTranslationTarget:
             return "Choose a language"
+        }
+    }
+
+    var actionErrorKind: KeyboardActionErrorKind {
+        switch self {
+        case .unauthorized:
+            return .authentication
+        case .modelUnavailable:
+            return .modelUnavailable
+        case .modelCapability:
+            return .modelCapability
+        case .notConfigured, .missingInput, .invalidURL, .timeout, .transport, .server, .invalidResponse, .missingTranslationTarget:
+            return .gatewayUnavailable
         }
     }
 }
@@ -275,7 +300,11 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
         let output = try await performRawSuggestionRequest(prompt: KeyboardSuggestionParser.prompt(for: text), config: config)
-        return try KeyboardSuggestionParser.parseAssistantContent(output)
+        do {
+            return try KeyboardSuggestionParser.parseAssistantContent(output)
+        } catch {
+            throw KeyboardAIError.modelCapability
+        }
     }
 
     private func performRawSuggestionRequest(prompt: String, config: AppConfig) async throws -> String {
@@ -299,7 +328,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
         let result = try await performResult(action: action, on: text, config: config)
         let output = result.displayText
-        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw KeyboardAIError.invalidResponse }
+        guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw KeyboardAIError.modelCapability }
         return output
     }
 
@@ -326,13 +355,13 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         do {
             return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
         } catch {
-            throw KeyboardAIError.invalidResponse
+            throw KeyboardAIError.modelCapability
         }
     }
 
-    private static func keyboardError(from error: Error) -> KeyboardAIError {
+    static func keyboardError(from error: Error) -> KeyboardAIError {
         guard let gatewayError = error as? CanonicalGatewayClientError else {
-            return .server("Gateway request failed. Check settings and try again.")
+            return .transport
         }
 
         switch gatewayError {
@@ -344,10 +373,16 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             return .missingInput
         case .unauthorized:
             return .unauthorized
-        case .invalidResponse, .unusableCorrection:
+        case .modelUnavailable:
+            return .modelUnavailable
+        case .unusableCorrection:
+            return .modelCapability
+        case .timeout:
+            return .timeout
+        case .transport:
+            return .transport
+        case .invalidResponse:
             return .invalidResponse
-        case .modelUnavailable, .timeout, .transport:
-            return .server(gatewayError.userMessage)
         case .serverStatus(let status):
             return .server("Gateway HTTP \(status)")
         }

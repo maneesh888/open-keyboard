@@ -293,7 +293,7 @@ final class KeyboardViewModel: ObservableObject {
         !hasFullAccess
             || gatewayConnectionError != nil
             || !hasUsableGatewayConfig
-            || actionError != nil
+            || actionError?.blocksGrammarCorrection == true
     }
 
     var currentCorrection: KeyboardCorrectionSuggestion? {
@@ -302,7 +302,7 @@ final class KeyboardViewModel: ObservableObject {
 
     var toolbarState: KeyboardToolbarState {
         if let actionError {
-            return KeyboardToolbarState(kind: .error(message: actionError.message))
+            return KeyboardToolbarState(kind: .error(kind: actionError.kind, message: actionError.message))
         }
         if let rewriteOptionsState {
             let status = rewriteOptionsState.intent.toolbarStatus(count: rewriteOptionsState.options.count)
@@ -319,7 +319,7 @@ final class KeyboardViewModel: ObservableObject {
             ))
         }
         if let gatewayConnectionError {
-            return KeyboardToolbarState(kind: .error(message: gatewayConnectionError))
+            return KeyboardToolbarState(kind: .error(kind: .gatewayUnavailable, message: gatewayConnectionError))
         }
 
         return KeyboardToolbarState.current(
@@ -355,6 +355,7 @@ final class KeyboardViewModel: ObservableObject {
         self.suggestionState = seededSuggestionState?.suggestionState
         self.actionPanelState = seededSuggestionState?.actionPanelState
         self.rewriteOptionsState = seededSuggestionState?.rewriteOptionsState
+        self.actionError = seededSuggestionState?.actionError
         self.panelMode = seededSuggestionState?.panelMode ?? Self.consumeInitialPanelModeSeed()
         self.aiStatus = seededSuggestionState?.aiStatus ?? self.aiStatus
         self.isPerformingAIAction = seededSuggestionState?.isPerformingAIAction ?? false
@@ -766,10 +767,9 @@ final class KeyboardViewModel: ObservableObject {
                     if lastAnalyzedText == sourceText {
                         lastAnalyzedText = nil
                     }
-                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    recordDebugEvent("grammar_correction_request_failed:\(KeyboardActionErrorState.sanitized(message))")
+                    recordDebugEvent("grammar_correction_request_failed:\(Self.sanitizedErrorMessage(error))")
                     isGrammarCorrectionLoading = false
-                    showActionError(message)
+                    showActionError(error, scope: .grammar)
                 }
             }
         }
@@ -820,7 +820,7 @@ final class KeyboardViewModel: ObservableObject {
         case .noChanges:
             markGrammarCorrectionAllClear()
         case .showRewriteOptions, .noUsableResult:
-            showActionError("No AI response")
+            showActionError(KeyboardAIError.modelCapability, scope: .grammar)
         }
     }
 
@@ -883,8 +883,17 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = .correctionComplete
     }
 
-    private func showActionError(_ message: String) {
-        let error = KeyboardActionErrorState(message: message)
+    private func showActionError(
+        _ sourceError: Error,
+        scope: KeyboardActionErrorScope = .global
+    ) {
+        let keyboardError = sourceError as? KeyboardAIError
+        let message = keyboardError?.errorDescription ?? sourceError.localizedDescription
+        let error = KeyboardActionErrorState(
+            kind: keyboardError?.actionErrorKind ?? .gatewayUnavailable,
+            scope: scope,
+            message: message
+        )
         actionPanelTask?.cancel()
         actionPanelTask = nil
         grammarCorrectionTask?.cancel()
@@ -1032,6 +1041,7 @@ final class KeyboardViewModel: ObservableObject {
         suggestionState = seededSuggestionState.suggestionState
         actionPanelState = seededSuggestionState.actionPanelState
         rewriteOptionsState = seededSuggestionState.rewriteOptionsState
+        actionError = seededSuggestionState.actionError
         panelMode = seededSuggestionState.panelMode
         aiStatus = seededSuggestionState.aiStatus
         isPerformingAIAction = seededSuggestionState.isPerformingAIAction
@@ -1039,7 +1049,8 @@ final class KeyboardViewModel: ObservableObject {
         completionPanelState = seededSuggestionState.completionPanelState
         if seededSuggestionState.suggestionState != nil
             || seededSuggestionState.actionPanelState != nil
-            || seededSuggestionState.rewriteOptionsState != nil {
+            || seededSuggestionState.rewriteOptionsState != nil
+            || seededSuggestionState.actionError != nil {
             hasFullAccess = true
         }
     }
@@ -1145,14 +1156,24 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noUsableResult:
-                        showActionError("No AI response")
+                        showActionError(
+                            KeyboardAIError.modelCapability,
+                            scope: action == .fixGrammar ? .grammar : .writingAction
+                        )
                     }
+                }
+            } catch is CancellationError {
+                await MainActor.run {
+                    isPerformingAIAction = false
+                    aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
                 }
             } catch {
                 await MainActor.run {
-                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    recordDebugEvent("action_request_failed:\(KeyboardActionErrorState.sanitized(message))")
-                    showActionError(message)
+                    recordDebugEvent("action_request_failed:\(Self.sanitizedErrorMessage(error))")
+                    showActionError(
+                        error,
+                        scope: action == .fixGrammar ? .grammar : .writingAction
+                    )
                 }
             }
         }
@@ -1263,7 +1284,7 @@ final class KeyboardViewModel: ObservableObject {
                     )
                     let options = self.actionPanelOptions(from: outcome, action: action)
                     guard !options.isEmpty else {
-                        self.showActionError("No AI response")
+                        self.showActionError(KeyboardAIError.modelCapability, scope: .writingAction)
                         return
                     }
 
@@ -1283,9 +1304,8 @@ final class KeyboardViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    self?.recordDebugEvent("action_panel_request_failed:\(KeyboardActionErrorState.sanitized(message))")
-                    self?.showActionError(message)
+                    self?.recordDebugEvent("action_panel_request_failed:\(Self.sanitizedErrorMessage(error))")
+                    self?.showActionError(error, scope: .writingAction)
                 }
             }
         }
@@ -1408,13 +1428,11 @@ final class KeyboardViewModel: ObservableObject {
                 lastAnalyzedText = nil
             }
         } catch {
-            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            recordDebugEvent("automatic_analysis_failed:\(KeyboardActionErrorState.sanitized(message))")
+            recordDebugEvent("automatic_analysis_failed:\(Self.sanitizedErrorMessage(error))")
             guard !isGrammarCorrectionLoading else { return }
-            aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
             suggestionState = nil
             hasNoIssueAnalysisResult = false
-            isPerformingAIAction = false
+            showActionError(error, scope: .grammar)
         }
     }
 
@@ -1463,7 +1481,7 @@ final class KeyboardViewModel: ObservableObject {
             suggestionState = nil
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
-            aiStatus = "Ready"
+            showActionError(KeyboardAIError.modelCapability, scope: .grammar)
         }
         isPerformingAIAction = false
         if panelMode != .correctionComplete {
@@ -1726,6 +1744,11 @@ final class KeyboardViewModel: ObservableObject {
         defaults.synchronize()
     }
 
+    private static func sanitizedErrorMessage(_ error: Error) -> String {
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        return KeyboardActionErrorState.sanitized(message)
+    }
+
     private static func loadPersistedComposingBuffer() -> String {
         guard debugStateEnabled else { return "" }
         return AppConfig.sharedDefaults()?.string(forKey: Keys.composingBuffer) ?? ""
@@ -1806,6 +1829,7 @@ final class KeyboardViewModel: ObservableObject {
         let suggestionState: KeyboardSuggestionState?
         let actionPanelState: KeyboardActionPanelState?
         let rewriteOptionsState: KeyboardRewriteOptionsState?
+        let actionError: KeyboardActionErrorState?
         let aiStatus: String
         let isPerformingAIAction: Bool
         let hasNoIssueAnalysisResult: Bool
@@ -1818,6 +1842,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = nil
                 rewriteOptionsState = Self.rewriteOptionsState
+                actionError = nil
                 aiStatus = "3 rewrites ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1827,6 +1852,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = Self.improveActionPanelState
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "Improve ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1836,6 +1862,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = Self.actionCarouselPanelState
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "Actions ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1845,6 +1872,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = Self.translateActionPanelState
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "Translate ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1857,6 +1885,7 @@ final class KeyboardViewModel: ObservableObject {
                 )
                 actionPanelState = nil
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1866,6 +1895,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = nil
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "No more suggestions"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
@@ -1875,6 +1905,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = nil
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "No issues found"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = true
@@ -1884,8 +1915,23 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = nil
                 rewriteOptionsState = nil
+                actionError = nil
                 aiStatus = "Analyzing your text..."
                 isPerformingAIAction = true
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
+            case "modelCapabilityError":
+                panelMode = .keyboard
+                suggestionState = nil
+                actionPanelState = nil
+                rewriteOptionsState = nil
+                actionError = KeyboardActionErrorState(
+                    kind: .modelCapability,
+                    scope: .grammar,
+                    message: KeyboardActionErrorState.modelCapabilityMessage
+                )
+                aiStatus = KeyboardActionErrorState.modelCapabilityMessage
+                isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
             default:

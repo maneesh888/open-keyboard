@@ -512,13 +512,49 @@ private extension Character {
     }
 }
 
+enum KeyboardActionErrorKind: Equatable {
+    case gatewayUnavailable
+    case authentication
+    case modelUnavailable
+    case modelCapability
+
+    var title: String {
+        switch self {
+        case .gatewayUnavailable: return "AI unavailable"
+        case .authentication: return "Invalid API key"
+        case .modelUnavailable: return "Model unavailable"
+        case .modelCapability: return "Model not compatible"
+        }
+    }
+}
+
+enum KeyboardActionErrorScope: Equatable {
+    case global
+    case grammar
+    case writingAction
+}
+
 struct KeyboardActionErrorState: Equatable {
-    let title: String
+    static let modelCapabilityMessage = "The selected model is not capable of this AI action. Choose another model or retry the model check."
+
+    let kind: KeyboardActionErrorKind
+    let scope: KeyboardActionErrorScope
     let message: String
 
-    init(title: String = "Gateway error", message: String) {
-        self.title = title
-        self.message = Self.sanitized(message)
+    init(
+        kind: KeyboardActionErrorKind = .gatewayUnavailable,
+        scope: KeyboardActionErrorScope = .global,
+        message: String
+    ) {
+        self.kind = kind
+        self.scope = kind == .modelCapability ? scope : .global
+        self.message = kind == .modelCapability ? Self.modelCapabilityMessage : Self.sanitized(message)
+    }
+
+    var title: String { kind.title }
+
+    var blocksGrammarCorrection: Bool {
+        kind != .modelCapability || scope != .writingAction
     }
 
     static func sanitized(_ rawMessage: String) -> String {

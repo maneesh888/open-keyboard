@@ -32,12 +32,30 @@ final class KeyboardToolbarStateTests: XCTestCase {
     }
 
     func testRuntimeGatewayErrorDoesNotShowReady() {
-        let state = KeyboardToolbarState(kind: .error(message: "Gateway HTTP 500"))
+        let state = KeyboardToolbarState(kind: .error(kind: .gatewayUnavailable, message: "Gateway HTTP 500"))
 
         XCTAssertEqual(state.title, "AI unavailable")
         XCTAssertEqual(state.subtitle, "Gateway HTTP 500")
         XCTAssertFalse(state.isActionEnabled)
         XCTAssertNotEqual(state.subtitle, "Ready")
+    }
+
+    func testTypedKeyboardErrorsUseDistinctTitles() {
+        XCTAssertEqual(
+            KeyboardToolbarState(kind: .error(kind: .authentication, message: "Invalid API key")).title,
+            "Invalid API key"
+        )
+        XCTAssertEqual(
+            KeyboardToolbarState(kind: .error(kind: .modelUnavailable, message: "Missing model")).title,
+            "Model unavailable"
+        )
+        let capability = KeyboardToolbarState(kind: .error(
+            kind: .modelCapability,
+            message: KeyboardActionErrorState.modelCapabilityMessage
+        ))
+        XCTAssertEqual(capability.title, "Model not compatible")
+        XCTAssertEqual(capability.subtitle, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertNotEqual(capability.title, "AI unavailable")
     }
 
     func testActionsStateUsesLoadedModel() {

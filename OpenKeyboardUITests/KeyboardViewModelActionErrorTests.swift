@@ -362,6 +362,110 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await assertGatewayFailureShowsErrorAndPreservesText(for: .fixGrammar)
     }
 
+    func testTypedGatewayFailuresReachDistinctKeyboardErrorTitles() async {
+        let cases: [(KeyboardAIError, String)] = [
+            (.timeout, "AI unavailable"),
+            (.transport, "AI unavailable"),
+            (.modelUnavailable, "Model unavailable"),
+            (.unauthorized, "Invalid API key")
+        ]
+
+        for (error, expectedTitle) in cases {
+            let proxy = FakeTextDocumentProxy(text: "Keep this text safe.")
+            let viewModel = KeyboardViewModel(
+                textDocumentProxy: proxy,
+                aiService: ThrowingKeyboardAIService(error: error),
+                loadConfig: { Self.configuredGateway },
+                productionTestFullAccess: true
+            )
+
+            viewModel.performAIAction(.rewrite)
+            await waitUntil { viewModel.actionError != nil }
+
+            XCTAssertEqual(viewModel.actionError?.title, expectedTitle)
+            XCTAssertEqual(viewModel.toolbarState.title, expectedTitle)
+            XCTAssertEqual(proxy.text, "Keep this text safe.")
+        }
+    }
+
+    func testModelCapabilityFailureIsOperationScopedForManualGrammar() async {
+        let original = "i has a apple"
+        let proxy = FakeTextDocumentProxy(text: original)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: .modelCapability),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
+        XCTAssertNotEqual(viewModel.toolbarState.title, "AI unavailable")
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertTrue(viewModel.canOpenActionPanel, "A grammar capability failure must not disable unrelated writing actions")
+    }
+
+    func testModelCapabilityFailureIsShownForRewriteActionPanelAndPreservesText() async {
+        let original = "Please keep these words."
+        let proxy = FakeTextDocumentProxy(text: original)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: .modelCapability),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertTrue(viewModel.canOpenActionPanel)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection, "A rewrite capability failure must not disable grammar correction")
+    }
+
+    func testAutomaticGrammarCapabilityFailureShowsTypedStateAndPreservesText() async {
+        let original = "i has a apple"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: .modelCapability),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert(original)
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertTrue(viewModel.canOpenActionPanel)
+    }
+
+    func testCancellationDoesNotCreateKeyboardErrorOrChangeText() async {
+        let original = "Please keep these words."
+        let proxy = FakeTextDocumentProxy(text: original)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: CancellingKeyboardAIService(),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { !viewModel.isPerformingAIAction }
+
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(viewModel.toolbarState.title, "Open Keyboard AI")
+        XCTAssertEqual(proxy.text, original)
+    }
+
     func testFailureKeepsStickyErrorUntilExplicitRecoveryActions() async {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
@@ -381,7 +485,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "please make this better")
 
         viewModel.copyActionErrorDetails()
-        XCTAssertEqual(UIPasteboard.general.string, "Gateway error: Unable to reach gateway.")
+        XCTAssertEqual(UIPasteboard.general.string, "AI unavailable: Unable to reach gateway.")
 
         viewModel.retryAfterActionError()
         XCTAssertNil(viewModel.actionError)
@@ -1402,7 +1506,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(viewModel.isPerformingAIAction)
 
         viewModel.copyActionErrorDetails()
-        XCTAssertEqual(UIPasteboard.general.string, "Gateway error: Gateway returned an invalid response.")
+        XCTAssertEqual(UIPasteboard.general.string, "AI unavailable: Gateway returned an invalid response.")
     }
 
     func testErrorTextOperationResultShowsErrorAndNeverReplacesDocumentText() async {
@@ -1420,8 +1524,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 50_000_000)
 
         XCTAssertEqual(proxy.text, original)
-        XCTAssertEqual(viewModel.actionError?.message, "No AI response")
-        XCTAssertEqual(viewModel.toolbarState.title, "AI unavailable")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
         XCTAssertNotEqual(viewModel.toolbarState.subtitle, "Ready")
         XCTAssertFalse(proxy.text.contains("no safe keyboard text could be extracted"))
         XCTAssertFalse(viewModel.isPerformingAIAction)
@@ -1745,7 +1849,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(proxy.text, "please make this better", "Failed \(action.title) must preserve original typed text", file: file, line: line)
         XCTAssertNotNil(viewModel.actionError, "Failed \(action.title) should expose a visible keyboard error state", file: file, line: line)
-        XCTAssertEqual(viewModel.actionError?.title, "Gateway error", file: file, line: line)
+        XCTAssertEqual(viewModel.actionError?.title, "AI unavailable", file: file, line: line)
         XCTAssertEqual(viewModel.actionError?.message, "Unable to reach gateway.", file: file, line: line)
         XCTAssertEqual(viewModel.toolbarState.title, "AI unavailable", file: file, line: line)
         XCTAssertEqual(viewModel.toolbarState.subtitle, "Unable to reach gateway.", file: file, line: line)
@@ -2124,6 +2228,40 @@ private final class FailingKeyboardAIService: KeyboardAIServiceProviding {
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         throw KeyboardAIError.server("Unable to reach gateway.")
+    }
+}
+
+private final class ThrowingKeyboardAIService: KeyboardAIServiceProviding {
+    let error: KeyboardAIError
+
+    init(error: KeyboardAIError) {
+        self.error = error
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        throw error
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        throw error
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        throw error
+    }
+}
+
+private final class CancellingKeyboardAIService: KeyboardAIServiceProviding {
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        throw CancellationError()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        throw CancellationError()
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        throw CancellationError()
     }
 }
 

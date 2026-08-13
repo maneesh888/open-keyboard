@@ -221,6 +221,83 @@ final class GatewayClientArchitectureTests: XCTestCase {
         }
         XCTAssertTrue(transport.requests.isEmpty)
     }
+
+    func testKeyboardAIServicePreservesCanonicalGatewayErrorCategories() {
+        XCTAssertEqual(
+            KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.unusableCorrection),
+            .modelCapability
+        )
+        XCTAssertEqual(
+            KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.modelUnavailable),
+            .modelUnavailable
+        )
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.unauthorized), .unauthorized)
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.timeout), .timeout)
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.transport), .transport)
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.invalidResponse), .invalidResponse)
+    }
+
+    func testKeyboardAIServiceClassifiesMalformedStructuredJSONAsModelCapabilityFailure() async throws {
+        try await assertModelCapabilityFailure(content: #"{"#, action: .fixGrammar, sourceText: "i has a apple")
+    }
+
+    func testKeyboardAIServiceClassifiesEmptyStructuredRewriteOutputAsModelCapabilityFailure() async throws {
+        try await assertModelCapabilityFailure(
+            content: #"{"operation":"rewrite","results":[]}"#,
+            action: .rewrite,
+            sourceText: "Please make this clearer."
+        )
+    }
+
+    func testKeyboardAIServiceAcceptsValidNoChangeGrammarJSON() async throws {
+        let result = try await keyboardService(content: #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#)
+            .performResult(action: .fixGrammar, on: "The app works well.", config: configuredGateway)
+
+        XCTAssertTrue(result.isStructuredGrammarNoChange)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: "The app works well."),
+            .noChanges
+        )
+    }
+
+    private func assertModelCapabilityFailure(
+        content: String,
+        action: KeyboardAIAction,
+        sourceText: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async throws {
+        do {
+            _ = try await keyboardService(content: content).performResult(
+                action: action,
+                on: sourceText,
+                config: configuredGateway
+            )
+            XCTFail("Expected model capability failure", file: file, line: line)
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .modelCapability, file: file, line: line)
+        }
+    }
+
+    private func keyboardService(content: String) throws -> KeyboardAIService {
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [["message": ["role": "assistant", "content": content]]]
+        ])
+        return KeyboardAIService(gatewayClient: CanonicalGatewayClient(
+            transport: CanonicalGatewayClientTestTransport(data: responseBody, statusCode: 200)
+        ))
+    }
+
+    private var configuredGateway: AppConfig {
+        AppConfig(
+            apiKey: "test-api-key",
+            gatewayURL: "https://gateway.example/v1",
+            selectedModel: "test-model",
+            isConfigured: true,
+            supportsStructuredCorrections: true,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+    }
 }
 
 final class NetworkManagerGatewayTests: XCTestCase {
