@@ -156,7 +156,18 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'create_sensitive_live_simulator "iPhone 16"' "$ROOT/scripts/ios/test.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  live_case = source.match(/^  live-gateway-smoke\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
+  abort "The iOS test runner is missing live-gateway-smoke mode." unless live_case
+  unless live_case.include?(%q{create_sensitive_live_simulator "iPhone 16"})
+    abort "The live gateway smoke must create a disposable iPhone 16 simulator."
+  end
+  expected = %q{-destination "$destination"}
+  unless live_case.scan(expected).length == 2
+    abort "Both live gateway Xcode invocations must use the disposable simulator destination."
+  end
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"
