@@ -798,12 +798,14 @@ struct KeyboardActionOperationResult: Equatable {
             guard !cleanOriginal.isEmpty, !cleanReplacement.isEmpty else { return nil }
             let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let cleanCategory = category?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanExplanation = explanation?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
             return KeyboardCorrectionSuggestion(
                 id: id,
                 label: cleanTitle.isEmpty ? "Correct grammar" : cleanTitle,
                 original: cleanOriginal,
                 replacement: String(cleanReplacement.prefix(32)),
-                explanation: explanation?.trimmingCharacters(in: .whitespacesAndNewlines),
+                explanation: cleanExplanation.isEmpty ? cleanText : cleanExplanation,
                 category: cleanCategory?.isEmpty == false ? cleanCategory : type,
                 range: range
             )

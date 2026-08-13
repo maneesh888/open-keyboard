@@ -184,7 +184,7 @@ class NetworkManager {
                 inputText: smokeInput,
                 systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
                 userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
-                maxTokens: 1600,
+                maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
                 timeoutInterval: 45
             )
             do {
@@ -239,7 +239,7 @@ class NetworkManager {
             apiKey: apiKey,
             systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
             userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: settingsSmokeInput),
-            maxTokens: 1600,
+            maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
             validationAttempts: 2
         ) { content in
             _ = try Self.validateAtomicCorrectionContent(content, inputText: settingsSmokeInput, minimumCount: 1)
