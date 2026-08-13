@@ -163,6 +163,9 @@ ruby -e '
   unless live_case.include?(%q{create_sensitive_live_simulator "iPhone 16"})
     abort "The live gateway smoke must create a disposable iPhone 16 simulator."
   end
+  unless live_case.include?(%q{inject_xctestrun_live_smoke_env "$xctestrun"})
+    abort "The live gateway smoke must use the encoded sensitive environment handoff."
+  end
   expected = %q{-destination "$destination"}
   unless live_case.scan(expected).length == 2
     abort "Both live gateway Xcode invocations must use the disposable simulator destination."

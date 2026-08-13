@@ -582,10 +582,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
 final class LiveGatewaySmokeTests: XCTestCase {
     func testLiveGatewayTestConnectionServicePathWhenSeeded() async throws {
         let environment = ProcessInfo.processInfo.environment
-        guard let gatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"], !gatewayURL.isEmpty,
-              let apiKey = environment["OPEN_KEYBOARD_TEST_API_KEY"], !apiKey.isEmpty,
+        guard let gatewayURL = Self.decodedHexEnvironmentValue("OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX", from: environment),
+              let apiKey = Self.decodedHexEnvironmentValue("OPEN_KEYBOARD_TEST_API_KEY_HEX", from: environment),
               let model = environment["OPEN_KEYBOARD_TEST_MODEL"], !model.isEmpty else {
-            throw XCTSkip("Set OPEN_KEYBOARD_TEST_GATEWAY_URL, OPEN_KEYBOARD_TEST_API_KEY, and OPEN_KEYBOARD_TEST_MODEL to run live gateway smoke.")
+            throw XCTSkip("Set the encoded live gateway test values and OPEN_KEYBOARD_TEST_MODEL to run live gateway smoke.")
         }
 
         let suiteName = "LiveGatewaySmokeTests.\(UUID().uuidString)"
@@ -641,6 +641,24 @@ final class LiveGatewaySmokeTests: XCTestCase {
                 "Optional capability \(check.title) should pass or skip: \(check.message)"
             )
         }
+    }
+
+    private static func decodedHexEnvironmentValue(
+        _ key: String,
+        from environment: [String: String]
+    ) -> String? {
+        guard let encoded = environment[key], encoded.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: encoded.count / 2)
+        var index = encoded.startIndex
+        while index < encoded.endIndex {
+            let nextIndex = encoded.index(index, offsetBy: 2)
+            guard let byte = UInt8(encoded[index..<nextIndex], radix: 16) else { return nil }
+            data.append(byte)
+            index = nextIndex
+        }
+        guard let value = String(data: data, encoding: .utf8),
+              !value.isEmpty else { return nil }
+        return value
     }
 }
 
