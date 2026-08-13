@@ -81,6 +81,25 @@ inject_xctestrun_gateway_env() {
   done
 }
 
+inject_xctestrun_live_smoke_env() {
+  local xctestrun="$1"
+  local gateway_url_hex api_key_hex
+  local roots=(
+    ":TestConfigurations:0:TestTargets:0:EnvironmentVariables"
+    ":TestConfigurations:0:TestTargets:0:TestingEnvironmentVariables"
+    ":TestConfigurations:0:TestTargets:0:UITargetAppEnvironmentVariables"
+  )
+  local root
+
+  gateway_url_hex="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
+  api_key_hex="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
+  for root in "${roots[@]}"; do
+    plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX" "$gateway_url_hex"
+    plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY_HEX" "$api_key_hex"
+    plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
+  done
+}
+
 SENSITIVE_LIVE_WORKSPACE=""
 SENSITIVE_LIVE_SIMULATOR=""
 SENSITIVE_LIVE_SOURCE_SIMULATOR=""
@@ -123,6 +142,8 @@ cleanup_sensitive_live_artifacts() {
     OPEN_KEYBOARD_SIMULATOR_MODEL \
     OPEN_KEYBOARD_TEST_GATEWAY_URL \
     OPEN_KEYBOARD_TEST_API_KEY \
+    OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX \
+    OPEN_KEYBOARD_TEST_API_KEY_HEX \
     OPEN_KEYBOARD_TEST_MODEL
 
   if [[ -n "$SENSITIVE_LIVE_WORKSPACE" ]]; then
@@ -294,6 +315,8 @@ case "${1:-}" in
         "$REPO_ROOT" \
         "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
     )" || exit 2
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-gateway-smoke.xcresult"
 
@@ -307,7 +330,7 @@ case "${1:-}" in
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
       -derivedDataPath "$derived_data" \
       CODE_SIGN_IDENTITY="" \
@@ -319,13 +342,13 @@ case "${1:-}" in
       exit 1
     fi
 
-    inject_xctestrun_gateway_env "$xctestrun"
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
-    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
+    inject_xctestrun_live_smoke_env "$xctestrun"
+    export OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
+    export OPEN_KEYBOARD_TEST_API_KEY_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
     export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"

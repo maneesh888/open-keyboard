@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 
 enum KeyboardGatewayActionContract {
     static let contractVersion = SemanticPromptContract.version
@@ -154,9 +155,15 @@ struct KeyboardSuggestionState: Equatable {
     private(set) var currentCorrectionIndex: Int
 
     init(response: KeyboardSuggestionResponse, sourceContext: String? = nil, currentCorrectionIndex: Int = 0) {
-        self.corrections = response.corrections
+        if let sourceContext, !sourceContext.isEmpty {
+            let filteredCorrections = response.corrections.filter { $0.isAtomicCorrection(for: sourceContext) }
+            self.corrections = filteredCorrections
+            self.correctedText = Self.textByApplying(filteredCorrections, to: sourceContext)
+        } else {
+            self.corrections = response.corrections
+            self.correctedText = response.correctedText
+        }
         self.predictions = Self.filteredPredictions(response.predictions, sourceContext: sourceContext)
-        self.correctedText = response.correctedText
         if response.corrections.isEmpty {
             self.currentCorrectionIndex = 0
         } else {
@@ -253,6 +260,13 @@ struct KeyboardSuggestionState: Equatable {
         return predictions.filter { !isRedundantPrediction($0.text, sourceContext: sourceContext) }
     }
 
+    private static func textByApplying(_ corrections: [KeyboardCorrectionSuggestion], to sourceText: String) -> String? {
+        let corrected = corrections.reduce(sourceText) { text, correction in
+            correction.applying(to: text) ?? text
+        }
+        return corrected == sourceText ? nil : corrected
+    }
+
     static func isRedundantPrediction(_ prediction: String, sourceContext: String) -> Bool {
         let normalizedPrediction = normalizeText(prediction)
         guard !normalizedPrediction.isEmpty else { return true }
@@ -275,6 +289,164 @@ struct KeyboardSuggestionState: Equatable {
 }
 
 extension KeyboardCorrectionSuggestion {
+    func isAtomicCorrection(for sourceText: String) -> Bool {
+        let cleanOriginal = original.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanReplacement = replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanOriginal.isEmpty,
+              !cleanReplacement.isEmpty,
+              cleanOriginal != cleanReplacement,
+              cleanOriginal != sourceText.trimmingCharacters(in: .whitespacesAndNewlines),
+              sourceText.correctionRange(of: cleanOriginal) != nil else {
+            return false
+        }
+        let originalWords = cleanOriginal.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let replacementWords = cleanReplacement.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        let originalWordCount = originalWords.count
+        let replacementWordCount = replacementWords.count
+        guard originalWordCount <= 3, replacementWordCount <= 3 else { return false }
+
+        let metadata = [label, category ?? "", explanation ?? ""]
+            .joined(separator: " ")
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .lowercased()
+        let stylisticMarkers = [
+            "word choice", "vocabulary", "synonym", "style", "tone", "clarity",
+            "formal", "friendly", "concise", "professional", "rewrite", "rephrase"
+        ]
+        guard !stylisticMarkers.contains(where: metadata.contains) else { return false }
+
+        let mechanicalMarkers = [
+            "spell", "capital", "punct", "grammar", "agreement", "article",
+            "missing", "extra word", "word form", "inflection", "contraction",
+            "pronoun", "tense", "plural", "singular"
+        ]
+        let hasMechanicalMarker = mechanicalMarkers.contains(where: metadata.contains)
+        if originalWordCount == replacementWordCount {
+            let changedTokens = zip(originalWords, replacementWords).filter { pair in pair.0 != pair.1 }
+            guard changedTokens.count == 1, let changedToken = changedTokens.first else { return false }
+            return Self.isMechanicalTokenReplacement(
+                original: changedToken.0,
+                replacement: changedToken.1,
+                hasMechanicalMarker: hasMechanicalMarker
+            )
+        }
+
+        guard hasMechanicalMarker, abs(originalWordCount - replacementWordCount) == 1 else { return false }
+        return Self.isSingleMechanicalInsertionOrRemoval(originalWords, replacementWords)
+    }
+
+    private static func isMechanicalTokenReplacement(
+        original: String,
+        replacement: String,
+        hasMechanicalMarker: Bool
+    ) -> Bool {
+        let lowerOriginal = original.lowercased()
+        let lowerReplacement = replacement.lowercased()
+        if lowerOriginal == lowerReplacement { return true }
+
+        let letterSet = CharacterSet.letters.union(.decimalDigits)
+        let originalCore = lowerOriginal.trimmingCharacters(in: letterSet.inverted)
+        let replacementCore = lowerReplacement.trimmingCharacters(in: letterSet.inverted)
+        if !originalCore.isEmpty, originalCore == replacementCore { return true }
+        if originalCore.isEmpty, replacementCore.isEmpty { return hasMechanicalMarker }
+        if isLikelySpellingCorrection(originalCore, replacementCore) { return true }
+
+        guard hasMechanicalMarker else { return false }
+        if grammaticalWordFamilies.contains(where: { $0.contains(originalCore) && $0.contains(replacementCore) }) {
+            return true
+        }
+        return !inflectionStems(for: originalCore).isDisjoint(with: inflectionStems(for: replacementCore))
+    }
+
+    private static func isSingleMechanicalInsertionOrRemoval(_ lhs: [String], _ rhs: [String]) -> Bool {
+        let shorter = lhs.count < rhs.count ? lhs : rhs
+        let longer = lhs.count < rhs.count ? rhs : lhs
+        let allowedInsertedWords: Set<String> = [
+            "a", "an", "the", "to", "of", "in", "on", "at", "for", "from",
+            "with", "by", "and", "or", "but", "as", "than", "that", "if", "so"
+        ]
+        for skippedIndex in longer.indices {
+            let candidate = longer.enumerated().compactMap { index, word in
+                index == skippedIndex ? nil : word.lowercased()
+            }
+            if candidate == shorter.map({ $0.lowercased() }),
+               allowedInsertedWords.contains(longer[skippedIndex].lowercased()) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static let grammaticalWordFamilies: [Set<String>] = [
+        ["am", "is", "are", "was", "were", "be", "been", "being"],
+        ["have", "has", "had", "having"],
+        ["do", "does", "did", "done", "doing"]
+    ]
+
+    private static func inflectionStems(for word: String) -> Set<String> {
+        guard !word.isEmpty else { return [] }
+        var stems: Set<String> = [word]
+        let suffixes = ["ing", "ed", "es", "s"]
+        for suffix in suffixes where word.hasSuffix(suffix) && word.count > suffix.count + 1 {
+            let stem = String(word.dropLast(suffix.count))
+            stems.insert(stem)
+            if suffix == "ing" {
+                stems.insert(stem + "e")
+                if stem.count > 2, stem.last == stem.dropLast().last {
+                    stems.insert(String(stem.dropLast()))
+                }
+            }
+        }
+        if word.hasSuffix("ies"), word.count > 4 {
+            stems.insert(String(word.dropLast(3)) + "y")
+        }
+        return stems
+    }
+
+    private static func isLikelySpellingCorrection(_ original: String, _ replacement: String) -> Bool {
+        guard !original.isEmpty, !replacement.isEmpty else { return false }
+        let editDistance = characterEditDistance(original, replacement)
+        guard editDistance <= max(2, max(original.count, replacement.count) / 3) else { return false }
+
+        let checker = UITextChecker()
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredCheckerLanguages = UITextChecker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
+        }
+        let languages = Set(preferredCheckerLanguages + ["en_US", "en_GB"])
+        let originalRange = NSRange(location: 0, length: original.utf16.count)
+        for language in languages {
+            let guesses = checker.guesses(
+                forWordRange: originalRange,
+                in: original,
+                language: language
+            ) ?? []
+            if guesses.contains(where: { $0.caseInsensitiveCompare(replacement) == .orderedSame }) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func characterEditDistance(_ lhs: String, _ rhs: String) -> Int {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        var previous = Array(0...right.count)
+        for (leftIndex, leftCharacter) in left.enumerated() {
+            var current = [leftIndex + 1]
+            for (rightIndex, rightCharacter) in right.enumerated() {
+                current.append(min(
+                    current[rightIndex] + 1,
+                    previous[rightIndex + 1] + 1,
+                    previous[rightIndex] + (leftCharacter == rightCharacter ? 0 : 1)
+                ))
+            }
+            previous = current
+        }
+        return previous.last ?? 0
+    }
+
     func applying(to text: String) -> String? {
         guard !original.isEmpty, !replacement.isEmpty else { return nil }
         let range = range.flatMap { text.correctionRange(of: original, near: $0.start) } ?? text.correctionRange(of: original)
@@ -390,12 +562,29 @@ struct KeyboardActionOperationResult: Equatable {
         self.isNoChangeResult = isNoChangeResult
     }
 
-    func suggestionResponse() -> KeyboardSuggestionResponse {
-        KeyboardSuggestionResponse(
-            corrections: items.compactMap(\.correctionSuggestion),
+    func suggestionResponse(sourceText: String? = nil) -> KeyboardSuggestionResponse {
+        let mappedCorrections = items.compactMap(\.correctionSuggestion)
+        let corrections: [KeyboardCorrectionSuggestion]
+        let safeCorrectedText: String?
+        if let sourceText, !sourceText.isEmpty {
+            corrections = mappedCorrections.filter { $0.isAtomicCorrection(for: sourceText) }
+            safeCorrectedText = Self.textByApplying(corrections, to: sourceText)
+        } else {
+            corrections = mappedCorrections
+            safeCorrectedText = correctedText
+        }
+        return KeyboardSuggestionResponse(
+            corrections: corrections,
             predictions: [],
-            correctedText: correctedText
+            correctedText: safeCorrectedText
         )
+    }
+
+    private static func textByApplying(_ corrections: [KeyboardCorrectionSuggestion], to sourceText: String) -> String? {
+        let corrected = corrections.reduce(sourceText) { text, correction in
+            correction.applying(to: text) ?? text
+        }
+        return corrected == sourceText ? nil : corrected
     }
 
     var displayText: String {
@@ -730,13 +919,14 @@ enum KeyboardActionResultHandler {
     static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalizedOperation == "fix_grammar" {
-            let response = result.suggestionResponse()
+            let response = result.suggestionResponse(sourceText: sourceText)
             if !response.corrections.isEmpty {
                 return .showCorrections(response)
             }
             if result.isStructuredGrammarNoChange {
                 return .noChanges
             }
+            return .noUsableResult
         }
         if normalizedOperation == "rewrite" {
             let options = result.rewriteOptions(sourceText: sourceText)
