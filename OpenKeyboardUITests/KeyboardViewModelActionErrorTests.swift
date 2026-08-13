@@ -388,6 +388,66 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testMissingSelectedModelUsesRealServicePreflightAndDistinctTitle() async {
+        let source = "Keep this text safe."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let config = AppConfig(
+            apiKey: "test-key",
+            gatewayURL: "https://mock.local.invalid",
+            selectedModel: "",
+            isConfigured: true,
+            supportsStructuredCorrections: false,
+            structuredCorrectionSchemaVersion: ""
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: KeyboardAIService(),
+            loadConfig: { config },
+            productionTestFullAccess: true
+        )
+
+        XCTAssertFalse(viewModel.canRunAIAction)
+        XCTAssertEqual(viewModel.toolbarState.title, "Model unavailable")
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.kind, .modelUnavailable)
+        XCTAssertEqual(viewModel.actionError?.title, "Model unavailable")
+        XCTAssertEqual(viewModel.toolbarState.title, "Model unavailable")
+        XCTAssertEqual(proxy.text, source)
+    }
+
+    func testWarningOnlyGrammarOutputShowsCapabilityFailureAndPreservesText() async {
+        let source = "The app works well."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let result = KeyboardActionOperationResult(
+            operation: "fix_grammar",
+            items: [KeyboardActionOperationResult.Item(
+                id: "unsupported",
+                type: "warning",
+                title: "Unsupported",
+                text: "This model could not produce corrections."
+            )],
+            correctedText: source,
+            isStructuredResponse: true
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: result),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.fixGrammar)
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.kind, .modelCapability)
+        XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(proxy.text, source)
+    }
+
     func testModelCapabilityFailureIsOperationScopedForManualGrammar() async {
         let original = "i has a apple"
         let proxy = FakeTextDocumentProxy(text: original)

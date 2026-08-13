@@ -82,7 +82,7 @@ struct CanonicalGatewayClient {
         guard let completion = try? JSONDecoder().decode(CanonicalChatCompletionResponse.self, from: data),
               let content = completion.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
               !content.isEmpty else {
-            throw CanonicalGatewayClientError.invalidResponse
+            throw CanonicalGatewayClientError.unusableCorrection
         }
         return content
     }

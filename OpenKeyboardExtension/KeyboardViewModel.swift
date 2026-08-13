@@ -263,6 +263,7 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess
             && gatewayConnectionError == nil
             && hasUsableGatewayConfig
+            && !isSelectedModelUnavailable
             && !isPerformingAIAction
     }
 
@@ -270,11 +271,17 @@ final class KeyboardViewModel: ObservableObject {
         hasFullAccess
             && gatewayConnectionError == nil
             && hasUsableGatewayConfig
+            && !isSelectedModelUnavailable
             && !isManualActionInFlight
     }
 
     private var hasUsableGatewayConfig: Bool {
-        config.isConfigured && config.hasCompleteGatewayRuntimeConfig
+        config.isConfigured && config.hasGatewayRuntimeConfig
+    }
+
+    private var isSelectedModelUnavailable: Bool {
+        hasUsableGatewayConfig
+            && config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var isManualActionInFlight: Bool {
@@ -293,6 +300,7 @@ final class KeyboardViewModel: ObservableObject {
         !hasFullAccess
             || gatewayConnectionError != nil
             || !hasUsableGatewayConfig
+            || isSelectedModelUnavailable
             || actionError?.blocksGrammarCorrection == true
     }
 
@@ -320,6 +328,12 @@ final class KeyboardViewModel: ObservableObject {
         }
         if let gatewayConnectionError {
             return KeyboardToolbarState(kind: .error(kind: .gatewayUnavailable, message: gatewayConnectionError))
+        }
+        if isSelectedModelUnavailable {
+            return KeyboardToolbarState(kind: .error(
+                kind: .modelUnavailable,
+                message: KeyboardAIError.modelUnavailable.localizedDescription
+            ))
         }
 
         return KeyboardToolbarState.current(

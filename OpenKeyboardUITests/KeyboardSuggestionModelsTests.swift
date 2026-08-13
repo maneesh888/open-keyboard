@@ -739,6 +739,21 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertNotEqual(outcome, .replaceText("The app works well today."))
     }
 
+    func testWarningOnlyStructuredGrammarResultIsNotNoChange() throws {
+        let source = "The app works well."
+        let result = try KeyboardActionOperationResult.parse(
+            #"{"operation":"fix_grammar","results":[{"id":"unsupported","type":"warning","title":"Unsupported","text":"This model could not produce corrections."}],"corrected_text":"The app works well."}"#,
+            operation: "fix_grammar",
+            fallbackText: source
+        )
+
+        XCTAssertFalse(result.isStructuredGrammarNoChange)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: source),
+            .noUsableResult
+        )
+    }
+
     func testMalformedJSONLikeResponseDoesNotBecomeLegacyReplacementText() {
         XCTAssertThrowsError(try KeyboardActionOperationResult.parse(#"{"operation":"fix_grammar","results": ["#, operation: "fix_grammar", fallbackText: "i has a apple")) { error in
             XCTAssertEqual(error as? KeyboardActionOperationResultError, .invalidResponse)

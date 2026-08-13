@@ -249,6 +249,14 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testKeyboardAIServiceClassifiesEmptyAssistantContentAsModelCapabilityFailure() async throws {
+        try await assertModelCapabilityFailure(
+            content: "   ",
+            action: .rewrite,
+            sourceText: "Please make this clearer."
+        )
+    }
+
     func testKeyboardAIServiceAcceptsValidNoChangeGrammarJSON() async throws {
         let result = try await keyboardService(content: #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#)
             .performResult(action: .fixGrammar, on: "The app works well.", config: configuredGateway)

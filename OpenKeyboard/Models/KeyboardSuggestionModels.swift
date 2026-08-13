@@ -670,7 +670,7 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     var isStructuredGrammarNoChange: Bool {
-        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
+        isStructuredResponse && isNoChangeResult
     }
 
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
@@ -727,10 +727,11 @@ struct KeyboardActionOperationResult: Equatable {
         }
 
         let finalCorrectedText = correctedText ?? topLevelDisplayText
-        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
         let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
+        let isNoChangeResult = operation == "fix_grammar"
+            && canonicalItems.isEmpty
+            && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
 
         return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
     }
