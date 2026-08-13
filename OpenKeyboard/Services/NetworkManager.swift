@@ -38,7 +38,7 @@ enum NetworkError: Error {
         case .unusableCorrection:
             return "Gateway connected, but the selected model did not return a usable correction."
         case .timeout:
-            return "Gateway connected, but the selected model timed out during the test."
+            return "Gateway connected, but the selected model did not respond within the model-check limit."
         }
     }
 }
@@ -185,7 +185,7 @@ class NetworkManager {
                 systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
                 userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
                 maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
-                timeoutInterval: 45
+                timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
             do {
                 _ = try Self.validateAtomicCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
@@ -375,7 +375,7 @@ class NetworkManager {
             case .unauthorized:
                 return "API key was rejected by the gateway. Reconnect your gateway in the app."
             case .timeout:
-                return "Gateway connected, but the selected model timed out during the test."
+                return "Gateway connected, but the selected model did not respond within 20 seconds. Choose a faster model or retry."
             case .modelUnavailable:
                 return "The selected model is not available for this key."
             case .unusableCorrection:
@@ -555,7 +555,7 @@ class NetworkManager {
                     systemPrompt: systemPrompt,
                     userPrompt: userPrompt,
                     maxTokens: maxTokens,
-                    timeoutInterval: 90
+                    timeoutInterval: GatewayRequestTimeouts.diagnosticAction
                 )
                 do {
                     let message = try validation(content)
