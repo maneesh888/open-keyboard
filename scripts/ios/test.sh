@@ -294,6 +294,8 @@ case "${1:-}" in
         "$REPO_ROOT" \
         "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
     )" || exit 2
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-gateway-smoke.xcresult"
 
@@ -307,7 +309,7 @@ case "${1:-}" in
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
       -derivedDataPath "$derived_data" \
       CODE_SIGN_IDENTITY="" \
@@ -325,7 +327,7 @@ case "${1:-}" in
     export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"

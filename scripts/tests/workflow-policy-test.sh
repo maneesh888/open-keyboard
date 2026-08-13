@@ -156,6 +156,7 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'create_sensitive_live_simulator "iPhone 16"' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"
