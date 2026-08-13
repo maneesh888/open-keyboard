@@ -275,6 +275,28 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertTrue((messages.last?["content"] as? String)?.contains(smokeInput) == true)
     }
 
+    func testCorrectionSmokeRetriesOneUnusableStructuredResponse() async throws {
+        let transport = NetworkManagerTestTransport([
+            .chat(content: "This sentence is already fine."),
+            .chat(content: #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix typo.","original":"teh","replacement":"the"}],"corrected_text":"i recieved the refnd."}"#)
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        try await manager.testCorrectionSmoke(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            model: "gemma2:2b"
+        )
+
+        XCTAssertEqual(transport.requests.count, 2)
+        let models = try transport.requests.map { request -> String in
+            let body = try XCTUnwrap(request.httpBody)
+            let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+            return try XCTUnwrap(json["model"] as? String)
+        }
+        XCTAssertEqual(models, ["gemma2:2b", "gemma2:2b"])
+    }
+
     func testCorrectionSmokeTestPhrasesAreCuratedTypoInputs() {
         let phrases = NetworkManager.correctionSmokeTestPhrases
         let typoMarkers = [
@@ -484,6 +506,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .chat(content: "This sentence is already fine."),
+            .chat(content: "This sentence is already fine."),
             .chat(content: #"{"operation":"fix_grammar","results":[{"id":"spelling","type":"correction","title":"Spelling","text":"Fix typo.","original":"teh","replacement":"the"}],"corrected_text":"The tiny robot has a sandwich for breakfast."}"#)
         ])
         let manager = NetworkManager(transport: transport)
@@ -501,18 +524,19 @@ final class NetworkManagerGatewayTests: XCTestCase {
             "/v1/models",
             "/v1/models",
             "/v1/chat/completions",
+            "/v1/chat/completions",
             "/v1/chat/completions"
         ])
-        let smokeBodies = try transport.requests.suffix(2).map { request -> String in
+        let smokeBodies = try transport.requests.suffix(3).map { request -> String in
             let body = try XCTUnwrap(request.httpBody)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
             return try XCTUnwrap(json["model"] as? String)
         }
-        XCTAssertEqual(smokeBodies, ["apple-foundationmodel", "gpt-oss:120b-cloud"])
+        XCTAssertEqual(smokeBodies, ["apple-foundationmodel", "apple-foundationmodel", "gpt-oss:120b-cloud"])
     }
 
     @MainActor
-    func testViewModelDoesNotSaveDraftConfigWhenNetworkSmokeFails() async throws {
+    func testViewModelSavesConnectedGatewayWhenNetworkSmokeCannotVerifyModel() async throws {
         let suiteName = "NetworkManagerGatewayTests.failure.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -524,6 +548,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let transport = NetworkManagerTestTransport([
             .models(["apple-foundationmodel"]),
             .models(["apple-foundationmodel"]),
+            .chat(content: "This sentence is already fine."),
             .chat(content: "This sentence is already fine.")
         ])
         let manager = NetworkManager(transport: transport)
@@ -533,14 +558,17 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .failure)
-        XCTAssertEqual(viewModel.config.gatewayURL, "")
-        XCTAssertEqual(viewModel.config.apiKey, "")
-        XCTAssertEqual(viewModel.config.selectedModel, "")
-        XCTAssertFalse(viewModel.config.isConfigured)
-        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
-        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
-        XCTAssertNil(secretStore.apiKey)
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
+        XCTAssertEqual(viewModel.config.apiKey, "test-api-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertTrue(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example")
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
+        XCTAssertEqual(secretStore.apiKey, "test-api-key")
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
     }
 
     private func assertFetchModelsThrows(
@@ -564,7 +592,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        let manager = NetworkManager(transport: NetworkManagerTestTransport(response))
+        let manager = NetworkManager(transport: NetworkManagerTestTransport([response, response]))
         do {
             try await manager.testCorrectionSmoke(
                 gatewayURL: "gateway.example",

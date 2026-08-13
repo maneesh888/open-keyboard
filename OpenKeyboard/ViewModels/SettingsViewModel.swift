@@ -36,6 +36,7 @@ class SettingsViewModel: ObservableObject {
         case unknown
         case checking
         case success
+        case limited
         case failure
     }
     
@@ -57,7 +58,7 @@ class SettingsViewModel: ObservableObject {
         let sharedError = defaults.flatMap(AppConfig.gatewayConnectionError(from:))
         let hasRecentValidation = Self.hasRecentSavedGatewayValidation(for: displayConfig, defaults: defaults)
         self.errorMessage = sharedError
-        self.connectionStatus = sharedError == nil ? (hasRecentValidation ? .success : .unknown) : .failure
+        self.connectionStatus = sharedError == nil ? (hasRecentValidation ? Self.validatedConnectionStatus(for: displayConfig) : .unknown) : .failure
         self.showsValidatedGatewayDetails = sharedError == nil && hasRecentValidation
         self.hasValidatedSavedGatewayThisLaunch = sharedError == nil && hasRecentValidation
     }
@@ -81,7 +82,7 @@ class SettingsViewModel: ObservableObject {
         errorMessage = sharedError
         showsValidatedGatewayDetails = sharedError == nil && hasRecentValidation
         diagnosticReport = nil
-        connectionStatus = sharedError == nil ? (hasRecentValidation ? .success : .unknown) : .failure
+        connectionStatus = sharedError == nil ? (hasRecentValidation ? Self.validatedConnectionStatus(for: displayConfig) : .unknown) : .failure
         hasValidatedSavedGatewayThisLaunch = sharedError == nil && hasRecentValidation
     }
 
@@ -118,7 +119,7 @@ class SettingsViewModel: ObservableObject {
     }
 
     var shouldShowConnectionActions: Bool {
-        isTestingConnection || hasConnectionError || !showsValidatedGatewayDetails || isEditingGatewayDraft
+        isTestingConnection || hasConnectionError || connectionStatus == .limited || !showsValidatedGatewayDetails || isEditingGatewayDraft
     }
 
     var canTestConnection: Bool {
@@ -144,10 +145,15 @@ class SettingsViewModel: ObservableObject {
     }
 
     var structuredCapabilityDisplay: String {
-        guard !hasConnectionError, showsValidatedGatewayDetails, config.isConfigured, config.supportsStructuredCorrections else {
+        guard !hasConnectionError, showsValidatedGatewayDetails, config.isConfigured else {
             return "Loaded after Test Connection"
         }
+        guard config.supportsStructuredCorrections else { return "Not verified for selected model" }
         return config.structuredCorrectionSchemaVersion.isEmpty ? "Structured corrections enabled" : config.structuredCorrectionSchemaVersion
+    }
+
+    var modelCapabilityMessage: String {
+        "Gateway connected and the model is available, but its structured correction response could not be verified. Basic AI actions remain available; use Diagnostics to inspect model capabilities."
     }
     
     func updateGatewayURLInput(_ value: String) {
@@ -176,7 +182,7 @@ class SettingsViewModel: ObservableObject {
         guard draftGatewayURL != config.gatewayURL || draftAPIKey != config.apiKey else { return }
         showsValidatedGatewayDetails = false
         diagnosticReport = nil
-        if connectionStatus == .success || connectionStatus == .checking { connectionStatus = .unknown }
+        if connectionStatus == .success || connectionStatus == .limited || connectionStatus == .checking { connectionStatus = .unknown }
     }
 
     func validateSavedGatewayOnceOnLaunch() async {
@@ -185,7 +191,7 @@ class SettingsViewModel: ObservableObject {
         guard !hasValidatedSavedGatewayThisLaunch else { return }
         hasValidatedSavedGatewayThisLaunch = true
         if Self.hasRecentSavedGatewayValidation(for: config, defaults: defaults) {
-            connectionStatus = .success
+            connectionStatus = Self.validatedConnectionStatus(for: config)
             errorMessage = nil
             showsValidatedGatewayDetails = true
             return
@@ -235,7 +241,7 @@ class SettingsViewModel: ObservableObject {
                     return
                 }
 
-                var lastSmokeError: Error?
+                var smokeErrors: [Error] = []
                 for gatewayModel in candidates {
                     do {
                         try await gatewayTester.testCorrectionSmoke(
@@ -263,12 +269,35 @@ class SettingsViewModel: ObservableObject {
                         showsValidatedGatewayDetails = true
                         return
                     } catch {
-                        lastSmokeError = error
+                        smokeErrors.append(error)
                     }
                 }
 
                 let fallbackModel = candidates.first ?? config.selectedModel
-                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: lastSmokeError ?? NetworkError.unusableCorrection, model: fallbackModel))
+                if smokeErrors.count == candidates.count,
+                   smokeErrors.allSatisfy(Self.isStructuredCorrectionCapabilityMiss) {
+                    let previousConfig = config
+                    config.gatewayURL = draftGatewayURL
+                    config.apiKey = draftAPIKey
+                    config.selectedModel = fallbackModel
+                    config.isConfigured = true
+                    config.supportsStructuredCorrections = false
+                    config.structuredCorrectionSchemaVersion = ""
+                    guard saveSettings() else {
+                        config = previousConfig
+                        failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
+                        return
+                    }
+
+                    connectionStatus = .limited
+                    errorMessage = nil
+                    AppConfig.clearGatewayConnectionError(from: defaults)
+                    AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
+                    showsValidatedGatewayDetails = true
+                    return
+                }
+
+                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: smokeErrors.last ?? NetworkError.unusableCorrection, model: fallbackModel))
             } else {
                 failConnection(with: "Connection failed")
             }
@@ -328,6 +357,16 @@ class SettingsViewModel: ObservableObject {
         showsValidatedGatewayDetails = false
         AppConfig.saveGatewayConnectionError(message, to: defaults)
         AppConfig.clearGatewayConnectionLastTestedAt(from: defaults)
+    }
+
+    private static func validatedConnectionStatus(for config: AppConfig) -> ConnectionStatus {
+        config.supportsStructuredCorrections ? .success : .limited
+    }
+
+    private static func isStructuredCorrectionCapabilityMiss(_ error: Error) -> Bool {
+        guard let networkError = error as? NetworkError else { return false }
+        if case .unusableCorrection = networkError { return true }
+        return false
     }
 
     private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {

@@ -174,21 +174,25 @@ class NetworkManager {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
         let smokeInput = Self.diagnosticSettingsCorrectionInput
-        let content = try await chatCompletionContent(
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            model: trimmedModel,
-            operation: "fix_grammar",
-            inputText: smokeInput,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
-            maxTokens: 1600,
-            timeoutInterval: 45
-        )
-        do {
-            _ = try Self.validateAtomicCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
-        } catch {
-            throw NetworkError.unusableCorrection
+        let validationAttempts = 2
+        for attempt in 1...validationAttempts {
+            let content = try await chatCompletionContent(
+                gatewayURL: gatewayURL,
+                apiKey: apiKey,
+                model: trimmedModel,
+                operation: "fix_grammar",
+                inputText: smokeInput,
+                systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+                userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
+                maxTokens: 1600,
+                timeoutInterval: 45
+            )
+            do {
+                _ = try Self.validateAtomicCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
+                return
+            } catch {
+                guard attempt < validationAttempts else { throw NetworkError.unusableCorrection }
+            }
         }
     }
 

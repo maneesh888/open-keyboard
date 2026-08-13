@@ -18,6 +18,30 @@ final class GatewayStatusUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["gateway_status_icon"].waitForExistence(timeout: 2))
         XCTAssertFalse(app.descendants(matching: .any)["gateway_status_progress"].exists)
     }
+
+    func testHomeShowsConnectedGatewayWhenModelCapabilityIsUnverified() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--clear-gateway-config",
+            "--seed-gateway-config",
+            "--replace-existing-config",
+            "--seed-unverified-model-capability"
+        ]
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://mock.local.invalid"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = "mock-ui-test-key"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = "gemma2:2b"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Gateway Connected"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Retry model check"].exists)
+        XCTAssertFalse(app.staticTexts["Gateway needs attention"].exists)
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "gateway-connected-model-unverified"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
 }
 
 final class KeyboardExtensionConfiguredUITests: XCTestCase {

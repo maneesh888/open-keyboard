@@ -994,6 +994,18 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
         XCTAssertTrue(noTextViewModel.canOpenGrammarCorrection)
 
+        var unverifiedCapabilityConfig = Self.configuredGateway
+        unverifiedCapabilityConfig.supportsStructuredCorrections = false
+        unverifiedCapabilityConfig.structuredCorrectionSchemaVersion = ""
+        let unverifiedCapabilityViewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
+            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            loadConfig: { unverifiedCapabilityConfig },
+            productionTestFullAccess: true
+        )
+        XCTAssertTrue(unverifiedCapabilityViewModel.canRunAIAction)
+        XCTAssertTrue(unverifiedCapabilityViewModel.canOpenGrammarCorrection)
+
         let noFullAccessViewModel = KeyboardViewModel(
             textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
             aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
