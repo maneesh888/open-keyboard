@@ -21,6 +21,8 @@ PR_REQUIREMENTS_VALIDATOR="$ROOT/scripts/validate-pr-requirements.sh"
 PR_REQUIREMENTS_POLICY_TEST="$ROOT/scripts/tests/pr-requirements-policy-test.sh"
 PR_REVIEW_RECORD_VALIDATOR="$ROOT/scripts/validate-pr-review-record.sh"
 PR_REVIEW_RECORD_POLICY_TEST="$ROOT/scripts/tests/pr-review-record-policy-test.sh"
+REVIEW_CHECK_STATE_CLASSIFIER="$ROOT/scripts/classify-review-check-state.sh"
+REVIEW_CHECK_STATE_POLICY_TEST="$ROOT/scripts/tests/review-check-state-policy-test.sh"
 DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
@@ -48,6 +50,8 @@ for required_file in \
   "$PR_REQUIREMENTS_POLICY_TEST" \
   "$PR_REVIEW_RECORD_VALIDATOR" \
   "$PR_REVIEW_RECORD_POLICY_TEST" \
+  "$REVIEW_CHECK_STATE_CLASSIFIER" \
+  "$REVIEW_CHECK_STATE_POLICY_TEST" \
   "$DEPLOY_SOURCE_POLICY_TEST" \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
@@ -71,10 +75,20 @@ fi
 
 rg --quiet 'contents:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$LIVE_WORKFLOW"
+rg --quiet 'checks:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet "github.event.action || 'none'" "$CI_WORKFLOW"
-rg --fixed-strings --quiet "github.event.action || 'none'" "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'group: live-${{ github.event.pull_request.number }}' "$LIVE_WORKFLOW"
+if rg --fixed-strings --quiet "github.event.action || 'none'" "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
+  echo "Exact-head metadata events must share one serialized per-PR queue." >&2
+  exit 1
+fi
+if [[ "$(rg --count 'queue:[[:space:]]*max' "$CI_WORKFLOW")" -ne 1 ||
+      "$(rg --count 'queue:[[:space:]]*max' "$LIVE_WORKFLOW")" -ne 1 ]]; then
+  echo "Review and live metadata workflows must retain every queued per-PR transition." >&2
+  exit 1
+fi
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_WORKFLOW"
@@ -114,6 +128,11 @@ rg --fixed-strings --quiet 'if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]' "
 rg --fixed-strings --quiet 'if [[ "$EVENT_NAME" == "pull_request_review" ]]' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'sleep 5' "$CI_WORKFLOW"
+rg --fixed-strings --quiet -- "-f check_name='Required checks'" "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'classify-review-check-state.sh' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'CURRENT_RUN_ID: ${{ github.run_id }}' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'history_poisoned' "$CI_WORKFLOW"
+rg --fixed-strings --quiet "needs.requirement-evidence.outputs.emit_incomplete == 'true'" "$CI_WORKFLOW"
 if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$CI_WORKFLOW"; then
   echo "Review evidence must not validate the stale event-body snapshot." >&2
   exit 1
@@ -123,7 +142,7 @@ if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"
   exit 1
 fi
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet "name: \${{ needs.requirement-evidence.outputs.evidence_ready == 'true' && 'Required checks' || 'Incomplete review evidence' }}" "$CI_WORKFLOW"
+rg --fixed-strings --quiet "name: \${{ needs.requirement-evidence.outputs.emit_incomplete == 'true' && 'Incomplete review evidence' || 'Required checks' }}" "$CI_WORKFLOW"
 if rg --quiet 'REQUIREMENT_EVIDENCE_RESULT' "$CI_WORKFLOW"; then
   echo "Technical aggregation must not turn expected incomplete review evidence into a poisoned required check." >&2
   exit 1
@@ -135,6 +154,10 @@ ruby -e '
   classifier = jobs.fetch("requirement-evidence")
   abort "Review classification must expose exact-head readiness." unless
     classifier.fetch("outputs").fetch("evidence_ready").include?("steps.review-evidence.outputs.ready")
+  abort "Review classification must expose the protected-name decision." unless
+    classifier.fetch("outputs").fetch("emit_incomplete").include?("steps.review-check-history.outputs.emit_incomplete")
+  abort "Review classification must expose irreversible invalidation." unless
+    classifier.fetch("outputs").fetch("history_poisoned").include?("steps.review-check-history.outputs.history_poisoned")
 
   technical = jobs.fetch("required-technical-checks")
   abort "Technical aggregation has the wrong protected name." unless technical.fetch("name") == "Required technical checks"
@@ -143,7 +166,7 @@ ruby -e '
 
   review = jobs.fetch("required-review-evidence")
   review_name = review.fetch("name")
-  abort "Complete and incomplete review evidence must use different check names." unless
+  abort "Pre-review and protected review evidence must use different check names." unless
     review_name.include?("Required checks") && review_name.include?("Incomplete review evidence")
   abort "The protected review status must depend only on trusted review classification." unless
     Array(review.fetch("needs")) == ["requirement-evidence"]

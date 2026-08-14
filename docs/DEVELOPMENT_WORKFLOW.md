@@ -146,6 +146,12 @@ expected pre-review failure history from permanently poisoning the protected con
 structurally valid ledger does not prove its own claims; the exact-head independent report and
 conditional automatic-or-human authorization remain required.
 
+CI serializes all review-metadata events for a pull request and inspects the SHA's complete
+`Required checks` history. Once that protected context has succeeded, a later invalid report,
+dismissal, weakened authorization record, unresolved history lookup, or prior protected failure
+emits/fixes the state at a failed `Required checks`. That failure is irreversible for the SHA;
+restoring mutable PR text is insufficient, and a new commit must restart every exact-head gate.
+
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
 exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
@@ -187,6 +193,11 @@ retained and linked, so it is intentionally a post-report gate; `Required techni
 before the report exists. After the root posts the report and updates the PR brief, all three
 protected statuses (`Required technical checks`, `Required checks`, and `Required live
 verification`) must pass on the same head before readiness or merge.
+
+Immediately before readiness and again before guarded merge, re-fetch and revalidate the current PR
+body, linked review, head, threads, and complete protected check history. Keep the PR draft during
+the evidence handoff. A same-head protected review failure is not recoverable by editing the PR;
+push a new commit and repeat the review cycle.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in

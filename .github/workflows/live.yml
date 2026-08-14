@@ -13,8 +13,8 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: live-${{ github.event.pull_request.number }}-${{ github.event.action || 'none' }}
-  cancel-in-progress: true
+  group: live-${{ github.event.pull_request.number }}
+  queue: max
 
 jobs:
   impact:

@@ -99,6 +99,12 @@ Before marking a PR ready or merging it, always require:
 9. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
 10. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
+Inspect every `Required checks` run on the exact SHA, not only the latest displayed rollup. Any
+non-success under that protected name permanently invalidates the SHA. Do not try to recover it by
+editing or rerunning PR metadata; push a new commit and restart the full exact-head cycle. Keep the
+PR draft throughout report/body handoff and re-fetch the current body, linked review, and check
+history immediately before readiness.
+
 Then require exactly one authorization route:
 
 - **Automatic:** every in-scope row is `VERIFIED`; the reviewer inspected N/N requirements, reports

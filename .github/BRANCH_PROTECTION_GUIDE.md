@@ -25,6 +25,12 @@ the PR description. Skipped, missing, stale, fallback, wrong-target, or wrong-mo
 `UNVERIFIED`; it prevents automatic authorization and forces the explicit human route. Human
 authorization accepts the disclosed risk but never bypasses the required statuses above.
 
+The protected review context is intentionally one-way for each SHA. Before the first complete
+report, incomplete metadata uses the non-required `Incomplete review evidence` name. After a
+`Required checks` success exists, weakening or removing the report, authorization, or linked PR
+metadata emits a failed `Required checks` and permanently invalidates that SHA. Do not rerun or edit
+metadata to revive it; push a new commit and repeat the exact-head proof and review cycle.
+
 Recommended repository merge settings:
 
 - Allow squash merge.

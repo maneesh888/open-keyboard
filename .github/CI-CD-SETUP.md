@@ -44,10 +44,11 @@ the repository owner's explicit approval for the same exact SHA.
 
 Review-submission CI re-reads current pull-request metadata and retries the review/body handoff for
 at most 60 seconds. Live-policy CI similarly allows at most 120 seconds for a pushed exact head's
-already-completed local live evidence to be recorded in the pull-request body. Action-scoped
-concurrency keeps both handoff runs alive when the matching body-edit runs start. This prevents a
-frozen event snapshot or cancellation from leaving an obsolete failed required check on the same
-commit; validation still fails if either exact-head record never becomes complete.
+already-completed local live evidence to be recorded in the pull-request body. Each workflow uses
+one retained serialized queue per pull request, so review, body-edit, dismissal, and live-evidence
+events cannot cancel one another. Every run re-fetches current exact-head metadata rather than
+trusting dispatch order. This prevents a frozen event snapshot or cancellation from leaving obsolete
+evidence effective; validation still fails if either exact-head record never becomes complete.
 
 Incomplete review metadata emits a deliberately different `Incomplete review evidence` failure.
 The protected `Required checks` name is emitted only after the trusted validators accept the
@@ -55,6 +56,13 @@ complete exact-head record. GitHub retains every failed check run on a commit in
 rollup, so this name separation prevents an expected pre-review failure from permanently poisoning
 an otherwise completed review. Technical jobs aggregate independently as `Required technical
 checks`; branch protection requires both names plus `Required live verification`.
+
+After `Required checks` has succeeded once for a SHA, the workflow treats that protected name as a
+one-way latch. It inspects all prior check runs for the SHA before choosing a name. Any later invalid
+or uninspectable review state emits a failed `Required checks`, and any prior non-success under that
+name keeps the SHA permanently failed even if the mutable PR metadata is restored. Recovery requires
+a new commit and a complete new exact-head full, live, review, and authorization cycle. This closes
+the complete-to-incomplete stale-success path without reintroducing the expected pre-review poison.
 
 ## Repository automation set
 
