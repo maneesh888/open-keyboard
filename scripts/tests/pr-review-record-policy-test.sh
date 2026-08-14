@@ -182,11 +182,37 @@ mv "$newer_review_file" "$REVIEWS_JSON_FILE"
 expect_rejected "an older linked report superseded by a newer same-head project-reviewer report" "$automatic_pr_body"
 
 write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
+newer_approved_file="$FIXTURE/reviews-with-newer-approved-project-report.json"
+jq \
+  --arg body "$automatic_review_body" \
+  '. + [{id:457, html_url:"https://github.com/maneesh888/open-keyboard/pull/123#pullrequestreview-457", commit_id:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", state:"APPROVED", body:$body, submitted_at:"2026-08-14T00:02:00Z", user:{login:"implementer",type:"User"}}]' \
+  "$REVIEWS_JSON_FILE" > "$newer_approved_file"
+mv "$newer_approved_file" "$REVIEWS_JSON_FILE"
+expect_rejected "a newer same-head APPROVED submission carrying the project-reviewer marker" "$automatic_pr_body"
+
+write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
+older_approved_file="$FIXTURE/reviews-with-older-approved-project-report.json"
+jq \
+  --arg body "$automatic_review_body" \
+  '[{id:455, html_url:"https://github.com/maneesh888/open-keyboard/pull/123#pullrequestreview-455", commit_id:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", state:"APPROVED", body:$body, submitted_at:"2026-08-13T23:59:00Z", user:{login:"implementer",type:"User"}}] + .' \
+  "$REVIEWS_JSON_FILE" > "$older_approved_file"
+mv "$older_approved_file" "$REVIEWS_JSON_FILE"
+expect_rejected "any same-head APPROVED submission carrying the project-reviewer marker" "$automatic_pr_body"
+
+write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
 event_review_file="$FIXTURE/event-review.json"
 jq \
   --arg body "$human_review_body" \
   '.[0] + {body:$body, state:"commented"}' \
   "$REVIEWS_JSON_FILE" > "$event_review_file"
 expect_rejected "a restored API review that hides the invalid event snapshot" "$automatic_pr_body" "$event_review_file"
+
+write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
+approved_event_review_file="$FIXTURE/approved-event-review.json"
+jq \
+  --arg body "$automatic_review_body" \
+  '.[0] + {id:457, html_url:"https://github.com/maneesh888/open-keyboard/pull/123#pullrequestreview-457", body:$body, state:"approved", submitted_at:"2026-08-14T00:02:00Z"}' \
+  "$REVIEWS_JSON_FILE" > "$approved_event_review_file"
+expect_rejected "an APPROVED project-reviewer event overlay hidden by restored API state" "$automatic_pr_body" "$approved_event_review_file"
 
 echo "Pull-request review-record policy regression tests passed."

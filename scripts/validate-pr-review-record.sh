@@ -99,10 +99,15 @@ fail_review("Independent review identity is not the isolated project reviewer.")
 reviewer_marker = "- Reviewer: #{reviewer}"
 same_head_reviewer_reports = reviews.select do |candidate|
   next false unless candidate.is_a?(Hash)
-  next false unless candidate["commit_id"] == head_sha && candidate["state"].to_s.upcase == "COMMENTED"
+  next false unless candidate["commit_id"] == head_sha
 
   candidate.fetch("body", "").lines.any? { |line| line.strip == reviewer_marker }
 end
+invalid_reviewer_state = same_head_reviewer_reports.find do |candidate|
+  candidate["state"].to_s.upcase != "COMMENTED"
+end
+fail_review("Every same-head project-reviewer submission must be COMMENTED, never an approval or change request.") if
+  invalid_reviewer_state
 latest_reviewer_report = same_head_reviewer_reports.max_by do |candidate|
   [candidate["submitted_at"].to_s, candidate["id"].to_i]
 end
