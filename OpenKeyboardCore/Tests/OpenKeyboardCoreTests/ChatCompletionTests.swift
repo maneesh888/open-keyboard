@@ -3,12 +3,12 @@ import XCTest
 
 final class ChatCompletionTests: XCTestCase {
     func testPerformWritingActionBuildsAuthorizedChatCompletionRequest() async throws {
-        let server = DummyGatewayServer(.chatPlainText("Corrected text."))
+        let server = DummyGatewayServer(.chatPlainText("I have an apple."))
         let client = GatewayClient(config: validConfig, httpClient: server)
 
         let output = try await client.performWritingAction(.fixGrammar, text: "i has a apple", model: "test-model")
 
-        XCTAssertEqual(output, "Corrected text.")
+        XCTAssertEqual(output, "I have an apple.")
         let request = try XCTUnwrap(server.requests.first)
         XCTAssertEqual(request.method, "POST")
         XCTAssertEqual(request.url.absoluteString, "https://gateway.example/v1/chat/completions")
@@ -20,12 +20,12 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(json["stream"] as? Bool, false)
         XCTAssertEqual(json["operation"] as? String, "fix_grammar")
         XCTAssertEqual(json["input_text"] as? String, "i has a apple")
-        let responseFormat = try XCTUnwrap(json["response_format"] as? [String: String])
-        XCTAssertEqual(responseFormat, ["type": "json_object"])
-        XCTAssertEqual(json["temperature"] as? Double, 0.1)
+        XCTAssertNil(json["response_format"])
+        XCTAssertNil(json["temperature"])
+        XCTAssertEqual(json["max_tokens"] as? Int, 12_000)
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
         XCTAssertEqual(messages.first?["role"], "system")
-        XCTAssertEqual(messages.first?["content"], WritingPromptBuilder.structuredSystemPrompt)
+        XCTAssertTrue(messages.first?["content"]?.contains("grammar correction engine") == true)
         XCTAssertEqual(messages.last?["role"], "user")
         XCTAssertEqual(messages.last?["content"], WritingPromptBuilder.prompt(for: .fixGrammar, text: "i has a apple"))
     }
@@ -61,7 +61,7 @@ final class ChatCompletionTests: XCTestCase {
         ))
         let client = GatewayClient(config: validConfig, httpClient: server)
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple,ths is nt sound god", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple,ths is nt sound god", model: "test-model")
 
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertEqual(result.items.count, 2)
@@ -76,7 +76,7 @@ final class ChatCompletionTests: XCTestCase {
         let server = DummyGatewayServer(.chatComplexSpellFix)
         let client = GatewayClient(config: validConfig, httpClient: server)
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: DummyGatewayServer.complexSpellFixOriginalText, model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: DummyGatewayServer.complexSpellFixOriginalText, model: "test-model")
 
         XCTAssertEqual(server.requestedURLs, ["https://gateway.example/v1/chat/completions"])
         XCTAssertEqual(result.operation, "fix_grammar")
@@ -103,7 +103,7 @@ final class ChatCompletionTests: XCTestCase {
         let scenarios = [
             Scenario(
                 name: "multi-error grammar",
-                action: .fixGrammar,
+                action: .rewrite,
                 input: "i has a apple,ths is nt sound god",
                 content: #"{"operation":"fix_grammar","results":[{"id":"article","type":"correction","title":"Article","text":"Use an before apple","original":"a apple","replacement":"an apple"},{"id":"spelling","type":"correction","title":"Spelling","text":"Fix ths","original":"ths","replacement":"this"},{"id":"grammar","type":"correction","title":"Grammar","text":"Use does not sound good","original":"is nt sound god","replacement":"does not sound good"}],"summary":"Found three issues.","corrected_text":"i has an apple,this does not sound good"}"#,
                 expectedDisplayText: "i has an apple,this does not sound good",
@@ -111,7 +111,7 @@ final class ChatCompletionTests: XCTestCase {
             ),
             Scenario(
                 name: "clean text all good",
-                action: .fixGrammar,
+                action: .rewrite,
                 input: "The app works well today.",
                 content: #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#,
                 expectedDisplayText: "No issues found.",
@@ -135,7 +135,7 @@ final class ChatCompletionTests: XCTestCase {
             ),
             Scenario(
                 name: "mixed result types",
-                action: .fixGrammar,
+                action: .rewrite,
                 input: "i has a apple, maybe send it",
                 content: #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Grammar","text":"Use have","original":"has","replacement":"have","extra":"ignored"},{"id":"s1","type":"suggestion","title":"Tone","text":"Consider adding context."},{"id":"w1","type":"warning","title":"Ambiguous pronoun","text":"It is unclear what it refers to."},{"id":"e1","type":"explanation","title":"Why","text":"The verb should match the subject."}],"corrected_text":"i have a apple, maybe send it"}"#,
                 expectedDisplayText: "i have a apple, maybe send it",
@@ -159,7 +159,7 @@ final class ChatCompletionTests: XCTestCase {
         let http = DummyGatewayServer(.chatRawContent(content))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple,ths is nt sound god", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple,ths is nt sound god", model: "test-model")
 
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertEqual(result.correctedText, "I have an apple; this does not sound good.")
@@ -173,7 +173,7 @@ final class ChatCompletionTests: XCTestCase {
         let content = #"{"operation":"fix_grammar","results":[{"id":1,"type":"correction","title":"Spelling","text":"Fix typo","original":"teh","replacement":"the","range":{"start":"0","end":"3"},"confidence":"0.97"}],"summary":{"unexpected":true},"corrected_text":"the message"}"#
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "teh message", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "teh message", model: "test-model")
 
         XCTAssertTrue(result.isStructuredResponse)
         XCTAssertEqual(result.items.count, 1)
@@ -195,7 +195,7 @@ final class ChatCompletionTests: XCTestCase {
         let http = DummyGatewayServer(.chatRawContent(content))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "teh quick brown fox", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "teh quick brown fox", model: "test-model")
 
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertEqual(result.items.count, 1)
@@ -208,7 +208,7 @@ final class ChatCompletionTests: XCTestCase {
         let http = DummyGatewayServer(.chatRawContent(content))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        await XCTAssertThrowsErrorAsync(try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")) { error in
+        await XCTAssertThrowsErrorAsync(try await client.performWritingActionResult(.rewrite, text: "i has a apple", model: "test-model")) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
     }
@@ -218,7 +218,7 @@ final class ChatCompletionTests: XCTestCase {
         let http = DummyGatewayServer(.chatRawContent(content))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple", model: "test-model")
 
         XCTAssertEqual(result.items.count, 1)
         XCTAssertEqual(result.items.first?.id, "good")
@@ -231,7 +231,7 @@ final class ChatCompletionTests: XCTestCase {
         let content = #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Verb","text":"Use have","original":"has","replacement":"have"},{"id":"c2","type":"correction","title":"Article","text":"Use an","original":"a apple","replacement":"an apple"}],"summary":"Two issues.","corrected_text":"I have an apple."}"#
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple", model: "test-model")
 
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertEqual(result.items.count, 2)
@@ -243,7 +243,7 @@ final class ChatCompletionTests: XCTestCase {
         let content = #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Verb","text":"Use have","original":"has","replacement":"have"},{"id":"c2","type":"correction","title":"Article","text":"Use an","original":"a apple","replacement":"an apple"}]}"#
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple", model: "test-model")
 
         XCTAssertEqual(result.items.count, 2)
         XCTAssertEqual(result.items.map(\.original), ["has", "a apple"])
@@ -255,7 +255,7 @@ final class ChatCompletionTests: XCTestCase {
         let content = #"{"operation":"fix_grammar","items":[{"id":"c1","type":"correction","title":"Spelling","text":"Fix ths","original":"ths","replacement":"this"},{"id":"c2","type":"correction","title":"Missing word","text":"Expand nt","original":"nt","replacement":"not"}]}"#
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "ths is nt good", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "ths is nt good", model: "test-model")
 
         XCTAssertEqual(result.items.count, 2)
         XCTAssertEqual(result.items.map(\.replacement), ["this", "not"])
@@ -265,7 +265,7 @@ final class ChatCompletionTests: XCTestCase {
         let content = #"{"operation":"fix_grammar","results":[{"id":"w1","type":"warning","title":"Warning","text":"Ambiguous text"},{"id":"s1","type":"summary","title":"Summary","text":"Short summary"},{"id":"e1","type":"explanation","title":"Why","text":"Explanation text"},{"id":"x1","type":"made_up","title":"Unknown","text":"Unknown item"}],"summary":"Handled safely."}"#
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "Some text", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "Some text", model: "test-model")
 
         XCTAssertEqual(result.items.map(\.type), ["warning", "summary", "explanation", "made_up"])
         XCTAssertEqual(result.summary, "Handled safely.")
@@ -288,13 +288,49 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(output, "I have an apple.")
     }
 
-    func testPerformWritingActionTrimsCompletionContent() async throws {
+    func testPerformWritingActionRejectsChangedBoundaryWhitespace() async throws {
         let http = DummyGatewayServer(.chatPlainText("  Corrected text.\n"))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        let output = try await client.performWritingAction(.fixGrammar, text: "bad", model: "test-model")
+        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "bad", model: "test-model")) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+    }
 
-        XCTAssertEqual(output, "Corrected text.")
+    func testPlainGrammarPreservesExactBoundaryWhitespace() async throws {
+        let source = "  i has a apple.  "
+        let corrected = "  I have an apple.  "
+        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatPlainText(corrected)))
+
+        let result = try await client.performWritingActionResult(.fixGrammar, text: source, model: "test-model")
+        let actionClient = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatPlainText(corrected)))
+        let output = try await actionClient.performWritingAction(.fixGrammar, text: source, model: "test-model")
+
+        XCTAssertEqual(result.correctedText, corrected)
+        XCTAssertEqual(result.displayText, corrected)
+        XCTAssertEqual(output, corrected)
+    }
+
+    func testPlainGrammarRejectsSuspiciousRewriteAndTruncation() async {
+        let suspicious = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This sentence is entirely unrelated."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await suspicious.performWritingAction(.fixGrammar, text: "i recieved teh refnd.", model: "test-model")
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let truncated = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatTruncated("I received the"))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await truncated.performWritingAction(.fixGrammar, text: "i recieved teh refnd.", model: "test-model")
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
     }
 
     func testPerformWritingActionEmptyChoicesMapsToInvalidResponse() async {
@@ -310,9 +346,9 @@ final class ChatCompletionTests: XCTestCase {
     func testStructuredOperationResultParsesCommonDisplayAliases() async throws {
         let scenarios: [(String, WritingAction, String)] = [
             (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, .rewrite, "This is clearer."),
-            (#"{"operation":"fix_grammar","correctedText":"I have an apple."}"#, .fixGrammar, "I have an apple."),
+            (#"{"operation":"fix_grammar","correctedText":"I have an apple."}"#, .rewrite, "I have an apple."),
             (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, .rewrite, "Clearer text."),
-            (#"{"operation":"fix_grammar","improved_text":"I have an apple."}"#, .fixGrammar, "I have an apple."),
+            (#"{"operation":"fix_grammar","improved_text":"I have an apple."}"#, .rewrite, "I have an apple."),
             (#"{"operation":"rewrite","replacement":"Replacement text."}"#, .rewrite, "Replacement text."),
             (#"{"operation":"rewrite","text":"Top-level text."}"#, .rewrite, "Top-level text."),
             (#"{"operation":"rewrite","output":"Output text."}"#, .rewrite, "Output text.")
@@ -333,7 +369,7 @@ final class ChatCompletionTests: XCTestCase {
         let encodedPayload = String(data: try JSONEncoder().encode(payload), encoding: .utf8)!
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(encodedPayload)))
 
-        let result = try await client.performWritingActionResult(.fixGrammar, text: "i has a apple", model: "test-model")
+        let result = try await client.performWritingActionResult(.rewrite, text: "i has a apple", model: "test-model")
 
         XCTAssertTrue(result.isStructuredResponse)
         XCTAssertEqual(result.items.count, 1)
@@ -359,16 +395,15 @@ final class ChatCompletionTests: XCTestCase {
     }
 
     func testPerformWritingActionDoesNotReplaceCleanTextWithSameCorrectedText() async throws {
-        let content = #"{"operation":"fix_grammar","results":[],"corrected_text":"The app works well today."}"#
+        let content = "The app works well today."
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
 
         let result = try await client.performWritingActionResult(.fixGrammar, text: "The app works well today.", model: "test-model")
 
-        XCTAssertTrue(result.isStructuredGrammarNoChange)
+        XCTAssertTrue(result.isNoChangeResult)
         let actionClient = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-        await XCTAssertThrowsErrorAsync(try await actionClient.performWritingAction(.fixGrammar, text: "The app works well today.", model: "test-model")) { error in
-            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
-        }
+        let output = try await actionClient.performWritingAction(.fixGrammar, text: "The app works well today.", model: "test-model")
+        XCTAssertEqual(output, content)
     }
 
     private var validConfig: GatewayConfig {

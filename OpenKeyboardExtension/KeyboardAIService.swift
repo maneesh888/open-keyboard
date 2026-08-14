@@ -338,6 +338,9 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        if action == .fixGrammar {
+            return try await performGrammarCorrection(on: text, config: config)
+        }
         guard let prompt = action.prompt(for: text) else {
             throw KeyboardAIError.missingTranslationTarget
         }
@@ -359,6 +362,68 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         }
         do {
             return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
+        } catch {
+            throw KeyboardAIError.modelCapability
+        }
+    }
+
+    private func performGrammarCorrection(on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        let chunks = GrammarTextChunker.chunks(in: text)
+        guard !chunks.isEmpty,
+              chunks.allSatisfy({ $0.text.count <= GrammarTextChunker.absoluteMaximumCharacters }) else {
+            throw KeyboardAIError.modelCapability
+        }
+        var correctedChunks = Array<String?>(repeating: nil, count: chunks.count)
+        let concurrencyLimit = 2
+
+        do {
+            try await withThrowingTaskGroup(of: (Int, String).self) { group in
+                var nextIndex = 0
+                func addNext() {
+                    guard nextIndex < chunks.count else { return }
+                    let chunkIndex = nextIndex
+                    let chunk = chunks[chunkIndex]
+                    nextIndex += 1
+                    group.addTask {
+                        let rendering = KeyboardGatewayActionContract.rendering(
+                            operation: "fix_grammar",
+                            text: chunk.text
+                        )
+                        let output = try await self.gatewayClient.chatCompletionContent(
+                            systemPrompt: rendering.messages[0].content,
+                            userPrompt: rendering.messages[1].content,
+                            operation: rendering.wireOperationID,
+                            inputText: chunk.text,
+                            maxTokens: rendering.maxTokens,
+                            config: config,
+                            temperature: rendering.temperature,
+                            expectsStructuredResponse: rendering.responseFormatType != nil,
+                            timeoutInterval: self.requestTimeoutInterval
+                        )
+                        return (chunkIndex, try GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
+                    }
+                }
+
+                for _ in 0..<min(concurrencyLimit, chunks.count) { addNext() }
+                while let (index, corrected) = try await group.next() {
+                    correctedChunks[index] = corrected
+                    addNext()
+                }
+            }
+        } catch let error as CancellationError {
+            throw error
+        } catch let error as KeyboardAIError {
+            throw error
+        } catch let error as CanonicalGatewayClientError {
+            throw Self.keyboardError(from: error)
+        } catch {
+            throw KeyboardAIError.modelCapability
+        }
+
+        guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
+        let corrected = correctedChunks.compactMap { $0 }.joined()
+        do {
+            return try KeyboardActionOperationResult.plainTextGrammarResponse(corrected, original: text)
         } catch {
             throw KeyboardAIError.modelCapability
         }
@@ -391,5 +456,71 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         case .serverStatus(let status):
             return .server("Gateway HTTP \(status)")
         }
+    }
+}
+
+struct GrammarTextChunk: Equatable, Sendable {
+    let range: KeyboardTextRange
+    let text: String
+}
+
+struct GrammarTextChunker {
+    static let maximumCharacters = 6_000
+    static let absoluteMaximumCharacters = 24_000
+
+    static func chunks(in text: String, maximumCharacters: Int = GrammarTextChunker.maximumCharacters) -> [GrammarTextChunk] {
+        let characters = Array(text)
+        guard characters.count > maximumCharacters else {
+            return [GrammarTextChunk(range: KeyboardTextRange(start: 0, end: characters.count), text: text)]
+        }
+
+        var chunks: [GrammarTextChunk] = []
+        var start = 0
+        while start < characters.count {
+            let hardEnd = min(start + maximumCharacters, characters.count)
+            var end = hardEnd
+            if hardEnd < characters.count {
+                let minimumEnd = start + maximumCharacters / 2
+                var candidate = hardEnd
+                var foundBoundary = false
+                while candidate > minimumEnd {
+                    let previous = characters[candidate - 1]
+                    let next = characters[candidate]
+                    let paragraphBoundary = previous == "\n" && (candidate < 2 || characters[candidate - 2] == "\n")
+                    let sentenceBoundary = ".!?".contains(previous) && next.isWhitespace
+                    if paragraphBoundary || sentenceBoundary {
+                        end = candidate
+                        foundBoundary = true
+                        break
+                    }
+                    candidate -= 1
+                }
+                if !foundBoundary {
+                    candidate = hardEnd + 1
+                    while candidate < characters.count {
+                        let previous = characters[candidate - 1]
+                        let next = characters[candidate]
+                        let paragraphBoundary = previous == "\n" && (candidate < 2 || characters[candidate - 2] == "\n")
+                        let sentenceBoundary = ".!?".contains(previous) && next.isWhitespace
+                        if paragraphBoundary || sentenceBoundary {
+                            end = candidate
+                            foundBoundary = true
+                            break
+                        }
+                        candidate += 1
+                    }
+                }
+                if !foundBoundary {
+                    end = characters.count
+                }
+            }
+            let chunkText = String(characters[start..<end])
+            chunks.append(GrammarTextChunk(
+                range: KeyboardTextRange(start: start, end: end),
+                text: chunkText
+            ))
+            start = end
+        }
+        return chunks
     }
 }

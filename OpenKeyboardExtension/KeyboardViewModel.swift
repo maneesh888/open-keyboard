@@ -245,6 +245,7 @@ final class KeyboardViewModel: ObservableObject {
     private var lastAnalyzedText: String?
     private var lastKeyboardReplacementSourceText: String?
     private var lastKeyboardReplacementResultText: String?
+    private var documentRevision = 0
 
     private enum Keys {
         static let composingBuffer = "keyboardExtension.composingBuffer"
@@ -381,9 +382,11 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insert(_ character: String) {
+        invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         let output = isShiftEnabled ? character.uppercased() : character
         textDocumentProxy.insertText(output)
+        documentRevision += 1
         composingBuffer.append(output)
         persistComposingBuffer()
         scheduleAutomaticAnalysisAfterTextChange()
@@ -394,24 +397,30 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insertSpace() {
+        invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText(" ")
+        documentRevision += 1
         composingBuffer.append(" ")
         persistComposingBuffer()
         scheduleAutomaticAnalysisAfterTextChange()
     }
 
     func insertReturn() {
+        invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText("\n")
+        documentRevision += 1
         clearComposingBuffer()
         typingPredictions = []
         clearAutomaticAnalysisState()
     }
 
     func deleteBackward() {
+        invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.deleteBackward()
+        documentRevision += 1
         if !composingBuffer.isEmpty {
             composingBuffer.removeLast()
             persistComposingBuffer()
@@ -703,8 +712,10 @@ final class KeyboardViewModel: ObservableObject {
     func applyTypingPrediction(id: String) {
         guard typingPredictionsEnabled else { return }
         guard let prediction = typingPredictions.first(where: { $0.id == id }) else { return }
+        invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         insertTypingPrediction(prediction)
+        documentRevision += 1
         persistComposingBuffer()
         refreshTypingPredictions()
         scheduleAutomaticAnalysisAfterTextChange()
@@ -720,6 +731,7 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisTask = nil
 
         let documentTextAtRequest = currentDocumentTextForAnalysis()
+        let documentRevisionAtRequest = documentRevision
         guard let sourceText = currentInputTextForAnalysis() else {
             recordDebugEvent("grammar_correction_blocked_no_text")
             showAllDoneForEmptyText()
@@ -755,9 +767,14 @@ final class KeyboardViewModel: ObservableObject {
                         discardStaleGrammarCorrectionResponse(sourceText: sourceText)
                         return
                     }
+                    guard documentRevision == documentRevisionAtRequest else {
+                        discardStaleGrammarCorrectionResponse(sourceText: sourceText)
+                        return
+                    }
                     applyGrammarCorrectionResult(
                         KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: sourceText),
-                        sourceText: sourceText
+                        sourceText: sourceText,
+                        documentRevision: documentRevisionAtRequest
                     )
                     recordDebugEvent("grammar_correction_request_success")
                 }
@@ -789,7 +806,7 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
-    private func applyGrammarCorrectionResult(_ outcome: KeyboardActionProductOutcome, sourceText: String) {
+    private func applyGrammarCorrectionResult(_ outcome: KeyboardActionProductOutcome, sourceText: String, documentRevision: Int) {
         isGrammarCorrectionLoading = false
         isPerformingAIAction = false
         grammarCorrectionTask = nil
@@ -798,7 +815,15 @@ final class KeyboardViewModel: ObservableObject {
 
         switch outcome {
         case .showCorrections(let response):
-            suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            if let correctedText = response.correctedText {
+                suggestionState = KeyboardSuggestionState(
+                    grammarOriginal: sourceText,
+                    correctedText: correctedText,
+                    documentRevision: documentRevision
+                )
+            } else {
+                suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            }
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
@@ -923,8 +948,19 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func applyCurrentCorrection() {
-        guard var state = suggestionState,
-              let updatedText = state.textByApplyingCurrentCorrection(to: currentEditableText()) else {
+        guard var state = suggestionState else { return }
+        if let currentText = state.renderedGrammarText {
+            guard currentInputTextForAnalysis() == currentText else {
+                invalidateGrammarSessionForDocumentEdit()
+                return
+            }
+            state.applyCurrentCorrection()
+            guard let updatedText = state.renderedGrammarText else { return }
+            replaceEditableText(with: updatedText)
+            finishCorrectionStep(state)
+            return
+        }
+        guard let updatedText = state.textByApplyingCurrentCorrection(to: currentEditableText()) else {
             dismissCurrentCorrection()
             return
         }
@@ -935,8 +971,52 @@ final class KeyboardViewModel: ObservableObject {
 
     func dismissCurrentCorrection() {
         guard var state = suggestionState else { return }
+        if let expectedText = state.renderedGrammarText, currentInputTextForAnalysis() != expectedText {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
         state.dismissCurrentCorrection()
         finishCorrectionStep(state)
+    }
+
+    func acceptAllGrammarCorrections() {
+        guard var state = suggestionState,
+              let currentText = state.renderedGrammarText,
+              currentInputTextForAnalysis() == currentText else {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
+        state.acceptAllGrammarCorrections()
+        if let finalText = state.renderedGrammarText {
+            replaceEditableText(with: finalText)
+        }
+        finishCorrectionStep(state)
+    }
+
+    func rejectAllGrammarCorrections() {
+        guard var state = suggestionState else { return }
+        if let expectedText = state.renderedGrammarText, currentInputTextForAnalysis() != expectedText {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
+        state.rejectAllGrammarCorrections()
+        finishCorrectionStep(state)
+    }
+
+    func checkGrammarAgain() {
+        guard !isGrammarCorrectionLoading else { return }
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        lastAnalyzedText = nil
+        requestGrammarCorrectionForCurrentText()
+    }
+
+    func documentDidChange() {
+        documentRevision += 1
+        guard let expectedText = suggestionState?.renderedGrammarText else { return }
+        if currentInputTextForAnalysis() != expectedText {
+            invalidateGrammarSessionForDocumentEdit()
+        }
     }
 
     func selectRewriteOption(_ optionID: String) {
@@ -1016,7 +1096,7 @@ final class KeyboardViewModel: ObservableObject {
         if state.isComplete {
             suggestionState = nil
             hasNoIssueAnalysisResult = false
-            completionPanelState = .allDone
+            completionPanelState = .grammarReviewComplete
             aiStatus = "No more suggestions"
             panelMode = .correctionComplete
         } else if state.currentCorrection == nil {
@@ -1404,6 +1484,7 @@ final class KeyboardViewModel: ObservableObject {
 
         let currentConfig = config
         let documentTextAtRequest = currentDocumentTextForAnalysis()
+        let documentRevisionAtRequest = documentRevision
         lastAnalyzedText = analysisText
         isPerformingAIAction = true
         aiStatus = "Analyzing…"
@@ -1412,7 +1493,8 @@ final class KeyboardViewModel: ObservableObject {
         do {
             let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
             guard let currentAnalysisText = currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest),
-                  currentAnalysisText == analysisText else {
+                  currentAnalysisText == analysisText,
+                  documentRevision == documentRevisionAtRequest else {
                 isPerformingAIAction = false
                 if lastAnalyzedText == analysisText {
                     lastAnalyzedText = nil
@@ -1431,7 +1513,8 @@ final class KeyboardViewModel: ObservableObject {
             }
             applyAutomaticAnalysisResult(
                 KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: analysisText),
-                sourceText: analysisText
+                sourceText: analysisText,
+                documentRevision: documentRevisionAtRequest
             )
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
@@ -1450,10 +1533,18 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
-    private func applyAutomaticAnalysisResult(_ outcome: KeyboardActionProductOutcome, sourceText: String) {
+    private func applyAutomaticAnalysisResult(_ outcome: KeyboardActionProductOutcome, sourceText: String, documentRevision: Int) {
         switch outcome {
         case .showCorrections(let response):
-            suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            if let correctedText = response.correctedText {
+                suggestionState = KeyboardSuggestionState(
+                    grammarOriginal: sourceText,
+                    correctedText: correctedText,
+                    documentRevision: documentRevision
+                )
+            } else {
+                suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
+            }
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
@@ -1512,6 +1603,17 @@ final class KeyboardViewModel: ObservableObject {
         aiStatus = "No issues found"
     }
 
+    private func invalidateGrammarSessionForDocumentEdit() {
+        guard suggestionState?.grammarSession != nil else { return }
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        lastAnalyzedText = nil
+        completionPanelState = .allDone
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        panelMode = .keyboard
+        recordDebugEvent("grammar_correction_session_invalidated")
+    }
+
     private func clearAutomaticAnalysisState() {
         actionPanelTask?.cancel()
         actionPanelTask = nil
@@ -1544,8 +1646,13 @@ final class KeyboardViewModel: ObservableObject {
             textDocumentProxy.deleteBackward()
         }
         textDocumentProxy.insertText(finalReplacement)
+        documentRevision += 1
         composingBuffer = finalReplacement
-        rememberKeyboardReplacement(sourceText: plan.textForAI, resultText: finalReplacement)
+        rememberKeyboardReplacement(
+            sourceText: plan.textForAI,
+            resultText: finalReplacement,
+            preservesOutputWhitespace: plan.preservesOutputWhitespace
+        )
         persistComposingBuffer()
         refreshTypingPredictions()
     }
@@ -1604,9 +1711,15 @@ final class KeyboardViewModel: ObservableObject {
         return false
     }
 
-    private func rememberKeyboardReplacement(sourceText: String?, resultText: String) {
+    private func rememberKeyboardReplacement(
+        sourceText: String?,
+        resultText: String,
+        preservesOutputWhitespace: Bool = false
+    ) {
         lastKeyboardReplacementSourceText = sourceText
-        lastKeyboardReplacementResultText = KeyboardReplacementPlanner.plan(for: resultText)?.textForAI
+        lastKeyboardReplacementResultText = preservesOutputWhitespace
+            ? KeyboardReplacementPlanner.grammarPlan(for: resultText)?.textForAI
+            : KeyboardReplacementPlanner.plan(for: resultText)?.textForAI
     }
 
     private func clearKeyboardReplacementTracking() {
@@ -1657,7 +1770,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func currentDocumentTextForAnalysis() -> String? {
-        KeyboardReplacementPlanner.plan(
+        KeyboardReplacementPlanner.grammarPlan(
             contextBeforeInput: textDocumentProxy.documentContextBeforeInput,
             contextAfterInput: textDocumentProxy.documentContextAfterInput
         )?.textForAI
@@ -1672,8 +1785,8 @@ final class KeyboardViewModel: ObservableObject {
             composingBuffer = Self.loadPersistedComposingBuffer()
         }
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
-        let bufferPlan = KeyboardReplacementPlanner.plan(for: fallbackContext)
-        if let contextPlan = KeyboardReplacementPlanner.plan(
+        let bufferPlan = KeyboardReplacementPlanner.grammarPlan(for: fallbackContext)
+        if let contextPlan = KeyboardReplacementPlanner.grammarPlan(
             contextBeforeInput: contextBeforeInput,
             contextAfterInput: contextAfterInput
         ) {
@@ -1693,18 +1806,22 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func replaceEditableText(with replacement: String) {
-        if let plan = currentReplacementPlan() {
+        if let plan = KeyboardReplacementPlanner.grammarPlan(
+            contextBeforeInput: textDocumentProxy.documentContextBeforeInput,
+            contextAfterInput: textDocumentProxy.documentContextAfterInput
+        ) {
             replace(plan: plan, with: replacement)
             return
         }
         let currentText = currentEditableText()
-        let sourceText = KeyboardReplacementPlanner.plan(for: currentText)?.textForAI
+        let sourceText = KeyboardReplacementPlanner.grammarPlan(for: currentText)?.textForAI
         for _ in currentText {
             textDocumentProxy.deleteBackward()
         }
         textDocumentProxy.insertText(replacement)
+        documentRevision += 1
         composingBuffer = replacement
-        rememberKeyboardReplacement(sourceText: sourceText, resultText: replacement)
+        rememberKeyboardReplacement(sourceText: sourceText, resultText: replacement, preservesOutputWhitespace: true)
         persistComposingBuffer()
         refreshTypingPredictions()
     }

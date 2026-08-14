@@ -1924,6 +1924,84 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(proxy.text.contains("ann apple"))
     }
 
+    func testPlainGrammarMixedChoicesThenCheckAgainUsesOneNewRequestWithCurrentText() async {
+        let source = "Our support team definately need clearer notes before they reply about the refnd."
+        let corrected = "Our support team definitely needs clearer notes before they reply about the refund."
+        let mixedResult = "Our support team definitely need clearer notes before they reply about the refund."
+        let service = SequencedKeyboardAIService(results: [
+            Self.plainGrammarResult(corrected),
+            Self.plainGrammarResult(mixedResult)
+        ])
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.suggestionState?.correctionCount == 3 && !viewModel.isGrammarCorrectionLoading }
+        viewModel.applyCurrentCorrection()
+        viewModel.dismissCurrentCorrection()
+        viewModel.acceptAllGrammarCorrections()
+
+        XCTAssertEqual(proxy.text, mixedResult)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+
+        viewModel.checkGrammarAgain()
+        await waitUntil { service.requestedTexts.count == 2 && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertEqual(service.requestedTexts, [source, mixedResult])
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+    }
+
+    func testRejectAllKeepsOriginalAndManualDocumentEditInvalidatesGrammarSession() async {
+        let source = "i has teh note."
+        let corrected = "I have the note."
+        let service = SuccessfulKeyboardAIService(result: Self.plainGrammarResult(corrected))
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.suggestionState != nil && !viewModel.isGrammarCorrectionLoading }
+        viewModel.rejectAllGrammarCorrections()
+        XCTAssertEqual(proxy.text, source)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+
+        viewModel.checkGrammarAgain()
+        await waitUntil { viewModel.suggestionState != nil && !viewModel.isGrammarCorrectionLoading }
+        proxy.replaceTextForTest(source + " Manual edit")
+        viewModel.documentDidChange()
+
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testGrammarRequestUsesExactWholeMultilineDocumentIncludingWhitespaceAndEmoji() async {
+        let source = "  First paragraph is clean. 🙂\n\nSecond paragraf need correction.  "
+        let service = SequencedKeyboardAIService(results: [Self.plainGrammarResult(source)])
+        let proxy = FakeTextDocumentProxy(text: source, cursorOffset: 20)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts.count == 1 && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertEqual(service.requestedTexts, [source])
+        XCTAssertEqual(proxy.text, source)
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+    }
+
     private func assertGatewayFailureShowsErrorAndPreservesText(for action: KeyboardAIAction, file: StaticString = #filePath, line: UInt = #line) async {
         let proxy = FakeTextDocumentProxy(text: "please make this better")
         let viewModel = KeyboardViewModel(
@@ -1996,6 +2074,15 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             correctedText: nil,
             isStructuredResponse: true,
             isNoChangeResult: true
+        )
+    }
+
+    private static func plainGrammarResult(_ correctedText: String) -> KeyboardActionOperationResult {
+        KeyboardActionOperationResult(
+            operation: "fix_grammar",
+            items: [],
+            correctedText: correctedText,
+            isStructuredResponse: false
         )
     }
 

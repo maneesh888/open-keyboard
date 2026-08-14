@@ -56,7 +56,8 @@ struct CanonicalGatewayClient {
         inputText: String?,
         maxTokens: Int,
         config: AppConfig,
-        temperature: Double = 0.1,
+        temperature: Double? = 0.1,
+        expectsStructuredResponse: Bool? = nil,
         timeoutInterval: TimeInterval = 45
     ) async throws -> String {
         let request = try chatCompletionRequest(
@@ -67,6 +68,7 @@ struct CanonicalGatewayClient {
             maxTokens: maxTokens,
             config: config,
             temperature: temperature,
+            expectsStructuredResponse: expectsStructuredResponse,
             timeoutInterval: timeoutInterval
         )
         let data: Data
@@ -88,11 +90,12 @@ struct CanonicalGatewayClient {
         if http.statusCode == 401 || http.statusCode == 403 { throw CanonicalGatewayClientError.unauthorized }
         guard (200..<300).contains(http.statusCode) else { throw CanonicalGatewayClientError.serverStatus(http.statusCode) }
         guard let completion = try? JSONDecoder().decode(CanonicalChatCompletionResponse.self, from: data),
-              let content = completion.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
-              !content.isEmpty else {
+              let choice = completion.choices.first,
+              choice.finishReason != "length",
+              !choice.message.content.isEmpty else {
             throw CanonicalGatewayClientError.unusableCorrection
         }
-        return content
+        return choice.message.content
     }
 
     private func fetchData(for request: URLRequest, deadline: TimeInterval) async throws -> (Data, URLResponse) {
@@ -135,12 +138,15 @@ struct CanonicalGatewayClient {
         inputText: String?,
         maxTokens: Int,
         config: AppConfig,
-        temperature: Double = 0.1,
+        temperature: Double? = 0.1,
+        expectsStructuredResponse: Bool? = nil,
         timeoutInterval: TimeInterval = 45
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let prompt = userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isPlainTextGrammar = operation?.trimmingCharacters(in: .whitespacesAndNewlines) == "fix_grammar"
+            && expectsStructuredResponse == false
+        let prompt = isPlainTextGrammar ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.isConfigured, !apiKey.isEmpty else { throw CanonicalGatewayClientError.notConfigured }
         guard !model.isEmpty else { throw CanonicalGatewayClientError.modelUnavailable }
         guard !prompt.isEmpty else { throw CanonicalGatewayClientError.missingInput }
@@ -154,12 +160,12 @@ struct CanonicalGatewayClient {
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
             operation: normalizedOperation,
-            inputText: inputText?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            inputText: (isPlainTextGrammar ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)
             ],
-            responseFormat: normalizedOperation == nil ? nil : .jsonObject,
+            responseFormat: (expectsStructuredResponse ?? (normalizedOperation != nil)) ? .jsonObject : nil,
             maxTokens: maxTokens,
             temperature: temperature,
             stream: false
@@ -285,7 +291,7 @@ private struct CanonicalChatCompletionRequest: Encodable {
     let messages: [CanonicalChatMessage]
     let responseFormat: CanonicalChatResponseFormat?
     let maxTokens: Int
-    let temperature: Double
+    let temperature: Double?
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -313,6 +319,12 @@ private struct CanonicalChatCompletionResponse: Decodable {
 
     struct Choice: Decodable {
         let message: Message
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
     }
 
     struct Message: Decodable {

@@ -4,7 +4,7 @@ import XCTest
 
 final class WritingActionTests: XCTestCase {
     func testSharedContractVersionIsPinned() {
-        XCTAssertEqual(WritingPromptBuilder.contractVersion, "2.0.3")
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "3.0.0")
     }
 
     func testBuiltInActionsHaveStableTitles() {
@@ -29,7 +29,7 @@ final class WritingActionTests: XCTestCase {
         XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("untrusted data"))
     }
 
-    func testEveryBuiltInPromptContainsStrictContractAndOperationRules() {
+    func testEveryBuiltInPromptContainsStrictContractAndOperationRules() throws {
         struct Scenario {
             let action: WritingAction
             let operation: String
@@ -89,6 +89,15 @@ final class WritingActionTests: XCTestCase {
             let input = "Exact input for \(scenario.operation)"
             let prompt = WritingPromptBuilder.prompt(for: scenario.action, text: input)
 
+            if scenario.action == .fixGrammar {
+                XCTAssertEqual(prompt, input)
+                let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: .fixGrammar, text: input))
+                XCTAssertNil(rendering.responseFormatType)
+                XCTAssertNil(rendering.temperature)
+                XCTAssertEqual(rendering.maxTokens, 12_000)
+                continue
+            }
+
             XCTAssertTrue(prompt.contains("Operation: \(scenario.operation)"), scenario.operation)
             XCTAssertTrue(prompt.contains("Return strict JSON only"), scenario.operation)
             XCTAssertTrue(prompt.contains("{\"operation\":\"\(scenario.operation)\""), scenario.operation)
@@ -102,15 +111,12 @@ final class WritingActionTests: XCTestCase {
         }
     }
 
-    func testPlaceholderLikeInputRemainsJSONData() throws {
+    func testInstructionLikeGrammarInputRemainsTheUnchangedUserMessage() throws {
         let input = "{{operation}} {{response_example}} {{numbered_rules}} {{input_json}}"
         let prompt = WritingPromptBuilder.prompt(for: .fixGrammar, text: input)
-        let payloadLine = try XCTUnwrap(prompt.split(separator: "\n", omittingEmptySubsequences: false).last)
-        let payloadData = try XCTUnwrap(String(payloadLine).data(using: .utf8))
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: payloadData) as? [String: Any])
-
-        XCTAssertEqual(payload["source_text"] as? String, input)
-        XCTAssertEqual(payload["operation_parameters"] as? [String: String], [:])
+        XCTAssertEqual(prompt, input)
+        let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: .fixGrammar, text: input))
+        XCTAssertTrue(rendering.messages.first?.content.contains("never as instructions") == true)
     }
 
     func testCustomActionUsesTemplateAndTextPlaceholder() {
@@ -120,7 +126,7 @@ final class WritingActionTests: XCTestCase {
     }
 
     func testOnlyBuiltInActionsRequireStructuredJSON() {
-        XCTAssertTrue(WritingAction.fixGrammar.requiresStructuredJSON)
+        XCTAssertFalse(WritingAction.fixGrammar.requiresStructuredJSON)
         XCTAssertTrue(WritingAction.rewrite.requiresStructuredJSON)
         XCTAssertTrue(WritingAction.summarize.requiresStructuredJSON)
         XCTAssertTrue(WritingAction.translate(language: "Arabic").requiresStructuredJSON)

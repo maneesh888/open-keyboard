@@ -78,6 +78,9 @@ inject_xctestrun_gateway_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL" "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY" "$OPEN_KEYBOARD_SIMULATOR_API_KEY"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    if [[ -n "${OPEN_KEYBOARD_REAL_SCREENSHOT_DIR:-}" ]]; then
+      plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_REAL_SCREENSHOT_DIR" "$OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"
+    fi
   done
 }
 
@@ -372,7 +375,8 @@ case "${1:-}" in
     live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
     case "$live_test_identifier" in
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured|\
-      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured)
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured|\
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardGrammarCorrectionSelectionWhenGatewayConfigured)
         ;;
       *)
         echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"

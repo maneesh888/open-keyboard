@@ -88,6 +88,8 @@ struct KeyboardView: View {
                         onNext: { viewModel.moveToNextSuggestion() },
                         onApply: { viewModel.applyCurrentCorrection() },
                         onDismiss: { viewModel.dismissCurrentCorrection() },
+                        onAcceptAll: { viewModel.acceptAllGrammarCorrections() },
+                        onRejectAll: { viewModel.rejectAllGrammarCorrections() },
                         onBackToKeyboard: { viewModel.showKeyboardPanel() }
                     )
                 } else if viewModel.isGrammarCorrectionLoading {
@@ -101,6 +103,7 @@ struct KeyboardView: View {
             case .correctionComplete:
                 CorrectionCompletePanel(
                     state: viewModel.completionPanelState,
+                    onCheckAgain: { viewModel.checkGrammarAgain() },
                     onBackToKeyboard: { viewModel.showKeyboardPanel() }
                 )
             }
@@ -1143,6 +1146,8 @@ private struct CorrectionDetailPanel: View {
     let onNext: () -> Void
     let onApply: () -> Void
     let onDismiss: () -> Void
+    let onAcceptAll: () -> Void
+    let onRejectAll: () -> Void
     let onBackToKeyboard: () -> Void
 
     var body: some View {
@@ -1238,7 +1243,7 @@ private struct CorrectionDetailPanel: View {
 
             HStack(spacing: 10) {
                 Button(action: onDismiss) {
-                    Text("Dismiss")
+                    Text("Reject")
                         .font(.caption.weight(.semibold))
                         .frame(minHeight: 34)
                 }
@@ -1246,7 +1251,23 @@ private struct CorrectionDetailPanel: View {
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 .accessibilityIdentifier("ai_correction_dismiss")
 
+                Button(action: onRejectAll) {
+                    Text("Reject All")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .accessibilityIdentifier("ai_correction_reject_all")
+
                 Spacer()
+
+                Button(action: onAcceptAll) {
+                    Text("Accept All")
+                        .font(.caption2.weight(.bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                .accessibilityIdentifier("ai_correction_accept_all")
 
                 Button(action: onApply) {
                     Text("Accept")
@@ -1295,6 +1316,7 @@ private struct CorrectionDetailPanel: View {
 
 private struct CorrectionCompletePanel: View {
     let state: KeyboardCompletionPanelState
+    let onCheckAgain: () -> Void
     let onBackToKeyboard: () -> Void
 
     var body: some View {
@@ -1315,20 +1337,36 @@ private struct CorrectionCompletePanel: View {
                 .font(.subheadline)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
-            Button(action: onBackToKeyboard) {
-                Text("Back to Keyboard")
-                    .font(.subheadline.weight(.semibold))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 9)
+            HStack(spacing: 12) {
+                if state.allowsGrammarCheckAgain {
+                    Button(action: onCheckAgain) {
+                        Text("Check Again")
+                            .font(.subheadline.weight(.bold))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 9)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                    .background(OpenKeyboardTheme.Semantic.primaryAction)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .accessibilityIdentifier("grammar_check_again")
+                }
+
+                Button(action: onBackToKeyboard) {
+                    Text("Back to Keyboard")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 9)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
+                )
+                .accessibilityIdentifier("back_to_keyboard")
             }
-            .buttonStyle(.plain)
-            .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
-            )
             .padding(.top, 2)
-            .accessibilityIdentifier("back_to_keyboard")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)

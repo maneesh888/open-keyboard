@@ -168,12 +168,13 @@ class NetworkManager {
         !((try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)).isEmpty)
     }
 
-    /// Run a correction smoke through the same structured chat completions contract
+    /// Run a correction smoke through the same plain-text chat completions contract
     /// used by the keyboard action path.
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
         let smokeInput = Self.diagnosticSettingsCorrectionInput
+        let grammarRendering = KeyboardGatewayActionContract.rendering(operation: "fix_grammar", text: smokeInput)
         let validationAttempts = 2
         for attempt in 1...validationAttempts {
             let content = try await chatCompletionContent(
@@ -182,13 +183,15 @@ class NetworkManager {
                 model: trimmedModel,
                 operation: "fix_grammar",
                 inputText: smokeInput,
-                systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-                userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
-                maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
+                systemPrompt: grammarRendering.messages[0].content,
+                userPrompt: grammarRendering.messages[1].content,
+                maxTokens: grammarRendering.maxTokens,
+                temperature: grammarRendering.temperature,
+                expectsStructuredResponse: false,
                 timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
             do {
-                _ = try Self.validateAtomicCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
+                _ = try Self.validatePlainTextCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
                 return
             } catch {
                 guard attempt < validationAttempts else { throw NetworkError.unusableCorrection }
@@ -229,6 +232,7 @@ class NetworkManager {
         }
 
         let settingsSmokeInput = Self.diagnosticSettingsCorrectionInput
+        let settingsGrammarRendering = KeyboardGatewayActionContract.rendering(operation: "fix_grammar", text: settingsSmokeInput)
         checks.append(await chatDiagnosticCheck(
             id: "settings-correction-smoke",
             title: "Settings correction",
@@ -237,13 +241,15 @@ class NetworkManager {
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: settingsSmokeInput),
-            maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
+            systemPrompt: settingsGrammarRendering.messages[0].content,
+            userPrompt: settingsGrammarRendering.messages[1].content,
+            maxTokens: settingsGrammarRendering.maxTokens,
+            temperature: settingsGrammarRendering.temperature,
+            expectsStructuredResponse: false,
             validationAttempts: 2
         ) { content in
-            _ = try Self.validateAtomicCorrectionContent(content, inputText: settingsSmokeInput, minimumCount: 1)
-            return "Correction smoke returned usable structured JSON for: \"\(settingsSmokeInput)\""
+            _ = try Self.validatePlainTextCorrectionContent(content, inputText: settingsSmokeInput, minimumCount: 1)
+            return "Correction smoke returned usable complete plain text for: \"\(settingsSmokeInput)\""
         })
 
         let suggestionInput = Self.diagnosticKeyboardCorrectionInput
@@ -267,22 +273,24 @@ class NetworkManager {
         })
 
         let complexGrammarInput = Self.diagnosticAtomicCorrectionInput
+        let complexGrammarRendering = KeyboardGatewayActionContract.rendering(operation: "fix_grammar", text: complexGrammarInput)
         checks.append(await chatDiagnosticCheck(
-            id: "atomic-correction-json",
-            title: "Atomic correction cards",
+            id: "plain-text-grammar-multi-error",
+            title: "Plain-text grammar diff",
             operation: "fix_grammar",
             inputText: complexGrammarInput,
             model: selectedModel,
             gatewayURL: gatewayURL,
             apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: complexGrammarInput),
-            maxTokens: 5_000,
+            systemPrompt: complexGrammarRendering.messages[0].content,
+            userPrompt: complexGrammarRendering.messages[1].content,
+            maxTokens: complexGrammarRendering.maxTokens,
+            temperature: complexGrammarRendering.temperature,
+            expectsStructuredResponse: false,
             validationAttempts: 2
         ) { content in
-            let result = try Self.validateAtomicCorrectionContent(content, inputText: complexGrammarInput, minimumCount: 2)
-            let correctionCount = result.suggestionResponse(sourceText: complexGrammarInput).corrections.count
-            return "Parsed \(correctionCount) correction item\(correctionCount == 1 ? "" : "s")."
+            let correctionCount = try Self.validatePlainTextCorrectionContent(content, inputText: complexGrammarInput, minimumCount: 2)
+            return "Derived \(correctionCount) local correction edit\(correctionCount == 1 ? "" : "s")."
         })
 
         let rewriteInput = "hey team the app has issues and we need fix soon please check it"
@@ -466,6 +474,8 @@ class NetworkManager {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
+        temperature: Double? = 0.1,
+        expectsStructuredResponse: Bool? = nil,
         timeoutInterval: TimeInterval
     ) async throws -> String {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -486,6 +496,8 @@ class NetworkManager {
                     supportsStructuredCorrections: true,
                     structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
                 ),
+                temperature: temperature,
+                expectsStructuredResponse: expectsStructuredResponse,
                 timeoutInterval: timeoutInterval
             )
         } catch let error as NetworkError {
@@ -537,6 +549,8 @@ class NetworkManager {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
+        temperature: Double? = 0.1,
+        expectsStructuredResponse: Bool? = nil,
         optionalForSelectedModel: Bool = false,
         validationAttempts: Int = 1,
         validation: (String) throws -> String
@@ -555,6 +569,8 @@ class NetworkManager {
                     systemPrompt: systemPrompt,
                     userPrompt: userPrompt,
                     maxTokens: maxTokens,
+                    temperature: temperature,
+                    expectsStructuredResponse: expectsStructuredResponse,
                     timeoutInterval: GatewayRequestTimeouts.diagnosticAction
                 )
                 do {
@@ -587,25 +603,25 @@ class NetworkManager {
         }
     }
 
-    private static func validateAtomicCorrectionContent(
+    private static func validatePlainTextCorrectionContent(
         _ content: String,
         inputText: String,
         minimumCount: Int
-    ) throws -> KeyboardActionOperationResult {
-        let result = try validateStructuredActionContent(
-            content,
-            operation: "fix_grammar",
-            fallbackText: inputText,
-            requireChangedOutput: true
-        )
-        let correctionCount = result.suggestionResponse(sourceText: inputText).corrections.count
+    ) throws -> Int {
+        let corrected: String
+        do {
+            corrected = try GrammarCorrectionResponseValidator.validated(content, original: inputText)
+        } catch {
+            throw GatewayDiagnosticValidationError.noUsableOutput("fix_grammar")
+        }
+        let correctionCount = GrammarDiffService.edits(from: inputText, to: corrected).count
         guard correctionCount >= minimumCount else {
             throw GatewayDiagnosticValidationError.notEnoughCorrectionDetail(
                 required: minimumCount,
                 actual: correctionCount
             )
         }
-        return result
+        return correctionCount
     }
 
     private static func isModelCapabilityValidationError(_ error: Error) -> Bool {
@@ -635,7 +651,7 @@ class NetworkManager {
         [
             ("settings-correction-smoke", "Settings correction"),
             ("keyboard-correction-card-json", "Keyboard correction cards"),
-            ("atomic-correction-json", "Atomic correction cards"),
+            ("plain-text-grammar-multi-error", "Plain-text grammar diff"),
             ("rewrite-json", "Rewrite JSON"),
             ("summarize-json", "Summarize JSON"),
             ("improve-rewrite-json", "Improve via Rewrite JSON")

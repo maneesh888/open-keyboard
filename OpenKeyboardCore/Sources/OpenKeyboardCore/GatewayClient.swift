@@ -44,6 +44,9 @@ public struct WritingActionResult: Equatable, Sendable {
     }
 
     public var displayText: String {
+        if operation == "fix_grammar", !isStructuredResponse, let correctedText {
+            return correctedText
+        }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return correctedText.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -135,8 +138,8 @@ public final class GatewayClient: Sendable {
 
     public func performWritingAction(_ action: WritingAction, text: String, model: String) async throws -> String {
         let result = try await performWritingActionResult(action, text: text, model: model)
-        if action == .fixGrammar, result.isStructuredGrammarNoChange {
-            throw GatewayClientError.invalidResponse
+        if action == .fixGrammar, let correctedText = result.correctedText {
+            return correctedText
         }
         let displayText = result.displayText
         guard !displayText.isEmpty else { throw GatewayClientError.invalidResponse }
@@ -145,6 +148,7 @@ public final class GatewayClient: Sendable {
 
     public func performWritingActionResult(_ action: WritingAction, text: String, model: String) async throws -> WritingActionResult {
         let prompt = WritingPromptBuilder.prompt(for: action, text: text)
+        let rendering = WritingPromptBuilder.rendering(for: action, text: text)
         let payload = ChatCompletionRequest(
             model: model,
             operation: action.operationName,
@@ -152,14 +156,14 @@ public final class GatewayClient: Sendable {
             messages: [
                 ChatMessage(
                     role: "system",
-                    content: action.requiresStructuredJSON
-                        ? WritingPromptBuilder.structuredSystemPrompt
-                        : SemanticPromptContract.unstructuredWritingSystemInstruction
+                    content: rendering?.messages.first?.content
+                        ?? SemanticPromptContract.unstructuredWritingSystemInstruction
                 ),
                 ChatMessage(role: "user", content: prompt)
             ],
-            responseFormat: action.requiresStructuredJSON ? .jsonObject : nil,
-            temperature: action.requiresStructuredJSON ? 0.1 : nil,
+            responseFormat: rendering?.responseFormatType == "json_object" ? .jsonObject : nil,
+            maxTokens: rendering?.maxTokens,
+            temperature: rendering?.temperature,
             stream: false
         )
 
@@ -174,14 +178,25 @@ public final class GatewayClient: Sendable {
         try mapStatus(response.statusCode)
 
         guard let completion = try? JSONDecoder().decode(ChatCompletionResponse.self, from: response.data),
-              let content = completion.choices.first?.message.content else {
+              let choice = completion.choices.first,
+              choice.finishReason != "length" else {
             throw GatewayClientError.invalidResponse
         }
 
-        return try Self.parseWritingActionResult(content, operation: action.operationName, fallbackText: text)
+        return try Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
     }
 
     private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
+        if operation == "fix_grammar" {
+            let corrected = try validatedPlainTextGrammarResponse(content, original: fallbackText)
+            return WritingActionResult(
+                operation: operation,
+                items: [],
+                correctedText: corrected,
+                isStructuredResponse: false,
+                isNoChangeResult: corrected == fallbackText
+            )
+        }
         let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw GatewayClientError.invalidResponse }
         if let structuredContent = try normalizedStructuredContent(from: trimmed) {
@@ -292,6 +307,58 @@ public final class GatewayClient: Sendable {
         return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private static func validatedPlainTextGrammarResponse(_ response: String, original: String) throws -> String {
+        guard !response.isEmpty,
+              !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let inspection = response.drop(while: { $0.isWhitespace }).lowercased()
+        let commentaryPrefixes = ["```", "here is", "here's", "corrected text", "correction:", "sure,", "i corrected", "the corrected", "{", "["]
+        guard !commentaryPrefixes.contains(where: inspection.hasPrefix),
+              response.filter(\.isNewline).count == original.filter(\.isNewline).count,
+              String(response.prefix(while: { $0.isWhitespace })) == String(original.prefix(while: { $0.isWhitespace })),
+              String(response.reversed().prefix(while: { $0.isWhitespace }).reversed()) == String(original.reversed().prefix(while: { $0.isWhitespace }).reversed()) else {
+            throw GatewayClientError.invalidResponse
+        }
+        if original.count >= 80, response.count < original.count * 3 / 5 {
+            throw GatewayClientError.invalidResponse
+        }
+        if response == original { return response }
+        let originalWords = grammarWords(in: original)
+        let responseWords = grammarWords(in: response)
+        let approximatelyPreservedWords = originalWords.filter { sourceWord in
+            responseWords.contains { candidate in
+                grammarWordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
+            }
+        }.count
+        guard approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
+            throw GatewayClientError.invalidResponse
+        }
+        return response
+    }
+
+    private static func grammarWords(in value: String) -> [String] {
+        value.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).map { $0.lowercased() }
+    }
+
+    private static func grammarWordEditDistance(_ lhs: String, _ rhs: String) -> Int {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        var previous = Array(0...right.count)
+        for (leftIndex, leftCharacter) in left.enumerated() {
+            var current = [leftIndex + 1]
+            for (rightIndex, rightCharacter) in right.enumerated() {
+                current.append(min(
+                    current[rightIndex] + 1,
+                    previous[rightIndex + 1] + 1,
+                    previous[rightIndex] + (leftCharacter == rightCharacter ? 0 : 1)
+                ))
+            }
+            previous = current
+        }
+        return previous.last ?? 0
+    }
+
     private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         do {
             return try await httpClient.send(request)
@@ -398,6 +465,7 @@ private struct ChatCompletionRequest: Encodable {
     let inputText: String
     let messages: [ChatMessage]
     let responseFormat: ChatCompletionResponseFormat?
+    let maxTokens: Int?
     let temperature: Double?
     let stream: Bool
 
@@ -407,6 +475,7 @@ private struct ChatCompletionRequest: Encodable {
         case inputText = "input_text"
         case messages
         case responseFormat = "response_format"
+        case maxTokens = "max_tokens"
         case temperature
         case stream
     }
@@ -428,6 +497,12 @@ private struct ChatCompletionResponse: Decodable {
 
     struct Choice: Decodable {
         let message: ResponseMessage
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
     }
 
     struct ResponseMessage: Decodable {

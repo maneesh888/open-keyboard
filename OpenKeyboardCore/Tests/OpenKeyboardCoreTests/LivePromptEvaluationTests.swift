@@ -2,35 +2,24 @@ import XCTest
 @testable import OpenKeyboardCore
 
 final class LivePromptEvaluationTests: XCTestCase {
-    func testLiveGemmaReturnsGranularGrammarCorrectionsWhenConfigured() async throws {
-        let (client, model) = try await configuredGemmaClient()
-        let input = "i definately recieve teh adress tomorow, and seperate files wont upload because its recieve limit is to low."
+    func testLiveConfiguredModelReturnsCompletePlainTextGrammarCorrection() async throws {
+        let (client, model) = try configuredLiveClient()
+        let input = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
+        let expected = "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund."
 
+        let startedAt = Date()
         let result = try await client.performWritingActionResult(.fixGrammar, text: input, model: model)
+        let latency = Date().timeIntervalSince(startedAt)
+        print(String(format: "LIVE_GRAMMAR_REQUEST_LATENCY_SECONDS=%.3f", latency))
 
-        XCTAssertTrue(result.isStructuredResponse, "Gemma must return parseable structured JSON.")
+        XCTAssertFalse(result.isStructuredResponse, "Grammar must use the plain-text response contract.")
         XCTAssertEqual(result.operation, "fix_grammar")
-        let corrections = result.items.filter { $0.type.lowercased() == "correction" }
-        let usableCorrections = corrections.filter {
-            !($0.original?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty &&
-            !($0.replacement?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "").isEmpty
-        }
-        XCTAssertGreaterThanOrEqual(usableCorrections.count, 7, "Gemma must return at least seven granular correction cards with original and replacement text.")
-        for correction in usableCorrections {
-            let original = correction.original?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            XCTAssertLessThan(original.count, input.count, "A correction must not collapse the complete input into one item.")
-        }
-        let distinctPairs = Set(usableCorrections.map { "\($0.original ?? "")\u{0}\($0.replacement ?? "")" })
-        XCTAssertEqual(distinctPairs.count, usableCorrections.count, "Each usable correction item must describe a distinct issue.")
-
-        let output = result.displayText.lowercased()
-        let expectedCorrections = ["definitely", "receive", "address", "tomorrow", "separate", "too low"]
-        let hitCount = expectedCorrections.filter { output.contains($0) }.count
-        XCTAssertGreaterThanOrEqual(hitCount, 5, "Gemma corrected too few of the known errors.")
-        XCTAssertTrue(output.contains("won't") || output.contains("will not"), "Gemma must correct wont.")
+        XCTAssertTrue(result.items.isEmpty, "The model must not return patch metadata for grammar.")
+        XCTAssertEqual(result.displayText, expected)
+        XCTAssertTrue(result.displayText.contains("reply"), "Unrelated word 'reply' must remain unchanged.")
     }
 
-    func testLiveGemmaReturnsValidStructuredJSONForEveryOperationWhenConfigured() async throws {
+    func testLiveGemmaReturnsExpectedResponseFormatForEveryOperationWhenConfigured() async throws {
         let (client, model) = try await configuredGemmaClient()
         let scenarios: [(WritingAction, String, String)] = [
             (.fixGrammar, "she dont recieve teh message", "fix_grammar"),
@@ -43,10 +32,15 @@ final class LivePromptEvaluationTests: XCTestCase {
         for (action, input, expectedOperation) in scenarios {
             let result = try await client.performWritingActionResult(action, text: input, model: model)
 
-            XCTAssertTrue(result.isStructuredResponse, "\(expectedOperation) must return parseable structured JSON.")
             XCTAssertEqual(result.operation, expectedOperation)
-            XCTAssertFalse(result.displayText.isEmpty, "\(expectedOperation) must contain usable JSON result content.")
-            XCTAssertFalse(result.items.isEmpty, "\(expectedOperation) must return at least one structured result item.")
+            XCTAssertFalse(result.displayText.isEmpty, "\(expectedOperation) must contain usable result content.")
+            if action == .fixGrammar {
+                XCTAssertFalse(result.isStructuredResponse)
+                XCTAssertTrue(result.items.isEmpty)
+            } else {
+                XCTAssertTrue(result.isStructuredResponse, "\(expectedOperation) must return parseable structured JSON.")
+                XCTAssertFalse(result.items.isEmpty, "\(expectedOperation) must return at least one structured result item.")
+            }
         }
     }
 
@@ -131,18 +125,7 @@ final class LivePromptEvaluationTests: XCTestCase {
     }
 
     private func configuredGemmaClient() async throws -> (GatewayClient, String) {
-        let env = ProcessInfo.processInfo.environment
-        guard let gatewayURLString = env["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
-              let gatewayURL = URL(string: gatewayURLString),
-              let apiKey = env["OPEN_KEYBOARD_LIVE_API_KEY"],
-              let model = env["OPEN_KEYBOARD_LIVE_MODEL"],
-              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw XCTSkip("Set the OPEN_KEYBOARD_LIVE_* variables to run live Gemma prompt evals.")
-        }
-        let config = GatewayConfig(gatewayURL: gatewayURL, apiKey: apiKey)
-        try config.validate()
-        let client = GatewayClient(config: config, httpClient: URLSessionHTTPClient())
+        let (client, model) = try configuredLiveClient()
         if model.localizedCaseInsensitiveContains("gemma") {
             return (client, model)
         }
@@ -151,6 +134,22 @@ final class LivePromptEvaluationTests: XCTestCase {
             throw XCTSkip("The authenticated gateway model catalog does not include Gemma.")
         }
         return (client, gemmaModel)
+    }
+
+    private func configuredLiveClient() throws -> (GatewayClient, String) {
+        let env = ProcessInfo.processInfo.environment
+        guard let gatewayURLString = env["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
+              let gatewayURL = URL(string: gatewayURLString),
+              let apiKey = env["OPEN_KEYBOARD_LIVE_API_KEY"],
+              let model = env["OPEN_KEYBOARD_LIVE_MODEL"],
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw XCTSkip("Set the OPEN_KEYBOARD_LIVE_* variables to run live prompt evals.")
+        }
+        let config = GatewayConfig(gatewayURL: gatewayURL, apiKey: apiKey)
+        try config.validate()
+        let client = GatewayClient(config: config, httpClient: URLSessionHTTPClient())
+        return (client, model)
     }
 }
 

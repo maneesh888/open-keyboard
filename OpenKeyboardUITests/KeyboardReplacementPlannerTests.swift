@@ -51,4 +51,18 @@ final class KeyboardReplacementPlannerTests: XCTestCase {
         XCTAssertNil(KeyboardReplacementPlanner.plan(for: nil))
         XCTAssertNil(KeyboardReplacementPlanner.plan(contextBeforeInput: "", contextAfterInput: "   "))
     }
+
+    func testGrammarPlanUsesWholeMultilineDocumentAndPreservesWhitespaceExactly() throws {
+        let before = "  First line.\nSecond line before"
+        let after = " cursor.\nThird line.  "
+        let plan = try XCTUnwrap(KeyboardReplacementPlanner.grammarPlan(
+            contextBeforeInput: before,
+            contextAfterInput: after
+        ))
+
+        XCTAssertEqual(plan.textToDelete, before)
+        XCTAssertEqual(plan.textAfterCursorToDelete, after)
+        XCTAssertEqual(plan.textForAI, before + after)
+        XCTAssertEqual(plan.replacementText(from: "  First line.\nSecond line at cursor.\nThird line.  "), "  First line.\nSecond line at cursor.\nThird line.  ")
+    }
 }

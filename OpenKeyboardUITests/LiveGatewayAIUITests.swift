@@ -17,20 +17,23 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
     }
 
     func testFixGrammarWithRealGatewayReplacesTypedText() throws {
+        let source = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
         let editor = app.textViews["live_ai_text_editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.tap()
-        editor.typeText("i has a apple")
+        editor.typeText(source)
 
+        let requestStartedAt = Date()
         app.buttons["live_ai_fix_grammar_button"].tap()
 
         let status = app.staticTexts["live_ai_status"]
         XCTAssertTrue(status.waitForText("Success", timeout: 90))
+        print("OpenKeyboard live grammar request latency: \(Date().timeIntervalSince(requestStartedAt)) seconds")
 
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        XCTAssertNotEqual(value, "i has a apple")
-        XCTAssertTrue(value.localizedCaseInsensitiveContains("apple"), "Corrected output should preserve the core noun: \(value)")
+        XCTAssertEqual(value, "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund.")
+        XCTAssertTrue(value.contains("reply"), "Grammar correction must not rewrite reply: \(value)")
         XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
     }
 

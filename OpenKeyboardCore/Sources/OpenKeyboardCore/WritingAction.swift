@@ -44,8 +44,12 @@ public enum WritingAction: Equatable, Sendable {
     }
 
     public var requiresStructuredJSON: Bool {
-        if case .custom = self { return false }
-        return true
+        switch self {
+        case .fixGrammar, .custom:
+            return false
+        default:
+            return true
+        }
     }
 }
 
@@ -54,6 +58,16 @@ public enum WritingPromptBuilder {
     public static let structuredSystemPrompt = SemanticPromptContract.writingSystemInstruction
 
     public static func prompt(for action: WritingAction, text: String) -> String {
+        if case .custom(_, _, let promptTemplate) = action {
+            return promptTemplate.replacingOccurrences(of: "{{text}}", with: text)
+        }
+        guard let rendering = rendering(for: action, text: text), let userMessage = rendering.messages.last else {
+            preconditionFailure("semantic-prompt-contract \(contractVersion) cannot render \(action.operationName)")
+        }
+        return userMessage.content
+    }
+
+    public static func rendering(for action: WritingAction, text: String) -> SemanticPromptRendering? {
         let operationID: String
         let parameters: [String: String]
         switch action {
@@ -73,15 +87,16 @@ public enum WritingPromptBuilder {
             operationID = "translate"
             parameters = ["target_language": language]
         case .custom(_, _, let promptTemplate):
-            return promptTemplate.replacingOccurrences(of: "{{text}}", with: text)
+            _ = promptTemplate
+            return nil
         }
         guard let rendering = try? SemanticPromptContract.renderWriting(
             operationID: operationID,
             input: text,
             parameters: parameters
-        ), let userMessage = rendering.messages.last else {
+        ) else {
             preconditionFailure("semantic-prompt-contract \(contractVersion) cannot render \(operationID)")
         }
-        return userMessage.content
+        return rendering
     }
 }

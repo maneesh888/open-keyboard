@@ -7,7 +7,7 @@ final class UserFlowTests: XCTestCase {
             action: .fixGrammar,
             typedText: "i has a apple",
             modelResponse: "I have an apple.",
-            expectedPromptFragments: ["Operation: fix_grammar", "Return strict JSON only", "i has a apple"],
+            expectedPromptFragments: ["i has a apple"],
             replacementStrategy: .replaceAll
         )
 
