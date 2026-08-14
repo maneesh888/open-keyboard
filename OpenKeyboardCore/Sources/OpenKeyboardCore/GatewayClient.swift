@@ -44,7 +44,7 @@ public struct WritingActionResult: Equatable, Sendable {
     }
 
     public var displayText: String {
-        if operation == "fix_grammar", !isStructuredResponse, let correctedText {
+        if operation == "fix_grammar", let correctedText {
             return correctedText
         }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -57,10 +57,6 @@ public struct WritingActionResult: Equatable, Sendable {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-
-    public var isStructuredGrammarNoChange: Bool {
-        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
     }
 }
 
@@ -193,7 +189,6 @@ public final class GatewayClient: Sendable {
                 operation: operation,
                 items: [],
                 correctedText: corrected,
-                isStructuredResponse: false,
                 isNoChangeResult: corrected == fallbackText
             )
         }
@@ -249,12 +244,7 @@ public final class GatewayClient: Sendable {
         }
 
         let finalCorrectedText = correctedText ?? topLevelDisplayText
-        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
-        let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
-
-        return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
+        return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true)
     }
 
     private static func normalizedStructuredContent(from trimmed: String) throws -> String? {

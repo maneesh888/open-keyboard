@@ -311,7 +311,7 @@ class NetworkManager {
             return "Parsed rewrite output, \(result.displayText.count) characters."
         })
 
-        let summaryInput = "The keyboard extension now reads the same App Group gateway configuration as the host app. When the user tests the gateway in settings, the app loads models, stores the selected model, and runs a structured correction smoke request so the keyboard can rely on the same endpoint."
+        let summaryInput = "The keyboard extension now reads the same App Group gateway configuration as the host app. When the user tests the gateway in settings, the app loads models, stores the selected model, and runs a plain-text grammar correction smoke request so the keyboard can rely on the same endpoint."
         checks.append(await chatDiagnosticCheck(
             id: "summarize-json",
             title: "Summarize JSON",
@@ -493,8 +493,8 @@ class NetworkManager {
                     gatewayURL: gatewayURL,
                     selectedModel: trimmedModel,
                     isConfigured: true,
-                    supportsStructuredCorrections: true,
-                    structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+                    grammarCorrectionVerified: true,
+                    grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
                 ),
                 temperature: temperature,
                 expectsStructuredResponse: expectsStructuredResponse,

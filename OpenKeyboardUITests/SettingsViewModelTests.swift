@@ -34,7 +34,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
 
@@ -62,7 +62,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         viewModel.applyConfig(placeholder)
@@ -95,7 +95,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         viewModel.applyConfig(validated)
@@ -119,7 +119,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(
             config: config,
@@ -146,7 +146,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -168,7 +168,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -187,7 +187,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -229,7 +229,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester(), defaults: defaults)
@@ -262,7 +262,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -288,7 +288,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(healthSucceeds: false)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -312,7 +312,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -339,7 +339,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -355,6 +355,36 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.trustedModelLoaded)
     }
 
+    func testRecentLegacyStructuredCapabilityForcesPlainTextGrammarRevalidation() async {
+        let suiteName = "SettingsViewModelTests.saved-legacy-capability.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: false,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertTrue(viewModel.shouldShowGatewayValidationPending)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
+        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "openkeyboard.structured-corrections.v1")
+    }
+
     func testRecentConnectedConfigPreservesUnverifiedModelCapabilityWithoutGatewayError() async {
         let suiteName = "SettingsViewModelTests.saved-limited.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -366,7 +396,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "gemma2:2b",
             isConfigured: true,
             supportsStructuredCorrections: false,
-            structuredCorrectionSchemaVersion: ""
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["gemma2:2b"], smokeSucceeds: false)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -395,7 +425,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -499,7 +529,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.onboardingResetMessage, "Onboarding will show again after you close Settings.")
     }
 
-    func testSuccessfulTestConnectionPersistsValidatedModelAndStructuredCapability() async {
+    func testSuccessfulTestConnectionPersistsValidatedModelAndGrammarCapability() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["gemma4:latest", "apple-foundationmodel"],
@@ -517,7 +547,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
-        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
         XCTAssertEqual(tester.smokeModel, "apple-foundationmodel")
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
@@ -532,7 +562,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "gemma4:latest",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(healthSucceeds: false)
         let viewModel = SettingsViewModel(config: existing, gatewayTester: tester)
@@ -619,6 +649,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertFalse(viewModel.hasConnectionError)
@@ -648,6 +679,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.hasConnectionError)
         XCTAssertNil(viewModel.errorMessage)
@@ -701,7 +733,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester(), defaults: defaults)
@@ -723,7 +755,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)

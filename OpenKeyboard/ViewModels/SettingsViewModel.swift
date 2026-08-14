@@ -149,7 +149,9 @@ class SettingsViewModel: ObservableObject {
             return "Loaded after Test Connection"
         }
         guard config.supportsStructuredCorrections else { return "Not verified for selected model" }
-        return config.structuredCorrectionSchemaVersion.isEmpty ? "Structured corrections enabled" : config.structuredCorrectionSchemaVersion
+        return config.structuredCorrectionSchemaVersion.isEmpty
+            ? "Structured corrections enabled"
+            : "openkeyboard.structured-corrections.v1"
     }
 
     var modelCapabilityMessage: String {
@@ -254,8 +256,8 @@ class SettingsViewModel: ObservableObject {
                         config.apiKey = draftAPIKey
                         config.selectedModel = gatewayModel
                         config.isConfigured = true
-                        config.supportsStructuredCorrections = true
-                        config.structuredCorrectionSchemaVersion = "openkeyboard.structured-corrections.v1"
+                        config.grammarCorrectionVerified = true
+                        config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
                         guard saveSettings() else {
                             config = previousConfig
                             failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
@@ -275,14 +277,14 @@ class SettingsViewModel: ObservableObject {
 
                 let fallbackModel = candidates.first ?? config.selectedModel
                 if smokeErrors.count == candidates.count,
-                   smokeErrors.allSatisfy(Self.isStructuredCorrectionCapabilityMiss) {
+                   smokeErrors.allSatisfy(Self.isGrammarCorrectionCapabilityMiss) {
                     let previousConfig = config
                     config.gatewayURL = draftGatewayURL
                     config.apiKey = draftAPIKey
                     config.selectedModel = fallbackModel
                     config.isConfigured = true
-                    config.supportsStructuredCorrections = false
-                    config.structuredCorrectionSchemaVersion = ""
+                    config.grammarCorrectionVerified = false
+                    config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
                     guard saveSettings() else {
                         config = previousConfig
                         failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
@@ -360,10 +362,10 @@ class SettingsViewModel: ObservableObject {
     }
 
     private static func validatedConnectionStatus(for config: AppConfig) -> ConnectionStatus {
-        config.supportsStructuredCorrections ? .success : .limited
+        config.grammarCorrectionVerified ? .success : .limited
     }
 
-    private static func isStructuredCorrectionCapabilityMiss(_ error: Error) -> Bool {
+    private static func isGrammarCorrectionCapabilityMiss(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
         switch networkError {
         case .unusableCorrection, .timeout:
@@ -375,6 +377,7 @@ class SettingsViewModel: ObservableObject {
 
     private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {
         guard config.isConfigured, config.hasCompleteGatewayRuntimeConfig else { return false }
+        guard config.hasCurrentGrammarCorrectionCapabilityRecord else { return false }
         guard let defaults, let lastTestedAt = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else { return false }
         let elapsed = now.timeIntervalSince(lastTestedAt)
         return elapsed >= 0 && elapsed < AppConfig.gatewayConnectionRetestInterval

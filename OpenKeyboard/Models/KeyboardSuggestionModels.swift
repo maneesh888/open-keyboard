@@ -1084,7 +1084,7 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     var displayText: String {
-        if operation == "fix_grammar", !isStructuredResponse, let correctedText {
+        if operation == "fix_grammar", let correctedText {
             return correctedText
         }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1132,22 +1132,20 @@ struct KeyboardActionOperationResult: Equatable {
         return options
     }
 
-    var isStructuredGrammarNoChange: Bool {
-        isStructuredResponse && isNoChangeResult
-    }
-
     static func plainTextGrammarResponse(_ content: String, original: String) throws -> KeyboardActionOperationResult {
         let corrected = try GrammarCorrectionResponseValidator.validated(content, original: original)
         return KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
             correctedText: corrected,
-            isStructuredResponse: false,
             isNoChangeResult: corrected == original
         )
     }
 
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
+        guard operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "fix_grammar" else {
+            throw KeyboardActionOperationResultError.invalidResponse
+        }
         let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !stripped.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
         if let structuredContent = try normalizedStructuredContent(from: stripped) {
@@ -1201,13 +1199,7 @@ struct KeyboardActionOperationResult: Equatable {
         }
 
         let finalCorrectedText = correctedText ?? topLevelDisplayText
-        let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isNoChangeResult = operation == "fix_grammar"
-            && decoded.results?.isEmpty == true
-            && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
-
-        return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
+        return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true)
     }
 
     private static func normalizedStructuredContent(from stripped: String, depth: Int = 0) throws -> String? {
@@ -1432,23 +1424,16 @@ enum KeyboardActionResultHandler {
     static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if normalizedOperation == "fix_grammar" {
-            if !result.isStructuredResponse, let correctedText = result.correctedText {
-                let edits = GrammarDiffService.edits(from: sourceText, to: correctedText)
-                guard !edits.isEmpty else { return .noChanges }
-                return .showCorrections(KeyboardSuggestionResponse(
-                    corrections: edits.map(\.suggestion),
-                    predictions: [],
-                    correctedText: correctedText
-                ))
+            guard let correctedText = result.correctedText else {
+                return result.isNoChangeResult ? .noChanges : .noUsableResult
             }
-            let response = result.suggestionResponse(sourceText: sourceText)
-            if !response.corrections.isEmpty {
-                return .showCorrections(response)
-            }
-            if result.isStructuredGrammarNoChange {
-                return .noChanges
-            }
-            return .noUsableResult
+            let edits = GrammarDiffService.edits(from: sourceText, to: correctedText)
+            guard !edits.isEmpty else { return .noChanges }
+            return .showCorrections(KeyboardSuggestionResponse(
+                corrections: edits.map(\.suggestion),
+                predictions: [],
+                correctedText: correctedText
+            ))
         }
         if normalizedOperation == "rewrite" {
             let options = result.rewriteOptions(sourceText: sourceText)

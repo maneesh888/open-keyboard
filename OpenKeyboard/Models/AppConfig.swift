@@ -98,16 +98,62 @@ struct AppConfig: Codable {
     var gatewayURL: String
     var selectedModel: String
     var isConfigured: Bool
-    var supportsStructuredCorrections: Bool
-    var structuredCorrectionSchemaVersion: String
+    var grammarCorrectionVerified: Bool
+    var grammarCorrectionContractVersion: String
+
+    init(
+        apiKey: String,
+        gatewayURL: String,
+        selectedModel: String,
+        isConfigured: Bool,
+        grammarCorrectionVerified: Bool,
+        grammarCorrectionContractVersion: String
+    ) {
+        self.apiKey = apiKey
+        self.gatewayURL = gatewayURL
+        self.selectedModel = selectedModel
+        self.isConfigured = isConfigured
+        self.grammarCorrectionVerified = grammarCorrectionVerified
+        self.grammarCorrectionContractVersion = grammarCorrectionContractVersion
+    }
+
+    // Source compatibility for older tests and callers. These labels map only to the new
+    // plain-text grammar validation state; no structured grammar response is supported.
+    init(
+        apiKey: String,
+        gatewayURL: String,
+        selectedModel: String,
+        isConfigured: Bool,
+        supportsStructuredCorrections: Bool,
+        structuredCorrectionSchemaVersion: String
+    ) {
+        self.init(
+            apiKey: apiKey,
+            gatewayURL: gatewayURL,
+            selectedModel: selectedModel,
+            isConfigured: isConfigured,
+            grammarCorrectionVerified: supportsStructuredCorrections,
+            grammarCorrectionContractVersion: structuredCorrectionSchemaVersion
+        )
+    }
+
+    var supportsStructuredCorrections: Bool {
+        get { grammarCorrectionVerified }
+        set { grammarCorrectionVerified = newValue }
+    }
+
+    var structuredCorrectionSchemaVersion: String {
+        get { grammarCorrectionContractVersion }
+        set { grammarCorrectionContractVersion = newValue }
+    }
     
     static let `default` = AppConfig(
         apiKey: "",
         gatewayURL: "",
         selectedModel: "",
         isConfigured: false,
-        supportsStructuredCorrections: false,
-        structuredCorrectionSchemaVersion: ""
+        grammarCorrectionVerified: false,
+        grammarCorrectionContractVersion: ""
     )
     
     // App Group identifier for sharing non-sensitive data with keyboard extension
@@ -118,13 +164,25 @@ struct AppConfig: Codable {
     static let gatewayURLKey = "gatewayURL"
     static let selectedModelKey = "selectedModel"
     static let isConfiguredKey = "isConfigured"
-    static let supportsStructuredCorrectionsKey = "supportsStructuredCorrections"
-    static let structuredCorrectionSchemaVersionKey = "structuredCorrectionSchemaVersion"
+    // Preserve the existing App Group storage keys so installed builds migrate without losing
+    // their saved gateway state. Their values now describe plain-text grammar verification.
+    static let grammarCorrectionVerifiedKey = "supportsStructuredCorrections"
+    static let grammarCorrectionContractVersionKey = "structuredCorrectionSchemaVersion"
+    static let supportsStructuredCorrectionsKey = grammarCorrectionVerifiedKey
+    static let structuredCorrectionSchemaVersionKey = grammarCorrectionContractVersionKey
     static let gatewayConnectionErrorMessageKey = "gatewayConnectionErrorMessage"
     static let gatewayConnectionErrorUpdatedAtKey = "gatewayConnectionErrorUpdatedAt"
     static let gatewayConnectionLastTestedAtKey = "gatewayConnectionLastTestedAt"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
+
+    static var grammarCorrectionCapabilityVersion: String {
+        "fix_grammar/plain-text/\(SemanticPromptContract.version)"
+    }
+
+    var hasCurrentGrammarCorrectionCapabilityRecord: Bool {
+        grammarCorrectionContractVersion == Self.grammarCorrectionCapabilityVersion
+    }
 
 
     static var secretStore: AppConfigSecretStore = KeychainAppConfigSecretStore()
@@ -162,8 +220,8 @@ extension AppConfig {
             gatewayURL: defaults.string(forKey: AppConfig.gatewayURLKey) ?? "",
             selectedModel: defaults.string(forKey: AppConfig.selectedModelKey) ?? "",
             isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
-            supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
-            structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
+            grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
+            grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
         ).runtimeNormalized()
 
         if loadedConfig.isKnownTestPlaceholderConfig,
@@ -203,8 +261,8 @@ extension AppConfig {
             var unconfigured = runtimeConfig
             unconfigured.apiKey = ""
             unconfigured.isConfigured = false
-            unconfigured.supportsStructuredCorrections = false
-            unconfigured.structuredCorrectionSchemaVersion = ""
+            unconfigured.grammarCorrectionVerified = false
+            unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
             return false
@@ -237,8 +295,8 @@ extension AppConfig {
             var unconfigured = self
             unconfigured.apiKey = ""
             unconfigured.isConfigured = false
-            unconfigured.supportsStructuredCorrections = false
-            unconfigured.structuredCorrectionSchemaVersion = ""
+            unconfigured.grammarCorrectionVerified = false
+            unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
             return false
@@ -252,8 +310,8 @@ extension AppConfig {
         defaults.set(gatewayURL, forKey: AppConfig.gatewayURLKey)
         defaults.set(selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(isConfigured, forKey: AppConfig.isConfiguredKey)
-        defaults.set(supportsStructuredCorrections, forKey: AppConfig.supportsStructuredCorrectionsKey)
-        defaults.set(structuredCorrectionSchemaVersion, forKey: AppConfig.structuredCorrectionSchemaVersionKey)
+        defaults.set(grammarCorrectionVerified, forKey: AppConfig.grammarCorrectionVerifiedKey)
+        defaults.set(grammarCorrectionContractVersion, forKey: AppConfig.grammarCorrectionContractVersionKey)
         defaults.synchronize()
     }
 
@@ -267,8 +325,8 @@ extension AppConfig {
             gatewayURL: gatewayURL,
             selectedModel: selectedModel,
             isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
-            supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
-            structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
+            grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
+            grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
         )
 
         return candidate.isConfigured
@@ -389,16 +447,16 @@ extension AppConfig {
     private func runtimeNormalized() -> AppConfig {
         guard isConfigured else {
             var copy = self
-            copy.supportsStructuredCorrections = false
-            copy.structuredCorrectionSchemaVersion = ""
+            copy.grammarCorrectionVerified = false
+            copy.grammarCorrectionContractVersion = ""
             return copy
         }
         guard !hasGatewayRuntimeConfig else { return self }
 
         var copy = self
         copy.isConfigured = false
-        copy.supportsStructuredCorrections = false
-        copy.structuredCorrectionSchemaVersion = ""
+        copy.grammarCorrectionVerified = false
+        copy.grammarCorrectionContractVersion = ""
         return copy
     }
 
@@ -488,7 +546,7 @@ extension AppConfig {
 
     static func clear(from defaults: UserDefaults) {
         secretStore.clearAPIKey()
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, supportsStructuredCorrectionsKey, structuredCorrectionSchemaVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.initialPanelModeSeedID", "keyboardExtension.initialPanelModeSeededAt", "keyboardExtension.suggestionState", "keyboardExtension.suggestionStateSeedID", "keyboardExtension.suggestionStateSeededAt"].forEach {
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.initialPanelModeSeedID", "keyboardExtension.initialPanelModeSeededAt", "keyboardExtension.suggestionState", "keyboardExtension.suggestionStateSeedID", "keyboardExtension.suggestionStateSeededAt"].forEach {
             defaults.removeObject(forKey: $0)
         }
         defaults.synchronize()

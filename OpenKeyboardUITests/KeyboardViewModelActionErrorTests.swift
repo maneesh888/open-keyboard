@@ -448,19 +448,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, source)
     }
 
-    func testWarningOnlyGrammarOutputShowsCapabilityFailureAndPreservesText() async {
+    func testMissingPlainGrammarOutputShowsUnusableResponseAndPreservesText() async {
         let source = "The app works well."
         let proxy = FakeTextDocumentProxy(text: source)
         let result = KeyboardActionOperationResult(
             operation: "fix_grammar",
-            items: [KeyboardActionOperationResult.Item(
-                id: "unsupported",
-                type: "warning",
-                title: "Unsupported",
-                text: "This model could not produce corrections."
-            )],
-            correctedText: source,
-            isStructuredResponse: true
+            items: []
         )
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -1064,7 +1057,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true,
             automaticAnalysisDelayNanoseconds: 0
@@ -1095,7 +1088,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = RoutingKeyboardAIService(
-            grammarResult: Self.structuredGrammarResult(),
+            grammarResult: Self.grammarCorrectionResult(),
             rewriteResult: Self.structuredRewriteResult()
         )
         let viewModel = KeyboardViewModel(
@@ -1137,7 +1130,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -1156,7 +1149,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testLeftGrammarCorrectionButtonReopensSameTextCorrectionsWithoutRequestingAgain() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
-        let service = DelayedRecordingKeyboardAIService(result: Self.structuredGrammarResult())
+        let service = DelayedRecordingKeyboardAIService(result: Self.grammarCorrectionResult())
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
             aiService: service,
@@ -1182,7 +1175,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let noTextProxy = FakeTextDocumentProxy(text: "")
         let noTextViewModel = KeyboardViewModel(
             textDocumentProxy: noTextProxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -1193,7 +1186,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         unverifiedCapabilityConfig.structuredCorrectionSchemaVersion = ""
         let unverifiedCapabilityViewModel = KeyboardViewModel(
             textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { unverifiedCapabilityConfig },
             productionTestFullAccess: true
         )
@@ -1202,14 +1195,14 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         let noFullAccessViewModel = KeyboardViewModel(
             textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway }
         )
         XCTAssertFalse(noFullAccessViewModel.canOpenGrammarCorrection)
 
         let gatewayErrorViewModel = KeyboardViewModel(
             textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             loadGatewayConnectionError: { "Gateway timed out. Open the app to retry." },
             productionTestFullAccess: true
@@ -1226,7 +1219,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
         let notConfiguredViewModel = KeyboardViewModel(
             textDocumentProxy: FakeTextDocumentProxy(text: "i has a apple"),
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { incompleteConfig },
             productionTestFullAccess: true
         )
@@ -1248,7 +1241,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             defaults.set(false, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             defaults.removeObject(forKey: "keyboardExtension.composingBuffer")
             let proxy = FakeTextDocumentProxy(text: "")
-            let service = SequencedKeyboardAIService(results: [Self.structuredGrammarResult()])
+            let service = SequencedKeyboardAIService(results: [Self.grammarCorrectionResult()])
             let viewModel = KeyboardViewModel(
                 textDocumentProxy: proxy,
                 aiService: service,
@@ -1320,7 +1313,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testOpeningGrammarCorrectionImmediatelyShowsLoadingAndRequestsFixGrammar() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
-        let service = DelayedRecordingKeyboardAIService(result: Self.structuredGrammarResult())
+        let service = DelayedRecordingKeyboardAIService(result: Self.grammarCorrectionResult())
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
             aiService: service,
@@ -1346,7 +1339,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: "")
         let service = DelayedSequencedKeyboardAIService(
-            results: [Self.structuredGrammarResult()],
+            results: [Self.grammarCorrectionResult()],
             delays: [50_000_000]
         )
         let viewModel = KeyboardViewModel(
@@ -1384,7 +1377,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "")
         let service = DelayedSequencedKeyboardAIService(
             results: [
-                Self.structuredGrammarResult(),
+                Self.grammarCorrectionResult(),
                 Self.noIssueGrammarResult()
             ],
             delays: [50_000_000, 0]
@@ -1418,7 +1411,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testManualGrammarLoadingSurvivesCancelledAutomaticAnalysis() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)
-        let service = CancellableDelayedRecordingKeyboardAIService(result: Self.structuredGrammarResult())
+        let service = CancellableDelayedRecordingKeyboardAIService(result: Self.grammarCorrectionResult())
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
             aiService: service,
@@ -1460,7 +1453,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "The app works well.")
         let service = SequencedKeyboardAIService(results: [
             Self.noIssueGrammarResult(),
-            Self.structuredGrammarResult()
+            Self.plainGrammarResult("The app works well. and this")
         ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -1544,7 +1537,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: DelayedKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: DelayedKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true,
             automaticAnalysisDelayNanoseconds: 0
@@ -1716,11 +1709,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "please make this better")
     }
 
-    func testFixGrammarStructuredCorrectionsOpenDetailWithoutReplacingText() async {
+    func testFixGrammarPlainTextCorrectionsOpenDetailWithoutReplacingText() async {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -1798,7 +1791,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true,
             automaticAnalysisDelayNanoseconds: 0
@@ -1849,7 +1842,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: SuccessfulKeyboardAIService(result: Self.structuredGrammarResult()),
+            aiService: SuccessfulKeyboardAIService(result: Self.grammarCorrectionResult()),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -1858,12 +1851,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { !viewModel.isPerformingAIAction }
 
         viewModel.moveToNextSuggestion()
-        XCTAssertEqual(viewModel.currentCorrection?.id, "spelling-this")
+        XCTAssertEqual(viewModel.currentCorrection?.original, "ths")
 
         viewModel.applyCurrentCorrection()
         XCTAssertEqual(proxy.text, "i has a apple and this")
         XCTAssertEqual(viewModel.panelMode, .correctionDetail)
-        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
+        XCTAssertEqual(viewModel.currentCorrection?.original, "has")
         XCTAssertNil(viewModel.suggestionState?.correctionProgressText)
 
         viewModel.applyCurrentCorrection()
@@ -1877,7 +1870,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let correctedText = "i have a apple and this"
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
-            Self.structuredGrammarResult(),
+            Self.grammarCorrectionResult(),
             Self.noIssueGrammarResult()
         ])
         let viewModel = KeyboardViewModel(
@@ -1919,7 +1912,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.performAIAction(.fixGrammar)
         await waitUntil { !viewModel.isPerformingAIAction }
 
-        XCTAssertEqual(viewModel.currentCorrection?.id, "subject-verb")
+        XCTAssertEqual(viewModel.currentCorrection?.original, "has")
+        XCTAssertEqual(viewModel.currentCorrection?.replacement, "had")
         XCTAssertEqual(proxy.text, text)
         XCTAssertFalse(proxy.text.contains("ann apple"))
     }
@@ -2035,44 +2029,14 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         structuredCorrectionSchemaVersion: "test"
     )
 
-    private static func structuredGrammarResult() -> KeyboardActionOperationResult {
-        KeyboardActionOperationResult(
-            operation: "fix_grammar",
-            items: [
-                KeyboardActionOperationResult.Item(
-                    id: "subject-verb",
-                    type: "correction",
-                    title: "Subject-verb agreement",
-                    text: "Use have.",
-                    original: "has",
-                    replacement: "have",
-                    explanation: "Use have for agreement.",
-                    category: "grammar"
-                ),
-                KeyboardActionOperationResult.Item(
-                    id: "spelling-this",
-                    type: "correction",
-                    title: "Spelling",
-                    text: "Correct the typo.",
-                    original: "ths",
-                    replacement: "this",
-                    explanation: "Correct the typo.",
-                    category: "spelling"
-                )
-            ],
-            summary: "Two issues.",
-            correctedText: nil,
-            isStructuredResponse: true
-        )
+    private static func grammarCorrectionResult() -> KeyboardActionOperationResult {
+        plainGrammarResult("i have a apple and this")
     }
 
     private static func noIssueGrammarResult() -> KeyboardActionOperationResult {
         KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
-            summary: "No issues found.",
-            correctedText: nil,
-            isStructuredResponse: true,
             isNoChangeResult: true
         )
     }
@@ -2081,8 +2045,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
-            correctedText: correctedText,
-            isStructuredResponse: false
+            correctedText: correctedText
         )
     }
 
@@ -2128,33 +2091,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     }
 
     private static func staleArticleGrammarResult() -> KeyboardActionOperationResult {
-        KeyboardActionOperationResult(
-            operation: "fix_grammar",
-            items: [
-                KeyboardActionOperationResult.Item(
-                    id: "article",
-                    type: "correction",
-                    title: "Article",
-                    text: "Use an before a vowel sound.",
-                    original: "a",
-                    replacement: "an",
-                    range: KeyboardTextRange(start: 16, end: 17),
-                    explanation: "Use an before a vowel sound.",
-                    category: "grammar"
-                ),
-                KeyboardActionOperationResult.Item(
-                    id: "subject-verb",
-                    type: "correction",
-                    title: "Subject-verb agreement",
-                    text: "Use sounds.",
-                    original: "sound",
-                    replacement: "sounds",
-                    explanation: "With a singular subject, use sounds.",
-                    category: "grammar"
-                )
-            ],
-            isStructuredResponse: true
-        )
+        plainGrammarResult("Yesterday I had an apple before the meeting, and this message still sounds wrong.")
     }
 
     private func waitUntil(_ predicate: @MainActor @escaping () -> Bool) async {

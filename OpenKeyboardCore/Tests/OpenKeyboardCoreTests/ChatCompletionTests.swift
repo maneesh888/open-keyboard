@@ -214,7 +214,7 @@ final class ChatCompletionTests: XCTestCase {
     }
 
     func testStructuredOperationResultIgnoresMalformedNestedJSONCards() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":"bad","type":"correction","title":"Nested payload","text":"{\"corrected_text\":\"I have an apple.\"}"},{"id":"good","type":"correction","title":"Grammar","text":"Use have","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#
+        let content = #"{"operation":"rewrite","results":[{"id":"bad","type":"suggestion","title":"Nested payload","text":"{\"corrected_text\":\"I have an apple.\"}"},{"id":"good","type":"suggestion","title":"Rewrite","text":"Use have","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#
         let http = DummyGatewayServer(.chatRawContent(content))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
@@ -346,9 +346,9 @@ final class ChatCompletionTests: XCTestCase {
     func testStructuredOperationResultParsesCommonDisplayAliases() async throws {
         let scenarios: [(String, WritingAction, String)] = [
             (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, .rewrite, "This is clearer."),
-            (#"{"operation":"fix_grammar","correctedText":"I have an apple."}"#, .rewrite, "I have an apple."),
+            (#"{"operation":"rewrite","correctedText":"I have an apple."}"#, .rewrite, "I have an apple."),
             (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, .rewrite, "Clearer text."),
-            (#"{"operation":"fix_grammar","improved_text":"I have an apple."}"#, .rewrite, "I have an apple."),
+            (#"{"operation":"rewrite","improved_text":"I have an apple."}"#, .rewrite, "I have an apple."),
             (#"{"operation":"rewrite","replacement":"Replacement text."}"#, .rewrite, "Replacement text."),
             (#"{"operation":"rewrite","text":"Top-level text."}"#, .rewrite, "Top-level text."),
             (#"{"operation":"rewrite","output":"Output text."}"#, .rewrite, "Output text.")
@@ -365,7 +365,7 @@ final class ChatCompletionTests: XCTestCase {
     }
 
     func testStructuredJSONStringPayloadIsParsedInsteadOfReturnedAsRawText() async throws {
-        let payload = #"{"operation":"fix_grammar","results":[{"id":"1","type":"correction","title":"Subject-verb agreement","text":"Use have.","original":"has","replacement":"have"}],"summary":"One issue found."}"#
+        let payload = #"{"operation":"rewrite","results":[{"id":"1","type":"suggestion","title":"Rewrite","text":"Use clearer wording.","original":"bad","replacement":"clear"}],"summary":"One rewrite found."}"#
         let encodedPayload = String(data: try JSONEncoder().encode(payload), encoding: .utf8)!
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(encodedPayload)))
 
@@ -373,7 +373,7 @@ final class ChatCompletionTests: XCTestCase {
 
         XCTAssertTrue(result.isStructuredResponse)
         XCTAssertEqual(result.items.count, 1)
-        XCTAssertEqual(result.items.first?.replacement, "have")
+        XCTAssertEqual(result.items.first?.replacement, "clear")
         XCTAssertFalse(result.displayText.contains("\"operation\""), "Raw JSON string must not become display text")
     }
 
