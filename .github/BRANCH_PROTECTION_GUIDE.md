@@ -26,18 +26,24 @@ the PR description. Skipped, missing, stale, fallback, wrong-target, or wrong-mo
 authorization accepts the disclosed risk but never bypasses the required statuses above.
 
 Every review/body event creates the fixed `Required checks` root job, and every live-evidence body
-event creates the fixed `Required live verification` root job. Initial incomplete metadata therefore
-fails the protected name; the completed body event must supply the newer success. The workflows do
-not use capped concurrency queues. Each run validates both its immutable event snapshot and current
-exact-head GitHub metadata, so late or canceled work blocks or conservatively over-blocks instead of
+event creates the fixed `Required live verification` root job. The first project-review submission
+normally fails because its immutable PR body cannot yet link the newly created review. GitHub keeps
+the latest `pull_request_review` and `pull_request` check suites separately, so the completed body
+event cannot replace that review-event failure. After linking the report, submit a same-head
+COMMENTED revalidation trigger that explicitly says it is not an approval, independent-review
+report, or merge authorization. That review event must pass both immutable and current validation.
+The trigger must not contain the project-reviewer identity marker. The workflows do not use capped
+concurrency queues. Each run validates both its immutable event snapshot and current exact-head
+GitHub metadata, so late or canceled work blocks or conservatively over-blocks instead of
 authorizing invalid current state. The PR must link the newest same-head project-reviewer COMMENTED
 report; a later blocker report supersedes every older positive report.
 
 Before merge, re-fetch the current body, reviews, head, threads, and current check rollup; rerun the
-trusted validators locally and require the newest `Required checks` and `Required live verification`
-results to be completed successes with no newer pending, canceled, skipped, or failing result. If a
-GitHub event was not created, current metadata is newer than the passing run, or freshness cannot be
-established, do not merge automatically.
+trusted validators locally and require the current `Required checks` and `Required live verification`
+results to be completed successes with no pending, canceled, skipped, or failing required entry.
+Run `gh pr checks <number> --required` and require a successful exit; a newest-by-name query alone
+can hide an older failed event family. If a GitHub event was not created, current metadata is newer
+than the passing run, or freshness cannot be established, do not merge automatically.
 
 Recommended repository merge settings:
 

@@ -132,6 +132,14 @@ expect_rejected() {
 write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
 run_validator "$automatic_pr_body"
 
+revalidation_review_file="$FIXTURE/revalidation-review.json"
+jq -n \
+  --arg head "$HEAD_SHA" \
+  --arg url "$PR_URL#pullrequestreview-999" \
+  '{id:999, html_url:$url, commit_id:$head, state:"commented", body:"Review-evidence revalidation trigger. This is not an approval or independent-review report.", submitted_at:"2026-08-14T00:01:00Z", user:{login:"implementer",type:"User"}}' \
+  > "$revalidation_review_file"
+run_validator "$automatic_pr_body" "$revalidation_review_file"
+
 write_reviews "$HEAD_SHA" COMMENTED "$human_review_body"
 run_validator "$human_pr_body"
 

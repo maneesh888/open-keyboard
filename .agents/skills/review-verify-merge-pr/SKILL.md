@@ -99,15 +99,30 @@ Before marking a PR ready or merging it, always require:
 9. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
 10. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
-Inspect every exact-head run to identify the newest result for each protected name, including
-pending, canceled, skipped, and rerun attempts. Initial incomplete review/live metadata is expected
-to fail the fixed protected name; only a newer event that validates both its immutable snapshot and
-the current GitHub state may supersede it. Require the current rollup for `Required checks` and
-`Required live verification` to point to completed successful root jobs, with no newer non-success.
-Re-run the trusted validators locally against the freshly fetched current body and reviews before
-readiness and merge. Keep the PR draft throughout report/body handoff. The linked submission must
-be the newest same-head COMMENTED report declaring the isolated project-reviewer identity; any
-later such report supersedes it, even before the PR body is updated.
+Inspect every exact-head run, including pending, canceled, skipped, failed, and rerun attempts.
+GitHub retains the latest check suite separately for `pull_request` and `pull_request_review`
+events, so a later body-edit success does not by itself replace the expected failure created when
+the project-reviewer report was submitted before its PR-body link existed. After the report is
+linked and the current validators pass, submit exactly one same-head COMMENTED review whose body is
+`Review-evidence revalidation trigger for exact head <full-sha>. This COMMENTED submission is not
+an approval, an independent-review report, or merge authorization.` The trigger must not contain
+the project-reviewer identity marker and must never be submitted as `APPROVED`. Wait for its
+`pull_request_review` run to pass against both the event and current snapshots.
+
+Require the current rollup for `Required checks` and `Required live verification` to point to
+completed successful root jobs with no newer non-success, then run:
+
+```bash
+gh pr checks <number> --required
+```
+
+The command must exit successfully; checking only the newest result grouped by protected name is
+insufficient because it can hide an unsuperseded failed event family. Re-run the trusted validators
+locally against the freshly fetched current body and reviews before readiness and merge. Keep the
+PR draft throughout report/body/revalidation handoff. The linked submission must be the newest
+same-head COMMENTED report declaring the isolated project-reviewer identity; the revalidation
+trigger is not that report, and any later project-reviewer report supersedes the linked one even
+before the PR body is updated.
 
 Then require exactly one authorization route:
 
@@ -147,7 +162,7 @@ head may become ready but must remain unmerged.
 
 Otherwise:
 
-1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction.
+1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction. Require `gh pr checks <number> --required` to exit successfully so no failed event-family result is hidden by a newer check with the same name.
 2. Confirm all evidence and the selected automatic or human authorization route remain bound to the same full reviewed and locally verified SHA. If the reviewer is below 100% and explicit current-head owner approval is absent, keep the PR draft, ask the owner to review the named gaps, and stop.
 3. Mark the draft ready.
 4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, or review mismatch, disable any queued auto-merge, return the PR to draft when applicable, and restart the exact-head cycle or report the blocker. On a late `keep draft`, disable auto-merge, return the PR to draft, verify it remains unmerged, and stop. On a late `do not merge`, disable auto-merge, verify the PR remains unmerged, and stop.

@@ -142,8 +142,12 @@ stable `Required technical checks` job covers the ordinary build and test gates.
 event creates the fixed protected `Required checks` root job. That job accepts only when the trusted
 validators accept both the immutable event snapshot and a separately fetched current snapshot of
 the exact-head requirement ledger, durable independent-review link, and selected automatic-or-human
-authorization route. Initial incomplete metadata therefore fails the protected name; the completed
-body event must produce the newer passing result. A structurally valid ledger does not prove its own
+authorization route. Initial incomplete metadata therefore fails the protected name. Because
+GitHub retains `pull_request_review` and `pull_request` check suites separately, the completed body
+event does not replace the expected first review-event failure. After linking the report, the root
+submits a same-head COMMENTED revalidation trigger clearly labeled as neither approval,
+independent-review evidence, nor merge authorization. The trigger has no project-reviewer identity
+marker, and its review-event run must pass. A structurally valid ledger does not prove its own
 claims; the exact-head independent report and conditional automatic-or-human authorization remain
 required.
 
@@ -151,7 +155,9 @@ CI deliberately does not serialize metadata events because GitHub concurrency qu
 dispatch-order execution is not guaranteed. A stale event that runs late also validates current
 metadata, so it can conservatively block but cannot authorize invalid current state. Before merge,
 the agent re-fetches current metadata, reruns the trusted validators, and requires the current check
-rollup to point to a completed successful `Required checks` root job with no newer non-success.
+rollup to point to completed successful root jobs. It also requires
+`gh pr checks <number> --required` to exit successfully so a failed event-family result cannot be
+hidden by a newer same-name check.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
@@ -192,22 +198,25 @@ The root agent posts the review report as a durable GitHub `COMMENTED` review an
 PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
 exact-head review. The linked submission must be the newest same-head COMMENTED report that declares
 the isolated project-reviewer identity; a later report with a blocker supersedes every older positive
-report. CI validates each immutable review/body event snapshot and the current GitHub state without
-depending on event execution order. A stale run can over-block, but it cannot validate an invalid
-current report.
+report. The later non-review revalidation trigger is a separate COMMENTED submission and does not
+supersede the linked project-reviewer report. CI validates each immutable review/body event snapshot
+and the current GitHub state without depending on event execution order. A stale run can over-block,
+but it cannot validate an invalid current report.
 
 This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
 technical evidence and the trusted validator source. `Required checks` depends on that report being
 retained and linked, so it is intentionally a post-report gate; `Required technical checks` can pass
 before the report exists. After the root posts the report and updates the PR brief, all three
 protected statuses (`Required technical checks`, `Required checks`, and `Required live
-verification`) must pass on the same head before readiness or merge.
+verification`) must pass on the same head before readiness or merge. The root must also submit the
+same-head non-approval revalidation trigger after linking the report and require
+`gh pr checks <number> --required` to succeed.
 
 Immediately before readiness and again before guarded merge, re-fetch and revalidate the current PR
 body, linked review, head, threads, and protected check rollup. Keep the PR draft during the evidence
-handoff. Require the newest protected results to be completed successes and rerun the trusted
-validators locally; if current metadata is newer than the passing run or freshness is unclear, stop
-instead of inferring authorization.
+handoff. Require all required check entries to be completed successes, run
+`gh pr checks <number> --required`, and rerun the trusted validators locally; if current metadata is
+newer than the passing run or freshness is unclear, stop instead of inferring authorization.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in

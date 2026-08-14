@@ -50,22 +50,27 @@ review overlay when present) and independently validates the current body and cu
 `Required live verification` applies the same event-and-current rule to retained live evidence.
 Both jobs verify that the current head still equals the event head.
 
-The initial COMMENTED review or synchronize event is expected to fail the protected name while the
-PR body still lacks its exact-head evidence. The later body-edit event must produce the newer passing
-result. A canceled, pending, stale, or invalid latest event remains visible under the protected name
-and blocks. If GitHub schedules an older event late, current-state validation makes it fail rather
-than authorizing invalid current metadata; this may conservatively require a fresh valid body event,
-but it cannot convert invalid current evidence into a pass. Technical jobs aggregate independently
-as `Required technical checks`; branch protection requires that name plus `Required checks` and
-`Required live verification`.
+The initial project-review submission is expected to fail the protected name while the PR body
+still lacks the new review link. GitHub retains the latest check suite separately for
+`pull_request_review` and `pull_request` events, so a later valid body-edit run does not supersede
+that review-event failure. After the report is linked, the root submits one same-head COMMENTED
+revalidation trigger explicitly labeled as neither an approval, an independent-review report, nor
+merge authorization. It contains no project-reviewer identity marker. Its review-event run must
+validate both its immutable body snapshot and current GitHub state. A canceled, pending, stale, or
+invalid event remains visible under the protected name and blocks. If GitHub schedules an older
+event late, current-state validation makes it fail rather than authorizing invalid current metadata.
+Technical jobs aggregate independently as `Required technical checks`; branch protection requires
+that name plus `Required checks` and `Required live verification`.
 
 The linked COMMENTED submission must be the newest same-head report that identifies itself as the
 isolated project reviewer; a later blocking report always supersedes an older positive report.
 Immediately before readiness and merge, the guarded agent re-fetches the current body, reviews,
-head, threads, and check rollup, reruns the trusted validators, and requires the newest protected
-results to be completed successes. GitHub platform refusal to create a workflow run is outside an
-Actions workflow's enforcement ability; if current metadata is newer than the successful run or
-cannot be inspected, the guarded agent stops instead of inferring authorization.
+head, threads, and check rollup, reruns the trusted validators, and requires the protected results
+to be completed successes. It also requires `gh pr checks <number> --required` to exit successfully;
+grouping only by check name can conceal an unsuperseded failure from another event family. GitHub
+platform refusal to create a workflow run is outside an Actions workflow's enforcement ability; if
+current metadata is newer than the successful run or cannot be inspected, the guarded agent stops
+instead of inferring authorization.
 
 ## Repository automation set
 

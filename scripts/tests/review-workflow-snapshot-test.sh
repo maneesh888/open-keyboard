@@ -83,20 +83,30 @@ run_snapshot_gate() {
   local event_body="$1"
   local current_body="$2"
   local current_head="${3:-$HEAD_SHA}"
+  local event_name="${4:-pull_request}"
   local run_temp="$FIXTURE/run"
 
   rm -rf -- "$run_temp"
   mkdir -p "$run_temp"
   printf '%s' "$current_body" > "$MOCK_CURRENT_BODY_FILE"
-  jq -n \
-    --arg head "$HEAD_SHA" \
-    --arg url "$PR_URL" \
-    --arg body "$event_body" \
-    '{pull_request: {head: {sha: $head}, html_url: $url, body: $body}}' > "$EVENT_JSON"
+  if [[ "$event_name" == "pull_request_review" ]]; then
+    jq -n \
+      --arg head "$HEAD_SHA" \
+      --arg url "$PR_URL" \
+      --arg body "$event_body" \
+      '{pull_request: {head: {sha: $head}, html_url: $url, body: $body}, review: {id: 999, commit_id: $head, state: "commented", body: "Review-evidence revalidation trigger. This is not an approval or independent-review report."}}' \
+      > "$EVENT_JSON"
+  else
+    jq -n \
+      --arg head "$HEAD_SHA" \
+      --arg url "$PR_URL" \
+      --arg body "$event_body" \
+      '{pull_request: {head: {sha: $head}, html_url: $url, body: $body}}' > "$EVENT_JSON"
+  fi
 
   PATH="$MOCK_BIN:$PATH" \
     EVENT_HEAD_SHA="$HEAD_SHA" \
-    EVENT_NAME=pull_request \
+    EVENT_NAME="$event_name" \
     GH_TOKEN=fixture \
     GITHUB_EVENT_PATH="$EVENT_JSON" \
     GITHUB_REPOSITORY=maneesh888/open-keyboard \
@@ -110,6 +120,10 @@ run_snapshot_gate() {
 
 if ! run_snapshot_gate VALID VALID; then
   echo "Matching valid event and current review snapshots were rejected." >&2
+  exit 1
+fi
+if ! run_snapshot_gate VALID VALID "$HEAD_SHA" pull_request_review; then
+  echo "A valid non-approval review revalidation event was rejected." >&2
   exit 1
 fi
 if run_snapshot_gate VALID INVALID; then
