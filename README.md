@@ -236,6 +236,12 @@ These commands use the canonical seed and are credential-gated:
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
+`./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
+catalog fallback. When a task requires a named model, set
+`OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-model-id>`; the check fails before testing if the seed does
+not match. Model-specific pull requests must record the required and exact tested model IDs, and a
+different working model does not satisfy that evidence.
+
 `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` may select another regular, ignored, untracked, private
 file, but it must remain under the primary checkout's `.agent/local-seeds/` directory. Direct Swift
 package live tests remain opt-in through ephemeral environment variables:

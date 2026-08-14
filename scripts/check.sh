@@ -72,6 +72,9 @@ run_script_policy_tests() {
   "$ROOT/scripts/tests/live-impact-test.sh"
   "$ROOT/scripts/tests/live-test-safety-test.sh"
   "$ROOT/scripts/tests/live-evidence-policy-test.sh"
+  "$ROOT/scripts/tests/pr-requirements-policy-test.sh"
+  "$ROOT/scripts/tests/pr-review-record-policy-test.sh"
+  "$ROOT/scripts/tests/review-workflow-snapshot-test.sh"
   "$ROOT/scripts/tests/deploy-source-policy-test.sh"
   "$ROOT/scripts/tests/workflow-policy-test.sh"
 }

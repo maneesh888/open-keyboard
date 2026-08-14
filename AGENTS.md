@@ -77,7 +77,7 @@ Use the repo scripts before hand-written commands unless a targeted command is c
 - Opt-in live AI harness tests: `./scripts/ios/test.sh live-ui`
 - Independent exact-head PR review: project `pr-reviewer` via `$review-verify-merge-pr`
 
-Remote GitHub CI runs hygiene, `core`, and `build` from `.github/workflows/ci.yml`, then reports the stable `Required checks` status. `.github/workflows/live.yml` enforces retained exact-head local evidence for gateway-impacting changes without receiving credentials. Do not imply remote CI proves simulator UI, screenshots, real keyboard extension behavior, live gateway execution, signing, or deployment.
+Remote GitHub CI runs hygiene, `core`, semantic-contract validation, and `build` from `.github/workflows/ci.yml`, then reports `Required technical checks`. Every review/body metadata event creates the fixed protected `Required checks` root job; every live-evidence body event creates the fixed protected `Required live verification` root job. These jobs do not use capped concurrency queues. They validate both the immutable event snapshot and the current exact-head GitHub state, so an out-of-order stale event can over-block but cannot turn invalid current evidence into a pass. The initial project-review submission is expected to fail while the PR body still lacks its link. After linking the report, submit one clearly labeled non-approval COMMENTED revalidation trigger on the same head so the `pull_request_review` event family also has a current valid result. The PR must link the newest same-head project-reviewer COMMENTED report; the trigger must not identify itself as that reviewer. `.github/workflows/live.yml` enforces retained exact-head local evidence for gateway-impacting changes without receiving credentials. Do not imply remote CI proves simulator UI, screenshots, real keyboard extension behavior, live gateway execution, signing, or deployment.
 
 ## Coding Rules
 
@@ -184,12 +184,17 @@ when invoked from a linked worktree; values must never be printed.
 
 - Use `$review-verify-merge-pr` for independent PR review and release-readiness assessment.
 - The project `pr-reviewer` is read-only and must review the exact GitHub head without inherited implementation context.
+- Give every in-scope user requirement a stable ID, observable acceptance criterion, required proof type, exact evidence, and `VERIFIED` or `UNVERIFIED` status. Do not combine independent requirements.
+- Treat ambiguous, skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. Every unverified in-scope requirement is a blocker, not a residual proof limit.
+- Exact-model requirements must run that exact model without catalog fallback or substitution. A different working model proves only that different model.
+- For an exact-model requirement, run `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway`; this keeps structured-correction capability mandatory. A model-agnostic run may pass with the gateway connected and the seeded model capability explicitly unverified after a format miss or model-check timeout, but it must not be cited as structured-correction or exact-model capability proof.
 - Run the independent review and GitHub checks concurrently where practical.
-- Any new commit invalidates the previous review, local full gate, and GitHub check conclusions.
-- A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages.
+- Any new commit invalidates the previous review, local full gate, GitHub check conclusions, and exact-head human merge authorization.
+- A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages while the exact-head independent reviewer reports operational confidence of exactly `100%`.
 - Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`.
 - Planning, review-only work, readiness assessment, and blocker requests remain read-only and do not authorize state changes.
-- Before a guarded merge, require the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- Before a guarded merge, always re-fetch and validate the current body, linked review, head, threads, and current check rollup; require a durable linked independent-review report, the exact reviewed head to pass `./scripts/check.sh --full`, and the exact-head `Required technical checks`, `Required checks`, and `Required live verification` results to be successful with no pending, canceled, skipped, or failing required entry. Re-run the validators locally against current GitHub metadata and require `gh pr checks <number> --required` to exit successfully immediately before merge; checking only the newest result by name can miss a failed `pull_request_review` event family. Automatic authorization additionally requires every in-scope requirement `VERIFIED`, no material uncertainty, and exact reviewer confidence of `100%`. Otherwise keep the PR draft and require explicit repository-owner approval for that exact SHA after all unverified requirements and blockers are disclosed; never infer or carry that approval across a new head.
+- Never claim that unknown defects are impossible. A clean review means all stated requirements are verified within the named evidence boundary and no material uncertainty remains.
 - Deployment remains a separate external state change and requires explicit authorization plus protected-environment approval.
 
 ## Repository Automation
@@ -198,7 +203,7 @@ when invoked from a linked worktree; values must never be printed.
 - `$plan-openkeyboard-work-package` creates compact digest-bound plans only when planning is requested.
 - The project `work-package-planner` is read-only and cannot edit, test, access GitHub, or invoke other agents.
 - `$review-verify-merge-pr` prepares exact-head evidence and invokes the read-only project `pr-reviewer`.
-- Custom-agent output never substitutes for GitHub required checks, maintainer approval, live proof, signing, deployment, or App Review.
+- Custom-agent output never substitutes for GitHub required checks, conditional exact-head owner approval, live proof, signing, deployment, or App Review.
 
 ## Commit And Push Rules
 

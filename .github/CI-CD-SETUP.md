@@ -9,11 +9,15 @@ Pull request
   -> GitHub repository hygiene
   -> GitHub OpenKeyboardCore tests
   -> GitHub iOS app + keyboard extension build
-  -> Required checks
+  -> Required technical checks
+  -> Required checks (passes only with complete event-and-current exact-head review evidence)
   -> Required live verification
      -> pass immediately when gateway runtime is unaffected
      -> otherwise require exact-head local gateway evidence in the PR
-  -> Human approval and protected merge
+  -> Conditional exact-head merge authorization
+     -> automatic only at independent reviewer confidence 100%
+     -> otherwise explicit repository-owner approval for that exact SHA
+  -> Protected merge
 
 Version tag or manual deployment
   -> Reusable OpenKeyboard CI
@@ -32,9 +36,41 @@ OpenKeyboard includes `.codex/agents/pr-reviewer.toml` and the `$review-verify-m
 skill. For release readiness, invoke the skill with the PR identity and a neutral exact-head packet.
 The reviewer is sandboxed read-only and cannot mutate GitHub or the checkout.
 
-Record the full reviewed SHA and whether blocking findings remain in the PR description. Any new
-commit invalidates the review. This process gate complements GitHub approval and required checks;
-it does not create a GitHub status or replace maintainer review.
+Record the full reviewed SHA, requirement coverage, confidence, recommendation, and every blocking
+finding in the PR description. Any new commit invalidates the review. This process gate complements
+required checks and creates no GitHub status by itself. In the solo-maintainer configuration,
+reviewer confidence exactly `100%` authorizes the automatic route; below 100%, it does not replace
+the repository owner's explicit approval for the same exact SHA.
+
+Review and live-policy CI do not use a per-PR concurrency queue: [GitHub caps such queues and does
+not guarantee dispatch-order execution](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency).
+Instead, every relevant metadata event creates the fixed
+protected root job immediately. `Required checks` validates the immutable event body (plus the event
+review overlay when present) and independently validates the current body and current review list.
+`Required live verification` applies the same event-and-current rule to retained live evidence.
+Both jobs verify that the current head still equals the event head.
+
+The initial project-review submission is expected to fail the protected name while the PR body
+still lacks the new review link. GitHub retains the latest check suite separately for
+`pull_request_review` and `pull_request` events, so a later valid body-edit run does not supersede
+that review-event failure. After the report is linked, the root submits one same-head COMMENTED
+revalidation trigger explicitly labeled as neither an approval, an independent-review report, nor
+merge authorization. It contains no project-reviewer identity marker. Its review-event run must
+validate both its immutable body snapshot and current GitHub state. A canceled, pending, stale, or
+invalid event remains visible under the protected name and blocks. If GitHub schedules an older
+event late, current-state validation makes it fail rather than authorizing invalid current metadata.
+Technical jobs aggregate independently as `Required technical checks`; branch protection requires
+that name plus `Required checks` and `Required live verification`.
+
+The linked COMMENTED submission must be the newest same-head report that identifies itself as the
+isolated project reviewer; a later blocking report always supersedes an older positive report.
+Immediately before readiness and merge, the guarded agent re-fetches the current body, reviews,
+head, threads, and check rollup, reruns the trusted validators, and requires the protected results
+to be completed successes. It also requires `gh pr checks <number> --required` to exit successfully;
+grouping only by check name can conceal an unsuperseded failure from another event family. GitHub
+platform refusal to create a workflow run is outside an Actions workflow's enforcement ability; if
+current metadata is newer than the successful run or cannot be inspected, the guarded agent stops
+instead of inferring authorization.
 
 ## Repository automation set
 
@@ -45,8 +81,8 @@ The CI/CD files are paired with the complete repository-owned Codex automation s
 - `pr-reviewer` plus `$review-verify-merge-pr`: independent exact-head review and guarded readiness.
 
 The planner and reviewer are sandboxed read-only. GitHub Actions remain the remote enforcement
-layer; these agents cannot replace required checks, approvals, protected environments, signing, or
-deployment evidence.
+layer; these agents cannot replace required checks, the explicit owner approval required below
+100% confidence, protected environments, signing, or deployment evidence.
 
 ## Required environments
 
@@ -99,9 +135,11 @@ an intentional upload.
 Enable GitHub's repository-level auto-merge setting. During an autonomous implementation lifecycle,
 the root agent invokes native squash auto-merge only after the exact head passes local Release
 verification, applicable live proof, independent review, required GitHub checks, thread resolution,
-mergeability, and branch-protection validation. If GitHub queues instead of immediately completing
-the merge, the agent disables auto-merge and reports the unsatisfied gate; it never leaves an
-unattended merge queued.
+mergeability, and branch-protection validation. Automatic authorization additionally requires the
+reviewer to report operational confidence of exactly `100%`. Below 100%, the PR remains draft until
+the repository owner explicitly authorizes that exact SHA after reviewing every disclosed gap. If
+GitHub queues instead of immediately completing the merge, the agent disables auto-merge and
+reports the unsatisfied gate; it never leaves an unattended merge queued.
 
 This repository does not use an Actions workflow, write-enabled pull-request token, or PAT to merge
 pull requests.

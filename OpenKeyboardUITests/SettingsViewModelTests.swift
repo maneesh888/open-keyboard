@@ -627,6 +627,34 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
     }
 
+    func testCorrectionTimeoutKeepsGatewayConnectedAndPersistsUnverifiedModelCapability() async {
+        let suiteName = "SettingsViewModelTests.model-timeout.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(
+            healthSucceeds: true,
+            models: ["gpt-oss:120b-cloud"],
+            smokeSucceeds: false,
+            smokeFailure: .timeout
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.gatewayURLInput = "https://gateway.example"
+        viewModel.apiKeyInput = "test-key"
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
+        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertTrue(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+        XCTAssertFalse(viewModel.hasConnectionError)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+    }
+
     func testDefaultGatewayInputShowsHTTPSHelpButCannotTestUntilHostExists() {
         let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
 
@@ -894,6 +922,7 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var models: [String]
     var smokeSucceeds: Bool
     var failingSmokeModels: Set<String>
+    var smokeFailure: NetworkError
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
@@ -905,11 +934,18 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     private(set) var diagnosticPreferredModel: String?
     var fetchedGatewayURL: String? { testedGatewayURLs.last }
 
-    init(healthSucceeds: Bool = true, models: [String] = [], smokeSucceeds: Bool = true, failingSmokeModels: Set<String> = []) {
+    init(
+        healthSucceeds: Bool = true,
+        models: [String] = [],
+        smokeSucceeds: Bool = true,
+        failingSmokeModels: Set<String> = [],
+        smokeFailure: NetworkError = .unusableCorrection
+    ) {
         self.healthSucceeds = healthSucceeds
         self.models = models
         self.smokeSucceeds = smokeSucceeds
         self.failingSmokeModels = failingSmokeModels
+        self.smokeFailure = smokeFailure
     }
 
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
@@ -927,7 +963,7 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         smokeModel = model
         smokeModels.append(model)
-        if !smokeSucceeds || failingSmokeModels.contains(model) { throw NetworkError.unusableCorrection }
+        if !smokeSucceeds || failingSmokeModels.contains(model) { throw smokeFailure }
     }
 
     func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport {

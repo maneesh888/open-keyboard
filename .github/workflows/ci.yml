@@ -3,19 +3,152 @@ name: OpenKeyboard CI
 on:
   workflow_call:
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+      - ready_for_review
+      - converted_to_draft
+  pull_request_review:
+    types:
+      - submitted
+      - edited
+      - dismissed
   push:
     branches:
       - main
-  workflow_dispatch:
-
 permissions:
+  checks: read
   contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  pull-requests: read
 
 jobs:
+  required-review-evidence:
+    name: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && 'Required checks' || 'Review evidence not applicable' }}
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Prepare trusted requirement validators
+        id: validators
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          validator_root="$RUNNER_TEMP/requirement-validators"
+          mkdir -p "$validator_root"
+          for validator_name in \
+            validate-pr-requirements.sh \
+            validate-pr-review-record.sh; do
+            validator_path="$validator_root/$validator_name"
+            if git cat-file -e "$PR_BASE_SHA:scripts/$validator_name" 2>/dev/null; then
+              git show "$PR_BASE_SHA:scripts/$validator_name" > "$validator_path"
+            else
+              cp "scripts/$validator_name" "$validator_path"
+            fi
+            chmod +x "$validator_path"
+          done
+          echo "root=$validator_root" >> "$GITHUB_OUTPUT"
+
+      - name: Validate immutable event and current review evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
+        run: |
+          reviews_file="$RUNNER_TEMP/pull-request-reviews.json"
+          event_body_file="$RUNNER_TEMP/event-pull-request-body.md"
+          current_body_file="$RUNNER_TEMP/current-pull-request-body.md"
+          event_review_file=""
+          event_head_sha="$(jq -er '.pull_request.head.sha' "$GITHUB_EVENT_PATH")"
+          if [[ "$event_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+            echo "The pull-request event head does not match the workflow head." >&2
+            exit 1
+          fi
+          event_pr_url="$(jq -er '.pull_request.html_url' "$GITHUB_EVENT_PATH")"
+          jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" > "$event_body_file"
+
+          current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
+          current_pr_url="$(jq -er '.html_url' <<<"$current_pr_json")"
+          if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+            echo "The pull-request head changed before review-evidence validation." >&2
+            exit 1
+          fi
+          if [[ "$current_pr_url" != "$event_pr_url" ]]; then
+            echo "The current pull-request URL does not match the event snapshot." >&2
+            exit 1
+          fi
+          jq -r '.body // ""' <<<"$current_pr_json" > "$current_body_file"
+
+          gh api \
+            --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
+            | jq --slurp 'add' > "$reviews_file"
+
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            event_review_file="$RUNNER_TEMP/event-review.json"
+            jq -e '.review | objects' "$GITHUB_EVENT_PATH" > "$event_review_file"
+          fi
+
+          validate_snapshot() {
+            local snapshot_name="$1"
+            local body_file="$2"
+            local review_overlay="$3"
+            local requirement_output="$RUNNER_TEMP/$snapshot_name-requirement-evidence.out"
+            local review_output="$RUNNER_TEMP/$snapshot_name-review-record.out"
+            local requirement_status=0
+            local review_status=0
+
+            HEAD_SHA="$EVENT_HEAD_SHA" \
+              PR_BODY="$(< "$body_file")" \
+              PR_URL="$event_pr_url" \
+              "$VALIDATOR_ROOT/validate-pr-requirements.sh" >"$requirement_output" 2>&1 || requirement_status=$?
+            if [[ "$requirement_status" -eq 0 ]]; then
+              EVENT_REVIEW_JSON_FILE="$review_overlay" \
+                HEAD_SHA="$EVENT_HEAD_SHA" \
+                PR_BODY="$(< "$body_file")" \
+                PR_URL="$event_pr_url" \
+                REVIEWS_JSON_FILE="$reviews_file" \
+                "$VALIDATOR_ROOT/validate-pr-review-record.sh" >"$review_output" 2>&1 || review_status=$?
+            else
+              review_status=1
+            fi
+
+            if [[ "$requirement_status" -eq 0 && "$review_status" -eq 0 ]]; then
+              echo "$snapshot_name review evidence passed."
+              cat "$requirement_output" "$review_output"
+              return 0
+            fi
+            if [[ -s "$requirement_output" ]]; then
+              cat "$requirement_output" >&2
+            fi
+            if [[ -s "$review_output" ]]; then
+              cat "$review_output" >&2
+            fi
+            echo "$snapshot_name exact-head review evidence is incomplete." >&2
+            return 1
+          }
+
+          event_status=0
+          current_status=0
+          validate_snapshot event "$event_body_file" "$event_review_file" || event_status=$?
+          validate_snapshot current "$current_body_file" "" || current_status=$?
+          if [[ "$event_status" -ne 0 || "$current_status" -ne 0 ]]; then
+            echo "Both the immutable event snapshot and current GitHub state must pass." >&2
+            exit 1
+          fi
+
+          echo "Exact-head event and current review evidence passed."
+
   hygiene:
     name: Repository hygiene
     runs-on: ubuntu-latest
@@ -82,8 +215,8 @@ jobs:
       - name: Validate pinned semantic contract
         run: ./scripts/check-semantic-prompt-contract.sh
 
-  required-checks:
-    name: Required checks
+  required-technical-checks:
+    name: Required technical checks
     if: always()
     runs-on: ubuntu-latest
     needs:
@@ -103,7 +236,7 @@ jobs:
                 "$CORE_TESTS_RESULT" != "success" ||
                 "$IOS_BUILD_RESULT" != "success" ||
                 "$SEMANTIC_CONTRACT_RESULT" != "success" ]]; then
-            echo "Required checks did not pass."
+            echo "Required technical checks did not pass."
             echo "hygiene=$HYGIENE_RESULT"
             echo "core-tests=$CORE_TESTS_RESULT"
             echo "ios-build=$IOS_BUILD_RESULT"
@@ -111,4 +244,4 @@ jobs:
             exit 1
           fi
 
-          echo "All required OpenKeyboard checks passed."
+          echo "All required OpenKeyboard technical checks passed."

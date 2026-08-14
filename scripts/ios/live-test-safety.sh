@@ -275,6 +275,24 @@ openkeyboard_trim_seed_value() {
   printf '%s' "$value"
 }
 
+openkeyboard_require_exact_live_model() {
+  local tested_model="$1"
+  local required_model="$2"
+
+  if [[ ! "$tested_model" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
+    echo "Live verification requires one safe, non-empty seed model ID." >&2
+    return 1
+  fi
+  if [[ ! "$required_model" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
+    echo "The required live model must be one safe, non-empty model ID." >&2
+    return 1
+  fi
+  if [[ "$required_model" != "model-agnostic" && "$tested_model" != "$required_model" ]]; then
+    echo "The seeded live model does not match the exact required model." >&2
+    return 1
+  fi
+}
+
 openkeyboard_is_allowed_simulator_seed_key() {
   case "$1" in
     OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL|OPEN_KEYBOARD_SIMULATOR_API_KEY|OPEN_KEYBOARD_SIMULATOR_MODEL)

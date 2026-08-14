@@ -7,22 +7,19 @@ on:
       - synchronize
       - reopened
       - edited
+      - ready_for_review
+      - converted_to_draft
 
 permissions:
   contents: read
-
-concurrency:
-  group: live-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  pull-requests: read
 
 jobs:
-  impact:
-    name: Detect live impact
+  required-live-verification:
+    name: Required live verification
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      head_sha: ${{ steps.classify.outputs.head_sha }}
-      live_impact: ${{ steps.classify.outputs.live_impact }}
+    environment: live-policy
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -31,168 +28,105 @@ jobs:
           fetch-depth: 0
           submodules: recursive
 
+      - name: Prepare trusted live-policy validators
+        id: validators
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          validator_root="$RUNNER_TEMP/live-policy-validators"
+          mkdir -p "$validator_root"
+          for validator_name in \
+            live-impact.sh \
+            validate-pr-live-evidence.sh; do
+            validator_path="$validator_root/$validator_name"
+            if git cat-file -e "$PR_BASE_SHA:scripts/$validator_name" 2>/dev/null; then
+              git show "$PR_BASE_SHA:scripts/$validator_name" > "$validator_path"
+            else
+              cp "scripts/$validator_name" "$validator_path"
+            fi
+            chmod +x "$validator_path"
+          done
+          echo "root=$validator_root" >> "$GITHUB_OUTPUT"
+
       - name: Classify exact-head live impact
-        id: classify
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
         run: |
           checked_out_sha="$(git rev-parse HEAD)"
           if [[ "$checked_out_sha" != "$PR_HEAD_SHA" ]]; then
-            echo "The checked-out commit does not match the pull-request head."
+            echo "The checked-out commit does not match the pull-request head." >&2
             exit 1
           fi
 
-          if git cat-file -e "$PR_BASE_SHA:scripts/live-impact.sh" 2>/dev/null; then
-            trusted_classifier="$RUNNER_TEMP/live-impact.sh"
-            git show "$PR_BASE_SHA:scripts/live-impact.sh" > "$trusted_classifier"
-            chmod +x "$trusted_classifier"
-            live_impact="$(
-              OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
-                "$trusted_classifier" "$PR_BASE_SHA" "$PR_HEAD_SHA"
-            )"
-          else
-            changed_paths_file="$RUNNER_TEMP/live-bootstrap-changed-paths"
-            git diff \
-              --no-renames \
-              --name-only \
-              --diff-filter=ACDMRT \
-              -z \
-              "$PR_BASE_SHA...$PR_HEAD_SHA" > "$changed_paths_file"
-            live_impact=none
-            while IFS= read -r -d '' changed_path; do
-              case "$changed_path" in
-                .github/pull_request_template.md | \
-                  .github/workflows/live.yml | \
-                  .gitmodules | \
-                  .githooks/pre-push | \
-                  scripts/check-live.sh | \
-                  scripts/check.sh | \
-                  scripts/check-semantic-prompt-contract.sh | \
-                  scripts/live-impact.sh | \
-                  scripts/ios/enable-openkeyboard-simulator-keyboard.sh | \
-                  scripts/ios/live-test-safety.sh | \
-                  scripts/ios/openkeyboard-gateway.seed.env.example | \
-                  scripts/ios/seed-simulator-gateway-config.sh | \
-                  scripts/ios/test.sh | \
-                  Vendor/semantic-prompt-contract | \
-                  OpenKeyboard/* | \
-                  OpenKeyboardCore/Package.swift | \
-                  OpenKeyboardCore/Sources/* | \
-                  OpenKeyboardExtension/* | \
-                  OpenKeyboardUITests/GatewayClientArchitectureTests.swift | \
-                  OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift | \
-                  OpenKeyboard.xcodeproj/project.pbxproj)
-                  live_impact=gateway
-                  ;;
-              esac
-            done < "$changed_paths_file"
-          fi
-
+          live_impact="$(
+            OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+              "$VALIDATOR_ROOT/live-impact.sh" "$PR_BASE_SHA" "$PR_HEAD_SHA"
+          )"
           case "$live_impact" in
             none|gateway)
               ;;
             *)
-              echo "Live-impact classification returned an invalid result."
+              echo "Live-impact classification returned an invalid result." >&2
               exit 1
               ;;
           esac
 
           if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "The pull-request head is not a full commit SHA."
+            echo "The pull-request head is not a full commit SHA." >&2
             exit 1
           fi
 
-          echo "head_sha=$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "live_impact=$live_impact" >> "$GITHUB_OUTPUT"
+          echo "LIVE_IMPACT=$live_impact" >> "$GITHUB_ENV"
 
-  required-live-verification:
-    name: Required live verification
-    if: always()
-    needs:
-      - impact
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    environment: live-policy
-    steps:
-      - name: Enforce exact-head local live evidence
+      - name: Resolve immutable and current live-evidence snapshots
         env:
-          HEAD_SHA: ${{ needs.impact.outputs.head_sha }}
-          IMPACT_RESULT: ${{ needs.impact.result }}
-          LIVE_IMPACT: ${{ needs.impact.outputs.live_impact }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_BODY_FILE: ${{ runner.temp }}/event-pull-request-body.md
+          CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
         run: |
-          if [[ "$IMPACT_RESULT" != "success" ]]; then
-            echo "Live-impact classification did not pass."
+          event_head_sha="$(jq -er '.pull_request.head.sha' "$GITHUB_EVENT_PATH")"
+          if [[ "$event_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+            echo "The pull-request event head does not match the workflow head." >&2
             exit 1
           fi
+          jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH" > "$EVENT_BODY_FILE"
 
-          if [[ "$LIVE_IMPACT" == "none" ]]; then
-            echo "This exact head does not require local gateway credentials."
-            exit 0
-          fi
-
-          if [[ "$LIVE_IMPACT" != "gateway" ]]; then
-            echo "Live-impact classification returned an unsupported target."
+          current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
+          if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+            echo "The pull-request head changed before live-evidence validation." >&2
             exit 1
           fi
+          jq -r '.body // ""' <<<"$current_pr_json" > "$CURRENT_BODY_FILE"
 
-          local_live_verification=""
-          local_live_verification_count=0
-          live_verification_target=""
-          live_verification_target_count=0
-          live_tested_head=""
-          live_tested_head_count=0
-          retention_boundary_count=0
-          trust_boundary_count=0
-          while IFS= read -r body_line; do
-            body_line="${body_line%$'\r'}"
-            case "$body_line" in
-              '- Local live verification: '*)
-                local_live_verification="${body_line#- Local live verification: }"
-                ((local_live_verification_count += 1))
+      - name: Enforce event and current exact-head live evidence
+        env:
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_BODY_FILE: ${{ runner.temp }}/event-pull-request-body.md
+          CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
+          VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
+        run: |
+          for snapshot_name in event current; do
+            case "$snapshot_name" in
+              event)
+                body_file="$EVENT_BODY_FILE"
                 ;;
-              '- Live verification target: '*)
-                live_verification_target="${body_line#- Live verification target: }"
-                ((live_verification_target_count += 1))
-                ;;
-              '- Exact live-tested head: '*)
-                live_tested_head="${body_line#- Exact live-tested head: }"
-                ((live_tested_head_count += 1))
-                ;;
-              '- No credential or gateway response body retained.')
-                ((retention_boundary_count += 1))
-                ;;
-              '- Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.')
-                ((trust_boundary_count += 1))
+              current)
+                body_file="$CURRENT_BODY_FILE"
                 ;;
             esac
-          done <<< "$PR_BODY"
+            if [[ ! -f "$body_file" ]]; then
+              echo "The $snapshot_name live-evidence snapshot is unavailable." >&2
+              exit 1
+            fi
 
-          if [[ "$local_live_verification_count" -ne 1 || "$local_live_verification" != "passed" ]]; then
-            echo "The pull request must record exactly one passing local live-verification field."
-            exit 1
-          fi
-          if [[ "$live_verification_target_count" -ne 1 || "$live_verification_target" != "gateway" ]]; then
-            echo "The pull request must record exactly one gateway live-verification target."
-            exit 1
-          fi
-          if [[ "$live_tested_head_count" -ne 1 ]]; then
-            echo "The pull request must record exactly one exact live-tested head."
-            exit 1
-          fi
-          if [[ ! "$live_tested_head" =~ ^[0-9a-f]{40}$ || "$live_tested_head" != "$HEAD_SHA" ]]; then
-            echo "Local live evidence is not bound to this exact head."
-            exit 1
-          fi
-          if [[ "$retention_boundary_count" -ne 1 ]]; then
-            echo "The pull request must record exactly one live-proof retention boundary."
-            exit 1
-          fi
-          if [[ "$trust_boundary_count" -ne 1 ]]; then
-            echo "The pull request must record exactly one live-proof trust boundary."
-            exit 1
-          fi
-
-          echo "Exact-head local live evidence was recorded."
-          echo "GitHub did not receive gateway credentials."
+            echo "Validating $snapshot_name live-evidence snapshot."
+            HEAD_SHA="$EVENT_HEAD_SHA" \
+              LIVE_IMPACT="$LIVE_IMPACT" \
+              PR_BODY="$(< "$body_file")" \
+              "$VALIDATOR_ROOT/validate-pr-live-evidence.sh"
+          done

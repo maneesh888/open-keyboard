@@ -47,6 +47,7 @@ while IFS= read -r -d '' changed_path; do
       scripts/check.sh | \
       scripts/check-semantic-prompt-contract.sh | \
       scripts/live-impact.sh | \
+      scripts/validate-pr-live-evidence.sh | \
       scripts/ios/enable-openkeyboard-simulator-keyboard.sh | \
       scripts/ios/live-test-safety.sh | \
       scripts/ios/openkeyboard-gateway.seed.env.example | \

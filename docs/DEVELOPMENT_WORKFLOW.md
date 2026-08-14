@@ -136,14 +136,42 @@ The path must be `.githooks`.
 ## GitHub checks
 
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
-It runs repository hygiene, OpenKeyboardCore tests, and the iOS app/extension build. The stable
-`Required checks` job is the ordinary branch-protection status.
+It validates the requirement ledger and durable independent-review link, then runs repository
+hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
+stable `Required technical checks` job covers the ordinary build and test gates. Every review/body
+event creates the fixed protected `Required checks` root job. That job accepts only when the trusted
+validators accept both the immutable event snapshot and a separately fetched current snapshot of
+the exact-head requirement ledger, durable independent-review link, and selected automatic-or-human
+authorization route. Initial incomplete metadata therefore fails the protected name. Because
+GitHub retains `pull_request_review` and `pull_request` check suites separately, the completed body
+event does not replace the expected first review-event failure. After linking the report, the root
+submits a same-head COMMENTED revalidation trigger clearly labeled as neither approval,
+independent-review evidence, nor merge authorization. The trigger has no project-reviewer identity
+marker, and its review-event run must pass. A structurally valid ledger does not prove its own
+claims; the exact-head independent report and conditional automatic-or-human authorization remain
+required.
+
+CI deliberately does not serialize metadata events because GitHub concurrency queues are capped and
+dispatch-order execution is not guaranteed. A stale event that runs late also validates current
+metadata, so it can conservatively block but cannot authorize invalid current state. Before merge,
+the agent re-fetches current metadata, reruns the trusted validators, and requires the current check
+rollup to point to completed successful root jobs. It also requires
+`gh pr checks <number> --required` to exit successfully so a failed event-family result cannot be
+hidden by a newer same-name check.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
-exact-tested-SHA fields. The stable `Required live verification` job rejects duplicate or
-contradictory fields and validates only that retained evidence. Local execution is
-contributor-attested; GitHub never receives the credential or gateway response.
+exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
+tested, and that no substitution occurred. Exact model requirements must match the tested-model
+list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
+must still record the actual tested model. Exact-model runs set
+`OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id>` and require verified structured corrections.
+Model-agnostic runs may retain a connected, capability-unverified result after a response-format
+miss or model-check timeout, but that result proves transport/catalog behavior only and must not be
+reported as structured-correction capability. Every live-evidence body event creates the stable
+`Required live verification` root job. It rejects duplicate, contradictory, fallback, and
+wrong-model fields in both the immutable event body and the current exact-head body. Local execution
+is contributor-attested; GitHub never receives the credential or gateway response.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
@@ -158,23 +186,67 @@ implementation context.
 
 The reviewer checks correctness, regressions, MVVM and persistence boundaries, gateway and secret
 handling, keyboard-extension lifecycle, signing/deployment safety, test coverage, and truthful
-proof claims. It reports findings but cannot edit, approve, comment, change PR state, deploy, or
-merge. A new commit invalidates the result and requires a fresh exact-head review.
+proof claims. Its packet and result use a requirement ledger: every in-scope requirement has a
+stable ID, observable acceptance criterion, required proof type, exact evidence, and a `VERIFIED`
+or `UNVERIFIED` status. Skipped, missing, stale, fallback, wrong-target, wrong-model, ambiguous, or
+contributor-attested-only material evidence is unverified. A generic model cannot satisfy an exact
+model requirement. An in-scope unverified row is always a blocker and cannot be moved into residual
+proof limits.
+
+The reviewer reports findings but cannot edit, approve, comment, change PR state, deploy, or merge.
+The root agent posts the review report as a durable GitHub `COMMENTED` review and links it from the
+PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
+exact-head review. The linked submission must be the newest same-head COMMENTED report that declares
+the isolated project-reviewer identity; a later report with a blocker supersedes every older positive
+report. The later non-review revalidation trigger is a separate COMMENTED submission and does not
+supersede the linked project-reviewer report. CI validates each immutable review/body event snapshot
+and the current GitHub state without depending on event execution order. A stale run can over-block,
+but it cannot validate an invalid current report.
+
+This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
+technical evidence and the trusted validator source. `Required checks` depends on that report being
+retained and linked, so it is intentionally a post-report gate; `Required technical checks` can pass
+before the report exists. After the root posts the report and updates the PR brief, all three
+protected statuses (`Required technical checks`, `Required checks`, and `Required live
+verification`) must pass on the same head before readiness or merge. The root must also submit the
+same-head non-approval revalidation trigger after linking the report and require
+`gh pr checks <number> --required` to succeed.
+
+Immediately before readiness and again before guarded merge, re-fetch and revalidate the current PR
+body, linked review, head, threads, and protected check rollup. Keep the PR draft during the evidence
+handoff. Require all required check entries to be completed successes, run
+`gh pr checks <number> --required`, and rerun the trusted validators locally; if current metadata is
+newer than the passing run or freshness is unclear, stop instead of inferring authorization.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
-SHA and result in the PR brief; branch protection separately enforces GitHub checks and approvals.
+SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in
+the PR brief. Automatic authorization exists only when every row is verified, no blocker or
+material uncertainty remains, and the reviewer reports exactly `100%`. Any lower confidence keeps
+the PR draft until the repository owner explicitly authorizes that exact SHA after reviewing the
+disclosed gaps. The trusted review-evidence classification validates these fields before
+`Required checks` can pass, but it cannot establish human authorship by itself.
+
+No review can prove that unknown bugs are mathematically impossible. The fail-closed standard is
+that `100%` means every stated in-scope requirement is verified with the correct proof and every
+material uncertainty is reported as a blocker. It is operational proof confidence, not a claim
+that unknown defects are impossible.
 
 ## Autonomous lifecycle and guarded merge
 
 A bounded implementation request continues through branch preparation, implementation, checks,
 commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
-confirmation at every stage. The latest `local only`, `do not commit`, `do not push`, `do not create
-a PR`, `keep draft`, or `do not merge` instruction stops the corresponding state change.
+confirmation at every stage only when the reviewer reports `100%`. Below 100%, the root reports the
+exact head and every gap, then waits for explicit owner approval of that SHA. The latest `local
+only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
+instruction stops the corresponding state change.
 
-After every exact-head gate passes, the root agent may invoke GitHub's native squash auto-merge with
-head-SHA matching. It immediately inspects the result. If GitHub queues the merge instead of
-completing it, the agent disables auto-merge and reports the blocker; queued unattended merging is
-not permitted. Ordinary GitHub Actions remain read-only and never merge pull requests.
+After every exact-head gate and the selected authorization route pass, the root agent may invoke
+GitHub's native squash auto-merge with head-SHA matching. Human authorization never relabels an
+unverified row and never bypasses failed checks, live evidence, conflicts, requested changes, or
+unresolved threads. Any new commit expires review confidence and human approval. The root
+immediately inspects the merge result. If GitHub queues the merge instead of completing it, the
+agent disables auto-merge and reports the blocker; queued unattended merging is not permitted.
+Ordinary GitHub Actions remain read-only and never merge pull requests.
 
 Deployment is outside this lifecycle and still requires explicit authorization plus approval in
 the protected `app-store-connect` environment.
