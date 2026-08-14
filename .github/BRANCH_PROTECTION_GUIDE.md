@@ -25,14 +25,19 @@ the PR description. Skipped, missing, stale, fallback, wrong-target, or wrong-mo
 `UNVERIFIED`; it prevents automatic authorization and forces the explicit human route. Human
 authorization accepts the disclosed risk but never bypasses the required statuses above.
 
-The protected review context is intentionally one-way for each SHA. Before the first complete
-report, incomplete metadata uses the non-required `Incomplete review evidence` name. After a
-`Required checks` success exists, weakening or removing the report, authorization, or linked PR
-metadata emits a failed `Required checks` and permanently invalidates that SHA. Do not rerun or edit
-metadata to revive it; push a new commit and repeat the exact-head proof and review cycle. Serialized
-CI validates every event snapshot, so a quick invalid edit followed by restoration still burns the
-SHA. The PR must link the newest same-head project-reviewer COMMENTED report; a later blocker report
-supersedes every older positive report.
+Every review/body event creates the fixed `Required checks` root job, and every live-evidence body
+event creates the fixed `Required live verification` root job. Initial incomplete metadata therefore
+fails the protected name; the completed body event must supply the newer success. The workflows do
+not use capped concurrency queues. Each run validates both its immutable event snapshot and current
+exact-head GitHub metadata, so late or canceled work blocks or conservatively over-blocks instead of
+authorizing invalid current state. The PR must link the newest same-head project-reviewer COMMENTED
+report; a later blocker report supersedes every older positive report.
+
+Before merge, re-fetch the current body, reviews, head, threads, and current check rollup; rerun the
+trusted validators locally and require the newest `Required checks` and `Required live verification`
+results to be completed successes with no newer pending, canceled, skipped, or failing result. If a
+GitHub event was not created, current metadata is newer than the passing run, or freshness cannot be
+established, do not merge automatically.
 
 Recommended repository merge settings:
 

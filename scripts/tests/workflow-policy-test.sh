@@ -17,12 +17,12 @@ PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/opena
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 BRANCH_PROTECTION_GUIDE="$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
+LIVE_EVIDENCE_VALIDATOR="$ROOT/scripts/validate-pr-live-evidence.sh"
 PR_REQUIREMENTS_VALIDATOR="$ROOT/scripts/validate-pr-requirements.sh"
 PR_REQUIREMENTS_POLICY_TEST="$ROOT/scripts/tests/pr-requirements-policy-test.sh"
 PR_REVIEW_RECORD_VALIDATOR="$ROOT/scripts/validate-pr-review-record.sh"
 PR_REVIEW_RECORD_POLICY_TEST="$ROOT/scripts/tests/pr-review-record-policy-test.sh"
-REVIEW_CHECK_STATE_CLASSIFIER="$ROOT/scripts/classify-review-check-state.sh"
-REVIEW_CHECK_STATE_POLICY_TEST="$ROOT/scripts/tests/review-check-state-policy-test.sh"
+REVIEW_WORKFLOW_SNAPSHOT_TEST="$ROOT/scripts/tests/review-workflow-snapshot-test.sh"
 DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
@@ -46,12 +46,12 @@ for required_file in \
   "$PR_TEMPLATE" \
   "$BRANCH_PROTECTION_GUIDE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
+  "$LIVE_EVIDENCE_VALIDATOR" \
   "$PR_REQUIREMENTS_VALIDATOR" \
   "$PR_REQUIREMENTS_POLICY_TEST" \
   "$PR_REVIEW_RECORD_VALIDATOR" \
   "$PR_REVIEW_RECORD_POLICY_TEST" \
-  "$REVIEW_CHECK_STATE_CLASSIFIER" \
-  "$REVIEW_CHECK_STATE_POLICY_TEST" \
+  "$REVIEW_WORKFLOW_SNAPSHOT_TEST" \
   "$DEPLOY_SOURCE_POLICY_TEST" \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
@@ -78,107 +78,88 @@ rg --quiet 'pull-requests:[[:space:]]*read' "$LIVE_WORKFLOW"
 rg --quiet 'checks:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'group: live-${{ github.event.pull_request.number }}' "$LIVE_WORKFLOW"
-if rg --fixed-strings --quiet "github.event.action || 'none'" "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
-  echo "Exact-head metadata events must share one serialized per-PR queue." >&2
+if rg --quiet '^concurrency:|queue:[[:space:]]*max' "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
+  echo "Metadata checks must not rely on capped or non-chronological concurrency queues." >&2
   exit 1
 fi
-if [[ "$(rg --count 'queue:[[:space:]]*max' "$CI_WORKFLOW")" -ne 1 ||
-      "$(rg --count 'queue:[[:space:]]*max' "$LIVE_WORKFLOW")" -ne 1 ]]; then
-  echo "Review and live metadata workflows must retain every queued per-PR transition." >&2
+if rg --quiet '^  workflow_dispatch:' "$CI_WORKFLOW"; then
+  echo "Manual CI dispatch must not create a protected review check on an arbitrary branch." >&2
   exit 1
 fi
-rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
+rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
-rg --quiet 'local_live_verification_count' "$LIVE_WORKFLOW"
-rg --quiet 'live_verification_target_count' "$LIVE_WORKFLOW"
-rg --quiet 'live_tested_head_count' "$LIVE_WORKFLOW"
-rg --quiet 'required_live_models_count' "$LIVE_WORKFLOW"
-rg --quiet 'exact_live_tested_models_count' "$LIVE_WORKFLOW"
-rg --quiet 'live_model_substitutions_count' "$LIVE_WORKFLOW"
-rg --quiet 'required_live_models.*exact_live_tested_models' "$LIVE_WORKFLOW"
-rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_WORKFLOW"
+rg --quiet 'local_live_verification_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_verification_target_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_tested_head_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'required_live_models_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'exact_live_tested_models_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_model_substitutions_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'required_live_models.*exact_live_tested_models' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_EVIDENCE_VALIDATOR"
+rg --fixed-strings --quiet 'jq -r '\''.pull_request.body // ""'\'' "$GITHUB_EVENT_PATH" > "$EVENT_BODY_FILE"' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'current_head_sha="$(jq -er '\''.head.sha'\'' <<<"$current_pr_json")"' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'if [[ "$EVENT_ACTION" == "synchronize" ]]' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'max_attempts=24' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'PR_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md' "$LIVE_WORKFLOW"
-if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$LIVE_WORKFLOW"; then
-  echo "Live evidence must not validate the stale event-body snapshot." >&2
+rg --fixed-strings --quiet 'EVENT_BODY_FILE: ${{ runner.temp }}/event-pull-request-body.md' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'for snapshot_name in event current; do' "$LIVE_WORKFLOW"
+if rg --quiet 'max_attempts=|sleep [0-9]' "$LIVE_WORKFLOW"; then
+  echo "Live evidence must not poll mutable metadata or wait for a handoff." >&2
   exit 1
 fi
-if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORKFLOW"; then
+if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_EVIDENCE_VALIDATOR"; then
   echo "Live evidence must bind the dedicated exact-head field, not any PR-body occurrence." >&2
   exit 1
 fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'Required technical checks' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'Incomplete review evidence' "$CI_WORKFLOW"
-rg --quiet '^  requirement-evidence:$' "$CI_WORKFLOW"
+if rg --fixed-strings --quiet 'Incomplete review evidence' "$CI_WORKFLOW"; then
+  echo "Every review-metadata event must create the protected check instead of hiding failures under another name." >&2
+  exit 1
+fi
+rg --quiet '^  required-review-evidence:$' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-requirements\.sh' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
 rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'event_head_sha="$(jq -er '\''.pull_request.head.sha'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'export PR_BODY="$(jq -r '\''.pull_request.body // ""'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'export PR_URL="$(jq -er '\''.pull_request.html_url'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'jq -r '\''.pull_request.body // ""'\'' "$GITHUB_EVENT_PATH" > "$event_body_file"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'jq -r '\''.body // ""'\'' <<<"$current_pr_json" > "$current_body_file"' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'if [[ "$EVENT_NAME" == "pull_request_review" ]]' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'jq -e '\''.review | objects'\'' "$GITHUB_EVENT_PATH" > "$event_review_file"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'EVENT_REVIEW_JSON_FILE="$event_review_file"' "$CI_WORKFLOW"
-if rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$CI_WORKFLOW"; then
-  echo "Serialized review checks must validate each event snapshot instead of collapsing transitions into current metadata." >&2
+rg --fixed-strings --quiet 'validate_snapshot event "$event_body_file" "$event_review_file"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'validate_snapshot current "$current_body_file" ""' "$CI_WORKFLOW"
+if rg --quiet 'classify-review-check-state|history_poisoned|emit_incomplete|check_name=' "$CI_WORKFLOW"; then
+  echo "Review readiness must not depend on processing or completion order from historical check runs." >&2
   exit 1
 fi
-if rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"; then
-  echo "Review/body handoff must use distinct serialized events instead of refetching away an invalid transition." >&2
-  exit 1
-fi
-rg --fixed-strings --quiet -- "-f check_name='Required checks'" "$CI_WORKFLOW"
-rg --fixed-strings --quiet -- '-f status=completed' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'classify-review-check-state.sh' "$CI_WORKFLOW"
-if rg --fixed-strings --quiet 'CURRENT_RUN_ID: ${{ github.run_id }}' "$CI_WORKFLOW"; then
-  echo "A workflow rerun must not exclude failed earlier attempts sharing its run ID." >&2
-  exit 1
-fi
-rg --fixed-strings --quiet 'history_poisoned' "$CI_WORKFLOW"
-rg --fixed-strings --quiet "needs.requirement-evidence.outputs.emit_incomplete == 'true'" "$CI_WORKFLOW"
 if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"; then
   echo "Conditional owner authorization must not depend on an impossible non-author approval in a solo repository." >&2
   exit 1
 fi
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet "name: \${{ needs.requirement-evidence.outputs.emit_incomplete == 'true' && 'Incomplete review evidence' || 'Required checks' }}" "$CI_WORKFLOW"
-if rg --quiet 'REQUIREMENT_EVIDENCE_RESULT' "$CI_WORKFLOW"; then
-  echo "Technical aggregation must not turn expected incomplete review evidence into a poisoned required check." >&2
-  exit 1
-fi
 ruby -e '
   require "yaml"
 
   jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
-  classifier = jobs.fetch("requirement-evidence")
-  abort "Review classification must expose exact-head readiness." unless
-    classifier.fetch("outputs").fetch("evidence_ready").include?("steps.review-evidence.outputs.ready")
-  abort "Review classification must expose the protected-name decision." unless
-    classifier.fetch("outputs").fetch("emit_incomplete").include?("steps.review-check-history.outputs.emit_incomplete")
-  abort "Review classification must expose irreversible invalidation." unless
-    classifier.fetch("outputs").fetch("history_poisoned").include?("steps.review-check-history.outputs.history_poisoned")
-
   technical = jobs.fetch("required-technical-checks")
   abort "Technical aggregation has the wrong protected name." unless technical.fetch("name") == "Required technical checks"
   abort "Technical aggregation must not depend on review classification." if
-    Array(technical.fetch("needs")).include?("requirement-evidence")
+    Array(technical.fetch("needs")).include?("required-review-evidence")
 
   review = jobs.fetch("required-review-evidence")
   review_name = review.fetch("name")
-  abort "Pre-review and protected review evidence must use different check names." unless
-    review_name.include?("Required checks") && review_name.include?("Incomplete review evidence")
-  abort "The protected review status must depend only on trusted review classification." unless
-    Array(review.fetch("needs")) == ["requirement-evidence"]
-' "$CI_WORKFLOW"
+  abort "Every review event must use the fixed protected check name." unless
+    review_name.include?("Required checks") && review_name.include?("Review evidence not applicable")
+  abort "The protected review check must be a root job so cancellation cannot hide behind a prerequisite." if review.key?("needs")
+
+  live = YAML.load_file(ARGV.fetch(1)).fetch("jobs").fetch("required-live-verification")
+  abort "The live check has the wrong protected name." unless live.fetch("name") == "Required live verification"
+  abort "The protected live check must be a root job so cancellation cannot hide behind a prerequisite." if live.key?("needs")
+' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
@@ -371,6 +352,7 @@ live_impact_patterns=(
   'scripts/check.sh'
   'scripts/check-semantic-prompt-contract.sh'
   'scripts/live-impact.sh'
+  'scripts/validate-pr-live-evidence.sh'
   'scripts/ios/enable-openkeyboard-simulator-keyboard.sh'
   'scripts/ios/live-test-safety.sh'
   'scripts/ios/openkeyboard-gateway.seed.env.example'
@@ -387,20 +369,16 @@ live_impact_patterns=(
 )
 
 for live_impact_pattern in "${live_impact_patterns[@]}"; do
-  for classifier_source in "$ROOT/scripts/live-impact.sh" "$LIVE_WORKFLOW"; do
-    if ! rg --fixed-strings --quiet "$live_impact_pattern" "$classifier_source"; then
-      echo "Live-impact policy omitted $live_impact_pattern from $classifier_source." >&2
-      exit 1
-    fi
-  done
-done
-
-for classifier_source in "$ROOT/scripts/live-impact.sh" "$LIVE_WORKFLOW"; do
-  if ! rg --fixed-strings --quiet -- '--no-renames' "$classifier_source"; then
-    echo "Live-impact policy must classify both sides of file renames in $classifier_source." >&2
+  if ! rg --fixed-strings --quiet "$live_impact_pattern" "$ROOT/scripts/live-impact.sh"; then
+    echo "Live-impact policy omitted $live_impact_pattern." >&2
     exit 1
   fi
 done
+
+if ! rg --fixed-strings --quiet -- '--no-renames' "$ROOT/scripts/live-impact.sh"; then
+  echo "Live-impact policy must classify both sides of file renames." >&2
+  exit 1
+fi
 
 while IFS= read -r use_line; do
   action_ref="${use_line#*uses:}"

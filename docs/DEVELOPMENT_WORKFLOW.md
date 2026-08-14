@@ -138,29 +138,30 @@ The path must be `.githooks`.
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
 It validates the requirement ledger and durable independent-review link, then runs repository
 hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
-stable `Required technical checks` job covers the ordinary build and test gates. The protected
-`Required checks` name is emitted only when the trusted validators accept the exact-head requirement
-ledger, durable independent-review link, and selected automatic-or-human authorization route.
-Incomplete metadata instead emits the non-required `Incomplete review evidence` failure; this keeps
-expected pre-review failure history from permanently poisoning the protected context. A
-structurally valid ledger does not prove its own claims; the exact-head independent report and
-conditional automatic-or-human authorization remain required.
+stable `Required technical checks` job covers the ordinary build and test gates. Every review/body
+event creates the fixed protected `Required checks` root job. That job accepts only when the trusted
+validators accept both the immutable event snapshot and a separately fetched current snapshot of
+the exact-head requirement ledger, durable independent-review link, and selected automatic-or-human
+authorization route. Initial incomplete metadata therefore fails the protected name; the completed
+body event must produce the newer passing result. A structurally valid ledger does not prove its own
+claims; the exact-head independent report and conditional automatic-or-human authorization remain
+required.
 
-CI serializes all review-metadata events for a pull request and inspects the SHA's complete
-`Required checks` history. Once that protected context has succeeded, a later invalid report,
-dismissal, weakened authorization record, unresolved history lookup, or prior protected failure
-emits/fixes the state at a failed `Required checks`. That failure is irreversible for the SHA;
-restoring mutable PR text is insufficient, and a new commit must restart every exact-head gate.
+CI deliberately does not serialize metadata events because GitHub concurrency queues are capped and
+dispatch-order execution is not guaranteed. A stale event that runs late also validates current
+metadata, so it can conservatively block but cannot authorize invalid current state. Before merge,
+the agent re-fetches current metadata, reruns the trusted validators, and requires the current check
+rollup to point to a completed successful `Required checks` root job with no newer non-success.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
 exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
 tested, and that no substitution occurred. Exact model requirements must match the tested-model
 list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
-must still record the actual tested model. The stable `Required live verification` job rejects
-duplicate, contradictory, fallback, and wrong-model fields and validates only that retained
-evidence. Local execution is contributor-attested; GitHub never receives the credential or gateway
-response.
+must still record the actual tested model. Every live-evidence body event creates the stable
+`Required live verification` root job. It rejects duplicate, contradictory, fallback, and
+wrong-model fields in both the immutable event body and the current exact-head body. Local execution
+is contributor-attested; GitHub never receives the credential or gateway response.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
@@ -187,8 +188,9 @@ The root agent posts the review report as a durable GitHub `COMMENTED` review an
 PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
 exact-head review. The linked submission must be the newest same-head COMMENTED report that declares
 the isolated project-reviewer identity; a later report with a blocker supersedes every older positive
-report. CI validates each serialized review/body event snapshot so an invalid transition cannot be
-hidden by immediately restoring mutable PR metadata.
+report. CI validates each immutable review/body event snapshot and the current GitHub state without
+depending on event execution order. A stale run can over-block, but it cannot validate an invalid
+current report.
 
 This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
 technical evidence and the trusted validator source. `Required checks` depends on that report being
@@ -198,17 +200,18 @@ protected statuses (`Required technical checks`, `Required checks`, and `Require
 verification`) must pass on the same head before readiness or merge.
 
 Immediately before readiness and again before guarded merge, re-fetch and revalidate the current PR
-body, linked review, head, threads, and complete protected check history. Keep the PR draft during
-the evidence handoff. A same-head protected review failure is not recoverable by editing the PR;
-push a new commit and repeat the review cycle.
+body, linked review, head, threads, and protected check rollup. Keep the PR draft during the evidence
+handoff. Require the newest protected results to be completed successes and rerun the trusted
+validators locally; if current metadata is newer than the passing run or freshness is unclear, stop
+instead of inferring authorization.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in
 the PR brief. Automatic authorization exists only when every row is verified, no blocker or
 material uncertainty remains, and the reviewer reports exactly `100%`. Any lower confidence keeps
 the PR draft until the repository owner explicitly authorizes that exact SHA after reviewing the
-disclosed gaps. The trusted review-evidence classification validates these fields before emitting
-`Required checks`, but it cannot establish human authorship by itself.
+disclosed gaps. The trusted review-evidence classification validates these fields before
+`Required checks` can pass, but it cannot establish human authorship by itself.
 
 No review can prove that unknown bugs are mathematically impossible. The fail-closed standard is
 that `100%` means every stated in-scope requirement is verified with the correct proof and every

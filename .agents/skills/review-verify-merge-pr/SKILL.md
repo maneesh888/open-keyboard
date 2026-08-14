@@ -99,13 +99,15 @@ Before marking a PR ready or merging it, always require:
 9. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
 10. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
-Inspect every `Required checks` run on the exact SHA, not only the latest displayed rollup. Any
-non-success under that protected name permanently invalidates the SHA. Do not try to recover it by
-editing or rerunning PR metadata; push a new commit and restart the full exact-head cycle. Keep the
-PR draft throughout report/body handoff and re-fetch the current body, linked review, and check
-history immediately before readiness. The linked submission must be the newest same-head COMMENTED
-report declaring the isolated project-reviewer identity; any later such report supersedes it, even
-before the PR body is updated.
+Inspect every exact-head run to identify the newest result for each protected name, including
+pending, canceled, skipped, and rerun attempts. Initial incomplete review/live metadata is expected
+to fail the fixed protected name; only a newer event that validates both its immutable snapshot and
+the current GitHub state may supersede it. Require the current rollup for `Required checks` and
+`Required live verification` to point to completed successful root jobs, with no newer non-success.
+Re-run the trusted validators locally against the freshly fetched current body and reviews before
+readiness and merge. Keep the PR draft throughout report/body handoff. The linked submission must
+be the newest same-head COMMENTED report declaring the isolated project-reviewer identity; any
+later such report supersedes it, even before the PR body is updated.
 
 Then require exactly one authorization route:
 

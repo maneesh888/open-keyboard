@@ -55,6 +55,7 @@ gateway_sensitive_paths=(
   scripts/check-live.sh
   scripts/check.sh
   scripts/live-impact.sh
+  scripts/validate-pr-live-evidence.sh
   scripts/ios/enable-openkeyboard-simulator-keyboard.sh
   scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
