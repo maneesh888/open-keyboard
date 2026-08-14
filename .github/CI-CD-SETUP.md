@@ -42,9 +42,11 @@ reviewer confidence exactly `100%` authorizes the automatic route; below 100%, i
 the repository owner's explicit approval for the same exact SHA.
 
 Review-submission CI re-reads current pull-request metadata and retries the review/body handoff for
-at most 60 seconds. This lets the durable COMMENTED review be linked without leaving a stale failed
-required check on the same commit; validation still fails if the exact-head record never becomes
-complete.
+at most 60 seconds. Live-policy CI similarly allows at most 120 seconds for a pushed exact head's
+already-completed local live evidence to be recorded in the pull-request body. Action-scoped
+concurrency keeps both handoff runs alive when the matching body-edit runs start. This prevents a
+frozen event snapshot or cancellation from leaving an obsolete failed required check on the same
+commit; validation still fails if either exact-head record never becomes complete.
 
 ## Repository automation set
 

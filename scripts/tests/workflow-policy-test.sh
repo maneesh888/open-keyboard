@@ -68,8 +68,11 @@ if rg --quiet ':[[:space:]]*write([[:space:]]|$)' "$CI_WORKFLOW" "$LIVE_WORKFLOW
 fi
 
 rg --quiet 'contents:[[:space:]]*read' "$CI_WORKFLOW"
+rg --quiet 'pull-requests:[[:space:]]*read' "$LIVE_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha \|\| github\.sha' "$CI_WORKFLOW"
 rg --quiet 'github\.event\.pull_request\.head\.sha' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet "github.event.action || 'none'" "$CI_WORKFLOW"
+rg --fixed-strings --quiet "github.event.action || 'none'" "$LIVE_WORKFLOW"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/live-impact\.sh"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_WORKFLOW"
@@ -80,6 +83,16 @@ rg --quiet 'exact_live_tested_models_count' "$LIVE_WORKFLOW"
 rg --quiet 'live_model_substitutions_count' "$LIVE_WORKFLOW"
 rg --quiet 'required_live_models.*exact_live_tested_models' "$LIVE_WORKFLOW"
 rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'current_head_sha="$(jq -er '\''.head.sha'\'' <<<"$current_pr_json")"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'if [[ "$EVENT_ACTION" == "synchronize" ]]' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'max_attempts=24' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'PR_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md' "$LIVE_WORKFLOW"
+if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$LIVE_WORKFLOW"; then
+  echo "Live evidence must not validate the stale event-body snapshot." >&2
+  exit 1
+fi
 if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORKFLOW"; then
   echo "Live evidence must bind the dedicated exact-head field, not any PR-body occurrence." >&2
   exit 1

@@ -10,9 +10,10 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: live-${{ github.event.pull_request.number }}
+  group: live-${{ github.event.pull_request.number }}-${{ github.event.action || 'none' }}
   cancel-in-progress: true
 
 jobs:
@@ -115,12 +116,61 @@ jobs:
     timeout-minutes: 5
     environment: live-policy
     steps:
+      - name: Resolve current exact-head live evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_HEAD_SHA: ${{ needs.impact.outputs.head_sha }}
+          IMPACT_RESULT: ${{ needs.impact.result }}
+          LIVE_IMPACT: ${{ needs.impact.outputs.live_impact }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
+        run: |
+          : > "$PR_BODY_FILE"
+          if [[ "$IMPACT_RESULT" != "success" || "$LIVE_IMPACT" != "gateway" ]]; then
+            exit 0
+          fi
+
+          max_attempts=1
+          if [[ "$EVENT_ACTION" == "synchronize" ]]; then
+            max_attempts=24
+          fi
+
+          for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
+            current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+            current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
+            if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+              echo "The pull-request head changed while waiting for exact-head live evidence." >&2
+              exit 1
+            fi
+
+            current_body="$(jq -r '.body // ""' <<<"$current_pr_json")"
+            matching_live_head_count=0
+            while IFS= read -r body_line; do
+              body_line="${body_line%$'\r'}"
+              if [[ "$body_line" == "- Exact live-tested head: $EVENT_HEAD_SHA" ]]; then
+                ((matching_live_head_count += 1))
+              fi
+            done <<< "$current_body"
+
+            if [[ "$matching_live_head_count" -eq 1 ]]; then
+              printf '%s\n' "$current_body" > "$PR_BODY_FILE"
+              exit 0
+            fi
+            if [[ "$attempt" -lt "$max_attempts" ]]; then
+              sleep 5
+            fi
+          done
+
+          echo "Exact-head live evidence was not recorded during the bounded pull-request metadata handoff." >&2
+          exit 1
+
       - name: Enforce exact-head local live evidence
         env:
           HEAD_SHA: ${{ needs.impact.outputs.head_sha }}
           IMPACT_RESULT: ${{ needs.impact.result }}
           LIVE_IMPACT: ${{ needs.impact.outputs.live_impact }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
         run: |
           if [[ "$IMPACT_RESULT" != "success" ]]; then
             echo "Live-impact classification did not pass."
@@ -136,6 +186,15 @@ jobs:
             echo "Live-impact classification returned an unsupported target."
             exit 1
           fi
+
+          if [[ -n "${PR_BODY_FILE:-}" ]]; then
+            if [[ ! -f "$PR_BODY_FILE" ]]; then
+              echo "Current pull-request metadata was not resolved."
+              exit 1
+            fi
+            PR_BODY="$(< "$PR_BODY_FILE")"
+          fi
+          PR_BODY="${PR_BODY:-}"
 
           local_live_verification=""
           local_live_verification_count=0
