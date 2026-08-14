@@ -146,6 +146,8 @@ rg --fixed-strings --quiet 'Merge recommendation: human-review-required' "$REVIE
 rg --quiet 'repository-owner approval' "$REVIEW_SKILL"
 rg --quiet 'Human-approved head' "$REVIEW_SKILL"
 rg --quiet 'statement about policy' "$REVIEW_SKILL"
+rg --fixed-strings --quiet 'report-dependent `Requirement evidence`' "$REVIEW_SKILL"
+rg --quiet 'After the root posts and links the report' "$REVIEW_SKILL"
 rg --quiet 'wrong-model' "$REVIEW_SKILL"
 rg --quiet 'durable GitHub `COMMENTED` review' "$REVIEW_SKILL"
 if rg --quiet 'at least one approving GitHub review' "$REVIEW_SKILL"; then

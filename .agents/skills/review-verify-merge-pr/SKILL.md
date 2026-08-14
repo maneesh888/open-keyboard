@@ -55,7 +55,11 @@ private user text, generated artifacts, and raw logs out of the packet.
 7. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 8. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
 9. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence.
-10. Confirm GitHub reports `Required checks` and `Required live verification` as successful for the reviewed head.
+10. Before the report, confirm the exact-head technical jobs that do not depend on retaining that
+    report are successful. Inspect the trusted requirement validators, but do not require the
+    report-dependent `Requirement evidence` job or aggregate `Required checks` status to be green
+    before the report exists. After the root posts and links the report, require exact-head
+    `Required checks` and `Required live verification` before readiness or merge.
 
 The reviewer must never claim that unknown defects are impossible. "No findings" means all stated
 in-scope requirements are verified within the named evidence boundary, not that the software is

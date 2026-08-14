@@ -177,6 +177,12 @@ The root agent posts the review report as a durable GitHub `COMMENTED` review an
 PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
 exact-head review.
 
+This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
+technical evidence and the trusted validator source. `Requirement evidence` and the aggregate
+`Required checks` status depend on that report being retained and linked, so they are intentionally
+post-report gates. After the root posts the report and updates the PR brief, both aggregate required
+statuses must pass on the same head before readiness or merge.
+
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in
 the PR brief. Automatic authorization exists only when every row is verified, no blocker or
