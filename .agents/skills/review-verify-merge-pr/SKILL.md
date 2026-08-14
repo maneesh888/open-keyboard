@@ -14,7 +14,7 @@ Bind every review conclusion and state change to one exact pull-request head.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
 - Honor the latest explicit `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge` instruction.
-- Do not request another confirmation between requested lifecycle stages.
+- Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
 
@@ -24,7 +24,7 @@ Bind every review conclusion and state change to one exact pull-request head.
 2. Resolve the PR number, base, full head SHA, draft state, changed files, mergeability, reviews, unresolved threads, and checks using available read-only GitHub tools.
 3. Use an isolated clean worktree when the current checkout is not the exact PR head.
 4. Read `AGENTS.md`, the PR brief, the root diff, and only the relevant requirement and acceptance sources.
-5. Treat any head change as invalidating prior local, CI, live, and independent-review evidence.
+5. Treat any head change as invalidating prior local, CI, live, independent-review evidence, and human merge authorization.
 
 ## Prepare neutral review context
 
@@ -52,7 +52,7 @@ private user text, generated artifacts, and raw logs out of the packet.
 4. Treat correctness, security, data-loss, extension-contract, signing, missing-material-test, and false-evidence findings as blockers.
 5. Produce a requirement-coverage table with `VERIFIED` or `UNVERIFIED` for every in-scope row. A row is verified only by the proof type its acceptance criterion requires.
 6. Treat skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. An exact-model requirement must execute that exact model without substitution.
-7. Treat every `UNVERIFIED` in-scope row as a blocker. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
+7. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 8. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
 9. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence.
 10. Confirm GitHub reports `Required checks` and `Required live verification` as successful for the reviewed head.
@@ -66,39 +66,65 @@ verbatim into a six-column table: `ID | Observable acceptance | Required proof |
 | Status | Independent assessment`. This makes omitted requirements and proof substitutions
 machine-detectable when the report is retained on GitHub. It must also contain exactly one
 `Reviewer`, `Exact reviewed head`, `Review requirement coverage`, `Review unverified requirements`,
-`Blocking findings`, and `Conclusion` field. Use `requirements-complete` only for a fully verified
-report; otherwise use `blocked` and name every unverified requirement.
+`Blocking findings`, `Reviewer confidence`, `Merge recommendation`, and `Conclusion` field.
+Coverage records rows assessed and must be N/N even when a row is unverified. Use exactly
+`Reviewer confidence: 100%`, `Merge recommendation: automatic`, and
+`Conclusion: requirements-complete` only when every row has the exact required proof and no
+material uncertainty remains. Otherwise use exactly `Reviewer confidence: below 100%`,
+`Merge recommendation: human-review-required`, and `Conclusion: human-review-required`, and name
+every unverified requirement and blocker.
 
 Review-only work reports findings and stops. During an autonomous implementation lifecycle, the
 root agent fixes in-scope blockers while the PR remains draft. Every new commit invalidates local
-Release evidence, live evidence, independent review, and GitHub gate conclusions. If the PR was
+Release evidence, live evidence, independent review, human authorization, and GitHub gate conclusions. If the PR was
 already ready, immediately disable any auto-merge request and return it to draft, then refresh the
 PR brief and repeat the exact-head cycle.
 
 ## Readiness gate
 
-Before marking a PR ready or merging it, require:
+Before marking a PR ready or merging it, always require:
 
 1. a current PR brief and neutral reviewer packet bound to the full head SHA, with every in-scope requirement listed separately;
 2. independently reviewed SHA equal to GitHub's current head;
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
-5. 100% requirement coverage, with no `UNVERIFIED` in-scope row, substitution, ambiguity, or material uncertainty;
-6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
-7. no blocking finding, requested change, or unresolved review thread;
-8. at least one approving GitHub review from a human who is neither the PR author nor an identifiable implementing contributor, with stale-review dismissal enabled;
-9. an in-scope diff with no secret or generated-artifact violation;
-10. no conflict and compliance with the base-update policy;
-11. successful exact-head `Required checks` and `Required live verification`; and
-12. effective base protection requiring pull requests, at least one approval, stale-review dismissal, strict checks, and conversation resolution.
+5. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
+6. no undisclosed finding, current-head requested change, or unresolved review thread;
+7. an in-scope diff with no secret or generated-artifact violation;
+8. no conflict and compliance with the base-update policy;
+9. successful exact-head `Required checks` and `Required live verification`; and
+10. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
-Pending, skipped, missing, cancelled, timed-out, stale, or failed mandatory evidence blocks
-readiness and merge.
+Then require exactly one authorization route:
+
+- **Automatic:** every in-scope row is `VERIFIED`; the reviewer inspected N/N requirements, reports
+  `Reviewer confidence: 100%`, reports no blocking finding or material uncertainty, and recommends
+  `automatic`. Record `Merge authorization route: automatic` and set every human-approval field to
+  `not-required`.
+- **Human:** the reviewer reports `below 100%` and `human-review-required`; every unverified row and
+  blocker remains visible; and the repository owner explicitly authorizes merge for the current
+  full SHA in the active task after performing whatever local test and review they judge necessary.
+  Only then may the root record `Merge authorization route: human`, `Human approval status:
+  approved`, the exact `Human-approved head`, and `Human approval evidence: explicit
+  repository-owner approval for this exact head in the active Codex task`.
+
+Human authorization accepts the disclosed evidence risk; it does not relabel an unverified row as
+verified and never bypasses failed mandatory checks, live evidence, conflicts, requested changes,
+unresolved threads, secret controls, or branch protection. The root must not infer approval from
+the implementation request, PR authorship, prior approval of another SHA, silence, or a general
+statement about policy. If confidence is below 100% and current-head human approval is absent, keep
+the PR draft, present the exact SHA and every blocker to the user, ask for their decision, and stop.
+
+Pending, skipped, missing, cancelled, timed-out, stale, or failed mandatory technical gates block
+readiness and merge in both routes. A missing requirement-specific proof prevents automatic
+authorization and remains disclosed if the owner chooses the human route.
 
 The root agent must post the independent review result as a durable GitHub `COMMENTED` review
 submission without secrets or raw gateway output, link that review from the PR brief, and run the
 repository PR-requirement validators before readiness. The root may summarize but must not weaken,
-omit, or reclassify a reviewer's blocker.
+omit, or reclassify a reviewer's blocker. The AI reviewer never submits a GitHub approval, and the
+root never manufactures a human approval; the exact-head owner instruction is a separate authority
+boundary.
 
 ## Guarded merge
 
@@ -108,7 +134,7 @@ head may become ready but must remain unmerged.
 Otherwise:
 
 1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction.
-2. Confirm all evidence remains bound to the same full reviewed and locally verified SHA.
+2. Confirm all evidence and the selected automatic or human authorization route remain bound to the same full reviewed and locally verified SHA. If the reviewer is below 100% and explicit current-head owner approval is absent, keep the PR draft, ask the owner to review the named gaps, and stop.
 3. Mark the draft ready.
 4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, or review mismatch, disable any queued auto-merge, return the PR to draft when applicable, and restart the exact-head cycle or report the blocker. On a late `keep draft`, disable auto-merge, return the PR to draft, verify it remains unmerged, and stop. On a late `do not merge`, disable auto-merge, verify the PR remains unmerged, and stop.
 5. Run GitHub's native guarded squash merge with exact-head matching:

@@ -47,7 +47,10 @@ a higher cumulative gate without expanding the task's proof claim.
 
 A bounded implementation request starts the normal repository lifecycle through guarded merge:
 branch/worktree preparation, edits, tests, commit, push, PR publication, in-scope review fixes,
-readiness, and merge. Continue without separate confirmation between those stages.
+readiness, and merge. Continue without separate confirmation between those stages only when the
+exact-head independent reviewer reports operational confidence of exactly `100%`. If confidence is
+below 100%, keep the PR draft, disclose every unverified requirement and blocker, and require
+explicit repository-owner approval for that same exact head before readiness or merge.
 
 Honor the latest explicit opt-out:
 
@@ -80,7 +83,9 @@ Create PRs as drafts with a concise brief containing a separate row for every in
 its observable acceptance criterion, required proof type, exact evidence, and verification status.
 Include independent review state, live evidence, explicitly authorized out-of-scope limits, and the
 full exact head SHA. An unverified, ambiguous, skipped, stale, fallback, or wrong-target requirement
-is a blocker, not a residual limitation. For PR review, readiness, or merge, use
+is a blocker, not a residual limitation. Human authorization may accept a disclosed blocker but
+must not relabel it as verified or bypass a failed mandatory gate. A new commit invalidates both
+reviewer confidence and human authorization. For PR review, readiness, or merge, use
 `$review-verify-merge-pr`.
 
 ## Report compactly

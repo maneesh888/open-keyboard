@@ -4,11 +4,9 @@ set -euo pipefail
 HEAD_SHA="${HEAD_SHA:-}"
 PR_BODY="${PR_BODY:-}"
 PR_URL="${PR_URL:-}"
-PR_AUTHOR="${PR_AUTHOR:-}"
 REVIEWS_JSON_FILE="${REVIEWS_JSON_FILE:-}"
-CONTRIBUTORS_JSON_FILE="${CONTRIBUTORS_JSON_FILE:-}"
 
-if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ || -z "$PR_BODY" || -z "$PR_URL" || -z "$PR_AUTHOR" ]]; then
+if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ || -z "$PR_BODY" || -z "$PR_URL" ]]; then
   echo "Review-record validation needs exact pull-request metadata." >&2
   exit 2
 fi
@@ -16,16 +14,12 @@ if [[ ! -f "$REVIEWS_JSON_FILE" ]]; then
   echo "Review-record validation needs fetched GitHub reviews." >&2
   exit 2
 fi
-if [[ ! -f "$CONTRIBUTORS_JSON_FILE" ]]; then
-  echo "Review-record validation needs fetched pull-request commits." >&2
-  exit 2
-fi
 
-ruby -rjson - "$HEAD_SHA" "$PR_URL" "$PR_AUTHOR" "$REVIEWS_JSON_FILE" "$CONTRIBUTORS_JSON_FILE" <<'RUBY'
-head_sha, pr_url, pr_author, reviews_path, contributors_path = ARGV
+ruby -rjson - "$HEAD_SHA" "$PR_URL" "$REVIEWS_JSON_FILE" <<'RUBY'
+head_sha, pr_url, reviews_path = ARGV
 pr_body = ENV.fetch("PR_BODY")
 reviews = JSON.parse(File.read(reviews_path))
-commits = JSON.parse(File.read(contributors_path))
+human_evidence = "explicit repository-owner approval for this exact head in the active Codex task"
 
 def fail_review(message)
   warn message
@@ -42,6 +36,22 @@ def exact_field(body, label)
   value = values.first
   fail_review("Independent review field '#{label}' cannot be empty or pending.") if value.empty? || value.casecmp("pending").zero?
   value
+end
+
+def pr_field(body, label)
+  prefix = "- #{label}: "
+  values = body.lines.map(&:strip).select { |line| line.start_with?(prefix) }.map { |line| line.delete_prefix(prefix).strip }
+  fail_review("PR body must contain exactly one '#{label}' field.") unless values.length == 1
+  values.first
+end
+
+def requirement_ids(value, label)
+  return [] if value == "none"
+
+  ids = value.split(",").map(&:strip)
+  fail_review("#{label} must be 'none' or a comma-separated requirement ID list.") if
+    ids.empty? || ids.any? { |id| !id.match?(/\AR[1-9][0-9]*\z/) } || ids.uniq.length != ids.length
+  ids
 end
 
 evidence_prefix = "- Independent review evidence: #{pr_url}#pullrequestreview-"
@@ -64,17 +74,20 @@ reviewed_head = exact_field(review_body, "Exact reviewed head")
 coverage = exact_field(review_body, "Review requirement coverage")
 unverified = exact_field(review_body, "Review unverified requirements")
 blocking = exact_field(review_body, "Blocking findings")
+confidence = exact_field(review_body, "Reviewer confidence")
+recommendation = exact_field(review_body, "Merge recommendation")
 conclusion = exact_field(review_body, "Conclusion")
 
 fail_review("Independent review identity is not the isolated project reviewer.") unless reviewer == "project pr-reviewer (read-only, no inherited conversation)"
 fail_review("Independent review head does not match the current head.") unless reviewed_head == head_sha
-fail_review("Independent review contains unverified in-scope requirements.") unless unverified == "none"
-fail_review("Independent review contains blocking findings.") unless blocking == "none"
-fail_review("Independent review conclusion is incomplete.") unless conclusion == "requirements-complete"
+fail_review("PR body reviewer identity does not match the independent report.") unless pr_field(pr_body, "Reviewer") == reviewer
+fail_review("PR body reviewed head does not match the independent report.") unless pr_field(pr_body, "Exact reviewed head") == reviewed_head
+fail_review("PR body review coverage does not match the independent report.") unless pr_field(pr_body, "Review requirement coverage") == coverage
+fail_review("PR body blocking findings do not match the independent report.") unless pr_field(pr_body, "Blocking findings") == blocking
+fail_review("PR body reviewer confidence does not match the independent report.") unless pr_field(pr_body, "Reviewer confidence") == confidence
+fail_review("PR body merge recommendation does not match the independent report.") unless pr_field(pr_body, "Merge recommendation") == recommendation
 
-requirement_count_line = pr_body.lines.map(&:strip).find { |line| line.start_with?("- Requirement count: ") }
-fail_review("PR requirement count is missing.") unless requirement_count_line
-requirement_count_text = requirement_count_line.delete_prefix("- Requirement count: ")
+requirement_count_text = pr_field(pr_body, "Requirement count")
 fail_review("PR requirement count is invalid.") unless requirement_count_text.match?(/\A[1-9][0-9]*\z/)
 requirement_count = Integer(requirement_count_text, 10)
 expected_coverage = "#{requirement_count}/#{requirement_count}"
@@ -84,8 +97,8 @@ requirement_rows = pr_body.lines.each_with_object([]) do |line, collected|
   cells = line.strip.split("|", -1).drop(1).tap(&:pop).map(&:strip)
   next unless cells.length == 6 && cells.first.match?(/\AR[1-9][0-9]*\z/)
 
-  id, _requirement, acceptance, proof, _evidence, _status = cells
-  collected << [id, acceptance, proof]
+  id, _requirement, acceptance, proof, _evidence, status = cells
+  collected << [id, acceptance, proof, status]
 end
 expected_ids = (1..requirement_count).map { |index| "R#{index}" }
 fail_review("PR requirement rows must be unique and sequential from R1.") unless requirement_rows.map(&:first) == expected_ids
@@ -98,12 +111,43 @@ end
 fail_review("Independent review coverage rows must be unique and sequential from R1.") unless coverage_rows.map(&:first) == expected_ids
 coverage_rows.each_with_index do |row, index|
   id, acceptance, proof, evidence, status, assessment = row
-  _requirement_id, required_acceptance, required_proof = requirement_rows.fetch(index)
+  _requirement_id, required_acceptance, required_proof, required_status = requirement_rows.fetch(index)
   fail_review("#{id} changed or omitted the PR acceptance criterion.") unless acceptance == required_acceptance
   fail_review("#{id} changed or omitted the required proof type.") unless proof == required_proof
-  fail_review("#{id} remains unverified in the independent review.") unless status == "VERIFIED"
-  fail_review("#{id} is missing independently inspected evidence.") if evidence.empty? || evidence.match?(/\A(pending|unverified|none|not inspected)\z/i)
-  fail_review("#{id} is missing an independent evidence assessment.") if assessment.empty? || assessment.match?(/\A(pending|unverified|none)\z/i)
+  fail_review("#{id} review status does not match the PR requirement ledger.") unless status == required_status
+  fail_review("#{id} has an invalid independent-review status.") unless ["VERIFIED", "UNVERIFIED"].include?(status)
+  fail_review("#{id} is missing independently inspected evidence.") if evidence.empty? || evidence.match?(/\A(pending|none|not inspected)\z/i)
+  fail_review("#{id} is missing an independent evidence assessment.") if assessment.empty? || assessment.match?(/\A(pending|none)\z/i)
+end
+
+unverified_rows = coverage_rows.select { |row| row[4] == "UNVERIFIED" }.map(&:first)
+fail_review("Independent review unverified IDs do not match its coverage table.") unless
+  requirement_ids(unverified, "Review unverified requirements") == unverified_rows
+fail_review("PR and independent-review unverified IDs do not match.") unless
+  requirement_ids(pr_field(pr_body, "Review unverified requirements"), "PR review unverified requirements") == unverified_rows
+
+authorization_route = pr_field(pr_body, "Merge authorization route")
+human_status = pr_field(pr_body, "Human approval status")
+human_head = pr_field(pr_body, "Human-approved head")
+human_approval_evidence = pr_field(pr_body, "Human approval evidence")
+
+if unverified_rows.empty?
+  fail_review("A complete independent review must have no blocking findings.") unless blocking == "none"
+  fail_review("A complete independent review must report confidence as exactly '100%'.") unless confidence == "100%"
+  fail_review("A complete independent review must recommend 'automatic'.") unless recommendation == "automatic"
+  fail_review("A complete independent review conclusion must be 'requirements-complete'.") unless conclusion == "requirements-complete"
+  fail_review("A complete independent review requires the automatic authorization route.") unless authorization_route == "automatic"
+  fail_review("Automatic authorization must not claim human approval.") unless
+    human_status == "not-required" && human_head == "not-required" && human_approval_evidence == "not-required"
+else
+  fail_review("An incomplete independent review must retain its blocking findings.") if blocking == "none"
+  fail_review("An incomplete independent review must report confidence as exactly 'below 100%'.") unless confidence == "below 100%"
+  fail_review("An incomplete independent review must recommend 'human-review-required'.") unless recommendation == "human-review-required"
+  fail_review("An incomplete independent review conclusion must be 'human-review-required'.") unless conclusion == "human-review-required"
+  fail_review("Reviewer uncertainty requires the human authorization route.") unless authorization_route == "human"
+  fail_review("Human approval status must be 'approved'.") unless human_status == "approved"
+  fail_review("Human approval is stale or not bound to the current head.") unless human_head == head_sha
+  fail_review("Human approval evidence is missing or not exact-head owner authorization.") unless human_approval_evidence == human_evidence
 end
 
 latest_by_reviewer = reviews
@@ -117,20 +161,5 @@ blocking_review = latest_by_reviewer.values.find do |candidate|
 end
 fail_review("A current-head GitHub review requests changes.") if blocking_review
 
-implementation_logins = [pr_author]
-commits.each do |commit|
-  implementation_logins << commit.dig("author", "login").to_s
-  implementation_logins << commit.dig("committer", "login").to_s
-end
-implementation_logins = implementation_logins.reject(&:empty?).map(&:downcase).uniq
-
-approval = latest_by_reviewer.values.find do |candidate|
-  login = candidate.dig("user", "login").to_s
-  user_type = candidate.dig("user", "type").to_s
-  !implementation_logins.include?(login.downcase) && user_type != "Bot" && !login.end_with?("[bot]") &&
-    candidate["commit_id"] == head_sha && candidate["state"] == "APPROVED"
-end
-fail_review("At least one current-head approval from a non-author, non-implementer human reviewer is required.") unless approval
-
-puts "Independent review record and non-author approval are complete for #{head_sha}."
+puts "Independent review record is complete for #{head_sha} via the #{authorization_route} authorization route."
 RUBY

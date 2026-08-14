@@ -139,8 +139,8 @@ The path must be `.githooks`.
 It validates the requirement ledger and durable independent-review link, then runs repository
 hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
 stable `Required checks` job is the ordinary branch-protection status. A structurally valid ledger
-does not prove its own claims; the independent reviewer and a human approval from outside the
-identifiable implementation contributors remain required.
+does not prove its own claims; the exact-head independent report and conditional automatic-or-human
+authorization remain required.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
@@ -178,26 +178,34 @@ PR brief without weakening any blocker. A new commit invalidates the result and 
 exact-head review.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
-SHA, 100% in-scope coverage result, and durable review link in the PR brief. The required
-`Requirement evidence` CI job validates the complete ledger fields, but cannot establish truth by
-itself; branch protection separately requires GitHub checks and at least one human approval from
-outside the identifiable implementation contributors.
+SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in
+the PR brief. Automatic authorization exists only when every row is verified, no blocker or
+material uncertainty remains, and the reviewer reports exactly `100%`. Any lower confidence keeps
+the PR draft until the repository owner explicitly authorizes that exact SHA after reviewing the
+disclosed gaps. The required `Requirement evidence` CI job validates these fields but cannot
+establish human authorship by itself.
 
 No review can prove that unknown bugs are mathematically impossible. The fail-closed standard is
-that every stated in-scope requirement is verified with the correct proof and every material
-uncertainty is reported as a blocker.
+that `100%` means every stated in-scope requirement is verified with the correct proof and every
+material uncertainty is reported as a blocker. It is operational proof confidence, not a claim
+that unknown defects are impossible.
 
 ## Autonomous lifecycle and guarded merge
 
 A bounded implementation request continues through branch preparation, implementation, checks,
 commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
-confirmation at every stage. The latest `local only`, `do not commit`, `do not push`, `do not create
-a PR`, `keep draft`, or `do not merge` instruction stops the corresponding state change.
+confirmation at every stage only when the reviewer reports `100%`. Below 100%, the root reports the
+exact head and every gap, then waits for explicit owner approval of that SHA. The latest `local
+only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
+instruction stops the corresponding state change.
 
-After every exact-head gate passes, the root agent may invoke GitHub's native squash auto-merge with
-head-SHA matching. It immediately inspects the result. If GitHub queues the merge instead of
-completing it, the agent disables auto-merge and reports the blocker; queued unattended merging is
-not permitted. Ordinary GitHub Actions remain read-only and never merge pull requests.
+After every exact-head gate and the selected authorization route pass, the root agent may invoke
+GitHub's native squash auto-merge with head-SHA matching. Human authorization never relabels an
+unverified row and never bypasses failed checks, live evidence, conflicts, requested changes, or
+unresolved threads. Any new commit expires review confidence and human approval. The root
+immediately inspects the merge result. If GitHub queues the merge instead of completing it, the
+agent disables auto-merge and reports the blocker; queued unattended merging is not permitted.
+Ordinary GitHub Actions remain read-only and never merge pull requests.
 
 Deployment is outside this lifecycle and still requires explicit authorization plus approval in
 the protected `app-store-connect` environment.

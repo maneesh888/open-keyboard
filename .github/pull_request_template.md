@@ -38,8 +38,21 @@
 - Review unverified requirements: R1
 - Blocking findings: pending
 - Independent review evidence: pending
-- Reviewer confidence: incomplete
+- Reviewer confidence: pending
+- Merge recommendation: pending
 - Residual proof limits (authorized out-of-scope only): pending
+
+## Merge authorization
+
+<!-- Automatic route: use automatic / not-required / not-required / not-required only when the -->
+<!-- independent reviewer reports 100%, recommends automatic, and verifies every requirement. -->
+<!-- Human route: the root agent may replace these fields only after the repository owner gives -->
+<!-- explicit approval for the current exact head in the active Codex task. A new head expires it. -->
+<!-- Required human evidence value: explicit repository-owner approval for this exact head in the active Codex task -->
+- Merge authorization route: pending
+- Human approval status: pending
+- Human-approved head: pending
+- Human approval evidence: pending
 
 ## Live gateway evidence
 

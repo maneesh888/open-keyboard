@@ -188,11 +188,11 @@ when invoked from a linked worktree; values must never be printed.
 - Treat ambiguous, skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. Every unverified in-scope requirement is a blocker, not a residual proof limit.
 - Exact-model requirements must run that exact model without catalog fallback or substitution. A different working model proves only that different model.
 - Run the independent review and GitHub checks concurrently where practical.
-- Any new commit invalidates the previous review, local full gate, and GitHub check conclusions.
-- A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages.
+- Any new commit invalidates the previous review, local full gate, GitHub check conclusions, and exact-head human merge authorization.
+- A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages while the exact-head independent reviewer reports operational confidence of exactly `100%`.
 - Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`.
 - Planning, review-only work, readiness assessment, and blocker requests remain read-only and do not authorize state changes.
-- Before a guarded merge, require 100% verified in-scope requirements, a durable linked independent-review report, at least one GitHub approval from a human who is neither the PR author nor an identifiable implementing contributor, the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks.
+- Before a guarded merge, always require a durable linked independent-review report, the exact reviewed head to pass `./scripts/check.sh --full`, `Required checks`, `Required live verification`, applicable live evidence, and unresolved-thread checks. Automatic authorization additionally requires every in-scope requirement `VERIFIED`, no material uncertainty, and exact reviewer confidence of `100%`. Otherwise keep the PR draft and require explicit repository-owner approval for that exact SHA after all unverified requirements and blockers are disclosed; never infer or carry that approval across a new head.
 - Never claim that unknown defects are impossible. A clean review means all stated requirements are verified within the named evidence boundary and no material uncertainty remains.
 - Deployment remains a separate external state change and requires explicit authorization plus protected-environment approval.
 
@@ -202,7 +202,7 @@ when invoked from a linked worktree; values must never be printed.
 - `$plan-openkeyboard-work-package` creates compact digest-bound plans only when planning is requested.
 - The project `work-package-planner` is read-only and cannot edit, test, access GitHub, or invoke other agents.
 - `$review-verify-merge-pr` prepares exact-head evidence and invokes the read-only project `pr-reviewer`.
-- Custom-agent output never substitutes for GitHub required checks, maintainer approval, live proof, signing, deployment, or App Review.
+- Custom-agent output never substitutes for GitHub required checks, conditional exact-head owner approval, live proof, signing, deployment, or App Review.
 
 ## Commit And Push Rules
 

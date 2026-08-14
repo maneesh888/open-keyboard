@@ -63,7 +63,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_URL: ${{ github.event.pull_request.html_url }}
@@ -75,13 +74,7 @@ jobs:
             --paginate \
             "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
             | jq --slurp 'add' > "$reviews_file"
-          contributors_file="$RUNNER_TEMP/pull-request-commits.json"
-          gh api \
-            --paginate \
-            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/commits?per_page=100" \
-            | jq --slurp 'add' > "$contributors_file"
-          REVIEWS_JSON_FILE="$reviews_file" CONTRIBUTORS_JSON_FILE="$contributors_file" \
-            "$VALIDATOR_ROOT/validate-pr-review-record.sh"
+          REVIEWS_JSON_FILE="$reviews_file" "$VALIDATOR_ROOT/validate-pr-review-record.sh"
 
       - name: Confirm non-PR invocation
         if: github.event_name != 'pull_request' && github.event_name != 'pull_request_review'

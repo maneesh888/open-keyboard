@@ -99,9 +99,11 @@ an intentional upload.
 Enable GitHub's repository-level auto-merge setting. During an autonomous implementation lifecycle,
 the root agent invokes native squash auto-merge only after the exact head passes local Release
 verification, applicable live proof, independent review, required GitHub checks, thread resolution,
-mergeability, and branch-protection validation. If GitHub queues instead of immediately completing
-the merge, the agent disables auto-merge and reports the unsatisfied gate; it never leaves an
-unattended merge queued.
+mergeability, and branch-protection validation. Automatic authorization additionally requires the
+reviewer to report operational confidence of exactly `100%`. Below 100%, the PR remains draft until
+the repository owner explicitly authorizes that exact SHA after reviewing every disclosed gap. If
+GitHub queues instead of immediately completing the merge, the agent disables auto-merge and
+reports the unsatisfied gate; it never leaves an unattended merge queued.
 
 This repository does not use an Actions workflow, write-enabled pull-request token, or PAT to merge
 pull requests.

@@ -9,7 +9,7 @@ evaluates retained proof quality, not whether every merged implementation is kno
 
 1. All 12 pull requests have zero formal GitHub review submissions. Current `main` protection
    requires zero approving reviews, so an implementing account can merge after status checks without
-   a durable non-author approval.
+   either a durable 100%-confidence independent report or an explicit exact-head owner decision.
 2. Independent Codex review results were recorded only as editable PR-body claims, when recorded at
    all. No reviewed report was retained as a linked GitHub review submission.
 3. `Required live verification` checked an exact commit and generic `gateway` target, but did not
@@ -49,8 +49,10 @@ evaluates retained proof quality, not whether every merged implementation is kno
 - Missing, skipped, stale, fallback, wrong-target, wrong-model, ambiguous, or contributor-attested-
   only material evidence is `UNVERIFIED` and blocks readiness.
 - Exact-model live smoke rejects catalog fallback and records both required and tested models.
-- The independent report is retained as a linked GitHub review submission, and branch protection requires at
-  least one non-author approval.
+- The independent report is retained as a linked GitHub `COMMENTED` review submission. Automatic
+  authorization requires every row verified, no material uncertainty, and exact reviewer confidence
+  of `100%`; otherwise the PR stays draft until the owner explicitly authorizes that exact SHA after
+  reviewing the disclosed gaps.
 - Residual proof limits contain explicitly authorized out-of-scope work only.
 
 This standard guarantees complete coverage of stated requirements within the recorded evidence
