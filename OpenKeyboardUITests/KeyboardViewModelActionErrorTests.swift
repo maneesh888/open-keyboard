@@ -3,8 +3,14 @@ import UIKit
 
 @MainActor
 final class KeyboardViewModelActionErrorTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        AppConfig.clearGatewayConnectionError()
+    }
+
     override func tearDown() {
         UIPasteboard.general.string = nil
+        AppConfig.clearGatewayConnectionError()
         super.tearDown()
     }
 

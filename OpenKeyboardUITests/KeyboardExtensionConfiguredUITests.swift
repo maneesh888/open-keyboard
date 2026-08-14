@@ -1,6 +1,15 @@
 import XCTest
 
 final class GatewayStatusUITests: XCTestCase {
+    override func tearDown() {
+        let app = XCUIApplication()
+        if app.state != .notRunning {
+            app.terminate()
+        }
+        AppConfig.clearGatewayConnectionError()
+        super.tearDown()
+    }
+
     func testHomeGatewayLoaderIsRemovedWhenErrorIsShown() {
         let app = XCUIApplication()
         app.launchArguments = [
