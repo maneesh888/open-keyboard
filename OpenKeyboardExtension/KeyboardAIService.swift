@@ -265,7 +265,7 @@ enum KeyboardAIError: LocalizedError, Equatable {
         case .modelCapability:
             return KeyboardActionErrorState.modelCapabilityMessage
         case .timeout:
-            return "The gateway request timed out. Check the gateway and try again."
+            return "The AI request took longer than 15 seconds. Try again or choose a faster model."
         case .transport:
             return "Gateway request failed. Check settings and try again."
         case .server(let message):
@@ -293,9 +293,14 @@ enum KeyboardAIError: LocalizedError, Equatable {
 
 final class KeyboardAIService: KeyboardAIServiceProviding {
     private let gatewayClient: CanonicalGatewayClient
+    private let requestTimeoutInterval: TimeInterval
 
-    init(gatewayClient: CanonicalGatewayClient = CanonicalGatewayClient()) {
+    init(
+        gatewayClient: CanonicalGatewayClient = CanonicalGatewayClient(),
+        requestTimeoutInterval: TimeInterval = GatewayRequestTimeouts.keyboardAction
+    ) {
         self.gatewayClient = gatewayClient
+        self.requestTimeoutInterval = requestTimeoutInterval
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
@@ -316,7 +321,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 inputText: nil,
                 maxTokens: 1_200,
                 config: config,
-                timeoutInterval: 90
+                timeoutInterval: requestTimeoutInterval
             )
         } catch let error as CancellationError {
             throw error
@@ -345,7 +350,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 inputText: text,
                 maxTokens: action.maxTokens,
                 config: config,
-                timeoutInterval: 90
+                timeoutInterval: requestTimeoutInterval
             )
         } catch let error as CancellationError {
             throw error

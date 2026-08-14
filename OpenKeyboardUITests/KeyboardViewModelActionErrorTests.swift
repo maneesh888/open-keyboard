@@ -388,6 +388,30 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
     }
 
+    func testTimeoutStopsLoadingAndPreservesTypedText() async {
+        let source = "Keep this text exactly as typed."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: KeyboardAIError.timeout),
+            loadConfig: { Self.configuredGateway },
+            loadGatewayConnectionError: { nil },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.improve)
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(viewModel.actionError?.kind, .gatewayUnavailable)
+        XCTAssertEqual(viewModel.actionError?.title, "AI unavailable")
+        XCTAssertEqual(
+            viewModel.actionError?.message,
+            "The AI request took longer than 15 seconds. Try again or choose a faster model."
+        )
+        XCTAssertEqual(proxy.text, source)
+    }
+
     func testMissingSelectedModelUsesRealServicePreflightAndDistinctTitle() async {
         let source = "Keep this text safe."
         let proxy = FakeTextDocumentProxy(text: source)

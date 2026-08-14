@@ -142,7 +142,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-api-key")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertEqual(request.timeoutInterval, 90)
+        XCTAssertEqual(request.timeoutInterval, GatewayRequestTimeouts.keyboardAction)
 
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -235,6 +235,62 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.timeout), .timeout)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.transport), .transport)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.invalidResponse), .invalidResponse)
+    }
+
+    func testKeyboardAIServiceEnforcesWallClockTimeout() async throws {
+        let assistantContent = #"{"operation":"rewrite","results":[{"id":"rewrite","type":"suggestion","title":"Rewrite","text":"A clearer sentence.","replacement":"A clearer sentence."}]}"#
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [["message": ["role": "assistant", "content": assistantContent]]]
+        ])
+        let transport = CanonicalGatewayClientTestTransport(
+            data: responseBody,
+            statusCode: 200,
+            delayNanoseconds: 1_000_000_000,
+            ignoresCancellation: true
+        )
+        let service = KeyboardAIService(
+            gatewayClient: CanonicalGatewayClient(transport: transport),
+            requestTimeoutInterval: 0.02
+        )
+        let started = Date()
+
+        do {
+            _ = try await service.performResult(
+                action: .rewrite,
+                on: "Make this clearer.",
+                config: configuredGateway
+            )
+            XCTFail("Expected the request deadline to win")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .timeout)
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 0.30)
+        XCTAssertEqual(transport.requests.first?.timeoutInterval, 0.02)
+    }
+
+    func testKeyboardAIServiceEnforcesWallClockTimeoutForAutomaticSuggestions() async throws {
+        let transport = CanonicalGatewayClientTestTransport(
+            data: Data(#"{"choices":[{"message":{"content":"{}"}}]}"#.utf8),
+            statusCode: 200,
+            delayNanoseconds: 250_000_000
+        )
+        let service = KeyboardAIService(
+            gatewayClient: CanonicalGatewayClient(transport: transport),
+            requestTimeoutInterval: 0.02
+        )
+
+        do {
+            _ = try await service.analyzeSuggestions(
+                for: "i has a apple",
+                config: configuredGateway
+            )
+            XCTFail("Expected the automatic suggestion deadline to win")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .timeout)
+        }
+
+        XCTAssertEqual(transport.requests.first?.timeoutInterval, 0.02)
     }
 
     func testKeyboardAIServiceClassifiesMalformedStructuredJSONAsModelCapabilityFailure() async throws {
@@ -341,7 +397,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(request.httpMethod, "POST")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-api-key")
         XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-        XCTAssertEqual(request.timeoutInterval, 45)
+        XCTAssertEqual(request.timeoutInterval, GatewayRequestTimeouts.modelCheckAttempt)
 
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -374,6 +430,9 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         XCTAssertEqual(transport.requests.count, 2)
+        XCTAssertTrue(transport.requests.allSatisfy {
+            $0.timeoutInterval == GatewayRequestTimeouts.modelCheckAttempt
+        })
         let models = try transport.requests.map { request -> String in
             let body = try XCTUnwrap(request.httpBody)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
@@ -782,15 +841,37 @@ final class LiveGatewaySmokeTests: XCTestCase {
 private final class CanonicalGatewayClientTestTransport: GatewayChatTransporting {
     private let data: Data
     private let statusCode: Int
+    private let delayNanoseconds: UInt64
+    private let ignoresCancellation: Bool
     private(set) var requests: [URLRequest] = []
 
-    init(data: Data, statusCode: Int) {
+    init(
+        data: Data,
+        statusCode: Int,
+        delayNanoseconds: UInt64 = 0,
+        ignoresCancellation: Bool = false
+    ) {
         self.data = data
         self.statusCode = statusCode
+        self.delayNanoseconds = delayNanoseconds
+        self.ignoresCancellation = ignoresCancellation
     }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         requests.append(request)
+        if delayNanoseconds > 0 {
+            if ignoresCancellation {
+                await withCheckedContinuation { continuation in
+                    DispatchQueue.global().asyncAfter(
+                        deadline: .now() + .nanoseconds(Int(delayNanoseconds))
+                    ) {
+                        continuation.resume()
+                    }
+                }
+            } else {
+                try await Task.sleep(nanoseconds: delayNanoseconds)
+            }
+        }
         let response = HTTPURLResponse(
             url: try XCTUnwrap(request.url),
             statusCode: statusCode,
