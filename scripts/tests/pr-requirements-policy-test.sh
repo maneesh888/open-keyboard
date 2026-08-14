@@ -108,6 +108,7 @@ expect_rejected "incomplete review coverage" "${automatic_body/Review requiremen
 expect_rejected "a pending independent review" "${automatic_body/Independent review evidence: $PR_URL#pullrequestreview-456/Independent review evidence: pending}"
 expect_rejected "an unrelated review link" "${automatic_body/Independent review evidence: $PR_URL#pullrequestreview-456/Independent review evidence: https:\/\/github.com\/other\/repo\/pull\/1#pullrequestreview-9}"
 expect_rejected "automatic authorization below 100% reviewer confidence" "${automatic_body/Reviewer confidence: 100%/Reviewer confidence: below 100%}"
+expect_rejected "automatic authorization with blocking findings" "${automatic_body/Blocking findings: none/Blocking findings: R1 remains blocked}"
 expect_rejected "automatic authorization that claims human approval" "${automatic_body/Human approval status: not-required/Human approval status: approved}"
 expect_rejected "human authorization without explicit approval" "${human_body/Human approval status: approved/Human approval status: pending}"
 expect_rejected "human authorization for a stale head" "${human_body/Human-approved head: $HEAD_SHA/Human-approved head: $STALE_SHA}"
