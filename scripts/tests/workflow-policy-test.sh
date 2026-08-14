@@ -129,8 +129,12 @@ rg --fixed-strings --quiet 'if [[ "$EVENT_NAME" == "pull_request_review" ]]' "$C
 rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'sleep 5' "$CI_WORKFLOW"
 rg --fixed-strings --quiet -- "-f check_name='Required checks'" "$CI_WORKFLOW"
+rg --fixed-strings --quiet -- '-f status=completed' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'classify-review-check-state.sh' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'CURRENT_RUN_ID: ${{ github.run_id }}' "$CI_WORKFLOW"
+if rg --fixed-strings --quiet 'CURRENT_RUN_ID: ${{ github.run_id }}' "$CI_WORKFLOW"; then
+  echo "A workflow rerun must not exclude failed earlier attempts sharing its run ID." >&2
+  exit 1
+fi
 rg --fixed-strings --quiet 'history_poisoned' "$CI_WORKFLOW"
 rg --fixed-strings --quiet "needs.requirement-evidence.outputs.emit_incomplete == 'true'" "$CI_WORKFLOW"
 if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$CI_WORKFLOW"; then

@@ -27,7 +27,7 @@ expect_state() {
   local output
 
   write_history "$history_file" "$history_body"
-  output="$(CURRENT_RUN_ID=700 EVIDENCE_READY="$evidence_ready" "$CLASSIFIER" "$history_file")"
+  output="$(EVIDENCE_READY="$evidence_ready" "$CLASSIFIER" "$history_file")"
   if [[ "$output" != $'emit_incomplete='"$expected_incomplete"$'\nhistory_poisoned='"$expected_poisoned" ]]; then
     echo "$label produced an unexpected review-check state:" >&2
     echo "$output" >&2
@@ -92,23 +92,19 @@ expect_state \
   false
 
 expect_state \
-  current_run_is_ignored \
+  rerun_cannot_hide_prior_attempt_failure \
   true \
-  '[{"name":"Required checks","status":"queued","conclusion":null,"details_url":"https://github.com/example/repo/actions/runs/700/job/9"}]' \
+  '[{"name":"Required checks","status":"completed","conclusion":"failure","details_url":"https://github.com/example/repo/actions/runs/700/job/9"}]' \
   false \
-  false
+  true
 
-if CURRENT_RUN_ID=700 EVIDENCE_READY=unknown "$CLASSIFIER" "$TMP_ROOT/incomplete_before_review.json" >/dev/null 2>&1; then
+if EVIDENCE_READY=unknown "$CLASSIFIER" "$TMP_ROOT/incomplete_before_review.json" >/dev/null 2>&1; then
   echo "Invalid evidence readiness unexpectedly passed." >&2
-  exit 1
-fi
-if EVIDENCE_READY=false "$CLASSIFIER" "$TMP_ROOT/incomplete_before_review.json" >/dev/null 2>&1; then
-  echo "Missing current workflow run ID unexpectedly passed." >&2
   exit 1
 fi
 
 write_history "$TMP_ROOT/not-array.json" '{}'
-if CURRENT_RUN_ID=700 EVIDENCE_READY=false "$CLASSIFIER" "$TMP_ROOT/not-array.json" >/dev/null 2>&1; then
+if EVIDENCE_READY=false "$CLASSIFIER" "$TMP_ROOT/not-array.json" >/dev/null 2>&1; then
   echo "Non-array check history unexpectedly passed." >&2
   exit 1
 fi

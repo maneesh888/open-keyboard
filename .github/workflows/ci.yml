@@ -139,7 +139,6 @@ jobs:
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
         env:
           EVIDENCE_READY: ${{ steps.review-evidence.outputs.ready }}
-          CURRENT_RUN_ID: ${{ github.run_id }}
           EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           GH_TOKEN: ${{ github.token }}
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
@@ -156,6 +155,7 @@ jobs:
               "repos/$GITHUB_REPOSITORY/commits/$EVENT_HEAD_SHA/check-runs" \
               -f check_name='Required checks' \
               -f filter=all \
+              -f status=completed \
               -F per_page=100 > "$check_runs_pages" &&
               jq --slurp '[.[].check_runs[]]' "$check_runs_pages" > "$check_runs_file"; then
               history_resolved=true
@@ -171,7 +171,7 @@ jobs:
             exit 1
           fi
 
-          CURRENT_RUN_ID="$CURRENT_RUN_ID" EVIDENCE_READY="$EVIDENCE_READY" \
+          EVIDENCE_READY="$EVIDENCE_READY" \
             "$VALIDATOR_ROOT/classify-review-check-state.sh" "$check_runs_file" >> "$GITHUB_OUTPUT"
 
       - name: Confirm non-PR invocation

@@ -2,15 +2,10 @@
 set -euo pipefail
 
 EVIDENCE_READY="${EVIDENCE_READY:-}"
-CURRENT_RUN_ID="${CURRENT_RUN_ID:-}"
 CHECK_RUNS_JSON_FILE="${1:-}"
 
 if [[ "$EVIDENCE_READY" != "true" && "$EVIDENCE_READY" != "false" ]]; then
   echo "Review-check classification needs an explicit evidence-ready boolean." >&2
-  exit 2
-fi
-if [[ ! "$CURRENT_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
-  echo "Review-check classification needs the current GitHub workflow run ID." >&2
   exit 2
 fi
 if [[ -z "$CHECK_RUNS_JSON_FILE" || ! -r "$CHECK_RUNS_JSON_FILE" ]]; then
@@ -18,10 +13,9 @@ if [[ -z "$CHECK_RUNS_JSON_FILE" || ! -r "$CHECK_RUNS_JSON_FILE" ]]; then
   exit 2
 fi
 
-ruby -rjson - "$EVIDENCE_READY" "$CURRENT_RUN_ID" "$CHECK_RUNS_JSON_FILE" <<'RUBY'
+ruby -rjson - "$EVIDENCE_READY" "$CHECK_RUNS_JSON_FILE" <<'RUBY'
 evidence_ready = ARGV.fetch(0) == "true"
-current_run_id = ARGV.fetch(1)
-check_runs = JSON.parse(File.read(ARGV.fetch(2)))
+check_runs = JSON.parse(File.read(ARGV.fetch(1)))
 
 unless check_runs.is_a?(Array)
   warn "Review-check history must be a JSON array."
@@ -29,9 +23,7 @@ unless check_runs.is_a?(Array)
 end
 
 required_runs = check_runs.select do |run|
-  next false unless run.is_a?(Hash) && run["name"] == "Required checks"
-
-  !run["details_url"].to_s.include?("/actions/runs/#{current_run_id}/")
+  run.is_a?(Hash) && run["name"] == "Required checks"
 end
 successful_history = required_runs.any? do |run|
   run["status"] == "completed" && run["conclusion"] == "success"
