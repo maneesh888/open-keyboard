@@ -42,13 +42,14 @@ required checks and creates no GitHub status by itself. In the solo-maintainer c
 reviewer confidence exactly `100%` authorizes the automatic route; below 100%, it does not replace
 the repository owner's explicit approval for the same exact SHA.
 
-Review-submission CI re-reads current pull-request metadata and retries the review/body handoff for
-at most 60 seconds. Live-policy CI similarly allows at most 120 seconds for a pushed exact head's
+Review-submission CI validates the immutable metadata snapshot carried by each serialized event.
+The initial COMMENTED review event may therefore report incomplete evidence while the PR body still
+lacks its link; the following body-edit event validates the completed pair and can emit the first
+protected success. Live-policy CI separately allows at most 120 seconds for a pushed exact head's
 already-completed local live evidence to be recorded in the pull-request body. Each workflow uses
 one retained serialized queue per pull request, so review, body-edit, dismissal, and live-evidence
-events cannot cancel one another. Every run re-fetches current exact-head metadata rather than
-trusting dispatch order. This prevents a frozen event snapshot or cancellation from leaving obsolete
-evidence effective; validation still fails if either exact-head record never becomes complete.
+events cannot cancel one another. Preserving every review event snapshot prevents a rapid invalid
+edit and restoration from collapsing into one apparently valid current state.
 
 Incomplete review metadata emits a deliberately different `Incomplete review evidence` failure.
 The protected `Required checks` name is emitted only after the trusted validators accept the
@@ -63,6 +64,8 @@ or uninspectable review state emits a failed `Required checks`, and any prior no
 name keeps the SHA permanently failed even if the mutable PR metadata is restored. Recovery requires
 a new commit and a complete new exact-head full, live, review, and authorization cycle. This closes
 the complete-to-incomplete stale-success path without reintroducing the expected pre-review poison.
+The linked COMMENTED submission must also be the newest same-head report that identifies itself as
+the isolated project reviewer; a later blocking report always supersedes an older positive report.
 
 ## Repository automation set
 

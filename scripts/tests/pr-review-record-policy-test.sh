@@ -110,17 +110,20 @@ write_reviews() {
 
 run_validator() {
   local pr_body="$1"
+  local event_review_file="${2:-}"
   HEAD_SHA="$HEAD_SHA" \
     PR_BODY="$pr_body" \
     PR_URL="$PR_URL" \
     REVIEWS_JSON_FILE="$REVIEWS_JSON_FILE" \
+    EVENT_REVIEW_JSON_FILE="$event_review_file" \
     "$VALIDATOR" >/dev/null 2>&1
 }
 
 expect_rejected() {
   local description="$1"
   local pr_body="$2"
-  if run_validator "$pr_body"; then
+  local event_review_file="${3:-}"
+  if run_validator "$pr_body" "$event_review_file"; then
     echo "Review-record policy accepted $description." >&2
     exit 1
   fi
@@ -160,5 +163,22 @@ expect_rejected "human authorization for a stale head" "${human_pr_body/Human-ap
 expect_rejected "human authorization without exact owner evidence" "${human_pr_body/Human approval evidence: $HUMAN_EVIDENCE/Human approval evidence: someone approved}"
 write_reviews "$HEAD_SHA" COMMENTED "${human_review_body/Merge recommendation: human-review-required/Merge recommendation: automatic}"
 expect_rejected "an automatic recommendation with an unverified requirement" "$human_pr_body"
+
+write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
+newer_review_file="$FIXTURE/reviews-with-newer-project-report.json"
+jq \
+  --arg body "$human_review_body" \
+  '. + [{id:457, html_url:"https://github.com/maneesh888/open-keyboard/pull/123#pullrequestreview-457", commit_id:"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", state:"COMMENTED", body:$body, submitted_at:"2026-08-14T00:02:00Z", user:{login:"implementer",type:"User"}}]' \
+  "$REVIEWS_JSON_FILE" > "$newer_review_file"
+mv "$newer_review_file" "$REVIEWS_JSON_FILE"
+expect_rejected "an older linked report superseded by a newer same-head project-reviewer report" "$automatic_pr_body"
+
+write_reviews "$HEAD_SHA" COMMENTED "$automatic_review_body"
+event_review_file="$FIXTURE/event-review.json"
+jq \
+  --arg body "$human_review_body" \
+  '.[0] + {body:$body, state:"commented"}' \
+  "$REVIEWS_JSON_FILE" > "$event_review_file"
+expect_rejected "a restored API review that hides the invalid event snapshot" "$automatic_pr_body" "$event_review_file"
 
 echo "Pull-request review-record policy regression tests passed."

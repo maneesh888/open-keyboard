@@ -32,6 +32,7 @@
 
 ## Independent review
 
+<!-- Link the newest same-head project-reviewer COMMENTED report; later reports supersede it. -->
 - Reviewer: pending
 - Exact reviewed head: pending
 - Review requirement coverage: 0/1

@@ -103,7 +103,9 @@ Inspect every `Required checks` run on the exact SHA, not only the latest displa
 non-success under that protected name permanently invalidates the SHA. Do not try to recover it by
 editing or rerunning PR metadata; push a new commit and restart the full exact-head cycle. Keep the
 PR draft throughout report/body handoff and re-fetch the current body, linked review, and check
-history immediately before readiness.
+history immediately before readiness. The linked submission must be the newest same-head COMMENTED
+report declaring the isolated project-reviewer identity; any later such report supersedes it, even
+before the PR body is updated.
 
 Then require exactly one authorization route:
 

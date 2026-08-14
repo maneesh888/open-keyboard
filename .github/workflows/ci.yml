@@ -77,49 +77,45 @@ jobs:
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
         run: |
           reviews_file="$RUNNER_TEMP/pull-request-reviews.json"
+          event_review_file=""
           requirement_output="$RUNNER_TEMP/requirement-evidence.out"
           review_output="$RUNNER_TEMP/review-record.out"
-          evidence_ready=false
-          max_attempts=1
-          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
-            max_attempts=12
+          event_head_sha="$(jq -er '.pull_request.head.sha' "$GITHUB_EVENT_PATH")"
+          if [[ "$event_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+            echo "The pull-request event head does not match the workflow head." >&2
+            exit 1
           fi
 
-          for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
-            current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
-            current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
-            if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
-              echo "The pull-request head changed while validating review evidence." >&2
-              break
-            fi
+          export HEAD_SHA="$EVENT_HEAD_SHA"
+          export PR_BODY="$(jq -r '.pull_request.body // ""' "$GITHUB_EVENT_PATH")"
+          export PR_URL="$(jq -er '.pull_request.html_url' "$GITHUB_EVENT_PATH")"
+          gh api \
+            --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
+            | jq --slurp 'add' > "$reviews_file"
 
-            export HEAD_SHA="$EVENT_HEAD_SHA"
-            export PR_BODY="$(jq -r '.body // ""' <<<"$current_pr_json")"
-            export PR_URL="$(jq -er '.html_url' <<<"$current_pr_json")"
-            gh api \
-              --paginate \
-              "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
-              | jq --slurp 'add' > "$reviews_file"
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            event_review_file="$RUNNER_TEMP/event-review.json"
+            jq -e '.review | objects' "$GITHUB_EVENT_PATH" > "$event_review_file"
+          fi
 
-            : > "$requirement_output"
-            : > "$review_output"
-            requirement_status=0
-            review_status=0
-            "$VALIDATOR_ROOT/validate-pr-requirements.sh" >"$requirement_output" 2>&1 || requirement_status=$?
-            if [[ "$requirement_status" -eq 0 ]]; then
-              REVIEWS_JSON_FILE="$reviews_file" "$VALIDATOR_ROOT/validate-pr-review-record.sh" >"$review_output" 2>&1 || review_status=$?
-            else
-              review_status=1
-            fi
+          : > "$requirement_output"
+          : > "$review_output"
+          requirement_status=0
+          review_status=0
+          "$VALIDATOR_ROOT/validate-pr-requirements.sh" >"$requirement_output" 2>&1 || requirement_status=$?
+          if [[ "$requirement_status" -eq 0 ]]; then
+            EVENT_REVIEW_JSON_FILE="$event_review_file" \
+              REVIEWS_JSON_FILE="$reviews_file" \
+              "$VALIDATOR_ROOT/validate-pr-review-record.sh" >"$review_output" 2>&1 || review_status=$?
+          else
+            review_status=1
+          fi
 
-            if [[ "$requirement_status" -eq 0 && "$review_status" -eq 0 ]]; then
-              evidence_ready=true
-              break
-            fi
-            if [[ "$attempt" -lt "$max_attempts" ]]; then
-              sleep 5
-            fi
-          done
+          evidence_ready=false
+          if [[ "$requirement_status" -eq 0 && "$review_status" -eq 0 ]]; then
+            evidence_ready=true
+          fi
 
           if [[ "$evidence_ready" == "true" ]]; then
             cat "$requirement_output" "$review_output"

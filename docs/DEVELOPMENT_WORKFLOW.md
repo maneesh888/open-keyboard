@@ -185,7 +185,10 @@ proof limits.
 The reviewer reports findings but cannot edit, approve, comment, change PR state, deploy, or merge.
 The root agent posts the review report as a durable GitHub `COMMENTED` review and links it from the
 PR brief without weakening any blocker. A new commit invalidates the result and requires a fresh
-exact-head review.
+exact-head review. The linked submission must be the newest same-head COMMENTED report that declares
+the isolated project-reviewer identity; a later report with a blocker supersedes every older positive
+report. CI validates each serialized review/body event snapshot so an invalid transition cannot be
+hidden by immediately restoring mutable PR metadata.
 
 This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
 technical evidence and the trusted validator source. `Required checks` depends on that report being

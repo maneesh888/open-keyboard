@@ -5,6 +5,7 @@ HEAD_SHA="${HEAD_SHA:-}"
 PR_BODY="${PR_BODY:-}"
 PR_URL="${PR_URL:-}"
 REVIEWS_JSON_FILE="${REVIEWS_JSON_FILE:-}"
+EVENT_REVIEW_JSON_FILE="${EVENT_REVIEW_JSON_FILE:-}"
 
 if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ || -z "$PR_BODY" || -z "$PR_URL" ]]; then
   echo "Review-record validation needs exact pull-request metadata." >&2
@@ -15,16 +16,32 @@ if [[ ! -f "$REVIEWS_JSON_FILE" ]]; then
   exit 2
 fi
 
-ruby -rjson - "$HEAD_SHA" "$PR_URL" "$REVIEWS_JSON_FILE" <<'RUBY'
+if [[ -n "$EVENT_REVIEW_JSON_FILE" && ! -f "$EVENT_REVIEW_JSON_FILE" ]]; then
+  echo "Review-record validation received an unreadable event review snapshot." >&2
+  exit 2
+fi
+
+ruby -rjson - "$HEAD_SHA" "$PR_URL" "$REVIEWS_JSON_FILE" "$EVENT_REVIEW_JSON_FILE" <<'RUBY'
 head_sha, pr_url, reviews_path = ARGV
-pr_body = ENV.fetch("PR_BODY")
-reviews = JSON.parse(File.read(reviews_path))
-human_evidence = "explicit repository-owner approval for this exact head in the active Codex task"
+event_review_path = ARGV.fetch(3)
 
 def fail_review(message)
   warn message
   exit 1
 end
+
+pr_body = ENV.fetch("PR_BODY")
+reviews = JSON.parse(File.read(reviews_path))
+fail_review("Fetched GitHub reviews must be a JSON array.") unless reviews.is_a?(Array)
+unless event_review_path.empty?
+  event_review = JSON.parse(File.read(event_review_path))
+  fail_review("The event review snapshot must be a GitHub review object.") unless
+    event_review.is_a?(Hash) && event_review["id"].is_a?(Integer)
+  event_review["state"] = event_review["state"].to_s.upcase
+  reviews = reviews.reject { |candidate| candidate.is_a?(Hash) && candidate["id"] == event_review["id"] }
+  reviews << event_review
+end
+human_evidence = "explicit repository-owner approval for this exact head in the active Codex task"
 
 def exact_field(body, label)
   prefix = "- #{label}: "
@@ -66,7 +83,7 @@ fail_review("The linked independent review submission was not found.") unless re
 expected_review_url = "#{pr_url}#pullrequestreview-#{review_id}"
 fail_review("The linked independent review URL does not match GitHub evidence.") unless review["html_url"] == expected_review_url
 fail_review("The independent review is not bound to the current head.") unless review["commit_id"] == head_sha
-fail_review("The independent review must be a non-approval COMMENTED submission.") unless review["state"] == "COMMENTED"
+fail_review("The independent review must be a non-approval COMMENTED submission.") unless review["state"].to_s.upcase == "COMMENTED"
 
 review_body = review.fetch("body", "")
 reviewer = exact_field(review_body, "Reviewer")
@@ -79,6 +96,18 @@ recommendation = exact_field(review_body, "Merge recommendation")
 conclusion = exact_field(review_body, "Conclusion")
 
 fail_review("Independent review identity is not the isolated project reviewer.") unless reviewer == "project pr-reviewer (read-only, no inherited conversation)"
+reviewer_marker = "- Reviewer: #{reviewer}"
+same_head_reviewer_reports = reviews.select do |candidate|
+  next false unless candidate.is_a?(Hash)
+  next false unless candidate["commit_id"] == head_sha && candidate["state"].to_s.upcase == "COMMENTED"
+
+  candidate.fetch("body", "").lines.any? { |line| line.strip == reviewer_marker }
+end
+latest_reviewer_report = same_head_reviewer_reports.max_by do |candidate|
+  [candidate["submitted_at"].to_s, candidate["id"].to_i]
+end
+fail_review("The PR body must link the newest same-head project-reviewer report.") unless
+  latest_reviewer_report && latest_reviewer_report["id"] == review_id
 fail_review("Independent review head does not match the current head.") unless reviewed_head == head_sha
 fail_review("PR body reviewer identity does not match the independent report.") unless pr_field(pr_body, "Reviewer") == reviewer
 fail_review("PR body reviewed head does not match the independent report.") unless pr_field(pr_body, "Exact reviewed head") == reviewed_head

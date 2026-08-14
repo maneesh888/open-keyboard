@@ -29,7 +29,10 @@ The protected review context is intentionally one-way for each SHA. Before the f
 report, incomplete metadata uses the non-required `Incomplete review evidence` name. After a
 `Required checks` success exists, weakening or removing the report, authorization, or linked PR
 metadata emits a failed `Required checks` and permanently invalidates that SHA. Do not rerun or edit
-metadata to revive it; push a new commit and repeat the exact-head proof and review cycle.
+metadata to revive it; push a new commit and repeat the exact-head proof and review cycle. Serialized
+CI validates every event snapshot, so a quick invalid edit followed by restoration still burns the
+SHA. The PR must link the newest same-head project-reviewer COMMENTED report; a later blocker report
+supersedes every older positive report.
 
 Recommended repository merge settings:
 

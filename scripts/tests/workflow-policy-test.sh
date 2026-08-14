@@ -122,12 +122,20 @@ rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
 rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'current_head_sha="$(jq -er '\''.head.sha'\'' <<<"$current_pr_json")"' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'event_head_sha="$(jq -er '\''.pull_request.head.sha'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'export PR_BODY="$(jq -r '\''.pull_request.body // ""'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'export PR_URL="$(jq -er '\''.pull_request.html_url'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'if [[ "$EVENT_NAME" == "pull_request_review" ]]' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"
-rg --fixed-strings --quiet 'sleep 5' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'jq -e '\''.review | objects'\'' "$GITHUB_EVENT_PATH" > "$event_review_file"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'EVENT_REVIEW_JSON_FILE="$event_review_file"' "$CI_WORKFLOW"
+if rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$CI_WORKFLOW"; then
+  echo "Serialized review checks must validate each event snapshot instead of collapsing transitions into current metadata." >&2
+  exit 1
+fi
+if rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"; then
+  echo "Review/body handoff must use distinct serialized events instead of refetching away an invalid transition." >&2
+  exit 1
+fi
 rg --fixed-strings --quiet -- "-f check_name='Required checks'" "$CI_WORKFLOW"
 rg --fixed-strings --quiet -- '-f status=completed' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'classify-review-check-state.sh' "$CI_WORKFLOW"
@@ -137,10 +145,6 @@ if rg --fixed-strings --quiet 'CURRENT_RUN_ID: ${{ github.run_id }}' "$CI_WORKFL
 fi
 rg --fixed-strings --quiet 'history_poisoned' "$CI_WORKFLOW"
 rg --fixed-strings --quiet "needs.requirement-evidence.outputs.emit_incomplete == 'true'" "$CI_WORKFLOW"
-if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$CI_WORKFLOW"; then
-  echo "Review evidence must not validate the stale event-body snapshot." >&2
-  exit 1
-fi
 if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"; then
   echo "Conditional owner authorization must not depend on an impossible non-author approval in a solo repository." >&2
   exit 1
