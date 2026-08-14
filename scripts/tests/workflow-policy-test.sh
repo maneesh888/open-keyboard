@@ -91,6 +91,16 @@ rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
 rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'current_head_sha="$(jq -er '\''.head.sha'\'' <<<"$current_pr_json")"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'if [[ "$EVENT_NAME" == "pull_request_review" ]]' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'max_attempts=12' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'sleep 5' "$CI_WORKFLOW"
+if rg --fixed-strings --quiet 'PR_BODY: ${{ github.event.pull_request.body }}' "$CI_WORKFLOW"; then
+  echo "Review evidence must not validate the stale event-body snapshot." >&2
+  exit 1
+fi
 if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"; then
   echo "Conditional owner authorization must not depend on an impossible non-author approval in a solo repository." >&2
   exit 1

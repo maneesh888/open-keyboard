@@ -62,19 +62,58 @@ jobs:
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
         env:
           GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
         run: |
-          "$VALIDATOR_ROOT/validate-pr-requirements.sh"
           reviews_file="$RUNNER_TEMP/pull-request-reviews.json"
-          gh api \
-            --paginate \
-            "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
-            | jq --slurp 'add' > "$reviews_file"
-          REVIEWS_JSON_FILE="$reviews_file" "$VALIDATOR_ROOT/validate-pr-review-record.sh"
+          requirement_output="$RUNNER_TEMP/requirement-evidence.out"
+          review_output="$RUNNER_TEMP/review-record.out"
+          max_attempts=1
+          if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
+            max_attempts=12
+          fi
+
+          for ((attempt = 1; attempt <= max_attempts; attempt += 1)); do
+            current_pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+            current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
+            if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
+              echo "The pull-request head changed while validating review evidence." >&2
+              exit 1
+            fi
+
+            export HEAD_SHA="$EVENT_HEAD_SHA"
+            export PR_BODY="$(jq -r '.body // ""' <<<"$current_pr_json")"
+            export PR_URL="$(jq -er '.html_url' <<<"$current_pr_json")"
+            gh api \
+              --paginate \
+              "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
+              | jq --slurp 'add' > "$reviews_file"
+
+            requirement_status=0
+            review_status=0
+            "$VALIDATOR_ROOT/validate-pr-requirements.sh" >"$requirement_output" 2>&1 || requirement_status=$?
+            if [[ "$requirement_status" -eq 0 ]]; then
+              REVIEWS_JSON_FILE="$reviews_file" "$VALIDATOR_ROOT/validate-pr-review-record.sh" >"$review_output" 2>&1 || review_status=$?
+            else
+              review_status=1
+            fi
+
+            if [[ "$requirement_status" -eq 0 && "$review_status" -eq 0 ]]; then
+              cat "$requirement_output" "$review_output"
+              exit 0
+            fi
+            if [[ "$attempt" -lt "$max_attempts" ]]; then
+              sleep 5
+            fi
+          done
+
+          cat "$requirement_output" >&2
+          if [[ -s "$review_output" ]]; then
+            cat "$review_output" >&2
+          fi
+          exit 1
 
       - name: Confirm non-PR invocation
         if: github.event_name != 'pull_request' && github.event_name != 'pull_request_review'

@@ -41,6 +41,11 @@ required checks and creates no GitHub status by itself. In the solo-maintainer c
 reviewer confidence exactly `100%` authorizes the automatic route; below 100%, it does not replace
 the repository owner's explicit approval for the same exact SHA.
 
+Review-submission CI re-reads current pull-request metadata and retries the review/body handoff for
+at most 60 seconds. This lets the durable COMMENTED review be linked without leaving a stale failed
+required check on the same commit; validation still fails if the exact-head record never becomes
+complete.
+
 ## Repository automation set
 
 The CI/CD files are paired with the complete repository-owned Codex automation set:
