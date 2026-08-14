@@ -365,8 +365,12 @@ class SettingsViewModel: ObservableObject {
 
     private static func isStructuredCorrectionCapabilityMiss(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
-        if case .unusableCorrection = networkError { return true }
-        return false
+        switch networkError {
+        case .unusableCorrection, .timeout:
+            return true
+        default:
+            return false
+        }
     }
 
     private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {

@@ -158,7 +158,11 @@ runtime change, the pull request must retain unique canonical pass, target, rete
 exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
 tested, and that no substitution occurred. Exact model requirements must match the tested-model
 list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
-must still record the actual tested model. Every live-evidence body event creates the stable
+must still record the actual tested model. Exact-model runs set
+`OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id>` and require verified structured corrections.
+Model-agnostic runs may retain a connected, capability-unverified result after a response-format
+miss or model-check timeout, but that result proves transport/catalog behavior only and must not be
+reported as structured-correction capability. Every live-evidence body event creates the stable
 `Required live verification` root job. It rejects duplicate, contradictory, fallback, and
 wrong-model fields in both the immutable event body and the current exact-head body. Local execution
 is contributor-attested; GitHub never receives the credential or gateway response.

@@ -54,7 +54,7 @@ private user text, generated artifacts, and raw logs out of the packet.
 6. Treat skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. An exact-model requirement must execute that exact model without substitution.
 7. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 8. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
-9. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence.
+9. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence. For an exact-model requirement, set `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL` to that exact ID so structured corrections remain mandatory. A model-agnostic connected/capability-unverified pass proves no structured-correction capability.
 10. Before the report, confirm the exact-head technical jobs that do not depend on retaining that
     report are successful. Inspect the trusted requirement validators, but do not require the
     report-dependent `Required checks` status to be green

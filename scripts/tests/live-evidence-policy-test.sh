@@ -71,6 +71,7 @@ valid_body="$(cat <<EOF
 - Required live models: gemma2:2b
 - Exact live-tested models: gemma2:2b
 - Live-model substitutions: none
+- Live structured-correction capability: verified
 - No credential or gateway response body retained.
 - Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
 
@@ -96,6 +97,11 @@ substituted_model_body="${valid_body/Live-model substitutions: none/Live-model s
 duplicate_models_body="$valid_body
 - Exact live-tested models: gemma2:2b"
 model_agnostic_body="${valid_body/Required live models: gemma2:2b/Required live models: model-agnostic}"
+model_agnostic_unverified_body="${model_agnostic_body/Live structured-correction capability: verified/Live structured-correction capability: unverified}"
+exact_model_unverified_body="${valid_body/Live structured-correction capability: verified/Live structured-correction capability: unverified}"
+invalid_capability_body="${valid_body/Live structured-correction capability: verified/Live structured-correction capability: unknown}"
+duplicate_capability_body="$valid_body
+- Live structured-correction capability: unverified"
 
 run_snapshot_gate() {
   local event_body="$1"
@@ -200,6 +206,22 @@ if run_policy "$duplicate_models_body"; then
 fi
 if ! run_policy "$model_agnostic_body"; then
   echo "Model-agnostic gateway work rejected a named exact tested model." >&2
+  exit 1
+fi
+if ! run_policy "$model_agnostic_unverified_body"; then
+  echo "Model-agnostic gateway work rejected an explicit capability-unverified result." >&2
+  exit 1
+fi
+if run_policy "$exact_model_unverified_body"; then
+  echo "Exact-model live evidence accepted unverified structured-correction capability." >&2
+  exit 1
+fi
+if run_policy "$invalid_capability_body"; then
+  echo "An unsupported structured-correction capability value was accepted." >&2
+  exit 1
+fi
+if run_policy "$duplicate_capability_body"; then
+  echo "Duplicate structured-correction capability fields were accepted." >&2
   exit 1
 fi
 
