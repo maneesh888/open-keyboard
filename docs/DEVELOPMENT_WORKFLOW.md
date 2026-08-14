@@ -138,9 +138,13 @@ The path must be `.githooks`.
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
 It validates the requirement ledger and durable independent-review link, then runs repository
 hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
-stable `Required checks` job is the ordinary branch-protection status. A structurally valid ledger
-does not prove its own claims; the exact-head independent report and conditional automatic-or-human
-authorization remain required.
+stable `Required technical checks` job covers the ordinary build and test gates. The protected
+`Required checks` name is emitted only when the trusted validators accept the exact-head requirement
+ledger, durable independent-review link, and selected automatic-or-human authorization route.
+Incomplete metadata instead emits the non-required `Incomplete review evidence` failure; this keeps
+expected pre-review failure history from permanently poisoning the protected context. A
+structurally valid ledger does not prove its own claims; the exact-head independent report and
+conditional automatic-or-human authorization remain required.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
@@ -178,18 +182,19 @@ PR brief without weakening any blocker. A new commit invalidates the result and 
 exact-head review.
 
 This is a two-phase gate. Before composing the report, the reviewer inspects all exact-head
-technical evidence and the trusted validator source. `Requirement evidence` and the aggregate
-`Required checks` status depend on that report being retained and linked, so they are intentionally
-post-report gates. After the root posts the report and updates the PR brief, both aggregate required
-statuses must pass on the same head before readiness or merge.
+technical evidence and the trusted validator source. `Required checks` depends on that report being
+retained and linked, so it is intentionally a post-report gate; `Required technical checks` can pass
+before the report exists. After the root posts the report and updates the PR brief, all three
+protected statuses (`Required technical checks`, `Required checks`, and `Required live
+verification`) must pass on the same head before readiness or merge.
 
 Independent review is a repository process gate, not a GitHub Actions status. Record its reviewed
 SHA, N/N row assessment, operational confidence, merge recommendation, and durable review link in
 the PR brief. Automatic authorization exists only when every row is verified, no blocker or
 material uncertainty remains, and the reviewer reports exactly `100%`. Any lower confidence keeps
 the PR draft until the repository owner explicitly authorizes that exact SHA after reviewing the
-disclosed gaps. The required `Requirement evidence` CI job validates these fields but cannot
-establish human authorship by itself.
+disclosed gaps. The trusted review-evidence classification validates these fields before emitting
+`Required checks`, but it cannot establish human authorship by itself.
 
 No review can prove that unknown bugs are mathematically impossible. The fail-closed standard is
 that `100%` means every stated in-scope requirement is verified with the correct proof and every

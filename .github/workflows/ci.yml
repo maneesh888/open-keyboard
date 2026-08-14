@@ -29,9 +29,11 @@ concurrency:
 
 jobs:
   requirement-evidence:
-    name: Requirement evidence
+    name: Classify review evidence
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      evidence_ready: ${{ steps.review-evidence.outputs.ready }}
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -59,6 +61,7 @@ jobs:
           echo "root=$validator_root" >> "$GITHUB_OUTPUT"
 
       - name: Validate complete requirement coverage and independent review
+        id: review-evidence
         if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -70,6 +73,7 @@ jobs:
           reviews_file="$RUNNER_TEMP/pull-request-reviews.json"
           requirement_output="$RUNNER_TEMP/requirement-evidence.out"
           review_output="$RUNNER_TEMP/review-record.out"
+          evidence_ready=false
           max_attempts=1
           if [[ "$EVENT_NAME" == "pull_request_review" ]]; then
             max_attempts=12
@@ -80,7 +84,7 @@ jobs:
             current_head_sha="$(jq -er '.head.sha' <<<"$current_pr_json")"
             if [[ "$current_head_sha" != "$EVENT_HEAD_SHA" ]]; then
               echo "The pull-request head changed while validating review evidence." >&2
-              exit 1
+              break
             fi
 
             export HEAD_SHA="$EVENT_HEAD_SHA"
@@ -91,6 +95,8 @@ jobs:
               "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/reviews?per_page=100" \
               | jq --slurp 'add' > "$reviews_file"
 
+            : > "$requirement_output"
+            : > "$review_output"
             requirement_status=0
             review_status=0
             "$VALIDATOR_ROOT/validate-pr-requirements.sh" >"$requirement_output" 2>&1 || requirement_status=$?
@@ -101,19 +107,26 @@ jobs:
             fi
 
             if [[ "$requirement_status" -eq 0 && "$review_status" -eq 0 ]]; then
-              cat "$requirement_output" "$review_output"
-              exit 0
+              evidence_ready=true
+              break
             fi
             if [[ "$attempt" -lt "$max_attempts" ]]; then
               sleep 5
             fi
           done
 
-          cat "$requirement_output" >&2
-          if [[ -s "$review_output" ]]; then
-            cat "$review_output" >&2
+          if [[ "$evidence_ready" == "true" ]]; then
+            cat "$requirement_output" "$review_output"
+          else
+            if [[ -s "$requirement_output" ]]; then
+              cat "$requirement_output" >&2
+            fi
+            if [[ -s "$review_output" ]]; then
+              cat "$review_output" >&2
+            fi
+            echo "Exact-head review evidence is incomplete; the protected review check will not be emitted." >&2
           fi
-          exit 1
+          echo "ready=$evidence_ready" >> "$GITHUB_OUTPUT"
 
       - name: Confirm non-PR invocation
         if: github.event_name != 'pull_request' && github.event_name != 'pull_request_review'
@@ -185,12 +198,11 @@ jobs:
       - name: Validate pinned semantic contract
         run: ./scripts/check-semantic-prompt-contract.sh
 
-  required-checks:
-    name: Required checks
+  required-technical-checks:
+    name: Required technical checks
     if: always()
     runs-on: ubuntu-latest
     needs:
-      - requirement-evidence
       - hygiene
       - core-tests
       - ios-build
@@ -198,19 +210,16 @@ jobs:
     steps:
       - name: Confirm required jobs passed
         env:
-          REQUIREMENT_EVIDENCE_RESULT: ${{ needs.requirement-evidence.result }}
           HYGIENE_RESULT: ${{ needs.hygiene.result }}
           CORE_TESTS_RESULT: ${{ needs.core-tests.result }}
           IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
           SEMANTIC_CONTRACT_RESULT: ${{ needs.semantic-contract.result }}
         run: |
-          if [[ "$REQUIREMENT_EVIDENCE_RESULT" != "success" ||
-                "$HYGIENE_RESULT" != "success" ||
+          if [[ "$HYGIENE_RESULT" != "success" ||
                 "$CORE_TESTS_RESULT" != "success" ||
                 "$IOS_BUILD_RESULT" != "success" ||
                 "$SEMANTIC_CONTRACT_RESULT" != "success" ]]; then
-            echo "Required checks did not pass."
-            echo "requirement-evidence=$REQUIREMENT_EVIDENCE_RESULT"
+            echo "Required technical checks did not pass."
             echo "hygiene=$HYGIENE_RESULT"
             echo "core-tests=$CORE_TESTS_RESULT"
             echo "ios-build=$IOS_BUILD_RESULT"
@@ -218,4 +227,24 @@ jobs:
             exit 1
           fi
 
-          echo "All required OpenKeyboard checks passed."
+          echo "All required OpenKeyboard technical checks passed."
+
+  required-review-evidence:
+    name: ${{ needs.requirement-evidence.outputs.evidence_ready == 'true' && 'Required checks' || 'Incomplete review evidence' }}
+    if: always() && (github.event_name == 'pull_request' || github.event_name == 'pull_request_review')
+    runs-on: ubuntu-latest
+    needs:
+      - requirement-evidence
+    steps:
+      - name: Emit protected review status only for complete evidence
+        env:
+          EVIDENCE_JOB_RESULT: ${{ needs.requirement-evidence.result }}
+          EVIDENCE_READY: ${{ needs.requirement-evidence.outputs.evidence_ready }}
+        run: |
+          if [[ "$EVIDENCE_JOB_RESULT" != "success" || "$EVIDENCE_READY" != "true" ]]; then
+            echo "Exact-head review evidence is incomplete."
+            echo "The protected 'Required checks' context was intentionally not emitted."
+            exit 1
+          fi
+
+          echo "Exact-head requirement and independent-review evidence passed."

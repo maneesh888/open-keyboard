@@ -9,7 +9,8 @@ Pull request
   -> GitHub repository hygiene
   -> GitHub OpenKeyboardCore tests
   -> GitHub iOS app + keyboard extension build
-  -> Required checks
+  -> Required technical checks
+  -> Required checks (complete exact-head review evidence only)
   -> Required live verification
      -> pass immediately when gateway runtime is unaffected
      -> otherwise require exact-head local gateway evidence in the PR
@@ -47,6 +48,13 @@ already-completed local live evidence to be recorded in the pull-request body. A
 concurrency keeps both handoff runs alive when the matching body-edit runs start. This prevents a
 frozen event snapshot or cancellation from leaving an obsolete failed required check on the same
 commit; validation still fails if either exact-head record never becomes complete.
+
+Incomplete review metadata emits a deliberately different `Incomplete review evidence` failure.
+The protected `Required checks` name is emitted only after the trusted validators accept the
+complete exact-head record. GitHub retains every failed check run on a commit in its combined
+rollup, so this name separation prevents an expected pre-review failure from permanently poisoning
+an otherwise completed review. Technical jobs aggregate independently as `Required technical
+checks`; branch protection requires both names plus `Required live verification`.
 
 ## Repository automation set
 

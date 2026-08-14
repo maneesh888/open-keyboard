@@ -57,9 +57,9 @@ private user text, generated artifacts, and raw logs out of the packet.
 9. If `./scripts/live-impact.sh` selects `gateway`, require `./scripts/check-live.sh gateway` on that same exact head and refresh the PR evidence.
 10. Before the report, confirm the exact-head technical jobs that do not depend on retaining that
     report are successful. Inspect the trusted requirement validators, but do not require the
-    report-dependent `Requirement evidence` job or aggregate `Required checks` status to be green
+    report-dependent `Required checks` status to be green
     before the report exists. After the root posts and links the report, require exact-head
-    `Required checks` and `Required live verification` before readiness or merge.
+    `Required technical checks`, `Required checks`, and `Required live verification` before readiness or merge.
 
 The reviewer must never claim that unknown defects are impossible. "No findings" means all stated
 in-scope requirements are verified within the named evidence boundary, not that the software is
@@ -96,7 +96,7 @@ Before marking a PR ready or merging it, always require:
 6. no undisclosed finding, current-head requested change, or unresolved review thread;
 7. an in-scope diff with no secret or generated-artifact violation;
 8. no conflict and compliance with the base-update policy;
-9. successful exact-head `Required checks` and `Required live verification`; and
+9. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
 10. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
 Then require exactly one authorization route:

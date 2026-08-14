@@ -6,6 +6,7 @@ Protect `main` with a branch ruleset or branch protection rule:
 2. Require conversation resolution.
 3. Require branches to be up to date before merging.
 4. Require these status checks:
+   - `Required technical checks`
    - `Required checks`
    - `Required live verification`
 5. Block force pushes and branch deletion.

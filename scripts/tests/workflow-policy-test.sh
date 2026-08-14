@@ -15,6 +15,7 @@ DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
+BRANCH_PROTECTION_GUIDE="$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
 PR_REQUIREMENTS_VALIDATOR="$ROOT/scripts/validate-pr-requirements.sh"
 PR_REQUIREMENTS_POLICY_TEST="$ROOT/scripts/tests/pr-requirements-policy-test.sh"
@@ -41,6 +42,7 @@ for required_file in \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
+  "$BRANCH_PROTECTION_GUIDE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
   "$PR_REQUIREMENTS_VALIDATOR" \
   "$PR_REQUIREMENTS_POLICY_TEST" \
@@ -98,6 +100,8 @@ if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_WORK
   exit 1
 fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'Required technical checks' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'Incomplete review evidence' "$CI_WORKFLOW"
 rg --quiet '^  requirement-evidence:$' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-requirements\.sh' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
@@ -119,7 +123,31 @@ if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"
   exit 1
 fi
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$CI_WORKFLOW"
-rg --quiet 'REQUIREMENT_EVIDENCE_RESULT' "$CI_WORKFLOW"
+rg --fixed-strings --quiet "name: \${{ needs.requirement-evidence.outputs.evidence_ready == 'true' && 'Required checks' || 'Incomplete review evidence' }}" "$CI_WORKFLOW"
+if rg --quiet 'REQUIREMENT_EVIDENCE_RESULT' "$CI_WORKFLOW"; then
+  echo "Technical aggregation must not turn expected incomplete review evidence into a poisoned required check." >&2
+  exit 1
+fi
+ruby -e '
+  require "yaml"
+
+  jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
+  classifier = jobs.fetch("requirement-evidence")
+  abort "Review classification must expose exact-head readiness." unless
+    classifier.fetch("outputs").fetch("evidence_ready").include?("steps.review-evidence.outputs.ready")
+
+  technical = jobs.fetch("required-technical-checks")
+  abort "Technical aggregation has the wrong protected name." unless technical.fetch("name") == "Required technical checks"
+  abort "Technical aggregation must not depend on review classification." if
+    Array(technical.fetch("needs")).include?("requirement-evidence")
+
+  review = jobs.fetch("required-review-evidence")
+  review_name = review.fetch("name")
+  abort "Complete and incomplete review evidence must use different check names." unless
+    review_name.include?("Required checks") && review_name.include?("Incomplete review evidence")
+  abort "The protected review status must depend only on trusted review classification." unless
+    Array(review.fetch("needs")) == ["requirement-evidence"]
+' "$CI_WORKFLOW"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
@@ -161,6 +189,7 @@ rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
 rg --quiet 'Do not edit files.*access GitHub' "$PLANNER_AGENT"
 rg --quiet 'project `pr-reviewer`' "$REVIEW_SKILL"
 rg --quiet 'scripts/check\.sh --full' "$REVIEW_SKILL"
+rg --fixed-strings --quiet 'Required technical checks' "$REVIEW_SKILL"
 rg --quiet 'Required checks' "$REVIEW_SKILL"
 rg --quiet 'Required live verification' "$REVIEW_SKILL"
 rg --fixed-strings --quiet 'Reviewer confidence: 100%' "$REVIEW_SKILL"
@@ -169,7 +198,7 @@ rg --fixed-strings --quiet 'Merge recommendation: human-review-required' "$REVIE
 rg --quiet 'repository-owner approval' "$REVIEW_SKILL"
 rg --quiet 'Human-approved head' "$REVIEW_SKILL"
 rg --quiet 'statement about policy' "$REVIEW_SKILL"
-rg --fixed-strings --quiet 'report-dependent `Requirement evidence`' "$REVIEW_SKILL"
+rg --fixed-strings --quiet 'report-dependent `Required checks`' "$REVIEW_SKILL"
 rg --quiet 'After the root posts and links the report' "$REVIEW_SKILL"
 rg --quiet 'wrong-model' "$REVIEW_SKILL"
 rg --quiet 'durable GitHub `COMMENTED` review' "$REVIEW_SKILL"
@@ -204,6 +233,9 @@ rg --quiet 'Exact live-tested models:' "$PR_TEMPLATE"
 rg --quiet 'Live-model substitutions:' "$PR_TEMPLATE"
 rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
+rg --fixed-strings --quiet '`Required technical checks`' "$BRANCH_PROTECTION_GUIDE"
+rg --fixed-strings --quiet '`Required checks`' "$BRANCH_PROTECTION_GUIDE"
+rg --fixed-strings --quiet '`Required live verification`' "$BRANCH_PROTECTION_GUIDE"
 rg --quiet 'scripts/ios/test\.sh.*deterministic-ui' "$ROOT/scripts/check.sh"
 rg --fixed-strings --quiet 'BUILD_DESTINATION="generic/platform=iOS Simulator"' "$ROOT/scripts/ios/test.sh"
 rg --fixed-strings --quiet 'DETERMINISTIC_UI_DERIVED_DATA="$REPO_ROOT/.build/deterministic-ui/DerivedData"' "$ROOT/scripts/ios/test.sh"
