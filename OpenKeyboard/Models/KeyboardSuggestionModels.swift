@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import NaturalLanguage
 import UIKit
 
 enum KeyboardGatewayActionContract {
@@ -422,6 +423,7 @@ enum GrammarCorrectionResponseError: Error, Equatable {
     case suspiciousRewrite
 }
 
+@MainActor
 struct GrammarCorrectionResponseValidator {
     static func validated(_ response: String, original: String) throws -> String {
         guard !response.isEmpty else { throw GrammarCorrectionResponseError.empty }
@@ -432,6 +434,9 @@ struct GrammarCorrectionResponseValidator {
         let lower = inspection.lowercased()
         let originalLower = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard isTopLevelJSONValue(inspection) == isTopLevelJSONValue(originalLower) else {
+            throw GrammarCorrectionResponseError.commentary
+        }
+        guard outerBoundaryQuoteStructure(in: inspection) == outerBoundaryQuoteStructure(in: originalLower) else {
             throw GrammarCorrectionResponseError.commentary
         }
         let introducesOpeningFence = lower.hasPrefix("```") && !originalLower.hasPrefix("```")
@@ -496,6 +501,20 @@ struct GrammarCorrectionResponseValidator {
     private static func isTopLevelJSONValue(_ value: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
+    }
+
+    private struct OuterBoundaryQuoteStructure: Equatable {
+        let leading: Character?
+        let trailing: Character?
+    }
+
+    private static func outerBoundaryQuoteStructure(in value: String) -> OuterBoundaryQuoteStructure {
+        let boundaryQuotes: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "«", "»", "‹", "›"]
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OuterBoundaryQuoteStructure(
+            leading: trimmed.first.flatMap { boundaryQuotes.contains($0) ? $0 : nil },
+            trailing: trimmed.last.flatMap { boundaryQuotes.contains($0) ? $0 : nil }
+        )
     }
 
     private static func isSuspiciousOmission(_ edit: GrammarEdit, original: String) -> Bool {
@@ -577,8 +596,10 @@ struct GrammarCorrectionResponseValidator {
         var segments: [String] = []
         var tokens: [Character] = []
         var currentSegment = ""
-        for character in value {
-            if isProtectedGrammarCharacter(character) {
+        let characters = Array(value)
+        for (index, character) in characters.enumerated() {
+            if isProtectedGrammarCharacter(character) ||
+                isProtectedGrammarQuote(character, at: index, in: characters) {
                 segments.append(currentSegment)
                 tokens.append(character)
                 currentSegment = ""
@@ -588,6 +609,21 @@ struct GrammarCorrectionResponseValidator {
         }
         segments.append(currentSegment)
         return ProtectedGrammarStructure(segments: segments, tokens: tokens)
+    }
+
+    private static func isProtectedGrammarQuote(
+        _ character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> Bool {
+        let unambiguousQuotes: Set<Character> = ["\"", "“", "”", "‘", "«", "»", "‹", "›"]
+        if unambiguousQuotes.contains(character) { return true }
+        guard character == "'" || character == "’" else { return false }
+        let isInternalApostrophe = index > characters.startIndex &&
+            index + 1 < characters.endIndex &&
+            (characters[index - 1].isLetter || characters[index - 1].isNumber) &&
+            (characters[index + 1].isLetter || characters[index + 1].isNumber)
+        return !isInternalApostrophe
     }
 
     private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
@@ -744,7 +780,22 @@ struct GrammarCorrectionResponseValidator {
     private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
         guard source != corrected else { return true }
         return allowedGrammarWordReplacements.contains(source + "\u{1F}" + corrected) ||
+            hasSharedGrammarLemma(source, corrected) ||
             isSystemSpellingCorrection(source: source, corrected: corrected)
+    }
+
+    private static func hasSharedGrammarLemma(_ source: String, _ corrected: String) -> Bool {
+        let sourceForms = Set([source, grammarLemma(for: source)].compactMap { $0 })
+        let correctedForms = Set([corrected, grammarLemma(for: corrected)].compactMap { $0 })
+        return !sourceForms.isDisjoint(with: correctedForms)
+    }
+
+    private static func grammarLemma(for word: String) -> String? {
+        guard !word.isEmpty else { return nil }
+        let tagger = NLTagger(tagSchemes: [.lemma])
+        tagger.string = word
+        let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue.lowercased()
+        return lemma?.isEmpty == false ? lemma : nil
     }
 
     private static func isSystemSpellingCorrection(source: String, corrected: String) -> Bool {
@@ -784,10 +835,11 @@ struct GrammarCorrectionResponseValidator {
     }
 
     private static let grammarInsertableWords: Set<String> = [
-        "a", "an", "the"
+        "a", "an", "the", "am", "is", "are", "was", "were", "be", "been", "being",
+        "has", "have", "had", "do", "does", "did", "to"
     ]
 
-    private static let grammarDeletableWords = grammarInsertableWords
+    private static let grammarDeletableWords: Set<String> = ["a", "an", "the"]
 
     private static let allowedGrammarWordReplacements: Set<String> = [
         "a\u{1F}an", "an\u{1F}a",
@@ -1562,6 +1614,7 @@ struct KeyboardActionOperationResult: Equatable {
         return options
     }
 
+    @MainActor
     static func plainTextGrammarResponse(_ content: String, original: String) throws -> KeyboardActionOperationResult {
         let corrected = try GrammarCorrectionResponseValidator.validated(content, original: original)
         return KeyboardActionOperationResult(

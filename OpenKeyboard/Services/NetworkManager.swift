@@ -169,7 +169,7 @@ class NetworkManager {
                 timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
             do {
-                _ = try Self.validatePlainTextCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
+                _ = try await Self.validatePlainTextCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
                 return
             } catch {
                 guard attempt < validationAttempts else { throw NetworkError.unusableCorrection }
@@ -393,6 +393,7 @@ class NetworkManager {
         }
     }
 
+    @MainActor
     private static func validatePlainTextCorrectionContent(
         _ content: String,
         inputText: String,

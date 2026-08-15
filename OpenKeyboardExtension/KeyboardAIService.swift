@@ -402,7 +402,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                             expectsStructuredResponse: rendering.responseFormatType != nil,
                             timeoutInterval: self.requestTimeoutInterval
                         )
-                        return (chunkIndex, try GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
+                        return (chunkIndex, try await GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
                     }
                 }
 
@@ -427,7 +427,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
         let corrected = correctedChunks.compactMap { $0 }.joined()
         do {
-            return try KeyboardActionOperationResult.plainTextGrammarResponse(corrected, original: text)
+            return try await KeyboardActionOperationResult.plainTextGrammarResponse(corrected, original: text)
         } catch {
             throw KeyboardAIError.modelCapability
         }

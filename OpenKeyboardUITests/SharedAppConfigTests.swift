@@ -211,14 +211,14 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(description.contains("gatewayHost=gateway.test.local"))
     }
 
-    func testKnownUITestPlaceholderConfigIsAcceptedWhenKeyboardDebugStateEnabled() throws {
+    func testKnownUITestPlaceholderConfigIsAcceptedOnlyWithFreshExtensionSeed() throws {
         secretStore.apiKey = RejectedGatewayFixture.apiKey
         defaults.set(RejectedGatewayFixture.gatewayURL, forKey: AppConfig.gatewayURLKey)
         defaults.set(RejectedGatewayFixture.selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(true, forKey: AppConfig.isConfiguredKey)
         defaults.set(true, forKey: AppConfig.supportsStructuredCorrectionsKey)
         defaults.set("openkeyboard.structured-corrections.v1", forKey: AppConfig.structuredCorrectionSchemaVersionKey)
-        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        seedFreshKeyboardExtensionUITestState()
 
         let loadedConfig = AppConfig.load(from: defaults)
 
@@ -228,6 +228,37 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(loadedConfig.isConfigured)
         XCTAssertTrue(loadedConfig.supportsStructuredCorrections)
         XCTAssertEqual(loadedConfig.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
+
+        [
+            "keyboardExtension.suggestionState",
+            "keyboardExtension.suggestionStateSeedID",
+            "keyboardExtension.suggestionStateSeededAt",
+            "keyboardExtension.initialPanelMode",
+            "keyboardExtension.initialPanelModeSeedID",
+            "keyboardExtension.initialPanelModeSeededAt"
+        ].forEach { defaults.removeObject(forKey: $0) }
+
+        let afterSeedConsumption = AppConfig.load(from: defaults)
+        XCTAssertFalse(afterSeedConsumption.isConfigured)
+        XCTAssertTrue(afterSeedConsumption.gatewayURL.isEmpty)
+        XCTAssertTrue(afterSeedConsumption.selectedModel.isEmpty)
+    }
+
+    func testKnownUITestPlaceholderConfigIsRejectedWhenOnlyStaleDebugFlagRemains() throws {
+        secretStore.apiKey = RejectedGatewayFixture.apiKey
+        defaults.set(RejectedGatewayFixture.gatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(RejectedGatewayFixture.selectedModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+
+        let loadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertFalse(loadedConfig.isConfigured)
+        XCTAssertTrue(loadedConfig.apiKey.isEmpty)
+        XCTAssertTrue(loadedConfig.gatewayURL.isEmpty)
+        XCTAssertTrue(loadedConfig.selectedModel.isEmpty)
+        XCTAssertNil(secretStore.apiKey)
+        XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
     }
 
     func testDummySeedDoesNotOverwriteExistingRealGatewayConfigOrAPIKey() throws {
@@ -273,7 +304,7 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(dummyConfig.saveTestSeed(to: defaults, mirrorAPIKeyToDefaultsForUITest: true))
         XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), RejectedGatewayFixture.apiKey)
 
-        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        seedFreshKeyboardExtensionUITestState()
         let loadedConfig = AppConfig.load(from: defaults)
         XCTAssertEqual(loadedConfig.apiKey, RejectedGatewayFixture.apiKey)
         XCTAssertEqual(loadedConfig.gatewayURL, RejectedGatewayFixture.gatewayURL)
@@ -324,7 +355,7 @@ final class SharedAppConfigTests: XCTestCase {
 
         XCTAssertTrue(dummyConfig.saveTestSeed(to: defaults, overwriteExistingRealConfig: true, mirrorAPIKeyToDefaultsForUITest: true))
 
-        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        seedFreshKeyboardExtensionUITestState()
         let loadedConfig = AppConfig.load(from: defaults)
         XCTAssertEqual(loadedConfig.apiKey, RejectedGatewayFixture.apiKey)
         XCTAssertEqual(loadedConfig.gatewayURL, RejectedGatewayFixture.gatewayURL)
@@ -465,5 +496,17 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.composingBuffer"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+    }
+
+    private func seedFreshKeyboardExtensionUITestState() {
+        let seedID = UUID().uuidString
+        let seededAt = Date().timeIntervalSince1970
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        defaults.set("correctionCarousel", forKey: "keyboardExtension.suggestionState")
+        defaults.set(seedID, forKey: "keyboardExtension.suggestionStateSeedID")
+        defaults.set(seededAt, forKey: "keyboardExtension.suggestionStateSeededAt")
+        defaults.set("correctionCarousel", forKey: "keyboardExtension.initialPanelMode")
+        defaults.set(seedID, forKey: "keyboardExtension.initialPanelModeSeedID")
+        defaults.set(seededAt, forKey: "keyboardExtension.initialPanelModeSeededAt")
     }
 }

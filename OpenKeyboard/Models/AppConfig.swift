@@ -226,7 +226,7 @@ extension AppConfig {
 
         if loadedConfig.isKnownTestPlaceholderConfig,
            !ProcessInfo.processInfo.arguments.contains("--uitesting"),
-           !isUITestDebugStateEnabled(in: defaults) {
+           !hasFreshKeyboardExtensionUITestSeed(in: defaults) {
             clear(from: defaults)
             return .default
         }
@@ -542,6 +542,27 @@ extension AppConfig {
 
     static func isUITestDebugStateEnabled(in defaults: UserDefaults) -> Bool {
         defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled")
+    }
+
+    private static func hasFreshKeyboardExtensionUITestSeed(in defaults: UserDefaults) -> Bool {
+        guard isUITestDebugStateEnabled(in: defaults) else { return false }
+        let suggestionSeedID = defaults.string(forKey: "keyboardExtension.suggestionStateSeedID")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let panelSeedID = defaults.string(forKey: "keyboardExtension.initialPanelModeSeedID")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !suggestionSeedID.isEmpty,
+              suggestionSeedID == panelSeedID,
+              let suggestionSeededAt = defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt") as? TimeInterval,
+              let panelSeededAt = defaults.object(forKey: "keyboardExtension.initialPanelModeSeededAt") as? TimeInterval else {
+            return false
+        }
+        let now = Date().timeIntervalSince1970
+        let maximumSeedAge: TimeInterval = 60
+        let maximumClockSkew: TimeInterval = 5
+        return suggestionSeededAt >= now - maximumSeedAge &&
+            suggestionSeededAt <= now + maximumClockSkew &&
+            panelSeededAt >= now - maximumSeedAge &&
+            panelSeededAt <= now + maximumClockSkew
     }
 
     static func clearKeyboardUITestState(from defaults: UserDefaults) {

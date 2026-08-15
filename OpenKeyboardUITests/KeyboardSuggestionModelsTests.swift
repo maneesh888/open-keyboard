@@ -1,5 +1,6 @@
 import XCTest
 
+@MainActor
 final class KeyboardSuggestionModelsTests: XCTestCase {
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
@@ -756,7 +757,10 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             ("It dose not work.", "It does not work."),
             ("I defiantly agree.", "I definitely agree."),
             ("He are ready.", "He is ready."),
-            ("She have notes.", "She has notes.")
+            ("She have notes.", "She has notes."),
+            ("I going.", "I am going."),
+            ("The team walk.", "The team walks."),
+            ("The timeline sound wrong.", "The timeline sounds wrong.")
         ] {
             XCTAssertEqual(
                 try GrammarCorrectionResponseValidator.validated(response, original: source),
@@ -836,12 +840,32 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "teh update."
             )
         )
+        for wrapped in ["'the update.'", "“the update.”", "«the update.»", "the 'update'.", "the “update”."] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.validated(wrapped, original: "teh update.")
+            )
+        }
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(
                 #"["the"]"#,
                 original: #"["teh"]"#
             ),
             #"["the"]"#
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated("'the update.'", original: "'teh update.'"),
+            "'the update.'"
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated("“the update.”", original: "“teh update.”"),
+            "“the update.”"
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "She said 'the update.'",
+                original: "She said 'teh update.'"
+            ),
+            "She said 'the update.'"
         )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(

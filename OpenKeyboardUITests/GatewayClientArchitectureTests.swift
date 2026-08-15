@@ -563,6 +563,8 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the refund. Sure."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received. Sure."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the: Sure."))
+        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "'i received the refund.'"))
+        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "“i received the refund.”"))
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(CancellationError()))
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(URLError(.cancelled)))
     }

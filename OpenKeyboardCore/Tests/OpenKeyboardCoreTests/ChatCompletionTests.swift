@@ -713,7 +713,12 @@ final class ChatCompletionTests: XCTestCase {
             ("Review *the note*.", "Review the *note*."),
             ("[the note]", #"["the","note"]"#),
             ("{the note}", #"{"the":"note"}"#),
-            ("teh update.", #""the update.""#)
+            ("teh update.", #""the update.""#),
+            ("teh update.", "'the update.'"),
+            ("teh update.", "“the update.”"),
+            ("teh update.", "«the update.»"),
+            ("teh update.", "the 'update'."),
+            ("teh update.", "the “update”.")
         ] {
             let structuralRewrite = GatewayClient(
                 config: validConfig,
@@ -740,6 +745,23 @@ final class ChatCompletionTests: XCTestCase {
             model: "test-model"
         )
         XCTAssertEqual(correctedJSON, #"["the"]"#)
+
+        for (source, response) in [
+            ("'teh update.'", "'the update.'"),
+            ("“teh update.”", "“the update.”"),
+            ("She said 'teh update.'", "She said 'the update.'")
+        ] {
+            let preservedQuoteStructure = GatewayClient(
+                config: validConfig,
+                httpClient: DummyGatewayServer(.chatPlainText(response))
+            )
+            let correctedQuote = try? await preservedQuoteStructure.performWritingAction(
+                .fixGrammar,
+                text: source,
+                model: "test-model"
+            )
+            XCTAssertEqual(correctedQuote, response)
+        }
 
         let preservedMarkdownLink = GatewayClient(
             config: validConfig,
@@ -809,6 +831,23 @@ final class ChatCompletionTests: XCTestCase {
             model: "test-model"
         )
         XCTAssertEqual(correctedPrefix, "Here is the account update.")
+
+        for (source, response) in [
+            ("I going.", "I am going."),
+            ("The team walk.", "The team walks."),
+            ("The timeline sound wrong.", "The timeline sounds wrong.")
+        ] {
+            let generalGrammar = GatewayClient(
+                config: validConfig,
+                httpClient: DummyGatewayServer(.chatPlainText(response))
+            )
+            let generalCorrection = try? await generalGrammar.performWritingAction(
+                .fixGrammar,
+                text: source,
+                model: "test-model"
+            )
+            XCTAssertEqual(generalCorrection, response)
+        }
     }
 
     func testPerformWritingActionEmptyChoicesMapsToInvalidResponse() async {

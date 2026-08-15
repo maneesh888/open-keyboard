@@ -1,4 +1,5 @@
 import Foundation
+import NaturalLanguage
 import SemanticPromptContract
 #if canImport(UIKit)
 import UIKit
@@ -184,12 +185,12 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
 
-        return try Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
+        return try await Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
     }
 
-    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
+    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) async throws -> WritingActionResult {
         if operation == "fix_grammar" {
-            let corrected = try validatedPlainTextGrammarResponse(content, original: fallbackText)
+            let corrected = try await validatedPlainTextGrammarResponse(content, original: fallbackText)
             return WritingActionResult(
                 operation: operation,
                 items: [],
@@ -302,6 +303,7 @@ public final class GatewayClient: Sendable {
         return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    @MainActor
     private static func validatedPlainTextGrammarResponse(_ response: String, original: String) throws -> String {
         guard !response.isEmpty,
               !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
@@ -310,6 +312,9 @@ public final class GatewayClient: Sendable {
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard isTopLevelJSONValue(inspection) == isTopLevelJSONValue(originalInspection) else {
+            throw GatewayClientError.invalidResponse
+        }
+        guard outerBoundaryQuoteStructure(in: inspection) == outerBoundaryQuoteStructure(in: originalInspection) else {
             throw GatewayClientError.invalidResponse
         }
         let introducesOpeningFence = inspection.hasPrefix("```") && !originalInspection.hasPrefix("```")
@@ -354,17 +359,31 @@ public final class GatewayClient: Sendable {
         return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
     }
 
+    private struct OuterBoundaryQuoteStructure: Equatable {
+        let leading: Character?
+        let trailing: Character?
+    }
+
+    private static func outerBoundaryQuoteStructure(in value: String) -> OuterBoundaryQuoteStructure {
+        let boundaryQuotes: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "«", "»", "‹", "›"]
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OuterBoundaryQuoteStructure(
+            leading: trimmed.first.flatMap { boundaryQuotes.contains($0) ? $0 : nil },
+            trailing: trimmed.last.flatMap { boundaryQuotes.contains($0) ? $0 : nil }
+        )
+    }
+
     private static func hasSuspiciousBoundaryWordChange(
         originalWords: [String],
         responseWords: [String]
     ) -> Bool {
         if responseWords.count < originalWords.count {
-            return grammarWordsApproximatelyMatch(responseWords, Array(originalWords.prefix(responseWords.count))) ||
-                grammarWordsApproximatelyMatch(responseWords, Array(originalWords.suffix(responseWords.count)))
+            return responseWords == Array(originalWords.prefix(responseWords.count)) ||
+                responseWords == Array(originalWords.suffix(responseWords.count))
         }
         if responseWords.count > originalWords.count {
-            return grammarWordsApproximatelyMatch(originalWords, Array(responseWords.prefix(originalWords.count))) ||
-                grammarWordsApproximatelyMatch(originalWords, Array(responseWords.suffix(originalWords.count)))
+            return originalWords == Array(responseWords.prefix(originalWords.count)) ||
+                originalWords == Array(responseWords.suffix(originalWords.count))
         }
         return false
     }
@@ -470,8 +489,10 @@ public final class GatewayClient: Sendable {
         var segments: [String] = []
         var tokens: [Character] = []
         var currentSegment = ""
-        for character in value {
-            if isProtectedGrammarCharacter(character) {
+        let characters = Array(value)
+        for (index, character) in characters.enumerated() {
+            if isProtectedGrammarCharacter(character) ||
+                isProtectedGrammarQuote(character, at: index, in: characters) {
                 segments.append(currentSegment)
                 tokens.append(character)
                 currentSegment = ""
@@ -481,6 +502,21 @@ public final class GatewayClient: Sendable {
         }
         segments.append(currentSegment)
         return ProtectedGrammarStructure(segments: segments, tokens: tokens)
+    }
+
+    private static func isProtectedGrammarQuote(
+        _ character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> Bool {
+        let unambiguousQuotes: Set<Character> = ["\"", "“", "”", "‘", "«", "»", "‹", "›"]
+        if unambiguousQuotes.contains(character) { return true }
+        guard character == "'" || character == "’" else { return false }
+        let isInternalApostrophe = index > characters.startIndex &&
+            index + 1 < characters.endIndex &&
+            (characters[index - 1].isLetter || characters[index - 1].isNumber) &&
+            (characters[index + 1].isLetter || characters[index + 1].isNumber)
+        return !isInternalApostrophe
     }
 
     private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
@@ -647,7 +683,22 @@ public final class GatewayClient: Sendable {
     private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
         guard source != corrected else { return true }
         return allowedGrammarWordReplacements.contains(source + "\u{1F}" + corrected) ||
+            hasSharedGrammarLemma(source, corrected) ||
             isSystemSpellingCorrection(source: source, corrected: corrected)
+    }
+
+    private static func hasSharedGrammarLemma(_ source: String, _ corrected: String) -> Bool {
+        let sourceForms = Set([source, grammarLemma(for: source)].compactMap { $0 })
+        let correctedForms = Set([corrected, grammarLemma(for: corrected)].compactMap { $0 })
+        return !sourceForms.isDisjoint(with: correctedForms)
+    }
+
+    private static func grammarLemma(for word: String) -> String? {
+        guard !word.isEmpty else { return nil }
+        let tagger = NLTagger(tagSchemes: [.lemma])
+        tagger.string = word
+        let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue.lowercased()
+        return lemma?.isEmpty == false ? lemma : nil
     }
 
     private static func isSystemSpellingCorrection(source: String, corrected: String) -> Bool {
@@ -719,10 +770,11 @@ public final class GatewayClient: Sendable {
     }
 
     private static let grammarInsertableWords: Set<String> = [
-        "a", "an", "the"
+        "a", "an", "the", "am", "is", "are", "was", "were", "be", "been", "being",
+        "has", "have", "had", "do", "does", "did", "to"
     ]
 
-    private static let grammarDeletableWords = grammarInsertableWords
+    private static let grammarDeletableWords: Set<String> = ["a", "an", "the"]
 
     private static let allowedGrammarWordReplacements: Set<String> = [
         "a\u{1F}an", "an\u{1F}a",

@@ -1246,6 +1246,8 @@ private struct CorrectionDetailPanel: View {
                     Text("Reject")
                         .font(.caption.weight(.semibold))
                         .frame(minHeight: 34)
+                        .frame(minWidth: 44, minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
@@ -1255,6 +1257,7 @@ private struct CorrectionDetailPanel: View {
                     Text("Reject All")
                         .font(.caption2.weight(.semibold))
                         .frame(minHeight: 34)
+                        .frame(minWidth: 44, minHeight: KeyboardPanelLayout.actionControlButtonHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1267,6 +1270,7 @@ private struct CorrectionDetailPanel: View {
                     Text("Accept All")
                         .font(.caption2.weight(.bold))
                         .frame(minHeight: 34)
+                        .frame(minWidth: 44, minHeight: KeyboardPanelLayout.actionControlButtonHeight)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -1281,6 +1285,8 @@ private struct CorrectionDetailPanel: View {
                         .frame(minHeight: 34)
                         .background(OpenKeyboardTheme.Semantic.success)
                         .clipShape(Capsule())
+                        .frame(minWidth: 44, minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("ai_correction_apply")
