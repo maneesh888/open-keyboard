@@ -309,7 +309,7 @@ public final class GatewayClient: Sendable {
         guard !invalidPrefixes.contains(where: inspection.hasPrefix),
               !hasNewGrammarCommentaryPrefix(inspection, original: originalInspection),
               !hasNewGrammarCommentarySuffix(inspection, original: originalInspection),
-              corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
+              preservesNewlineStructure(original: original, corrected: corrected) else {
             throw GatewayClientError.invalidResponse
         }
         if original.count >= 80, corrected.count < original.count * 3 / 5 {
@@ -399,6 +399,43 @@ public final class GatewayClient: Sendable {
         let value: String
         let start: Int
         let end: Int
+    }
+
+    private struct GrammarLineStructure {
+        let lines: [String]
+        let separators: [Character]
+    }
+
+    private static func preservesNewlineStructure(original: String, corrected: String) -> Bool {
+        let sourceStructure = grammarLineStructure(in: original)
+        let correctedStructure = grammarLineStructure(in: corrected)
+        guard sourceStructure.separators == correctedStructure.separators,
+              sourceStructure.lines.count == correctedStructure.lines.count else {
+            return false
+        }
+        return zip(sourceStructure.lines, correctedStructure.lines).allSatisfy { sourceLine, correctedLine in
+            !hasUnanchoredGrammarContent(
+                grammarWordOccurrences(in: Array(sourceLine)).map(\.value),
+                grammarWordOccurrences(in: Array(correctedLine)).map(\.value)
+            )
+        }
+    }
+
+    private static func grammarLineStructure(in value: String) -> GrammarLineStructure {
+        var lines: [String] = []
+        var separators: [Character] = []
+        var currentLine = ""
+        for character in value {
+            if character.isNewline {
+                lines.append(currentLine)
+                separators.append(character)
+                currentLine = ""
+            } else {
+                currentLine.append(character)
+            }
+        }
+        lines.append(currentLine)
+        return GrammarLineStructure(lines: lines, separators: separators)
     }
 
     private static func hasSuspiciousBoundarySentenceSubstitution(original: String, corrected: String) -> Bool {

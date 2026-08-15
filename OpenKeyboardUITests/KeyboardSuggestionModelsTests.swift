@@ -713,6 +713,19 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
+                "First sentence. Second\nline stays.",
+                original: "First sentnce.\nSecond line stays."
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "First sentence.\nSecond line stays.",
+                original: "First sentnce.\nSecond line stays."
+            ),
+            "First sentence.\nSecond line stays."
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",
                 original: "  i recieved teh refnd.  "
             )

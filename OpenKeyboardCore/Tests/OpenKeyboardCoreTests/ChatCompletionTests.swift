@@ -537,6 +537,31 @@ final class ChatCompletionTests: XCTestCase {
         )
         XCTAssertEqual(correctedApostrophe, "I don't know.")
 
+        let relocatedLineBreak = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("First sentence. Second\nline stays."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await relocatedLineBreak.performWritingAction(
+                .fixGrammar,
+                text: "First sentnce.\nSecond line stays.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let preservedLineBreak = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("First sentence.\nSecond line stays."))
+        )
+        let correctedMultiline = try? await preservedLineBreak.performWritingAction(
+            .fixGrammar,
+            text: "First sentnce.\nSecond line stays.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedMultiline, "First sentence.\nSecond line stays.")
+
         let shortTailOmission = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))

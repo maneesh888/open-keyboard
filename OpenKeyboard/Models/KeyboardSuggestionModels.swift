@@ -440,7 +440,7 @@ struct GrammarCorrectionResponseValidator {
         }
         guard !lower.hasPrefix("{") && !lower.hasPrefix("[") else { throw GrammarCorrectionResponseError.commentary }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
-        guard corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
+        guard preservesNewlineStructure(original: original, corrected: corrected) else {
             throw GrammarCorrectionResponseError.truncated
         }
         if corrected == original { return corrected }
@@ -510,6 +510,43 @@ struct GrammarCorrectionResponseValidator {
         let value: String
         let start: Int
         let end: Int
+    }
+
+    private struct GrammarLineStructure {
+        let lines: [String]
+        let separators: [Character]
+    }
+
+    private static func preservesNewlineStructure(original: String, corrected: String) -> Bool {
+        let sourceStructure = grammarLineStructure(in: original)
+        let correctedStructure = grammarLineStructure(in: corrected)
+        guard sourceStructure.separators == correctedStructure.separators,
+              sourceStructure.lines.count == correctedStructure.lines.count else {
+            return false
+        }
+        return zip(sourceStructure.lines, correctedStructure.lines).allSatisfy { sourceLine, correctedLine in
+            !hasUnanchoredGrammarContent(
+                wordOccurrences(in: Array(sourceLine)).map(\.value),
+                wordOccurrences(in: Array(correctedLine)).map(\.value)
+            )
+        }
+    }
+
+    private static func grammarLineStructure(in value: String) -> GrammarLineStructure {
+        var lines: [String] = []
+        var separators: [Character] = []
+        var currentLine = ""
+        for character in value {
+            if character.isNewline {
+                lines.append(currentLine)
+                separators.append(character)
+                currentLine = ""
+            } else {
+                currentLine.append(character)
+            }
+        }
+        lines.append(currentLine)
+        return GrammarLineStructure(lines: lines, separators: separators)
     }
 
     private static func hasSuspiciousBoundarySentenceSubstitution(original: String, corrected: String) -> Bool {
