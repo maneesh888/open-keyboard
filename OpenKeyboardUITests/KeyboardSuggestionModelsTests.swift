@@ -612,6 +612,26 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: detailedSource
             )
         )
+
+        let shortSource = "i recieved teh refnd."
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "i recieved teh refnd. Hope this helps.",
+                original: shortSource
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "i recieved teh refnd. Hope this helps.",
+                original: "  i recieved teh refnd.  "
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "This is a detailed sentence.",
+                original: "This is a detailed sentence about updates."
+            )
+        )
     }
 
     func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {

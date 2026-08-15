@@ -387,7 +387,9 @@ class NetworkManager {
         } catch {
             throw NetworkError.unusableCorrection
         }
-        let correctionCount = GrammarDiffService.edits(from: inputText, to: corrected).count
+        let correctionCount = GrammarDiffService.edits(from: inputText, to: corrected).filter {
+            !$0.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
         guard correctionCount >= minimumCount else { throw NetworkError.unusableCorrection }
         return correctionCount
     }

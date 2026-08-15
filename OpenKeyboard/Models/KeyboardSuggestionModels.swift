@@ -444,10 +444,10 @@ struct GrammarCorrectionResponseValidator {
         }
 
         let edits = GrammarDiffService.edits(from: original, to: corrected)
-        guard !edits.contains(where: isSuspiciousOmission) else {
+        guard !edits.contains(where: { isSuspiciousOmission($0, original: original) }) else {
             throw GrammarCorrectionResponseError.truncated
         }
-        guard !edits.contains(where: { isSuspiciousBoundaryCommentary($0, originalLength: original.count) }) else {
+        guard !edits.contains(where: { isSuspiciousBoundaryCommentary($0, original: original) }) else {
             throw GrammarCorrectionResponseError.commentary
         }
         let changedCharacters = edits.reduce(0) {
@@ -475,19 +475,30 @@ struct GrammarCorrectionResponseValidator {
         return corrected
     }
 
-    private static func isSuspiciousOmission(_ edit: GrammarEdit) -> Bool {
+    private static func isSuspiciousOmission(_ edit: GrammarEdit, original: String) -> Bool {
         let removedWords = words(in: edit.originalText).count
         let replacementWords = words(in: edit.replacementText).count
-        return removedWords >= 3 && replacementWords == 0
+        guard removedWords > 0, replacementWords == 0 else { return false }
+        let originalCharacters = Array(original)
+        let beforeEdit = String(originalCharacters.prefix(edit.range.start))
+        let afterEdit = String(originalCharacters.dropFirst(edit.range.end))
+        let removesDocumentBoundary = words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty
+        return removesDocumentBoundary || removedWords >= 3
     }
 
-    private static func isSuspiciousBoundaryCommentary(_ edit: GrammarEdit, originalLength: Int) -> Bool {
+    private static func isSuspiciousBoundaryCommentary(_ edit: GrammarEdit, original: String) -> Bool {
         guard edit.originalText.isEmpty else { return false }
         let inserted = edit.replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
         let insertedWords = words(in: inserted)
-        guard !insertedWords.isEmpty, insertedWords.count <= 4 else { return false }
+        guard !insertedWords.isEmpty else { return false }
+        let originalCharacters = Array(original)
+        let beforeEdit = String(originalCharacters.prefix(edit.range.start))
+        let afterEdit = String(originalCharacters.dropFirst(edit.range.start))
+        guard words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty else { return false }
+        let normalized = inserted.lowercased().trimmingCharacters(in: .punctuationCharacters)
+        let oneWordCommentary = ["thanks", "done", "enjoy"].contains(normalized)
         let commentaryPunctuation = inserted.hasSuffix(":") || inserted.hasSuffix(",")
-        return commentaryPunctuation && (edit.range.start == 0 || edit.range.start == originalLength)
+        return insertedWords.count >= 2 || oneWordCommentary || commentaryPunctuation
     }
 
     private static func words(in value: String) -> [String] {

@@ -332,6 +332,30 @@ final class ChatCompletionTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
+
+        let commentary = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("i recieved teh refnd. Hope this helps."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await commentary.performWritingAction(.fixGrammar, text: "i recieved teh refnd.", model: "test-model")
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let shortTailOmission = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await shortTailOmission.performWritingAction(
+                .fixGrammar,
+                text: "This is a detailed sentence about updates.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
     }
 
     func testPerformWritingActionEmptyChoicesMapsToInvalidResponse() async {

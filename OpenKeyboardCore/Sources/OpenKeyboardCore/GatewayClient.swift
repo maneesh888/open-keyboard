@@ -303,9 +303,13 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let commentaryPrefixes = ["```", "here is", "here's", "corrected text", "correction:", "sure,", "i corrected", "the corrected", "{", "["]
+        let commentaryPrefixes = ["```", "here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected", "{", "["]
+        let commentarySuffixes = ["hope this helps", "let me know", "thanks", "thank you", "done", "enjoy"]
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard !commentaryPrefixes.contains(where: inspection.hasPrefix),
+              !commentarySuffixes.contains(where: {
+                  inspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0)
+              }),
               corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GatewayClientError.invalidResponse
         }
@@ -315,6 +319,9 @@ public final class GatewayClient: Sendable {
         if corrected == original { return corrected }
         let originalWords = grammarWords(in: original)
         let responseWords = grammarWords(in: corrected)
+        guard !hasSuspiciousBoundaryWordChange(originalWords: originalWords, responseWords: responseWords) else {
+            throw GatewayClientError.invalidResponse
+        }
         let approximatelyPreservedWords = originalWords.filter { sourceWord in
             responseWords.contains { candidate in
                 grammarWordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
@@ -324,6 +331,28 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
         return corrected
+    }
+
+    private static func hasSuspiciousBoundaryWordChange(
+        originalWords: [String],
+        responseWords: [String]
+    ) -> Bool {
+        if responseWords.count < originalWords.count {
+            return grammarWordsApproximatelyMatch(responseWords, Array(originalWords.prefix(responseWords.count))) ||
+                grammarWordsApproximatelyMatch(responseWords, Array(originalWords.suffix(responseWords.count)))
+        }
+        if responseWords.count >= originalWords.count + 2 {
+            return grammarWordsApproximatelyMatch(originalWords, Array(responseWords.prefix(originalWords.count))) ||
+                grammarWordsApproximatelyMatch(originalWords, Array(responseWords.suffix(originalWords.count)))
+        }
+        return false
+    }
+
+    private static func grammarWordsApproximatelyMatch(_ lhs: [String], _ rhs: [String]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        return zip(lhs, rhs).allSatisfy { left, right in
+            grammarWordEditDistance(left, right) <= max(2, max(left.count, right.count) / 3)
+        }
     }
 
     private static func restoringOriginalBoundaryWhitespace(in response: String, original: String) -> String {
