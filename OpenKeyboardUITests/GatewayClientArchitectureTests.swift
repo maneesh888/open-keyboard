@@ -239,6 +239,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.unauthorized), .unauthorized)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.timeout), .timeout)
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: URLError(.timedOut)), .timeout)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.transport), .transport)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.invalidResponse), .invalidResponse)
     }

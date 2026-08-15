@@ -974,6 +974,7 @@ private extension Character {
 
 enum KeyboardActionErrorKind: Equatable {
     case gatewayUnavailable
+    case timeout
     case authentication
     case modelUnavailable
     case modelCapability
@@ -981,6 +982,7 @@ enum KeyboardActionErrorKind: Equatable {
     var title: String {
         switch self {
         case .gatewayUnavailable: return "AI unavailable"
+        case .timeout: return "Request timed out"
         case .authentication: return "Invalid API key"
         case .modelUnavailable: return "Model unavailable"
         case .modelCapability: return "Model not compatible"

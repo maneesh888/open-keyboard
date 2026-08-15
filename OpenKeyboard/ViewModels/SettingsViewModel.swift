@@ -299,7 +299,10 @@ class SettingsViewModel: ObservableObject {
                     return
                 }
 
-                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: smokeErrors.last ?? NetworkError.unusableCorrection, model: fallbackModel))
+                let failure = smokeErrors.first(where: Self.isTimeout)
+                    ?? smokeErrors.last
+                    ?? NetworkError.unusableCorrection
+                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: failure, model: fallbackModel))
             } else {
                 failConnection(with: "Connection failed")
             }
@@ -368,11 +371,17 @@ class SettingsViewModel: ObservableObject {
     private static func isGrammarCorrectionCapabilityMiss(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
         switch networkError {
-        case .unusableCorrection, .timeout:
+        case .unusableCorrection:
             return true
         default:
             return false
         }
+    }
+
+    private static func isTimeout(_ error: Error) -> Bool {
+        guard let networkError = error as? NetworkError else { return false }
+        if case .timeout = networkError { return true }
+        return false
     }
 
     private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {

@@ -370,7 +370,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
     func testTypedGatewayFailuresReachDistinctKeyboardErrorTitles() async {
         let cases: [(KeyboardAIError, String)] = [
-            (.timeout, "AI unavailable"),
+            (.timeout, "Request timed out"),
             (.transport, "AI unavailable"),
             (.modelUnavailable, "Model unavailable"),
             (.unauthorized, "Invalid API key")
@@ -409,8 +409,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.actionError != nil }
 
         XCTAssertFalse(viewModel.isPerformingAIAction)
-        XCTAssertEqual(viewModel.actionError?.kind, .gatewayUnavailable)
-        XCTAssertEqual(viewModel.actionError?.title, "AI unavailable")
+        XCTAssertEqual(viewModel.actionError?.kind, .timeout)
+        XCTAssertEqual(viewModel.actionError?.title, "Request timed out")
         XCTAssertEqual(
             viewModel.actionError?.message,
             "The AI request took longer than 15 seconds. Try again or choose a faster model."

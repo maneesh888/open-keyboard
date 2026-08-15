@@ -285,7 +285,9 @@ enum KeyboardAIError: LocalizedError, Equatable {
             return .modelUnavailable
         case .modelCapability:
             return .modelCapability
-        case .notConfigured, .missingInput, .invalidURL, .timeout, .transport, .server, .invalidResponse, .missingTranslationTarget:
+        case .timeout:
+            return .timeout
+        case .notConfigured, .missingInput, .invalidURL, .transport, .server, .invalidResponse, .missingTranslationTarget:
             return .gatewayUnavailable
         }
     }
@@ -416,8 +418,10 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw error
         } catch let error as CanonicalGatewayClientError {
             throw Self.keyboardError(from: error)
-        } catch {
+        } catch is GrammarCorrectionResponseError {
             throw KeyboardAIError.modelCapability
+        } catch {
+            throw Self.keyboardError(from: error)
         }
 
         guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
@@ -430,6 +434,9 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     }
 
     static func keyboardError(from error: Error) -> KeyboardAIError {
+        if let urlError = error as? URLError, urlError.code == .timedOut {
+            return .timeout
+        }
         guard let gatewayError = error as? CanonicalGatewayClientError else {
             return .transport
         }

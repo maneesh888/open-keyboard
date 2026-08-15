@@ -658,7 +658,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
     }
 
-    func testCorrectionTimeoutKeepsGatewayConnectedAndPersistsUnverifiedModelCapability() async {
+    func testCorrectionTimeoutShowsTimeoutFailureInsteadOfModelCapability() async {
         let suiteName = "SettingsViewModelTests.model-timeout.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -674,17 +674,16 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
-        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertTrue(viewModel.config.isConfigured)
-        XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
-        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
-        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertFalse(viewModel.hasConnectionError)
-        XCTAssertNil(viewModel.errorMessage)
-        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+        let timeoutMessage = "Gateway connected, but the selected model did not respond within 20 seconds. Choose a faster model or retry."
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertTrue(viewModel.config.gatewayURL.isEmpty)
+        XCTAssertTrue(viewModel.config.selectedModel.isEmpty)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertTrue(viewModel.hasConnectionError)
+        XCTAssertEqual(viewModel.errorMessage, timeoutMessage)
+        XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), timeoutMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
     }
 
     func testDefaultGatewayInputShowsHTTPSHelpButCannotTestUntilHostExists() {
