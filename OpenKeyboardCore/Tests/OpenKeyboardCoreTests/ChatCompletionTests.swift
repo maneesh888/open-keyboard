@@ -343,6 +343,20 @@ final class ChatCompletionTests: XCTestCase {
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
 
+        let correctedWithOneWordCommentary = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I received the refund. Sure."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await correctedWithOneWordCommentary.performWritingAction(
+                .fixGrammar,
+                text: "i recieved teh refnd.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
         let shortTailOmission = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))

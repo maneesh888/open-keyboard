@@ -341,7 +341,7 @@ public final class GatewayClient: Sendable {
             return grammarWordsApproximatelyMatch(responseWords, Array(originalWords.prefix(responseWords.count))) ||
                 grammarWordsApproximatelyMatch(responseWords, Array(originalWords.suffix(responseWords.count)))
         }
-        if responseWords.count >= originalWords.count + 2 {
+        if responseWords.count > originalWords.count {
             return grammarWordsApproximatelyMatch(originalWords, Array(responseWords.prefix(originalWords.count))) ||
                 grammarWordsApproximatelyMatch(originalWords, Array(responseWords.suffix(originalWords.count)))
         }

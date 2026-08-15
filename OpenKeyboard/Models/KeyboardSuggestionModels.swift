@@ -495,10 +495,7 @@ struct GrammarCorrectionResponseValidator {
         let beforeEdit = String(originalCharacters.prefix(edit.range.start))
         let afterEdit = String(originalCharacters.dropFirst(edit.range.start))
         guard words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty else { return false }
-        let normalized = inserted.lowercased().trimmingCharacters(in: .punctuationCharacters)
-        let oneWordCommentary = ["thanks", "done", "enjoy"].contains(normalized)
-        let commentaryPunctuation = inserted.hasSuffix(":") || inserted.hasSuffix(",")
-        return insertedWords.count >= 2 || oneWordCommentary || commentaryPunctuation
+        return true
     }
 
     private static func words(in value: String) -> [String] {

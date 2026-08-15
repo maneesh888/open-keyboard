@@ -505,6 +505,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.timeout, response: .throwing(URLError(.timedOut)))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "i recieved teh refnd. Hope this helps."))
+        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the refund. Sure."))
     }
 
     func testGatewayDiagnosticsRunsKeyboardPlainTextGrammarPathAndMeasuresPerformance() async throws {

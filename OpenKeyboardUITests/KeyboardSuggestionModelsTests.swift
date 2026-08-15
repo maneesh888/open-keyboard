@@ -622,6 +622,12 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
+                "I received the refund. Sure.",
+                original: shortSource
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",
                 original: "  i recieved teh refnd.  "
             )
