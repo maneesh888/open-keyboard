@@ -732,11 +732,6 @@ final class LiveGatewaySmokeTests: XCTestCase {
               let model = environment["OPEN_KEYBOARD_TEST_MODEL"], !model.isEmpty else {
             throw XCTSkip("Set the encoded live gateway test values and OPEN_KEYBOARD_TEST_MODEL to run live gateway smoke.")
         }
-        let structuredRequirement = environment["OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS"] ?? "true"
-        guard let requiresStructuredCorrections = ["true": true, "false": false][structuredRequirement] else {
-            XCTFail("OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS must be true or false.")
-            return
-        }
 
         let suiteName = "LiveGatewaySmokeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -751,8 +746,8 @@ final class LiveGatewaySmokeTests: XCTestCase {
             gatewayURL: "",
             selectedModel: model,
             isConfigured: false,
-            supportsStructuredCorrections: false,
-            structuredCorrectionSchemaVersion: ""
+            grammarCorrectionVerified: false,
+            grammarCorrectionContractVersion: ""
         )
         let viewModel = SettingsViewModel(config: initialConfig, gatewayTester: NetworkManager(), defaults: defaults)
         viewModel.updateGatewayURLInput(gatewayURL)
@@ -761,13 +756,12 @@ final class LiveGatewaySmokeTests: XCTestCase {
         await viewModel.testConnection()
 
         let connectionFailure = viewModel.errorMessage ?? "No user-facing error was recorded."
-        let acceptedConnection = viewModel.connectionStatus == .success ||
-            (!requiresStructuredCorrections && viewModel.connectionStatus == .limited)
-        XCTAssertTrue(
-            acceptedConnection,
-            "Test Connection failed: \(connectionFailure)"
+        XCTAssertEqual(
+            viewModel.connectionStatus,
+            .success,
+            "Test Connection did not verify plain-text grammar: \(connectionFailure)"
         )
-        guard acceptedConnection else { return }
+        guard viewModel.connectionStatus == .success else { return }
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.gatewayURL.isEmpty)
         XCTAssertEqual(
@@ -780,18 +774,7 @@ final class LiveGatewaySmokeTests: XCTestCase {
         XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), viewModel.config.selectedModel)
         XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNotNil(secretStore.apiKey)
-        XCTAssertEqual(
-            viewModel.config.supportsStructuredCorrections,
-            viewModel.connectionStatus == .success
-        )
-
-        if viewModel.connectionStatus == .limited {
-            XCTAssertFalse(requiresStructuredCorrections)
-            XCTAssertTrue(viewModel.availableModels.contains(model))
-            XCTAssertNil(viewModel.errorMessage)
-            print("OpenKeyboard live Test Connection status: connected; plain-text grammar unverified.")
-            return
-        }
+        XCTAssertTrue(viewModel.config.grammarCorrectionVerified)
 
         print("OpenKeyboard live Test Connection status: connected; plain-text grammar verified.")
 

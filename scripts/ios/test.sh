@@ -100,7 +100,6 @@ inject_xctestrun_live_smoke_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX" "$gateway_url_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY_HEX" "$api_key_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
-    plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS" "$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS"
   done
 }
 
@@ -329,15 +328,6 @@ case "${1:-}" in
       echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
       exit 1
     fi
-    OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS="${OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS:-true}"
-    case "$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS" in
-      true|false) ;;
-      *)
-        echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS must be true or false.${NC}"
-        exit 2
-        ;;
-    esac
-
     echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
@@ -358,7 +348,6 @@ case "${1:-}" in
     export OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
     export OPEN_KEYBOARD_TEST_API_KEY_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
     export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
-    export OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS="$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS"
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \

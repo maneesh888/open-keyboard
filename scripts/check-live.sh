@@ -19,9 +19,8 @@ Optional:
   OPEN_KEYBOARD_LIVE_EXPECTED_SHA            Exact 40-character expected HEAD.
   OPEN_KEYBOARD_LIVE_REQUIRED_MODEL          Exact model ID required by this task.
                                              Omit only for model-agnostic gateway work.
-                                             Exact-model runs require verified structured
-                                             corrections; model-agnostic runs may retain a
-                                             connected, capability-unverified result.
+                                             Every run must verify the production plain-text
+                                             grammar flow for the seeded model.
 EOF
 }
 
@@ -79,11 +78,6 @@ TESTED_MODEL="${OPEN_KEYBOARD_SIMULATOR_MODEL:-}"
 REQUIRED_MODEL="${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL:-model-agnostic}"
 openkeyboard_require_exact_live_model "$TESTED_MODEL" "$REQUIRED_MODEL" ||
   fail "Live model coverage validation failed."
-if [[ "$REQUIRED_MODEL" == "model-agnostic" ]]; then
-  REQUIRE_STRUCTURED_CORRECTIONS=false
-else
-  REQUIRE_STRUCTURED_CORRECTIONS=true
-fi
 
 echo "Running deterministic gateway prerequisites for exact HEAD."
 env \
@@ -103,7 +97,6 @@ require_clean_checkout
 
 echo "Running local live gateway smoke for exact HEAD."
 OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE="$SEED_FILE" \
-  OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS="$REQUIRE_STRUCTURED_CORRECTIONS" \
   "$ROOT/scripts/ios/test.sh" live-gateway-smoke
 
 POST_LIVE_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
@@ -117,4 +110,4 @@ echo "target=gateway"
 echo "head_sha=$HEAD_SHA"
 echo "required_model=$REQUIRED_MODEL"
 echo "tested_model=$TESTED_MODEL"
-echo "structured_corrections_required=$REQUIRE_STRUCTURED_CORRECTIONS"
+echo "plain_text_grammar_verified=true"
