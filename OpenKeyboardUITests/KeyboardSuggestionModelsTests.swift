@@ -678,6 +678,18 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "This sentnce need correction today."
             )
         )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "I can send updates.",
+                original: "You send updates."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "You may pay today.",
+                original: "You must pay today."
+            )
+        )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(
                 "They are.",
@@ -691,6 +703,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "I sent update."
             ),
             "I sent an update."
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "I don't know.",
+                original: "I dont know."
+            ),
+            "I don't know."
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(

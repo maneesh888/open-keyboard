@@ -463,32 +463,61 @@ public final class GatewayClient: Sendable {
         _ sourceWords: [String],
         _ correctedWords: [String]
     ) -> Bool {
-        func expandingGrammarInsertions(from positions: Set<Int>) -> Set<Int> {
-            var expanded = positions
-            for index in correctedWords.indices where expanded.contains(index) {
-                if grammarFunctionWords.contains(correctedWords[index]) {
-                    expanded.insert(index + 1)
+        func expandingGrammarInsertions(from states: Set<GrammarAlignmentState>) -> Set<GrammarAlignmentState> {
+            var expanded = states
+            var pending = Array(states)
+            while let state = pending.popLast() {
+                guard state.correctedCount < correctedWords.count,
+                      state.gap != .deletion,
+                      grammarInsertableWords.contains(correctedWords[state.correctedCount]) else {
+                    continue
+                }
+                let inserted = GrammarAlignmentState(
+                    correctedCount: state.correctedCount + 1,
+                    gap: .insertion
+                )
+                if expanded.insert(inserted).inserted {
+                    pending.append(inserted)
                 }
             }
             return expanded
         }
 
-        var reachableCorrectedCounts = expandingGrammarInsertions(from: [0])
+        var reachableStates = expandingGrammarInsertions(from: [
+            GrammarAlignmentState(correctedCount: 0, gap: .none)
+        ])
         for sourceIndex in sourceWords.indices {
-            var nextCounts: Set<Int> = []
+            var nextStates: Set<GrammarAlignmentState> = []
             let sourceWord = sourceWords[sourceIndex]
-            if grammarFunctionWords.contains(sourceWord) || isRepeatedSourceWord(at: sourceIndex, in: sourceWords) {
-                nextCounts.formUnion(reachableCorrectedCounts)
-            }
-            for correctedIndex in reachableCorrectedCounts where correctedIndex < correctedWords.count {
-                if isPlausibleGrammarWordReplacement(sourceWord, correctedWords[correctedIndex]) {
-                    nextCounts.insert(correctedIndex + 1)
+            let canDeleteSource = grammarDeletableWords.contains(sourceWord) ||
+                isRepeatedSourceWord(at: sourceIndex, in: sourceWords)
+            for state in reachableStates {
+                if canDeleteSource, state.gap != .insertion {
+                    nextStates.insert(GrammarAlignmentState(correctedCount: state.correctedCount, gap: .deletion))
+                }
+                if state.correctedCount < correctedWords.count,
+                   isPlausibleGrammarWordReplacement(sourceWord, correctedWords[state.correctedCount]) {
+                    nextStates.insert(GrammarAlignmentState(
+                        correctedCount: state.correctedCount + 1,
+                        gap: .none
+                    ))
                 }
             }
-            reachableCorrectedCounts = expandingGrammarInsertions(from: nextCounts)
-            if reachableCorrectedCounts.isEmpty { return true }
+            reachableStates = expandingGrammarInsertions(from: nextStates)
+            if reachableStates.isEmpty { return true }
         }
-        return !reachableCorrectedCounts.contains(correctedWords.count)
+        return !reachableStates.contains(where: { $0.correctedCount == correctedWords.count })
+    }
+
+    private enum GrammarAlignmentGap: Hashable {
+        case none
+        case insertion
+        case deletion
+    }
+
+    private struct GrammarAlignmentState: Hashable {
+        let correctedCount: Int
+        let gap: GrammarAlignmentGap
     }
 
     private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
@@ -517,17 +546,14 @@ public final class GatewayClient: Sendable {
             sourceCharacters[differences[1]] == correctedCharacters[differences[0]]
     }
 
-    private static let grammarFunctionWords: Set<String> = [
-        "a", "an", "the", "this", "that", "these", "those",
+    private static let grammarInsertableWords: Set<String> = [
+        "a", "an", "the",
         "am", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did", "done",
-        "can", "could", "will", "would", "shall", "should", "may", "might", "must",
-        "and", "but", "or", "nor", "for", "so", "yet",
-        "at", "by", "from", "in", "into", "of", "on", "to", "with",
-        "i", "me", "my", "mine", "we", "us", "our", "ours",
-        "you", "your", "yours", "he", "him", "his", "she", "her", "hers",
-        "it", "its", "they", "them", "their", "theirs"
+        "have", "has", "had", "do", "does", "did",
+        "at", "by", "from", "in", "into", "of", "on", "to", "with"
     ]
+
+    private static let grammarDeletableWords = grammarInsertableWords
 
     private static let grammarWordFamilies: [Set<String>] = [
         ["am", "is", "are", "was", "were", "be", "been", "being"],
@@ -547,16 +573,33 @@ public final class GatewayClient: Sendable {
                 continue
             }
             let start = index
-            while index < characters.count, characters[index].isLetter || characters[index].isNumber {
-                index += 1
+            while index < characters.count {
+                if characters[index].isLetter || characters[index].isNumber {
+                    index += 1
+                    continue
+                }
+                let isInternalApostrophe = (characters[index] == "'" || characters[index] == "’") &&
+                    index > start && index + 1 < characters.count &&
+                    (characters[index + 1].isLetter || characters[index + 1].isNumber)
+                if isInternalApostrophe {
+                    index += 1
+                    continue
+                }
+                break
             }
             occurrences.append(GrammarWordOccurrence(
-                value: String(characters[start..<index]).lowercased(),
+                value: normalizedGrammarWord(String(characters[start..<index])),
                 start: start,
                 end: index
             ))
         }
         return occurrences
+    }
+
+    private static func normalizedGrammarWord(_ value: String) -> String {
+        value.lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "’", with: "")
     }
 
     private static func grammarContainsBoundaryDelimiter(_ characters: ArraySlice<Character>) -> Bool {

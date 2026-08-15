@@ -476,6 +476,34 @@ final class ChatCompletionTests: XCTestCase {
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
 
+        let pronounAndModalityRewrite = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I can send updates."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await pronounAndModalityRewrite.performWritingAction(
+                .fixGrammar,
+                text: "You send updates.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let modalityRewrite = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("You may pay today."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await modalityRewrite.performWritingAction(
+                .fixGrammar,
+                text: "You must pay today.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
         let grammarOnlyBoundaryReplacement = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("They are."))
@@ -497,6 +525,17 @@ final class ChatCompletionTests: XCTestCase {
             model: "test-model"
         )
         XCTAssertEqual(correctedArticle, "I sent an update.")
+
+        let apostropheCorrection = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I don't know."))
+        )
+        let correctedApostrophe = try? await apostropheCorrection.performWritingAction(
+            .fixGrammar,
+            text: "I dont know.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedApostrophe, "I don't know.")
 
         let shortTailOmission = GatewayClient(
             config: validConfig,
