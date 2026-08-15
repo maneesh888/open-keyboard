@@ -2225,7 +2225,7 @@ private final class SuccessfulKeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        result.suggestionResponse()
+        await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2248,7 +2248,7 @@ private final class RoutingKeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        grammarResult.suggestionResponse()
+        await MainActor.run { grammarResult.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2270,7 +2270,7 @@ private final class DelayedRecordingKeyboardAIService: KeyboardAIServiceProvidin
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        result.suggestionResponse()
+        await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2293,7 +2293,7 @@ private final class CancellableDelayedRecordingKeyboardAIService: KeyboardAIServ
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        result.suggestionResponse()
+        await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2318,7 +2318,8 @@ private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        try nextResult().suggestionResponse()
+        let result = try nextResult()
+        return await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2348,7 +2349,8 @@ private final class FailingThenSuccessfulGrammarAIService: KeyboardAIServiceProv
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
-        try await performResult(action: .fixGrammar, on: text, config: config).suggestionResponse()
+        let result = try await performResult(action: .fixGrammar, on: text, config: config)
+        return await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2377,7 +2379,7 @@ private final class DelayedSequencedKeyboardAIService: KeyboardAIServiceProvidin
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
         let result = try await performResult(action: .fixGrammar, on: text, config: config)
-        return try result.suggestionResponse()
+        return await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
@@ -2413,7 +2415,7 @@ private final class DelayedKeyboardAIService: KeyboardAIServiceProviding {
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
         try? await Task.sleep(nanoseconds: 50_000_000)
-        return result.suggestionResponse()
+        return await MainActor.run { result.suggestionResponse() }
     }
 
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {

@@ -500,7 +500,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
-    func testModelFallbackUsesWorkingNonAppleModelWhenAppleSmokeFails() async {
+    func testModelCheckDoesNotFallbackWhenDiscoveredModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
             failingSmokeModels: ["apple-foundationmodel"]
@@ -511,9 +511,31 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel", "gpt-oss:120b-cloud"])
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+    }
+
+    func testConfiguredModelMustExistAndCannotBeReplacedByCatalogFallback() async {
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "gemma2:2b",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["another-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
+        XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
+        XCTAssertTrue(tester.smokeModels.isEmpty)
     }
 
     func testResetOnboardingClearsPersistedFlagAndShowsConfirmation() {
@@ -917,7 +939,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
     }
 
-    func testModelValidationFallsBackWhenAppleFoundationModelFailsSmoke() async {
+    func testModelValidationDoesNotFallbackWhenAppleFoundationModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
@@ -930,9 +952,9 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel", "gpt-oss:120b-cloud"])
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
     }
 
     func testResetOnboardingClearsSharedAndStandardFlags() {

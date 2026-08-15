@@ -703,6 +703,14 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "We can pay today."
             )
         )
+        for (source, response) in [
+            ("You pay today.", "You have to pay today."),
+            ("We send updates.", "We did send updates.")
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.validated(response, original: source)
+            )
+        }
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
                 "The block bag arrived.",
@@ -759,8 +767,14 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             ("He are ready.", "He is ready."),
             ("She have notes.", "She has notes."),
             ("I going.", "I am going."),
+            ("I did went.", "I went."),
+            ("He is works.", "He works."),
+            ("I can to go.", "I can go."),
             ("The team walk.", "The team walks."),
-            ("The timeline sound wrong.", "The timeline sounds wrong.")
+            ("The timeline sound wrong.", "The timeline sounds wrong."),
+            ("🙂 I going.", "🙂 I am going."),
+            ("He said \"hello\" and sent update.", "He said \"hello\" and sent an update."),
+            ("The notes is, however, clear.", "The notes are, however, clear.")
         ] {
             XCTAssertEqual(
                 try GrammarCorrectionResponseValidator.validated(response, original: source),
@@ -840,9 +854,17 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "teh update."
             )
         )
-        for wrapped in ["'the update.'", "“the update.”", "«the update.»", "the 'update'.", "the “update”."] {
+        for wrapped in ["'the update.'", "“the update.”", "«the update.»", "「the update.」", "the 'update'.", "the “update”."] {
             XCTAssertThrowsError(
                 try GrammarCorrectionResponseValidator.validated(wrapped, original: "teh update.")
+            )
+        }
+        for (source, response) in [
+            ("- Teh item.", "The item."),
+            ("![Alt](image.png)", "[Alt](image.png)")
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.validated(response, original: source)
             )
         }
         XCTAssertEqual(
@@ -859,6 +881,10 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated("“the update.”", original: "“teh update.”"),
             "“the update.”"
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated("「the update.」", original: "「teh update.」"),
+            "「the update.」"
         )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(

@@ -510,7 +510,9 @@ final class ChatCompletionTests: XCTestCase {
             ("The black bag arrived.", "The block bag arrived."),
             ("The planes changed.", "The plans changed."),
             ("They stared today.", "They started today."),
-            ("The trial starts today.", "The trail starts today.")
+            ("The trial starts today.", "The trail starts today."),
+            ("You pay today.", "You have to pay today."),
+            ("We send updates.", "We did send updates.")
         ] {
             let semanticRewrite = GatewayClient(
                 config: validConfig,
@@ -717,8 +719,11 @@ final class ChatCompletionTests: XCTestCase {
             ("teh update.", "'the update.'"),
             ("teh update.", "“the update.”"),
             ("teh update.", "«the update.»"),
+            ("teh update.", "「the update.」"),
             ("teh update.", "the 'update'."),
-            ("teh update.", "the “update”.")
+            ("teh update.", "the “update”."),
+            ("- Teh item.", "The item."),
+            ("![Alt](image.png)", "[Alt](image.png)")
         ] {
             let structuralRewrite = GatewayClient(
                 config: validConfig,
@@ -749,6 +754,7 @@ final class ChatCompletionTests: XCTestCase {
         for (source, response) in [
             ("'teh update.'", "'the update.'"),
             ("“teh update.”", "“the update.”"),
+            ("「teh update.」", "「the update.」"),
             ("She said 'teh update.'", "She said 'the update.'")
         ] {
             let preservedQuoteStructure = GatewayClient(
@@ -834,8 +840,14 @@ final class ChatCompletionTests: XCTestCase {
 
         for (source, response) in [
             ("I going.", "I am going."),
+            ("I did went.", "I went."),
+            ("He is works.", "He works."),
+            ("I can to go.", "I can go."),
             ("The team walk.", "The team walks."),
-            ("The timeline sound wrong.", "The timeline sounds wrong.")
+            ("The timeline sound wrong.", "The timeline sounds wrong."),
+            ("🙂 I going.", "🙂 I am going."),
+            ("He said \"hello\" and sent update.", "He said \"hello\" and sent an update."),
+            ("The notes is, however, clear.", "The notes are, however, clear.")
         ] {
             let generalGrammar = GatewayClient(
                 config: validConfig,

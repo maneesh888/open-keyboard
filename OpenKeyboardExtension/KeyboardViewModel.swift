@@ -1966,6 +1966,7 @@ final class KeyboardViewModel: ObservableObject {
         let hasNoIssueAnalysisResult: Bool
         let completionPanelState: KeyboardCompletionPanelState
 
+        @MainActor
         init?(rawValue: String) {
             switch rawValue {
             case "rewriteOptions":

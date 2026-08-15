@@ -1354,6 +1354,8 @@ private struct CorrectionCompletePanel: View {
                             .font(.subheadline.weight(.bold))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 9)
+                            .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
@@ -1367,6 +1369,8 @@ private struct CorrectionCompletePanel: View {
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 18)
                         .padding(.vertical, 9)
+                        .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)

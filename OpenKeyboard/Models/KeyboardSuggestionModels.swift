@@ -436,7 +436,7 @@ struct GrammarCorrectionResponseValidator {
         guard isTopLevelJSONValue(inspection) == isTopLevelJSONValue(originalLower) else {
             throw GrammarCorrectionResponseError.commentary
         }
-        guard outerBoundaryQuoteStructure(in: inspection) == outerBoundaryQuoteStructure(in: originalLower) else {
+        guard outerBoundaryWrapperStructure(in: inspection) == outerBoundaryWrapperStructure(in: originalLower) else {
             throw GrammarCorrectionResponseError.commentary
         }
         let introducesOpeningFence = lower.hasPrefix("```") && !originalLower.hasPrefix("```")
@@ -503,17 +503,22 @@ struct GrammarCorrectionResponseValidator {
         return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
     }
 
-    private struct OuterBoundaryQuoteStructure: Equatable {
+    private struct OuterBoundaryWrapperStructure: Equatable {
         let leading: Character?
         let trailing: Character?
     }
 
-    private static func outerBoundaryQuoteStructure(in value: String) -> OuterBoundaryQuoteStructure {
+    private static func outerBoundaryWrapperStructure(in value: String) -> OuterBoundaryWrapperStructure {
         let boundaryQuotes: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "«", "»", "‹", "›"]
+        let sentenceTerminals: Set<Character> = [".", "!", "?", "…"]
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return OuterBoundaryQuoteStructure(
-            leading: trimmed.first.flatMap { boundaryQuotes.contains($0) ? $0 : nil },
-            trailing: trimmed.last.flatMap { boundaryQuotes.contains($0) ? $0 : nil }
+        return OuterBoundaryWrapperStructure(
+            leading: trimmed.first.flatMap {
+                boundaryQuotes.contains($0) || $0.isPunctuation ? $0 : nil
+            },
+            trailing: trimmed.last.flatMap {
+                boundaryQuotes.contains($0) || ($0.isPunctuation && !sentenceTerminals.contains($0)) ? $0 : nil
+            }
         )
     }
 
@@ -581,15 +586,19 @@ struct GrammarCorrectionResponseValidator {
               sourceStructure.segments.count == correctedStructure.segments.count else {
             return false
         }
-        let hasProtectedTokens = !sourceStructure.tokens.isEmpty
-        return zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
+        var wordCountDeltas: [Int] = []
+        let segmentsAreValid = zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
             let sourceWords = wordOccurrences(in: Array(source)).map(\.value)
             let responseWords = wordOccurrences(in: Array(response)).map(\.value)
+            wordCountDeltas.append(responseWords.count - sourceWords.count)
             return leadingWhitespace(in: source) == leadingWhitespace(in: response) &&
             trailingWhitespace(in: source) == trailingWhitespace(in: response) &&
-            (!hasProtectedTokens || sourceWords.count == responseWords.count) &&
             !hasUnanchoredGrammarContent(sourceWords, responseWords)
         }
+        guard segmentsAreValid else { return false }
+        let hasInsertion = wordCountDeltas.contains(where: { $0 > 0 })
+        let hasDeletion = wordCountDeltas.contains(where: { $0 < 0 })
+        return !(hasInsertion && hasDeletion)
     }
 
     private static func protectedGrammarStructure(in value: String) -> ProtectedGrammarStructure {
@@ -599,6 +608,7 @@ struct GrammarCorrectionResponseValidator {
         let characters = Array(value)
         for (index, character) in characters.enumerated() {
             if isProtectedGrammarCharacter(character) ||
+                isProtectedMarkdownMarker(character, at: index, in: characters) ||
                 isProtectedGrammarQuote(character, at: index, in: characters) {
                 segments.append(currentSegment)
                 tokens.append(character)
@@ -626,6 +636,28 @@ struct GrammarCorrectionResponseValidator {
         return !isInternalApostrophe
     }
 
+    private static func isProtectedMarkdownMarker(
+        _ character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> Bool {
+        if character == "!" {
+            return index + 1 < characters.endIndex && characters[index + 1] == "["
+        }
+        let lineStart = characters[..<index].lastIndex(where: { $0.isNewline }).map { $0 + 1 } ?? 0
+        let prefix = characters[lineStart..<index]
+        if character == "-" {
+            return prefix.allSatisfy(\.isWhitespace) &&
+                index + 1 < characters.endIndex && characters[index + 1].isWhitespace
+        }
+        if character == "." {
+            let trimmedPrefix = prefix.drop(while: { $0.isWhitespace })
+            return !trimmedPrefix.isEmpty && trimmedPrefix.allSatisfy(\.isNumber) &&
+                index + 1 < characters.endIndex && characters[index + 1].isWhitespace
+        }
+        return false
+    }
+
     private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
         let formattingMarkers: Set<Character> = [
             "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%",
@@ -635,7 +667,9 @@ struct GrammarCorrectionResponseValidator {
         if character.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) { return true }
         return character.unicodeScalars.contains { scalar in
             switch scalar.properties.generalCategory {
-            case .mathSymbol, .currencySymbol, .modifierSymbol, .otherSymbol:
+            case .mathSymbol, .currencySymbol, .modifierSymbol, .otherSymbol,
+                 .dashPunctuation, .openPunctuation, .closePunctuation,
+                 .initialPunctuation, .finalPunctuation:
                 return true
             default:
                 return false
@@ -687,7 +721,8 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
             ]
-            if containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
+            if sourceSeparator != correctedSeparator,
+               containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -709,7 +744,8 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
             ]
-            if containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
+            if sourceSeparator != correctedSeparator,
+               containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -720,36 +756,46 @@ struct GrammarCorrectionResponseValidator {
         _ sourceWords: [String],
         _ correctedWords: [String]
     ) -> Bool {
-        func expandingGrammarInsertions(from states: Set<GrammarAlignmentState>) -> Set<GrammarAlignmentState> {
+        func expandingGrammarInsertions(
+            from states: Set<GrammarAlignmentState>,
+            beforeSourceIndex sourceIndex: Int
+        ) -> Set<GrammarAlignmentState> {
             var expanded = states
-            var pending = Array(states)
-            while let state = pending.popLast() {
+            for state in states {
                 guard state.correctedCount < correctedWords.count,
-                      state.gap != .deletion,
-                      grammarInsertableWords.contains(correctedWords[state.correctedCount]) else {
+                      state.gap == .none,
+                      isAllowedGrammarInsertion(
+                        correctedWords[state.correctedCount],
+                        at: state.correctedCount,
+                        beforeSourceIndex: sourceIndex,
+                        sourceWords: sourceWords,
+                        correctedWords: correctedWords
+                      ) else {
                     continue
                 }
                 let inserted = GrammarAlignmentState(
                     correctedCount: state.correctedCount + 1,
                     gap: .insertion
                 )
-                if expanded.insert(inserted).inserted {
-                    pending.append(inserted)
-                }
+                expanded.insert(inserted)
             }
             return expanded
         }
 
-        var reachableStates = expandingGrammarInsertions(from: [
-            GrammarAlignmentState(correctedCount: 0, gap: .none)
-        ])
+        var reachableStates = expandingGrammarInsertions(
+            from: [GrammarAlignmentState(correctedCount: 0, gap: .none)],
+            beforeSourceIndex: 0
+        )
         for sourceIndex in sourceWords.indices {
             var nextStates: Set<GrammarAlignmentState> = []
             let sourceWord = sourceWords[sourceIndex]
-            let canDeleteSource = grammarDeletableWords.contains(sourceWord) ||
-                isRepeatedSourceWord(at: sourceIndex, in: sourceWords)
             for state in reachableStates {
-                if canDeleteSource, state.gap != .insertion {
+                let canDeleteSource = isAllowedGrammarDeletion(
+                    sourceWord,
+                    at: sourceIndex,
+                    sourceWords: sourceWords
+                ) || isRepeatedSourceWord(at: sourceIndex, in: sourceWords)
+                if canDeleteSource, state.gap == .none {
                     nextStates.insert(GrammarAlignmentState(correctedCount: state.correctedCount, gap: .deletion))
                 }
                 if state.correctedCount < correctedWords.count,
@@ -760,7 +806,10 @@ struct GrammarCorrectionResponseValidator {
                     ))
                 }
             }
-            reachableStates = expandingGrammarInsertions(from: nextStates)
+            reachableStates = expandingGrammarInsertions(
+                from: nextStates,
+                beforeSourceIndex: sourceIndex + 1
+            )
             if reachableStates.isEmpty { return true }
         }
         return !reachableStates.contains(where: { $0.correctedCount == correctedWords.count })
@@ -834,12 +883,58 @@ struct GrammarCorrectionResponseValidator {
             (index + 1 < words.endIndex && words[index + 1] == words[index])
     }
 
-    private static let grammarInsertableWords: Set<String> = [
-        "a", "an", "the", "am", "is", "are", "was", "were", "be", "been", "being",
-        "has", "have", "had", "do", "does", "did", "to"
-    ]
+    private static func isAllowedGrammarInsertion(
+        _ word: String,
+        at correctedIndex: Int,
+        beforeSourceIndex sourceIndex: Int,
+        sourceWords: [String],
+        correctedWords: [String]
+    ) -> Bool {
+        if grammarArticleWords.contains(word) { return true }
+        guard sourceWords.indices.contains(sourceIndex),
+              sourceWords[sourceIndex].hasSuffix("ing"),
+              correctedIndex > correctedWords.startIndex else {
+            return false
+        }
+        let subject = correctedWords[correctedIndex - 1]
+        switch word {
+        case "am": return subject == "i"
+        case "is": return ["he", "she", "it"].contains(subject)
+        case "are": return ["you", "we", "they"].contains(subject)
+        default: return false
+        }
+    }
 
-    private static let grammarDeletableWords: Set<String> = ["a", "an", "the"]
+    private static func isAllowedGrammarDeletion(
+        _ word: String,
+        at sourceIndex: Int,
+        sourceWords: [String]
+    ) -> Bool {
+        if grammarArticleWords.contains(word) { return true }
+        guard sourceIndex + 1 < sourceWords.endIndex else { return false }
+        let nextWord = sourceWords[sourceIndex + 1]
+        if word == "to", sourceIndex > sourceWords.startIndex {
+            return modalWords.contains(sourceWords[sourceIndex - 1])
+        }
+        if ["do", "does", "did"].contains(word) {
+            return nextWord.hasSuffix("ed") || irregularPastTenseWords.contains(nextWord)
+        }
+        if ["am", "is", "are", "was", "were"].contains(word) {
+            return nextWord.hasSuffix("s") && !nextWord.hasSuffix("ss")
+        }
+        return false
+    }
+
+    private static let grammarArticleWords: Set<String> = ["a", "an", "the"]
+    private static let modalWords: Set<String> = [
+        "can", "could", "may", "might", "must", "shall", "should", "will", "would"
+    ]
+    private static let irregularPastTenseWords: Set<String> = [
+        "ate", "bought", "came", "did", "drank", "drove", "felt", "found", "gave", "got",
+        "had", "kept", "knew", "left", "lost", "made", "met", "paid", "ran", "said", "saw",
+        "sent", "slept", "spoke", "stood", "taught", "thought", "told", "took", "understood",
+        "went", "won", "wore", "wrote"
+    ]
 
     private static let allowedGrammarWordReplacements: Set<String> = [
         "a\u{1F}an", "an\u{1F}a",
@@ -1035,6 +1130,7 @@ struct KeyboardSuggestionState: Equatable {
     private(set) var currentCorrectionIndex: Int
     private(set) var grammarSession: GrammarCorrectionSession?
 
+    @MainActor
     init(response: KeyboardSuggestionResponse, sourceContext: String? = nil, currentCorrectionIndex: Int = 0) {
         if let sourceContext, !sourceContext.isEmpty {
             let filteredCorrections = response.corrections.filter { $0.isAtomicCorrection(for: sourceContext) }
@@ -1229,6 +1325,7 @@ struct KeyboardSuggestionState: Equatable {
 }
 
 extension KeyboardCorrectionSuggestion {
+    @MainActor
     func isAtomicCorrection(for sourceText: String) -> Bool {
         let cleanOriginal = original.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanReplacement = replacement.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1276,6 +1373,7 @@ extension KeyboardCorrectionSuggestion {
         return Self.isSingleMechanicalInsertionOrRemoval(originalWords, replacementWords)
     }
 
+    @MainActor
     private static func isMechanicalTokenReplacement(
         original: String,
         replacement: String,
@@ -1344,6 +1442,7 @@ extension KeyboardCorrectionSuggestion {
         return stems
     }
 
+    @MainActor
     private static func isLikelySpellingCorrection(_ original: String, _ replacement: String) -> Bool {
         guard !original.isEmpty, !replacement.isEmpty else { return false }
         let editDistance = characterEditDistance(original, replacement)
@@ -1540,6 +1639,7 @@ struct KeyboardActionOperationResult: Equatable {
         self.isNoChangeResult = isNoChangeResult
     }
 
+    @MainActor
     func suggestionResponse(sourceText: String? = nil) -> KeyboardSuggestionResponse {
         let mappedCorrections = items.compactMap(\.correctionSuggestion)
         let corrections: [KeyboardCorrectionSuggestion]

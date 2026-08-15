@@ -88,6 +88,9 @@ class SettingsViewModel: ObservableObject {
 
     private static func settingsDisplayConfig(from config: AppConfig, defaults: UserDefaults?) -> AppConfig {
         guard config.isKnownTestPlaceholderConfig else { return config }
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            return config
+        }
         if let defaults {
             AppConfig.clear(from: defaults)
         } else {
@@ -235,56 +238,43 @@ class SettingsViewModel: ObservableObject {
                     apiKey: draftAPIKey
                 )
                 availableModels = models
-                let candidates = AppConfig.gatewayModelCandidates(from: availableModels, currentModel: config.selectedModel)
-                guard !candidates.isEmpty else {
+                let configuredModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                let gatewayModel: String
+                if configuredModel.isEmpty {
+                    guard let discoveredModel = AppConfig.gatewayModelCandidates(
+                        from: availableModels,
+                        currentModel: ""
+                    ).first else {
+                        failConnection(with: "No models returned by gateway")
+                        return
+                    }
+                    gatewayModel = discoveredModel
+                } else if let exactModel = availableModels.first(where: {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .caseInsensitiveCompare(configuredModel) == .orderedSame
+                })?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    gatewayModel = exactModel
+                } else {
+                    failConnection(with: NetworkError.modelUnavailable.localizedDescription)
+                    return
+                }
+                guard !gatewayModel.isEmpty else {
                     failConnection(with: "No models returned by gateway")
                     return
                 }
 
-                var smokeErrors: [Error] = []
-                for gatewayModel in candidates {
-                    do {
-                        try await gatewayTester.testCorrectionSmoke(
-                            gatewayURL: draftGatewayURL,
-                            apiKey: draftAPIKey,
-                            model: gatewayModel
-                        )
-                        let previousConfig = config
-                        config.gatewayURL = draftGatewayURL
-                        config.apiKey = draftAPIKey
-                        config.selectedModel = gatewayModel
-                        config.isConfigured = true
-                        config.grammarCorrectionVerified = true
-                        config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
-                        guard saveSettings() else {
-                            config = previousConfig
-                            failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
-                            return
-                        }
-
-                        connectionStatus = .success
-                        errorMessage = nil
-                        AppConfig.clearGatewayConnectionError(from: defaults)
-                        AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
-                        showsValidatedGatewayDetails = true
-                        return
-                    } catch {
-                        if Self.isCancellation(error) {
-                            throw NetworkError.cancelled
-                        }
-                        smokeErrors.append(error)
-                    }
-                }
-
-                let fallbackModel = candidates.first ?? config.selectedModel
-                if smokeErrors.count == candidates.count,
-                   smokeErrors.allSatisfy(Self.isGrammarCorrectionCapabilityMiss) {
+                do {
+                    try await gatewayTester.testCorrectionSmoke(
+                        gatewayURL: draftGatewayURL,
+                        apiKey: draftAPIKey,
+                        model: gatewayModel
+                    )
                     let previousConfig = config
                     config.gatewayURL = draftGatewayURL
                     config.apiKey = draftAPIKey
-                    config.selectedModel = fallbackModel
+                    config.selectedModel = gatewayModel
                     config.isConfigured = true
-                    config.grammarCorrectionVerified = false
+                    config.grammarCorrectionVerified = true
                     config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
                     guard saveSettings() else {
                         config = previousConfig
@@ -292,18 +282,39 @@ class SettingsViewModel: ObservableObject {
                         return
                     }
 
-                    connectionStatus = .limited
+                    connectionStatus = .success
                     errorMessage = nil
                     AppConfig.clearGatewayConnectionError(from: defaults)
                     AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
                     showsValidatedGatewayDetails = true
                     return
-                }
+                } catch {
+                    if Self.isCancellation(error) {
+                        throw NetworkError.cancelled
+                    }
+                    if Self.isGrammarCorrectionCapabilityMiss(error) {
+                        let previousConfig = config
+                        config.gatewayURL = draftGatewayURL
+                        config.apiKey = draftAPIKey
+                        config.selectedModel = gatewayModel
+                        config.isConfigured = true
+                        config.grammarCorrectionVerified = false
+                        config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
+                        guard saveSettings() else {
+                            config = previousConfig
+                            failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
+                            return
+                        }
 
-                let failure = smokeErrors.first(where: Self.isTimeout)
-                    ?? smokeErrors.last
-                    ?? NetworkError.unusableCorrection
-                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: failure, model: fallbackModel))
+                        connectionStatus = .limited
+                        errorMessage = nil
+                        AppConfig.clearGatewayConnectionError(from: defaults)
+                        AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
+                        showsValidatedGatewayDetails = true
+                        return
+                    }
+                    failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel))
+                }
             } else {
                 failConnection(with: "Connection failed")
             }
@@ -383,12 +394,6 @@ class SettingsViewModel: ObservableObject {
         default:
             return false
         }
-    }
-
-    private static func isTimeout(_ error: Error) -> Bool {
-        guard let networkError = error as? NetworkError else { return false }
-        if case .timeout = networkError { return true }
-        return false
     }
 
     private static func isCancellation(_ error: Error) -> Bool {

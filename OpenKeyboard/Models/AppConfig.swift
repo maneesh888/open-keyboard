@@ -8,6 +8,29 @@
 import Foundation
 import Security
 
+private final class KeyboardUITestConfigProcessAuthorization: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fingerprint: String?
+
+    func authorize(_ fingerprint: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.fingerprint = fingerprint
+    }
+
+    func isAuthorized(_ fingerprint: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return self.fingerprint == fingerprint
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        fingerprint = nil
+    }
+}
+
 enum SettingsDocumentationLink {
     static let url = URL(string: "https://myadidi.com/projects/open-keyboard-llm-gateway/")!
 }
@@ -175,6 +198,10 @@ struct AppConfig: Codable {
     static let gatewayConnectionLastTestedAtKey = "gatewayConnectionLastTestedAt"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
+    private static let keyboardUITestConfigOriginKey = "keyboardExtension.gatewayConfigIsUITestSeed"
+    private static let keyboardUITestConfigSeedIDKey = "keyboardExtension.gatewayConfigSeedID"
+    private static let keyboardUITestConfigSeededAtKey = "keyboardExtension.gatewayConfigSeededAt"
+    private static let keyboardUITestConfigAuthorization = KeyboardUITestConfigProcessAuthorization()
 
     static var grammarCorrectionCapabilityVersion: String {
         "fix_grammar/plain-text/\(SemanticPromptContract.version)"
@@ -224,9 +251,20 @@ extension AppConfig {
             grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
         ).runtimeNormalized()
 
-        if loadedConfig.isKnownTestPlaceholderConfig,
-           !ProcessInfo.processInfo.arguments.contains("--uitesting"),
-           !hasFreshKeyboardExtensionUITestSeed(in: defaults) {
+        let requiresUITestSeedAuthorization = loadedConfig.isKnownTestPlaceholderConfig ||
+            defaults.bool(forKey: keyboardUITestConfigOriginKey)
+        if requiresUITestSeedAuthorization,
+           !ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            let fingerprint = keyboardUITestConfigFingerprint(for: loadedConfig)
+            if keyboardUITestConfigAuthorization.isAuthorized(fingerprint) {
+                return loadedConfig
+            }
+            if hasFreshKeyboardExtensionUITestConfigSeed(in: defaults) ||
+                (loadedConfig.isKnownTestPlaceholderConfig && hasFreshKeyboardExtensionUITestSeed(in: defaults)) {
+                keyboardUITestConfigAuthorization.authorize(fingerprint)
+                consumeKeyboardExtensionUITestConfigSeed(from: defaults)
+                return loadedConfig
+            }
             clear(from: defaults)
             return .default
         }
@@ -254,6 +292,7 @@ extension AppConfig {
             unconfigured.apiKey = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return true
         }
 
@@ -265,11 +304,13 @@ extension AppConfig {
             unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return false
         }
 
         defaults.removeObject(forKey: AppConfig.apiKeyKey)
         runtimeConfig.saveNonSecretValues(to: defaults)
+        AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
         return true
     }
 
@@ -299,10 +340,15 @@ extension AppConfig {
             unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return false
         }
 
         runtimeNormalized().saveNonSecretValues(to: defaults)
+        defaults.set(true, forKey: AppConfig.keyboardUITestConfigOriginKey)
+        defaults.set(UUID().uuidString, forKey: AppConfig.keyboardUITestConfigSeedIDKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: AppConfig.keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
         return true
     }
 
@@ -334,6 +380,7 @@ extension AppConfig {
             && !candidate.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !candidate.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !candidate.isKnownTestPlaceholderConfig
+            && !defaults.bool(forKey: keyboardUITestConfigOriginKey)
     }
 
     static func clearSharedConfig() {
@@ -461,15 +508,24 @@ extension AppConfig {
     }
 
     private static var rejectedGatewayURLs: [String] {
-        [["https://gateway", "example", "invalid"].joined(separator: ".")]
+        [
+            ["https://gateway", "example", "invalid"].joined(separator: "."),
+            ["https://mock", "local", "invalid"].joined(separator: ".")
+        ]
     }
 
     private static var rejectedSelectedModels: [String] {
-        [["test", "placeholder", "model"].joined(separator: "-")]
+        [
+            ["test", "placeholder", "model"].joined(separator: "-"),
+            ["mock", "ui", "test", "model"].joined(separator: "-")
+        ]
     }
 
     private static var rejectedAPIKeys: [String] {
-        [["test", "placeholder", "key"].joined(separator: "-")]
+        [
+            ["test", "placeholder", "key"].joined(separator: "-"),
+            ["mock", "ui", "test", "key"].joined(separator: "-")
+        ]
     }
 
     struct RedactedVisibilityDiagnostic: Equatable {
@@ -557,12 +613,49 @@ extension AppConfig {
             return false
         }
         let now = Date().timeIntervalSince1970
-        let maximumSeedAge: TimeInterval = 60
+        let maximumSeedAge: TimeInterval = 30
         let maximumClockSkew: TimeInterval = 5
         return suggestionSeededAt >= now - maximumSeedAge &&
             suggestionSeededAt <= now + maximumClockSkew &&
             panelSeededAt >= now - maximumSeedAge &&
             panelSeededAt <= now + maximumClockSkew
+    }
+
+    private static func hasFreshKeyboardExtensionUITestConfigSeed(in defaults: UserDefaults) -> Bool {
+        guard defaults.bool(forKey: keyboardUITestConfigOriginKey),
+              isUITestDebugStateEnabled(in: defaults),
+              !(defaults.string(forKey: keyboardUITestConfigSeedIDKey) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let seededAt = defaults.object(forKey: keyboardUITestConfigSeededAtKey) as? TimeInterval else {
+            return false
+        }
+        let now = Date().timeIntervalSince1970
+        return seededAt >= now - 30 && seededAt <= now + 5
+    }
+
+    private static func keyboardUITestConfigFingerprint(for config: AppConfig) -> String {
+        [
+            config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        ].joined(separator: "\u{1F}")
+    }
+
+    private static func consumeKeyboardExtensionUITestConfigSeed(from defaults: UserDefaults) {
+        defaults.removeObject(forKey: keyboardUITestConfigSeedIDKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
+    }
+
+    private static func clearKeyboardUITestConfigMetadata(from defaults: UserDefaults) {
+        keyboardUITestConfigAuthorization.reset()
+        defaults.removeObject(forKey: keyboardUITestConfigOriginKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeedIDKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
+    }
+
+    static func resetKeyboardUITestConfigProcessAuthorizationForTesting() {
+        keyboardUITestConfigAuthorization.reset()
     }
 
     static func clearKeyboardUITestState(from defaults: UserDefaults) {
@@ -589,6 +682,7 @@ extension AppConfig {
             defaults.removeObject(forKey: $0)
         }
         clearKeyboardUITestState(from: defaults)
+        clearKeyboardUITestConfigMetadata(from: defaults)
     }
 }
 

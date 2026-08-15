@@ -193,8 +193,21 @@ class NetworkManager {
         })
 
         let modelsCheckPassed = checks.last?.status == .passed
-        let candidates = AppConfig.gatewayModelCandidates(from: models, currentModel: trimmedPreferredModel)
-        let selectedModel = candidates.first ?? trimmedPreferredModel
+        let selectedModel: String
+        let selectedModelIsAvailable: Bool
+        if trimmedPreferredModel.isEmpty {
+            selectedModel = AppConfig.gatewayModelCandidates(from: models, currentModel: "").first ?? ""
+            selectedModelIsAvailable = !selectedModel.isEmpty
+        } else if let exactModel = models.first(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(trimmedPreferredModel) == .orderedSame
+        }) {
+            selectedModel = exactModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            selectedModelIsAvailable = true
+        } else {
+            selectedModel = trimmedPreferredModel
+            selectedModelIsAvailable = false
+        }
         guard !selectedModel.isEmpty, modelsCheckPassed else {
             checks.append(Self.skippedGrammarDiagnostic(reason: "Skipped because no model was available."))
             return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
@@ -205,6 +218,7 @@ class NetworkManager {
             title: "Plain-text grammar",
             endpoint: "POST /v1/chat/completions"
         ) {
+            guard selectedModelIsAvailable else { throw NetworkError.modelUnavailable }
             try await testCorrectionSmoke(
                 gatewayURL: gatewayURL,
                 apiKey: apiKey,

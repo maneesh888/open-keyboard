@@ -565,6 +565,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the: Sure."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "'i received the refund.'"))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "“i received the refund.”"))
+        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "「i received the refund.」"))
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(CancellationError()))
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(URLError(.cancelled)))
     }
@@ -606,6 +607,25 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(report.checks[1].id, "settings-correction-smoke")
         XCTAssertEqual(report.checks[1].title, "Plain-text grammar")
         XCTAssertTrue(report.checks[1].message.contains("derived local edits"))
+    }
+
+    func testGatewayDiagnosticsDoesNotSubstituteForUnavailablePreferredModel() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["another-model"])
+        ])
+        let manager = NetworkManager(transport: transport)
+
+        let report = await manager.runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gemma2:2b"
+        )
+
+        XCTAssertEqual(report.selectedModel, "gemma2:2b")
+        let grammarCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
+        XCTAssertEqual(grammarCheck.status, .failed)
+        XCTAssertEqual(grammarCheck.message, NetworkError.modelUnavailable.localizedDescription)
+        XCTAssertEqual(transport.requests.map { $0.url?.path }, ["/v1/models"])
     }
 
     func testGatewayDiagnosticsSkipsGrammarWhenModelsFail() async throws {
@@ -673,7 +693,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     @MainActor
-    func testViewModelFallsBackAcrossRealNetworkManagerSmokePath() async throws {
+    func testViewModelKeepsExactDiscoveredModelWhenSmokeCannotVerifyIt() async throws {
         let suiteName = "NetworkManagerGatewayTests.fallback.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -686,8 +706,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .chat(content: "This sentence is already fine."),
-            .chat(content: "This sentence is already fine."),
-            .chat(content: "I received the refund.")
+            .chat(content: "This sentence is already fine.")
         ])
         let manager = NetworkManager(transport: transport)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: defaults)
@@ -696,23 +715,22 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
         XCTAssertEqual(secretStore.apiKey, "test-api-key")
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
             "/v1/models",
             "/v1/models",
             "/v1/chat/completions",
-            "/v1/chat/completions",
             "/v1/chat/completions"
         ])
-        let smokeBodies = try transport.requests.suffix(3).map { request -> String in
+        let smokeBodies = try transport.requests.suffix(2).map { request -> String in
             let body = try XCTUnwrap(request.httpBody)
             let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
             return try XCTUnwrap(json["model"] as? String)
         }
-        XCTAssertEqual(smokeBodies, ["apple-foundationmodel", "apple-foundationmodel", "gpt-oss:120b-cloud"])
+        XCTAssertEqual(smokeBodies, ["apple-foundationmodel", "apple-foundationmodel"])
     }
 
     @MainActor
