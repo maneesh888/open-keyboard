@@ -662,6 +662,38 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
+                "Sure thing we send updates.",
+                original: "Today we send updates."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "This sentence needs correction Certainly.",
+                original: "This sentnce need correction today."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "This sentence needs correction Totally.",
+                original: "This sentnce need correction today."
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "They are.",
+                original: "They is."
+            ),
+            "They are."
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "I sent an update.",
+                original: "I sent update."
+            ),
+            "I sent an update."
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",
                 original: "  i recieved teh refnd.  "
             )
@@ -678,6 +710,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             try GrammarCorrectionResponseValidator.validated(
                 "Here is the account update.",
                 original: sourceOwnedPrefix
+            ),
+            "Here is the account update."
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "Here is the account update.",
+                original: "Hear is teh account update."
             ),
             "Here is the account update."
         )

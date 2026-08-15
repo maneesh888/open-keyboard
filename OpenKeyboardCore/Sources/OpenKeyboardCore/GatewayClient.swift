@@ -305,12 +305,9 @@ public final class GatewayClient: Sendable {
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let invalidPrefixes = ["```", "{", "["]
-        let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected"]
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard !invalidPrefixes.contains(where: inspection.hasPrefix),
-              !commentaryPrefixes.contains(where: {
-                  inspection.hasPrefix($0) && !originalInspection.hasPrefix($0)
-              }),
+              !hasNewGrammarCommentaryPrefix(inspection, original: originalInspection),
               !hasNewGrammarCommentarySuffix(inspection, original: originalInspection),
               corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GatewayClientError.invalidResponse
@@ -379,6 +376,25 @@ public final class GatewayClient: Sendable {
         }
     }
 
+    private static func hasNewGrammarCommentaryPrefix(_ corrected: String, original: String) -> Bool {
+        let correctedWords = grammarWords(in: corrected)
+        let originalWords = grammarWords(in: original)
+        let commentaryPrefixes = [
+            "here is", "here's", "corrected text", "the corrected", "i corrected",
+            "sure thing", "of course", "sure", "certainly", "okay", "ok", "done", "correction"
+        ]
+        return commentaryPrefixes.contains { prefix in
+            let prefixWords = grammarWords(in: prefix)
+            guard correctedWords.count >= prefixWords.count,
+                  Array(correctedWords.prefix(prefixWords.count)) == prefixWords else {
+                return false
+            }
+            let originalHead = Array(originalWords.prefix(prefixWords.count))
+            return originalHead.count != prefixWords.count ||
+                !grammarWordsApproximatelyMatch(originalHead, prefixWords)
+        }
+    }
+
     private struct GrammarWordOccurrence {
         let value: String
         let start: Int
@@ -391,6 +407,10 @@ public final class GatewayClient: Sendable {
         let sourceWords = grammarWordOccurrences(in: sourceCharacters)
         let correctedWords = grammarWordOccurrences(in: correctedCharacters)
         let comparableCount = min(sourceWords.count, correctedWords.count)
+        guard !hasUnanchoredGrammarContent(
+            sourceWords.map(\.value),
+            correctedWords.map(\.value)
+        ) else { return true }
         guard comparableCount >= 2 else { return false }
 
         var preservedPrefixCount = 0
@@ -438,6 +458,85 @@ public final class GatewayClient: Sendable {
         }
         return false
     }
+
+    private static func hasUnanchoredGrammarContent(
+        _ sourceWords: [String],
+        _ correctedWords: [String]
+    ) -> Bool {
+        func expandingGrammarInsertions(from positions: Set<Int>) -> Set<Int> {
+            var expanded = positions
+            for index in correctedWords.indices where expanded.contains(index) {
+                if grammarFunctionWords.contains(correctedWords[index]) {
+                    expanded.insert(index + 1)
+                }
+            }
+            return expanded
+        }
+
+        var reachableCorrectedCounts = expandingGrammarInsertions(from: [0])
+        for sourceIndex in sourceWords.indices {
+            var nextCounts: Set<Int> = []
+            let sourceWord = sourceWords[sourceIndex]
+            if grammarFunctionWords.contains(sourceWord) || isRepeatedSourceWord(at: sourceIndex, in: sourceWords) {
+                nextCounts.formUnion(reachableCorrectedCounts)
+            }
+            for correctedIndex in reachableCorrectedCounts where correctedIndex < correctedWords.count {
+                if isPlausibleGrammarWordReplacement(sourceWord, correctedWords[correctedIndex]) {
+                    nextCounts.insert(correctedIndex + 1)
+                }
+            }
+            reachableCorrectedCounts = expandingGrammarInsertions(from: nextCounts)
+            if reachableCorrectedCounts.isEmpty { return true }
+        }
+        return !reachableCorrectedCounts.contains(correctedWords.count)
+    }
+
+    private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
+        guard source != corrected else { return true }
+        if grammarWordFamilies.contains(where: { $0.contains(source) && $0.contains(corrected) }) {
+            return true
+        }
+        let distance = grammarWordEditDistance(source, corrected)
+        return distance <= 1 || isAdjacentTransposition(source, corrected) ||
+            (max(source.count, corrected.count) >= 8 && distance <= 2)
+    }
+
+    private static func isRepeatedSourceWord(at index: Int, in words: [String]) -> Bool {
+        (index > words.startIndex && words[index - 1] == words[index]) ||
+            (index + 1 < words.endIndex && words[index + 1] == words[index])
+    }
+
+    private static func isAdjacentTransposition(_ source: String, _ corrected: String) -> Bool {
+        let sourceCharacters = Array(source)
+        let correctedCharacters = Array(corrected)
+        guard sourceCharacters.count == correctedCharacters.count else { return false }
+        let differences = sourceCharacters.indices.filter { sourceCharacters[$0] != correctedCharacters[$0] }
+        guard differences.count == 2,
+              differences[1] == differences[0] + 1 else { return false }
+        return sourceCharacters[differences[0]] == correctedCharacters[differences[1]] &&
+            sourceCharacters[differences[1]] == correctedCharacters[differences[0]]
+    }
+
+    private static let grammarFunctionWords: Set<String> = [
+        "a", "an", "the", "this", "that", "these", "those",
+        "am", "is", "are", "was", "were", "be", "been", "being",
+        "have", "has", "had", "do", "does", "did", "done",
+        "can", "could", "will", "would", "shall", "should", "may", "might", "must",
+        "and", "but", "or", "nor", "for", "so", "yet",
+        "at", "by", "from", "in", "into", "of", "on", "to", "with",
+        "i", "me", "my", "mine", "we", "us", "our", "ours",
+        "you", "your", "yours", "he", "him", "his", "she", "her", "hers",
+        "it", "its", "they", "them", "their", "theirs"
+    ]
+
+    private static let grammarWordFamilies: [Set<String>] = [
+        ["am", "is", "are", "was", "were", "be", "been", "being"],
+        ["have", "has", "had"], ["do", "does", "did", "done"],
+        ["can", "could"], ["will", "would"], ["shall", "should"], ["may", "might"],
+        ["a", "an", "the"], ["this", "these"], ["that", "those"],
+        ["good", "well", "better", "best"], ["bad", "badly", "worse", "worst"],
+        ["go", "goes", "went", "gone", "going", "goed"], ["hear", "here"]
+    ]
 
     private static func grammarWordOccurrences(in characters: [Character]) -> [GrammarWordOccurrence] {
         var occurrences: [GrammarWordOccurrence] = []

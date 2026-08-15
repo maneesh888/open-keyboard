@@ -434,6 +434,70 @@ final class ChatCompletionTests: XCTestCase {
             XCTFail("A source-owned suffix typo should remain correctable: \(error)")
         }
 
+        let whitespacePrefixCommentary = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Sure thing we send updates."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await whitespacePrefixCommentary.performWritingAction(
+                .fixGrammar,
+                text: "Today we send updates.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let unrelatedTailReplacement = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This sentence needs correction Certainly."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await unrelatedTailReplacement.performWritingAction(
+                .fixGrammar,
+                text: "This sentnce need correction today.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let nearSpellingTailReplacement = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This sentence needs correction Totally."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await nearSpellingTailReplacement.performWritingAction(
+                .fixGrammar,
+                text: "This sentnce need correction today.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let grammarOnlyBoundaryReplacement = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("They are."))
+        )
+        let correctedGrammar = try? await grammarOnlyBoundaryReplacement.performWritingAction(
+            .fixGrammar,
+            text: "They is.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedGrammar, "They are.")
+
+        let insertedArticle = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I sent an update."))
+        )
+        let correctedArticle = try? await insertedArticle.performWritingAction(
+            .fixGrammar,
+            text: "I sent update.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedArticle, "I sent an update.")
+
         let shortTailOmission = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))
@@ -458,6 +522,17 @@ final class ChatCompletionTests: XCTestCase {
             model: "test-model"
         )
         XCTAssertEqual(corrected, "Here is the account update.")
+
+        let sourceTypoCorrectedToPrefix = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Here is the account update."))
+        )
+        let correctedPrefix = try? await sourceTypoCorrectedToPrefix.performWritingAction(
+            .fixGrammar,
+            text: "Hear is teh account update.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedPrefix, "Here is the account update.")
     }
 
     func testPerformWritingActionEmptyChoicesMapsToInvalidResponse() async {
