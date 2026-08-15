@@ -562,6 +562,73 @@ final class ChatCompletionTests: XCTestCase {
         )
         XCTAssertEqual(correctedMultiline, "First sentence.\nSecond line stays.")
 
+        let removedEmoji = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Hello world."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await removedEmoji.performWritingAction(
+                .fixGrammar,
+                text: "Hello 🙂 world.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let replacedEmoji = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Hello 😈 world."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await replacedEmoji.performWritingAction(
+                .fixGrammar,
+                text: "Hello 🙂 world.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let movedEmoji = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Hello world 🙂."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await movedEmoji.performWritingAction(
+                .fixGrammar,
+                text: "Hello 🙂 world.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let removedFormatting = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Important update."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await removedFormatting.performWritingAction(
+                .fixGrammar,
+                text: "*Important* update.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let punctuationCorrection = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Hello, world."))
+        )
+        let correctedPunctuation = try? await punctuationCorrection.performWritingAction(
+            .fixGrammar,
+            text: "Hello world",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedPunctuation, "Hello, world.")
+
         let shortTailOmission = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))

@@ -726,6 +726,37 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
+                "Hello world.",
+                original: "Hello 🙂 world."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Hello 😈 world.",
+                original: "Hello 🙂 world."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Hello world 🙂.",
+                original: "Hello 🙂 world."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Important update.",
+                original: "*Important* update."
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "Hello, world.",
+                original: "Hello world"
+            ),
+            "Hello, world."
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",
                 original: "  i recieved teh refnd.  "
             )

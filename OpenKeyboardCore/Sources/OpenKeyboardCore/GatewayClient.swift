@@ -406,6 +406,11 @@ public final class GatewayClient: Sendable {
         let separators: [Character]
     }
 
+    private struct ProtectedGrammarStructure {
+        let segments: [String]
+        let tokens: [Character]
+    }
+
     private static func preservesNewlineStructure(original: String, corrected: String) -> Bool {
         let sourceStructure = grammarLineStructure(in: original)
         let correctedStructure = grammarLineStructure(in: corrected)
@@ -414,11 +419,70 @@ public final class GatewayClient: Sendable {
             return false
         }
         return zip(sourceStructure.lines, correctedStructure.lines).allSatisfy { sourceLine, correctedLine in
+            grammarLeadingWhitespace(in: sourceLine) == grammarLeadingWhitespace(in: correctedLine) &&
+            grammarTrailingWhitespace(in: sourceLine) == grammarTrailingWhitespace(in: correctedLine) &&
+            preservesProtectedGrammarStructure(original: sourceLine, corrected: correctedLine) &&
             !hasUnanchoredGrammarContent(
                 grammarWordOccurrences(in: Array(sourceLine)).map(\.value),
                 grammarWordOccurrences(in: Array(correctedLine)).map(\.value)
             )
         }
+    }
+
+    private static func preservesProtectedGrammarStructure(original: String, corrected: String) -> Bool {
+        let sourceStructure = protectedGrammarStructure(in: original)
+        let correctedStructure = protectedGrammarStructure(in: corrected)
+        guard sourceStructure.tokens == correctedStructure.tokens,
+              sourceStructure.segments.count == correctedStructure.segments.count else {
+            return false
+        }
+        return zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
+            !hasUnanchoredGrammarContent(
+                grammarWordOccurrences(in: Array(source)).map(\.value),
+                grammarWordOccurrences(in: Array(response)).map(\.value)
+            )
+        }
+    }
+
+    private static func protectedGrammarStructure(in value: String) -> ProtectedGrammarStructure {
+        var segments: [String] = []
+        var tokens: [Character] = []
+        var currentSegment = ""
+        for character in value {
+            if isProtectedGrammarCharacter(character) {
+                segments.append(currentSegment)
+                tokens.append(character)
+                currentSegment = ""
+            } else {
+                currentSegment.append(character)
+            }
+        }
+        segments.append(currentSegment)
+        return ProtectedGrammarStructure(segments: segments, tokens: tokens)
+    }
+
+    private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
+        let formattingMarkers: Set<Character> = [
+            "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%"
+        ]
+        if formattingMarkers.contains(character) { return true }
+        if character.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) { return true }
+        return character.unicodeScalars.contains { scalar in
+            switch scalar.properties.generalCategory {
+            case .mathSymbol, .currencySymbol, .modifierSymbol, .otherSymbol:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private static func grammarLeadingWhitespace(in value: String) -> String {
+        String(value.prefix(while: { $0.isWhitespace }))
+    }
+
+    private static func grammarTrailingWhitespace(in value: String) -> String {
+        String(value.reversed().prefix(while: { $0.isWhitespace }).reversed())
     }
 
     private static func grammarLineStructure(in value: String) -> GrammarLineStructure {
