@@ -738,6 +738,49 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("05-real-keyboard-translate-indian-languages")
     }
 
+    func testRealKeyboardTranslationCapabilityWarningScreenshotWhenExplicitlyRequested() throws {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard translation-warning screenshots.")
+        }
+
+        let sourceText = "Good morning, I hope you are well."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=translationWarning",
+            "--keyboard-initial-panel=actions"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear for translation-warning screenshot proof"
+        )
+
+        XCTAssertTrue(keyboardApp.staticTexts[
+            "This model may not reliably translate to Arabic. Try again or choose another model."
+        ].waitForExistence(timeout: 5))
+        XCTAssertEqual(keyboardApp.buttons["ai_translation_target_ar"].value as? String, "Selected")
+        XCTAssertTrue(keyboardApp.buttons["ai_action_rerun"].isEnabled)
+        XCTAssertFalse(keyboardApp.buttons["ai_action_copy"].isEnabled)
+        XCTAssertFalse(keyboardApp.buttons["ai_action_apply"].isEnabled)
+        XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists)
+        XCTAssertEqual(input.value as? String, sourceText)
+
+        try captureRealKeyboardStep("real-keyboard-translation-capability-warning")
+    }
+
     func testRealKeyboardTranslateReplacesTextWhenGatewayConfigured() throws {
         let sourceText = "Good morning, I hope you are well."
         let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText

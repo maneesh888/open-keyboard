@@ -780,6 +780,57 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
+    func testTranslationCapabilityFailureStaysInActionPanelAndPreservesOriginalText() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = TranslationCapabilityKeyboardAIService(
+            fallbackResult: Self.structuredRewriteResult()
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelAction(.translate(nil))
+        viewModel.selectActionPanelTranslationTarget(.arabic)
+        await waitUntil {
+            viewModel.actionPanelState?.warningMessage != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.arabic)])
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(
+            viewModel.actionPanelState?.warningMessage,
+            "This model may not reliably translate to Arabic. Try again or choose another model."
+        )
+        XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection)
+        XCTAssertTrue(viewModel.canOpenActionPanel)
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.rerunSelectedActionPanelAction()
+        await waitUntil { service.requestedActions.count == 3 && !viewModel.isPerformingAIAction }
+        XCTAssertEqual(service.requestedActions.last, .translate(.arabic))
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.selectActionPanelAction(.rewrite)
+        await waitUntil {
+            service.requestedActions.count == 4
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+        XCTAssertNil(viewModel.actionPanelState?.warningMessage)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
     func testTranslationTargetSelectionDoesNotReuseCapturedTextAfterHostClears() async {
         let sourceText = "Good morning, I hope you are well."
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -2363,6 +2414,31 @@ private final class FailingThenSuccessfulGrammarAIService: KeyboardAIServiceProv
             throw KeyboardAIError.modelCapability
         }
         return result
+    }
+}
+
+private final class TranslationCapabilityKeyboardAIService: KeyboardAIServiceProviding {
+    let fallbackResult: KeyboardActionOperationResult
+    private(set) var requestedActions: [KeyboardAIAction] = []
+
+    init(fallbackResult: KeyboardActionOperationResult) {
+        self.fallbackResult = fallbackResult
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        await MainActor.run { fallbackResult.suggestionResponse() }
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedActions.append(action)
+        if let target = action.translationTarget {
+            throw KeyboardAIError.unreliableTranslation(target)
+        }
+        return fallbackResult
     }
 }
 

@@ -105,6 +105,7 @@ struct KeyboardActionPanelState: Equatable {
     var selectedOptionID: String
     var isCarouselVisible: Bool
     var isLoading: Bool
+    var warningMessage: String?
 
     static let availableActions: [KeyboardAIAction] = [
         .improve,
@@ -119,7 +120,8 @@ struct KeyboardActionPanelState: Equatable {
         selectedAction: KeyboardAIAction = .improve,
         options: [KeyboardRewriteOption] = [],
         isCarouselVisible: Bool = true,
-        isLoading: Bool = false
+        isLoading: Bool = false,
+        warningMessage: String? = nil
     ) {
         self.sourceText = sourceText
         self.replacementPlan = replacementPlan
@@ -128,6 +130,7 @@ struct KeyboardActionPanelState: Equatable {
         self.selectedOptionID = options.first?.id ?? ""
         self.isCarouselVisible = isCarouselVisible
         self.isLoading = isLoading
+        self.warningMessage = warningMessage
     }
 
     init(sourceText: String, selectedAction: KeyboardAIAction = .improve) {
@@ -179,6 +182,7 @@ struct KeyboardActionPanelState: Equatable {
         selectedAction = action
         options = []
         selectedOptionID = ""
+        warningMessage = nil
         isLoading = action.isReadyForActionPanelRequest
     }
 
@@ -191,6 +195,7 @@ struct KeyboardActionPanelState: Equatable {
     mutating func beginLoading() {
         options = []
         selectedOptionID = ""
+        warningMessage = nil
         isLoading = true
     }
 
@@ -198,6 +203,14 @@ struct KeyboardActionPanelState: Equatable {
         self.options = options
         selectedOptionID = options.first?.id ?? ""
         isLoading = false
+        warningMessage = nil
+    }
+
+    mutating func finishLoading(warningMessage: String) {
+        options = []
+        selectedOptionID = ""
+        isLoading = false
+        self.warningMessage = warningMessage
     }
 
     mutating func selectOption(id: String) {
@@ -1413,10 +1426,41 @@ final class KeyboardViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.recordDebugEvent("action_panel_request_failed:\(Self.sanitizedErrorMessage(error))")
-                    self?.showActionError(error, scope: .writingAction)
+                    if case .unreliableTranslation(let target) = error as? KeyboardAIError {
+                        self?.showTranslationCapabilityWarning(
+                            target: target,
+                            action: action,
+                            replacementPlan: replacementPlan
+                        )
+                    } else {
+                        self?.showActionError(error, scope: .writingAction)
+                    }
                 }
             }
         }
+    }
+
+    private func showTranslationCapabilityWarning(
+        target: KeyboardTranslationTarget,
+        action: KeyboardAIAction,
+        replacementPlan: KeyboardReplacementPlan
+    ) {
+        guard panelMode == .actions,
+              var state = actionPanelState,
+              state.replacementPlan == replacementPlan,
+              state.selectedAction == action else {
+            isPerformingAIAction = false
+            actionPanelTask = nil
+            return
+        }
+        state.finishLoading(warningMessage: target.translationCapabilityWarning)
+        actionPanelState = state
+        rewriteOptionsState = nil
+        actionError = nil
+        aiStatus = "Translation warning"
+        isPerformingAIAction = false
+        actionPanelTask = nil
+        recordDebugEvent("translation_capability_warning target=\(target.rawValue)")
     }
 
     private func actionPanelOptions(from outcome: KeyboardActionProductOutcome, action: KeyboardAIAction) -> [KeyboardRewriteOption] {
@@ -2009,6 +2053,16 @@ final class KeyboardViewModel: ObservableObject {
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
+            case "translationWarning":
+                panelMode = .actions
+                suggestionState = nil
+                actionPanelState = Self.translationWarningActionPanelState
+                rewriteOptionsState = nil
+                actionError = nil
+                aiStatus = "Translation warning"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "correctionCard", "correctionDetail", "correctionCarousel":
                 panelMode = .correctionDetail
                 suggestionState = KeyboardSuggestionState(
@@ -2183,6 +2237,23 @@ final class KeyboardViewModel: ObservableObject {
                 ],
                 isCarouselVisible: true,
                 isLoading: false
+            )
+        }
+
+        private static var translationWarningActionPanelState: KeyboardActionPanelState {
+            let sourceText = "Good morning, I hope you are well."
+            return KeyboardActionPanelState(
+                sourceText: sourceText,
+                replacementPlan: KeyboardReplacementPlan(
+                    textToDelete: sourceText,
+                    textForAI: sourceText,
+                    leadingWhitespace: "",
+                    trailingWhitespace: ""
+                ),
+                selectedAction: .translate(.arabic),
+                isCarouselVisible: true,
+                isLoading: false,
+                warningMessage: KeyboardTranslationTarget.arabic.translationCapabilityWarning
             )
         }
 
