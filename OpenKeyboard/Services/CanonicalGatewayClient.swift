@@ -9,7 +9,6 @@ extension URLSession: GatewayChatTransporting {}
 enum GatewayRequestTimeouts {
     static let keyboardAction: TimeInterval = 15
     static let modelCheckAttempt: TimeInterval = 20
-    static let diagnosticAction: TimeInterval = 90
 }
 
 enum CanonicalGatewayClientError: LocalizedError, Equatable {

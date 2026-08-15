@@ -144,18 +144,16 @@ class SettingsViewModel: ObservableObject {
         !hasConnectionError && showsValidatedGatewayDetails && config.isConfigured && !config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var structuredCapabilityDisplay: String {
+    var grammarCapabilityDisplay: String {
         guard !hasConnectionError, showsValidatedGatewayDetails, config.isConfigured else {
             return "Loaded after Test Connection"
         }
-        guard config.supportsStructuredCorrections else { return "Not verified for selected model" }
-        return config.structuredCorrectionSchemaVersion.isEmpty
-            ? "Structured corrections enabled"
-            : "openkeyboard.structured-corrections.v1"
+        guard config.grammarCorrectionVerified else { return "Not verified for selected model" }
+        return "Plain text verified"
     }
 
     var modelCapabilityMessage: String {
-        "Gateway connected and the model is available, but its structured correction response could not be verified. Basic AI actions remain available; use Diagnostics to inspect model capabilities."
+        "Gateway and model are available, but plain-text grammar correction could not be verified. Other AI actions remain available; use Diagnostics to test grammar."
     }
     
     func updateGatewayURLInput(_ value: String) {

@@ -506,16 +506,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))
     }
 
-    func testGatewayDiagnosticsRunsFullGatewayContractAndMeasuresPerformance() async throws {
+    func testGatewayDiagnosticsRunsKeyboardPlainTextGrammarPathAndMeasuresPerformance() async throws {
         let transport = NetworkManagerTestTransport([
-            .rawJSON(#"{"status":"ok"}"#),
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I received the refund."),
-            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[{"label":"Suggestion","text":"tomorrow","kind":"nextWord"}]}"#),
-            .chat(content: "the client receives a refund"),
-            .chat(content: #"{"operation":"rewrite","results":[{"id":"rewrite","type":"suggestion","title":"Rewrite","text":"Hi team, the app has issues that need attention soon. Please check it when possible.","replacement":"Hi team, the app has issues that need attention soon. Please check it when possible."}],"corrected_text":"Hi team, the app has issues that need attention soon. Please check it when possible."}"#),
-            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard shares gateway configuration and validates the selected model."}],"summary":"The keyboard shares gateway configuration and validates the selected model."}"#),
-            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer and more helpful for the customer.","replacement":"This message is clearer and more helpful for the customer."}],"corrected_text":"This message is clearer and more helpful for the customer."}"#)
+            .chat(content: "I received the refund.")
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -527,52 +521,33 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         XCTAssertFalse(report.hasFailures)
         XCTAssertEqual(report.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertEqual(report.passedCount, 8)
-        XCTAssertEqual(report.checks.count, 8)
-        XCTAssertEqual(report.measuredDurations.count, 8)
+        XCTAssertEqual(report.passedCount, 2)
+        XCTAssertEqual(report.checks.count, 2)
+        XCTAssertEqual(report.measuredDurations.count, 2)
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
-            "/health",
             "/v1/models",
-            "/v1/chat/completions",
-            "/v1/chat/completions",
-            "/v1/chat/completions",
-            "/v1/chat/completions",
-            "/v1/chat/completions",
             "/v1/chat/completions"
         ])
 
-        let chatBodies = try transport.requests.dropFirst(2).map { request -> [String: Any] in
-            let body = try XCTUnwrap(request.httpBody)
-            return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
-        }
-        XCTAssertEqual(chatBodies.compactMap { $0["model"] as? String }, Array(repeating: "gpt-oss:120b-cloud", count: 6))
-        XCTAssertEqual(chatBodies.map { $0["operation"] as? String }, ["fix_grammar", nil, "fix_grammar", "rewrite", "summarize", "rewrite"])
-        XCTAssertEqual(chatBodies.map { $0["max_tokens"] as? Int }, [12000, 1200, 12000, 3000, 2000, 3000])
-        XCTAssertEqual(chatBodies.map { $0["stream"] as? Bool }, Array(repeating: false, count: 6))
-        XCTAssertEqual(chatBodies.map { ($0["response_format"] as? [String: String])?["type"] }, [nil, nil, nil, "json_object", "json_object", "json_object"])
-        let settingsSmokeInput = try XCTUnwrap(chatBodies[0]["input_text"] as? String)
+        let chatBodyData = try XCTUnwrap(transport.requests.last?.httpBody)
+        let chatBody = try XCTUnwrap(JSONSerialization.jsonObject(with: chatBodyData) as? [String: Any])
+        XCTAssertEqual(chatBody["model"] as? String, "gpt-oss:120b-cloud")
+        XCTAssertEqual(chatBody["operation"] as? String, "fix_grammar")
+        XCTAssertEqual(chatBody["max_tokens"] as? Int, 12_000)
+        XCTAssertEqual(chatBody["stream"] as? Bool, false)
+        XCTAssertNil(chatBody["response_format"])
+        let settingsSmokeInput = try XCTUnwrap(chatBody["input_text"] as? String)
         XCTAssertEqual(settingsSmokeInput, NetworkManager.diagnosticSettingsCorrectionInput)
-        let settingsMessages = try XCTUnwrap(chatBodies[0]["messages"] as? [[String: Any]])
+        let settingsMessages = try XCTUnwrap(chatBody["messages"] as? [[String: Any]])
         XCTAssertTrue((settingsMessages.last?["content"] as? String)?.contains(settingsSmokeInput) == true)
-        XCTAssertTrue(report.checks[2].message.contains(settingsSmokeInput))
-        XCTAssertNil(chatBodies[1]["input_text"])
-        XCTAssertEqual(chatBodies[4]["operation"] as? String, "summarize")
-        XCTAssertEqual(chatBodies[5]["operation"] as? String, "rewrite")
-        let improveMessages = try XCTUnwrap(chatBodies[5]["messages"] as? [[String: Any]])
-        let improvePrompt = try XCTUnwrap(improveMessages.last?["content"] as? String)
-        XCTAssertTrue(improvePrompt.contains("Improve this text"))
+        XCTAssertEqual(report.checks[1].id, "settings-correction-smoke")
+        XCTAssertEqual(report.checks[1].title, "Plain-text grammar")
+        XCTAssertTrue(report.checks[1].message.contains("derived local edits"))
     }
 
-    func testGatewayDiagnosticsContinueWhenHealthFailsButModelsPass() async throws {
+    func testGatewayDiagnosticsSkipsGrammarWhenModelsFail() async throws {
         let transport = NetworkManagerTestTransport([
-            .status(404),
-            .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I received the refund."),
-            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
-            .chat(content: "the client receives a refund"),
-            .chat(content: #"{"operation":"rewrite","results":[{"id":"rewrite","type":"suggestion","title":"Rewrite","text":"Hi team, please check the app issue soon.","replacement":"Hi team, please check the app issue soon."}],"corrected_text":"Hi team, please check the app issue soon."}"#),
-            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard validates gateway requests."}],"summary":"The keyboard validates gateway requests."}"#),
-            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer for the customer.","replacement":"This message is clearer for the customer."}],"corrected_text":"This message is clearer for the customer."}"#)
+            .status(503)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -584,24 +559,19 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         XCTAssertTrue(report.hasFailures)
         XCTAssertEqual(report.failedCount, 1)
-        XCTAssertEqual(report.passedCount, 7)
-        XCTAssertEqual(report.checks.first?.id, "health")
+        XCTAssertEqual(report.skippedCount, 1)
+        XCTAssertEqual(report.checks.first?.id, "models")
         XCTAssertEqual(report.checks.first?.status, .failed)
-        XCTAssertEqual(transport.requests.count, 8)
-        XCTAssertEqual(transport.requests.suffix(6).map { $0.url?.path }, Array(repeating: "/v1/chat/completions", count: 6))
+        XCTAssertEqual(report.checks.last?.id, "settings-correction-smoke")
+        XCTAssertEqual(report.checks.last?.status, .skipped)
+        XCTAssertEqual(transport.requests.count, 1)
     }
 
     func testGatewayDiagnosticsRetriesTransientRequiredCorrectionValidation() async throws {
         let transport = NetworkManagerTestTransport([
-            .rawJSON(#"{"status":"ok"}"#),
             .models(["gpt-oss:120b-cloud"]),
             .chat(content: "not json"),
-            .chat(content: "I received the refund."),
-            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
-            .chat(content: "the client receives a refund"),
-            .chat(content: "unsupported"),
-            .chat(content: "unsupported"),
-            .chat(content: "unsupported")
+            .chat(content: "I received the refund.")
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -613,21 +583,16 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         let correctionCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
         XCTAssertEqual(correctionCheck.status, .passed)
-        XCTAssertTrue(correctionCheck.message.contains("Passed after 2 attempts."))
+        XCTAssertTrue(correctionCheck.message.contains("derived local edits"))
         XCTAssertFalse(report.hasFailures)
-        XCTAssertEqual(transport.requests.count, 9)
+        XCTAssertEqual(transport.requests.count, 3)
     }
 
-    func testGatewayDiagnosticsFailsPlainTextActionBecauseJSONIsRequired() async throws {
+    func testGatewayDiagnosticsFailsWhenPlainTextGrammarIsUnusable() async throws {
         let transport = NetworkManagerTestTransport([
-            .rawJSON(#"{"status":"ok"}"#),
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I received the refund."),
-            .chat(content: #"{"corrections":[{"label":"Spelling","original":"teh","replacement":"the"}],"predictions":[]}"#),
-            .chat(content: "the client receives a refund"),
-            .chat(content: "Hi team, please check the app issue soon."),
-            .chat(content: #"{"operation":"summarize","results":[{"id":"summary","type":"summary","title":"Summary","text":"The keyboard validates gateway requests."}],"summary":"The keyboard validates gateway requests."}"#),
-            .chat(content: #"{"operation":"rewrite","results":[{"id":"improve","type":"suggestion","title":"Improve","text":"This message is clearer for the customer.","replacement":"This message is clearer for the customer."}],"corrected_text":"This message is clearer for the customer."}"#)
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput),
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -637,10 +602,11 @@ final class NetworkManagerGatewayTests: XCTestCase {
             preferredModel: "gpt-oss:120b-cloud"
         )
 
-        let rewriteCheck = try XCTUnwrap(report.checks.first { $0.id == "rewrite-json" })
-        XCTAssertEqual(rewriteCheck.status, .skipped)
-        XCTAssertEqual(rewriteCheck.message, "Optional for gpt-oss:120b-cloud: rewrite did not return valid app JSON.")
-        XCTAssertFalse(report.hasFailures)
+        let grammarCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
+        XCTAssertEqual(grammarCheck.status, .failed)
+        XCTAssertEqual(grammarCheck.message, NetworkError.unusableCorrection.localizedDescription)
+        XCTAssertTrue(report.hasFailures)
+        XCTAssertEqual(transport.requests.count, 3)
     }
 
     @MainActor
@@ -819,15 +785,15 @@ final class LiveGatewaySmokeTests: XCTestCase {
             viewModel.connectionStatus == .success
         )
 
-        if !requiresStructuredCorrections {
+        if viewModel.connectionStatus == .limited {
+            XCTAssertFalse(requiresStructuredCorrections)
             XCTAssertTrue(viewModel.availableModels.contains(model))
             XCTAssertNil(viewModel.errorMessage)
-            print("OpenKeyboard live Test Connection status: connected; structured corrections were not required.")
+            print("OpenKeyboard live Test Connection status: connected; plain-text grammar unverified.")
             return
         }
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        print("OpenKeyboard live Test Connection status: connected; structured corrections verified.")
+        print("OpenKeyboard live Test Connection status: connected; plain-text grammar verified.")
 
         let diagnosticReport = await NetworkManager().runGatewayDiagnostics(
             gatewayURL: viewModel.config.gatewayURL,
@@ -836,19 +802,11 @@ final class LiveGatewaySmokeTests: XCTestCase {
         )
         let requiredCheckIDs = [
             "models",
-            "settings-correction-smoke",
-            "keyboard-correction-card-json",
-            "plain-text-grammar-multi-error"
+            "settings-correction-smoke"
         ]
         for checkID in requiredCheckIDs {
             let check = try XCTUnwrap(diagnosticReport.checks.first { $0.id == checkID })
             XCTAssertEqual(check.status, .passed, "\(check.title): \(check.message)")
-        }
-        for check in diagnosticReport.checks where ["rewrite-json", "summarize-json", "improve-rewrite-json"].contains(check.id) {
-            XCTAssertTrue(
-                check.status == .passed || check.status == .skipped,
-                "Optional capability \(check.title) should pass or skip: \(check.message)"
-            )
         }
     }
 

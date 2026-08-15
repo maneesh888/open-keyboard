@@ -134,8 +134,8 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
         XCTAssertEqual(
-            viewModel.structuredCapabilityDisplay,
-            "openkeyboard.structured-corrections.v1"
+            viewModel.grammarCapabilityDisplay,
+            "Plain text verified"
         )
     }
 
@@ -158,7 +158,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
     }
 
     func testEditingValidatedAPIKeyHidesTrustedDetailsAndShowsConnectionActions() {
@@ -214,7 +214,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
     }
 
 
@@ -382,7 +382,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
         XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "openkeyboard.structured-corrections.v1")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Plain text verified")
     }
 
     func testRecentConnectedConfigPreservesUnverifiedModelCapabilityWithoutGatewayError() async {
@@ -405,7 +405,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertFalse(viewModel.hasConnectionError)
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Not verified for selected model")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Not verified for selected model")
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
@@ -552,7 +552,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "openkeyboard.structured-corrections.v1")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Plain text verified")
     }
 
     func testFailedTestConnectionDoesNotOverwriteExistingWorkingConfig() async {
@@ -601,7 +601,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .unknown)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
     }
 

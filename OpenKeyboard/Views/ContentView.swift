@@ -138,7 +138,7 @@ struct StatusCard: View {
 
     private var statusMessage: String {
         if isReady { return "Connection verified within the last hour." }
-        if isLimited { return "Connected, but this model did not verify structured corrections." }
+        if isLimited { return "Connected, but this model did not verify plain-text grammar correction." }
         if isChecking { return "Testing your saved gateway before enabling AI features." }
         if isFailure { return viewModel.errorMessage ?? "Connection failed. Open Settings to retry." }
         return "Add your API key to unlock AI features."
