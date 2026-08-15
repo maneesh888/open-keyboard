@@ -574,7 +574,8 @@ struct GrammarCorrectionResponseValidator {
 
     private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
         let formattingMarkers: Set<Character> = [
-            "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%"
+            "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%",
+            "[", "]", "(", ")"
         ]
         if formattingMarkers.contains(character) { return true }
         if character.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) { return true }

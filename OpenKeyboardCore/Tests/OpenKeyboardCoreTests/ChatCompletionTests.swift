@@ -618,6 +618,20 @@ final class ChatCompletionTests: XCTestCase {
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
 
+        let removedMarkdownLink = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Important note update."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await removedMarkdownLink.performWritingAction(
+                .fixGrammar,
+                text: "[Important](note) update.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
         let punctuationCorrection = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("Hello, world."))

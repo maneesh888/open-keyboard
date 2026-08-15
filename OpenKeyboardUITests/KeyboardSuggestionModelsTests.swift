@@ -748,6 +748,12 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "*Important* update."
             )
         )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Important note update.",
+                original: "[Important](note) update."
+            )
+        )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(
                 "Hello, world.",
