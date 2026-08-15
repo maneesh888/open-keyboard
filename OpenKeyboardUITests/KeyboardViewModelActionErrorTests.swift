@@ -531,6 +531,84 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(viewModel.canOpenActionPanel)
     }
 
+    func testTypingAfterAutomaticGrammarCapabilityFailureRetriesUpdatedText() async {
+        let original = "i has a apple"
+        let updated = "\(original) today"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = FailingThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert(original)
+        await waitUntil { viewModel.actionError?.scope == .grammar }
+
+        viewModel.insert(" today")
+        await waitUntil {
+            service.requestedTexts == [original, updated]
+                && viewModel.actionError == nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(proxy.text, updated)
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+    }
+
+    func testBackToTypingAfterGrammarCapabilityFailureRetriesCurrentText() async {
+        let original = "i has a apple"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = FailingThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert(original)
+        await waitUntil { viewModel.actionError?.scope == .grammar }
+
+        viewModel.retryAfterActionError()
+        await waitUntil {
+            service.requestedTexts == [original, original]
+                && viewModel.actionError == nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+    }
+
+    func testTypingDoesNotClearWritingActionCapabilityFailure() async {
+        let original = "Please keep these words."
+        let proxy = FakeTextDocumentProxy(text: original)
+        let service = ThrowingKeyboardAIService(error: .modelCapability)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { viewModel.actionError?.scope == .writingAction }
+
+        viewModel.insert(" now")
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(service.requestedActions, [.rewrite])
+        XCTAssertEqual(viewModel.actionError?.scope, .writingAction)
+        XCTAssertEqual(proxy.text, "\(original) now")
+    }
+
     func testCancellationDoesNotCreateKeyboardErrorOrChangeText() async {
         let original = "Please keep these words."
         let proxy = FakeTextDocumentProxy(text: original)
@@ -2225,6 +2303,31 @@ private final class SequencedKeyboardAIService: KeyboardAIServiceProviding {
     }
 }
 
+private final class FailingThenSuccessfulGrammarAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+    private(set) var requestedTexts: [String] = []
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        try await performResult(action: .fixGrammar, on: text, config: config).suggestionResponse()
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedTexts.append(text)
+        if requestedTexts.count == 1 {
+            throw KeyboardAIError.modelCapability
+        }
+        return result
+    }
+}
+
 private final class DelayedSequencedKeyboardAIService: KeyboardAIServiceProviding {
     private var results: [KeyboardActionOperationResult]
     private let delays: [UInt64]
@@ -2347,6 +2450,7 @@ private final class FailingKeyboardAIService: KeyboardAIServiceProviding {
 
 private final class ThrowingKeyboardAIService: KeyboardAIServiceProviding {
     let error: KeyboardAIError
+    private(set) var requestedActions: [KeyboardAIAction] = []
 
     init(error: KeyboardAIError) {
         self.error = error
@@ -2361,6 +2465,7 @@ private final class ThrowingKeyboardAIService: KeyboardAIServiceProviding {
     }
 
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
+        requestedActions.append(action)
         throw error
     }
 }

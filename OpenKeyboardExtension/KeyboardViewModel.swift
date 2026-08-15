@@ -686,9 +686,17 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func retryAfterActionError() {
+        let recoveryScope = actionError?.scope
         actionError = nil
         rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        if recoveryScope == .grammar {
+            actionPanelState = nil
+            panelMode = .keyboard
+            lastAnalyzedText = nil
+            scheduleAutomaticAnalysis(delayNanoseconds: 0)
+            return
+        }
         if canRunAIAction, let replacementPlan = currentReplacementPlan() {
             actionPanelState = KeyboardActionPanelState(
                 sourceText: replacementPlan.textForAI,
@@ -1274,6 +1282,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
+        if actionError?.scope == .grammar {
+            actionError = nil
+        }
         refreshTypingPredictions()
         let hadAIActionTask = actionPanelTask != nil
             || grammarCorrectionTask != nil
