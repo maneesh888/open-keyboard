@@ -533,7 +533,7 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
             ]
-            if containsSentenceBoundary(correctedSeparator), !containsSentenceBoundary(sourceSeparator) {
+            if containsBoundaryDelimiter(correctedSeparator), !containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -555,7 +555,7 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
             ]
-            if containsSentenceBoundary(correctedSeparator), !containsSentenceBoundary(sourceSeparator) {
+            if containsBoundaryDelimiter(correctedSeparator), !containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -587,8 +587,8 @@ struct GrammarCorrectionResponseValidator {
         wordEditDistance(lhs, rhs) <= max(2, max(lhs.count, rhs.count) / 3)
     }
 
-    private static func containsSentenceBoundary(_ characters: ArraySlice<Character>) -> Bool {
-        characters.contains(where: { ".!?".contains($0) })
+    private static func containsBoundaryDelimiter(_ characters: ArraySlice<Character>) -> Bool {
+        characters.contains(where: { !$0.isWhitespace })
     }
 
     private static func words(in value: String) -> [String] {

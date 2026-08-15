@@ -632,6 +632,18 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "This sentnce need correction today."
             )
         )
+        for boundaryCommentary in [
+            "This sentence needs correction: Sure.",
+            "This sentence needs correction; sure.",
+            "This sentence needs correction — sure."
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.validated(
+                    boundaryCommentary,
+                    original: "This sentnce need correction today."
+                )
+            )
+        }
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",

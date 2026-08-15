@@ -393,8 +393,8 @@ public final class GatewayClient: Sendable {
             let correctedSeparator = correctedCharacters[
                 correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
             ]
-            if grammarContainsSentenceBoundary(correctedSeparator),
-               !grammarContainsSentenceBoundary(sourceSeparator) {
+            if grammarContainsBoundaryDelimiter(correctedSeparator),
+               !grammarContainsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -416,8 +416,8 @@ public final class GatewayClient: Sendable {
             let correctedSeparator = correctedCharacters[
                 correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
             ]
-            if grammarContainsSentenceBoundary(correctedSeparator),
-               !grammarContainsSentenceBoundary(sourceSeparator) {
+            if grammarContainsBoundaryDelimiter(correctedSeparator),
+               !grammarContainsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -445,8 +445,8 @@ public final class GatewayClient: Sendable {
         return occurrences
     }
 
-    private static func grammarContainsSentenceBoundary(_ characters: ArraySlice<Character>) -> Bool {
-        characters.contains(where: { ".!?".contains($0) })
+    private static func grammarContainsBoundaryDelimiter(_ characters: ArraySlice<Character>) -> Bool {
+        characters.contains(where: { !$0.isWhitespace })
     }
 
     private static func restoringOriginalBoundaryWhitespace(in response: String, original: String) -> String {
