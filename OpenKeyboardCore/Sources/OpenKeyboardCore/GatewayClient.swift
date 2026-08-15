@@ -304,9 +304,15 @@ public final class GatewayClient: Sendable {
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let invalidPrefixes = ["```", "{", "["]
+        let introducesOpeningFence = inspection.hasPrefix("```") && !originalInspection.hasPrefix("```")
+        let introducesClosingFence = inspection.hasSuffix("```") && !originalInspection.hasSuffix("```")
+        let introducesStructuredPrefix = ["{", "["].contains {
+            inspection.hasPrefix($0) && !originalInspection.hasPrefix($0)
+        }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
-        guard !invalidPrefixes.contains(where: inspection.hasPrefix),
+        guard !introducesOpeningFence,
+              !introducesClosingFence,
+              !introducesStructuredPrefix,
               !hasNewGrammarCommentaryPrefix(inspection, original: originalInspection),
               !hasNewGrammarCommentarySuffix(inspection, original: originalInspection),
               preservesNewlineStructure(original: original, corrected: corrected) else {
@@ -437,6 +443,8 @@ public final class GatewayClient: Sendable {
             return false
         }
         return zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
+            grammarLeadingWhitespace(in: source) == grammarLeadingWhitespace(in: response) &&
+            grammarTrailingWhitespace(in: source) == grammarTrailingWhitespace(in: response) &&
             !hasUnanchoredGrammarContent(
                 grammarWordOccurrences(in: Array(source)).map(\.value),
                 grammarWordOccurrences(in: Array(response)).map(\.value)
@@ -464,7 +472,7 @@ public final class GatewayClient: Sendable {
     private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
         let formattingMarkers: Set<Character> = [
             "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%",
-            "[", "]", "(", ")"
+            "[", "]", "(", ")", "{", "}"
         ]
         if formattingMarkers.contains(character) { return true }
         if character.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) { return true }
@@ -627,9 +635,44 @@ public final class GatewayClient: Sendable {
         if grammarWordFamilies.contains(where: { $0.contains(source) && $0.contains(corrected) }) {
             return true
         }
-        let distance = grammarWordEditDistance(source, corrected)
-        return distance <= 1 || isAdjacentTransposition(source, corrected) ||
-            (max(source.count, corrected.count) >= 8 && distance <= 2)
+        if knownSpellingWordFamilies.contains(where: { $0.contains(source) && $0.contains(corrected) }) {
+            return true
+        }
+        return isAdjacentTransposition(source, corrected) ||
+            isPlausibleInflection(source, corrected) ||
+            isConservativeMissingCharacterCorrection(source, corrected)
+    }
+
+    private static func isConservativeMissingCharacterCorrection(_ source: String, _ corrected: String) -> Bool {
+        guard source.count >= 5,
+              corrected.count == source.count + 1,
+              source.first == corrected.first,
+              source.last == corrected.last else {
+            return false
+        }
+        return grammarWordEditDistance(source, corrected) == 1
+    }
+
+    private static func isPlausibleInflection(_ source: String, _ corrected: String) -> Bool {
+        !grammarInflectionStems(for: source).isDisjoint(with: grammarInflectionStems(for: corrected))
+    }
+
+    private static func grammarInflectionStems(for word: String) -> Set<String> {
+        var stems: Set<String> = [word]
+        for suffix in ["ing", "ed", "es", "s"] where word.hasSuffix(suffix) && word.count > suffix.count + 1 {
+            let stem = String(word.dropLast(suffix.count))
+            stems.insert(stem)
+            if suffix == "ing" {
+                stems.insert(stem + "e")
+                if stem.count > 2, stem.last == stem.dropLast().last {
+                    stems.insert(String(stem.dropLast()))
+                }
+            }
+        }
+        if word.hasSuffix("ies"), word.count > 4 {
+            stems.insert(String(word.dropLast(3)) + "y")
+        }
+        return stems
     }
 
     private static func isRepeatedSourceWord(at index: Int, in words: [String]) -> Bool {
@@ -665,6 +708,14 @@ public final class GatewayClient: Sendable {
         ["a", "an", "the"], ["this", "these"], ["that", "those"],
         ["good", "well", "better", "best"], ["bad", "badly", "worse", "worst"],
         ["go", "goes", "went", "gone", "going", "goed"], ["hear", "here"]
+    ]
+
+    private static let knownSpellingWordFamilies: [Set<String>] = [
+        ["definately", "definitely"], ["shure", "sure"],
+        ["yestarday", "yesterday"], ["wrng", "wrong"],
+        ["seperate", "separate"], ["reveiw", "review"],
+        ["paymant", "payment"], ["cliant", "client"],
+        ["tommorow", "tomorrow"]
     ]
 
     private static func grammarWordOccurrences(in characters: [Character]) -> [GrammarWordOccurrence] {

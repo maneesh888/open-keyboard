@@ -690,6 +690,24 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "You must pay today."
             )
         )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "You just pay today.",
+                original: "You must pay today."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "He can pay today.",
+                original: "We can pay today."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "The block bag arrived.",
+                original: "The black bag arrived."
+            )
+        )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(
                 "They are.",
@@ -760,6 +778,26 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 "Important note update.",
                 original: "[Important](note) update."
             )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Please review* this *now.",
+                original: "Please review *this* now."
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "[Important](note) update.",
+                original: "[Important](note) udpate."
+            ),
+            "[Important](note) update."
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "```\nthe update\n```",
+                original: "```\nteh update\n```"
+            ),
+            "```\nthe update\n```"
         )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(

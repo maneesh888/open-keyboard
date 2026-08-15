@@ -504,6 +504,26 @@ final class ChatCompletionTests: XCTestCase {
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
 
+        for (source, response) in [
+            ("You must pay today.", "You just pay today."),
+            ("We can pay today.", "He can pay today."),
+            ("The black bag arrived.", "The block bag arrived.")
+        ] {
+            let semanticRewrite = GatewayClient(
+                config: validConfig,
+                httpClient: DummyGatewayServer(.chatPlainText(response))
+            )
+            await XCTAssertThrowsErrorAsync(
+                try await semanticRewrite.performWritingAction(
+                    .fixGrammar,
+                    text: source,
+                    model: "test-model"
+                )
+            ) { error in
+                XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+            }
+        }
+
         let grammarOnlyBoundaryReplacement = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("They are."))
@@ -642,6 +662,42 @@ final class ChatCompletionTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
+
+        let movedMarkdownWhitespace = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Please review* this *now."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await movedMarkdownWhitespace.performWritingAction(
+                .fixGrammar,
+                text: "Please review *this* now.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let preservedMarkdownLink = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("[Important](note) update."))
+        )
+        let correctedMarkdownLink = try? await preservedMarkdownLink.performWritingAction(
+            .fixGrammar,
+            text: "[Important](note) udpate.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedMarkdownLink, "[Important](note) update.")
+
+        let preservedMarkdownFence = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("```\nthe update\n```"))
+        )
+        let correctedMarkdownFence = try? await preservedMarkdownFence.performWritingAction(
+            .fixGrammar,
+            text: "```\nteh update\n```",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedMarkdownFence, "```\nthe update\n```")
 
         let punctuationCorrection = GatewayClient(
             config: validConfig,
