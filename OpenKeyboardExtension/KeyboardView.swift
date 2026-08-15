@@ -1254,6 +1254,8 @@ private struct CorrectionDetailPanel: View {
                 Button(action: onRejectAll) {
                     Text("Reject All")
                         .font(.caption2.weight(.semibold))
+                        .frame(minHeight: 34)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
@@ -1264,6 +1266,8 @@ private struct CorrectionDetailPanel: View {
                 Button(action: onAcceptAll) {
                     Text("Accept All")
                         .font(.caption2.weight(.bold))
+                        .frame(minHeight: 34)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(OpenKeyboardTheme.Semantic.success)

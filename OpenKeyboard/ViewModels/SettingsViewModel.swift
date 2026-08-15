@@ -230,11 +230,11 @@ class SettingsViewModel: ObservableObject {
             )
 
             if success {
-                let models = try? await gatewayTester.fetchModels(
+                let models = try await gatewayTester.fetchModels(
                     gatewayURL: draftGatewayURL,
                     apiKey: draftAPIKey
                 )
-                availableModels = models ?? []
+                availableModels = models
                 let candidates = AppConfig.gatewayModelCandidates(from: availableModels, currentModel: config.selectedModel)
                 guard !candidates.isEmpty else {
                     failConnection(with: "No models returned by gateway")
@@ -269,6 +269,9 @@ class SettingsViewModel: ObservableObject {
                         showsValidatedGatewayDetails = true
                         return
                     } catch {
+                        if Self.isCancellation(error) {
+                            throw NetworkError.cancelled
+                        }
                         smokeErrors.append(error)
                     }
                 }
@@ -305,6 +308,12 @@ class SettingsViewModel: ObservableObject {
                 failConnection(with: "Connection failed")
             }
         } catch {
+            if Self.isCancellation(error) {
+                connectionStatus = .unknown
+                errorMessage = nil
+                showsValidatedGatewayDetails = false
+                return
+            }
             if let networkError = error as? NetworkError {
                 failConnection(with: networkError.localizedDescription)
             } else {
@@ -379,6 +388,14 @@ class SettingsViewModel: ObservableObject {
     private static func isTimeout(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
         if case .timeout = networkError { return true }
+        return false
+    }
+
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        guard let networkError = error as? NetworkError else { return false }
+        if case .cancelled = networkError { return true }
         return false
     }
 

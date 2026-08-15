@@ -20,6 +20,7 @@ enum NetworkError: Error {
     case modelUnavailable
     case unusableCorrection
     case timeout
+    case cancelled
 
     var localizedDescription: String {
         switch self {
@@ -39,6 +40,8 @@ enum NetworkError: Error {
             return "Gateway connected, but the selected model did not return a usable correction."
         case .timeout:
             return "Gateway connected, but the selected model did not respond within the model-check limit."
+        case .cancelled:
+            return "The gateway request was cancelled."
         }
     }
 }
@@ -251,6 +254,8 @@ class NetworkManager {
                 return "The selected model is not available for this key."
             case .unusableCorrection:
                 return "Gateway connected, but the selected model did not return a usable correction."
+            case .cancelled:
+                return "The gateway request was cancelled."
             default:
                 break
             }
@@ -298,6 +303,12 @@ class NetworkManager {
             return decoded.data.map(\.id)
         } catch let error as NetworkError {
             throw error
+        } catch is CancellationError {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .cancelled {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .timedOut {
+            throw NetworkError.timeout
         } catch {
             throw NetworkError.networkError(error)
         }
@@ -340,6 +351,12 @@ class NetworkManager {
             )
         } catch let error as NetworkError {
             throw error
+        } catch is CancellationError {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .cancelled {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .timedOut {
+            throw NetworkError.timeout
         } catch let error as CanonicalGatewayClientError {
             throw Self.networkError(from: error)
         } catch {

@@ -666,7 +666,7 @@ final class SettingsViewModelTests: XCTestCase {
             healthSucceeds: true,
             models: ["gpt-oss:120b-cloud"],
             smokeSucceeds: false,
-            smokeFailure: .timeout
+            smokeFailure: NetworkError.timeout
         )
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.gatewayURLInput = "https://gateway.example"
@@ -684,6 +684,47 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, timeoutMessage)
         XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), timeoutMessage)
         XCTAssertNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+    }
+
+    func testCancelledConnectionCheckDoesNotPersistGatewayFailure() async {
+        let suiteName = "SettingsViewModelTests.connection-cancelled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(connectionFailure: CancellationError())
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+    }
+
+    func testCancelledCorrectionCheckDoesNotPersistGatewayFailure() async {
+        let suiteName = "SettingsViewModelTests.correction-cancelled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(
+            healthSucceeds: true,
+            models: ["gpt-oss:120b-cloud"],
+            smokeSucceeds: false,
+            smokeFailure: CancellationError()
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
     func testDefaultGatewayInputShowsHTTPSHelpButCannotTestUntilHostExists() {
@@ -953,7 +994,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var models: [String]
     var smokeSucceeds: Bool
     var failingSmokeModels: Set<String>
-    var smokeFailure: NetworkError
+    var connectionFailure: Error?
+    var modelFetchFailure: Error?
+    var smokeFailure: Error
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
@@ -970,24 +1013,30 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         models: [String] = [],
         smokeSucceeds: Bool = true,
         failingSmokeModels: Set<String> = [],
-        smokeFailure: NetworkError = .unusableCorrection
+        connectionFailure: Error? = nil,
+        modelFetchFailure: Error? = nil,
+        smokeFailure: Error = NetworkError.unusableCorrection
     ) {
         self.healthSucceeds = healthSucceeds
         self.models = models
         self.smokeSucceeds = smokeSucceeds
         self.failingSmokeModels = failingSmokeModels
+        self.connectionFailure = connectionFailure
+        self.modelFetchFailure = modelFetchFailure
         self.smokeFailure = smokeFailure
     }
 
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
         healthChecks += 1
         testedGatewayURLs.append(gatewayURL)
+        if let connectionFailure { throw connectionFailure }
         return healthSucceeds
     }
 
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
         modelFetches += 1
         testedGatewayURLs.append(gatewayURL)
+        if let modelFetchFailure { throw modelFetchFailure }
         return models
     }
 

@@ -507,7 +507,10 @@ final class ChatCompletionTests: XCTestCase {
         for (source, response) in [
             ("You must pay today.", "You just pay today."),
             ("We can pay today.", "He can pay today."),
-            ("The black bag arrived.", "The block bag arrived.")
+            ("The black bag arrived.", "The block bag arrived."),
+            ("The planes changed.", "The plans changed."),
+            ("They stared today.", "They started today."),
+            ("The trial starts today.", "The trail starts today.")
         ] {
             let semanticRewrite = GatewayClient(
                 config: validConfig,
@@ -567,6 +570,17 @@ final class ChatCompletionTests: XCTestCase {
             model: "test-model"
         )
         XCTAssertEqual(correctedContraction, "She doesn't receive updates.")
+
+        let ordinarySpellingCorrection = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I wrote an apology, but the grammar needs work."))
+        )
+        let correctedSpelling = try? await ordinarySpellingCorrection.performWritingAction(
+            .fixGrammar,
+            text: "I wrote an apoligy, but the grammer needs work.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedSpelling, "I wrote an apology, but the grammar needs work.")
 
         let relocatedLineBreak = GatewayClient(
             config: validConfig,
@@ -676,6 +690,37 @@ final class ChatCompletionTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
+
+        for (source, response) in [
+            ("Review *the note*.", "Review the *note*."),
+            ("[the note]", #"["the","note"]"#),
+            ("{the note}", #"{"the":"note"}"#)
+        ] {
+            let structuralRewrite = GatewayClient(
+                config: validConfig,
+                httpClient: DummyGatewayServer(.chatPlainText(response))
+            )
+            await XCTAssertThrowsErrorAsync(
+                try await structuralRewrite.performWritingAction(
+                    .fixGrammar,
+                    text: source,
+                    model: "test-model"
+                )
+            ) { error in
+                XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+            }
+        }
+
+        let preservedJSONStructure = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText(#"["the"]"#))
+        )
+        let correctedJSON = try? await preservedJSONStructure.performWritingAction(
+            .fixGrammar,
+            text: #"["teh"]"#,
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedJSON, #"["the"]"#)
 
         let preservedMarkdownLink = GatewayClient(
             config: validConfig,

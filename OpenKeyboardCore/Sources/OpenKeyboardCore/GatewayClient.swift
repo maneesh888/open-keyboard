@@ -1,5 +1,10 @@
 import Foundation
 import SemanticPromptContract
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public struct HTTPRequest: Equatable, Sendable {
     public var method: String
@@ -304,6 +309,9 @@ public final class GatewayClient: Sendable {
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isTopLevelStructuredJSON(inspection) == isTopLevelStructuredJSON(originalInspection) else {
+            throw GatewayClientError.invalidResponse
+        }
         let introducesOpeningFence = inspection.hasPrefix("```") && !originalInspection.hasPrefix("```")
         let introducesClosingFence = inspection.hasSuffix("```") && !originalInspection.hasSuffix("```")
         let introducesStructuredPrefix = ["{", "["].contains {
@@ -339,6 +347,14 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
         return corrected
+    }
+
+    private static func isTopLevelStructuredJSON(_ value: String) -> Bool {
+        guard let data = value.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return false
+        }
+        return object is [Any] || object is [String: Any]
     }
 
     private static func hasSuspiciousBoundaryWordChange(
@@ -442,13 +458,14 @@ public final class GatewayClient: Sendable {
               sourceStructure.segments.count == correctedStructure.segments.count else {
             return false
         }
+        let hasProtectedTokens = !sourceStructure.tokens.isEmpty
         return zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
-            grammarLeadingWhitespace(in: source) == grammarLeadingWhitespace(in: response) &&
+            let sourceWords = grammarWordOccurrences(in: Array(source)).map(\.value)
+            let responseWords = grammarWordOccurrences(in: Array(response)).map(\.value)
+            return grammarLeadingWhitespace(in: source) == grammarLeadingWhitespace(in: response) &&
             grammarTrailingWhitespace(in: source) == grammarTrailingWhitespace(in: response) &&
-            !hasUnanchoredGrammarContent(
-                grammarWordOccurrences(in: Array(source)).map(\.value),
-                grammarWordOccurrences(in: Array(response)).map(\.value)
-            )
+            (!hasProtectedTokens || sourceWords.count == responseWords.count) &&
+            !hasUnanchoredGrammarContent(sourceWords, responseWords)
         }
     }
 
@@ -632,47 +649,71 @@ public final class GatewayClient: Sendable {
 
     private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
         guard source != corrected else { return true }
-        if grammarWordFamilies.contains(where: { $0.contains(source) && $0.contains(corrected) }) {
-            return true
-        }
-        if knownSpellingWordFamilies.contains(where: { $0.contains(source) && $0.contains(corrected) }) {
-            return true
-        }
-        return isAdjacentTransposition(source, corrected) ||
-            isPlausibleInflection(source, corrected) ||
-            isConservativeMissingCharacterCorrection(source, corrected)
+        return allowedGrammarWordReplacements.contains(source + "\u{1F}" + corrected) ||
+            isSystemSpellingCorrection(source: source, corrected: corrected)
     }
 
-    private static func isConservativeMissingCharacterCorrection(_ source: String, _ corrected: String) -> Bool {
-        guard source.count >= 5,
-              corrected.count == source.count + 1,
-              source.first == corrected.first,
-              source.last == corrected.last else {
+    private static func isSystemSpellingCorrection(source: String, corrected: String) -> Bool {
+        guard grammarWordEditDistance(source, corrected) <= max(2, max(source.count, corrected.count) / 3) else {
             return false
         }
-        return grammarWordEditDistance(source, corrected) == 1
-    }
-
-    private static func isPlausibleInflection(_ source: String, _ corrected: String) -> Bool {
-        !grammarInflectionStems(for: source).isDisjoint(with: grammarInflectionStems(for: corrected))
-    }
-
-    private static func grammarInflectionStems(for word: String) -> Set<String> {
-        var stems: Set<String> = [word]
-        for suffix in ["ing", "ed", "es", "s"] where word.hasSuffix(suffix) && word.count > suffix.count + 1 {
-            let stem = String(word.dropLast(suffix.count))
-            stems.insert(stem)
-            if suffix == "ing" {
-                stems.insert(stem + "e")
-                if stem.count > 2, stem.last == stem.dropLast().last {
-                    stems.insert(String(stem.dropLast()))
-                }
+        let range = NSRange(location: 0, length: source.utf16.count)
+#if canImport(UIKit)
+        let checker = UITextChecker()
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredLanguages = UITextChecker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
+        }
+        let languages = Array(Set(preferredLanguages + ["en_US", "en_GB"])).sorted()
+        return languages.contains { language in
+            let misspelledRange = checker.rangeOfMisspelledWord(
+                in: source,
+                range: range,
+                startingAt: 0,
+                wrap: false,
+                language: language
+            )
+            guard misspelledRange == range else { return false }
+            guard let firstGuess = checker.guesses(
+                forWordRange: range,
+                in: source,
+                language: language
+            )?.first else {
+                return false
             }
+            return firstGuess.caseInsensitiveCompare(corrected) == .orderedSame
         }
-        if word.hasSuffix("ies"), word.count > 4 {
-            stems.insert(String(word.dropLast(3)) + "y")
+#elseif canImport(AppKit)
+        let checker = NSSpellChecker.shared
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredLanguages = checker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
         }
-        return stems
+        let languages = Array(Set(preferredLanguages + ["en_US", "en_GB"])).sorted()
+        return languages.contains { language in
+            var wordCount = 0
+            let misspelledRange = checker.checkSpelling(
+                of: source,
+                startingAt: 0,
+                language: language,
+                wrap: false,
+                inSpellDocumentWithTag: 0,
+                wordCount: &wordCount
+            )
+            guard misspelledRange == range else { return false }
+            guard let firstGuess = checker.guesses(
+                forWordRange: range,
+                in: source,
+                language: language,
+                inSpellDocumentWithTag: 0
+            )?.first else {
+                return false
+            }
+            return firstGuess.caseInsensitiveCompare(corrected) == .orderedSame
+        }
+#else
+        return false
+#endif
     }
 
     private static func isRepeatedSourceWord(at index: Int, in words: [String]) -> Bool {
@@ -680,42 +721,22 @@ public final class GatewayClient: Sendable {
             (index + 1 < words.endIndex && words[index + 1] == words[index])
     }
 
-    private static func isAdjacentTransposition(_ source: String, _ corrected: String) -> Bool {
-        let sourceCharacters = Array(source)
-        let correctedCharacters = Array(corrected)
-        guard sourceCharacters.count == correctedCharacters.count else { return false }
-        let differences = sourceCharacters.indices.filter { sourceCharacters[$0] != correctedCharacters[$0] }
-        guard differences.count == 2,
-              differences[1] == differences[0] + 1 else { return false }
-        return sourceCharacters[differences[0]] == correctedCharacters[differences[1]] &&
-            sourceCharacters[differences[1]] == correctedCharacters[differences[0]]
-    }
-
     private static let grammarInsertableWords: Set<String> = [
-        "a", "an", "the",
-        "am", "is", "are", "was", "were", "be", "been", "being",
-        "have", "has", "had", "do", "does", "did",
-        "at", "by", "from", "in", "into", "of", "on", "to", "with"
+        "a", "an", "the"
     ]
 
     private static let grammarDeletableWords = grammarInsertableWords
 
-    private static let grammarWordFamilies: [Set<String>] = [
-        ["am", "is", "are", "was", "were", "be", "been", "being"],
-        ["have", "has", "had"], ["do", "does", "did", "done"],
-        ["dont", "doesnt", "didnt"],
-        ["can", "could"], ["will", "would"], ["shall", "should"], ["may", "might"],
-        ["a", "an", "the"], ["this", "these"], ["that", "those"],
-        ["good", "well", "better", "best"], ["bad", "badly", "worse", "worst"],
-        ["go", "goes", "went", "gone", "going", "goed"], ["hear", "here"]
-    ]
-
-    private static let knownSpellingWordFamilies: [Set<String>] = [
-        ["definately", "definitely"], ["shure", "sure"],
-        ["yestarday", "yesterday"], ["wrng", "wrong"],
-        ["seperate", "separate"], ["reveiw", "review"],
-        ["paymant", "payment"], ["cliant", "client"],
-        ["tommorow", "tomorrow"]
+    private static let allowedGrammarWordReplacements: Set<String> = [
+        "has\u{1F}have", "a\u{1F}an", "is\u{1F}are", "need\u{1F}needs",
+        "dont\u{1F}doesnt", "hear\u{1F}here", "teh\u{1F}the",
+        "recieved\u{1F}received", "definately\u{1F}definitely",
+        "sentnce\u{1F}sentence", "refnd\u{1F}refund", "shure\u{1F}sure",
+        "udpate\u{1F}update", "yestarday\u{1F}yesterday",
+        "adress\u{1F}address", "timline\u{1F}timeline", "wrng\u{1F}wrong",
+        "seperate\u{1F}separate", "qustions\u{1F}questions",
+        "reveiw\u{1F}review", "explan\u{1F}explain", "paymant\u{1F}payment",
+        "cliant\u{1F}client", "tommorow\u{1F}tomorrow"
     ]
 
     private static func grammarWordOccurrences(in characters: [Character]) -> [GrammarWordOccurrence] {

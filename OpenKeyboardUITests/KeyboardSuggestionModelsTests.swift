@@ -708,6 +708,15 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "The black bag arrived."
             )
         )
+        for (source, response) in [
+            ("The planes changed.", "The plans changed."),
+            ("They stared today.", "They started today."),
+            ("The trial starts today.", "The trail starts today.")
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.validated(response, original: source)
+            )
+        }
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(
                 "They are.",
@@ -735,6 +744,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "She dont receive updates."
             ),
             "She doesn't receive updates."
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "I wrote an apology, but the grammar needs work.",
+                original: "I wrote an apoligy, but the grammer needs work."
+            ),
+            "I wrote an apology, but the grammar needs work."
         )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
@@ -784,6 +800,31 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 "Please review* this *now.",
                 original: "Please review *this* now."
             )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "Review the *note*.",
+                original: "Review *the note*."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                #"["the","note"]"#,
+                original: "[the note]"
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                #"{"the":"note"}"#,
+                original: "{the note}"
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                #"["the"]"#,
+                original: #"["teh"]"#
+            ),
+            #"["the"]"#
         )
         XCTAssertEqual(
             try GrammarCorrectionResponseValidator.validated(

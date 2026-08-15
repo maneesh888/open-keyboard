@@ -545,6 +545,9 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertFetchModelsThrows(.unauthorized, response: .status(403))
         try await assertFetchModelsThrows(.serverError("HTTP 500"), response: .status(500))
         try await assertFetchModelsThrows(.noData, response: .rawJSON(#"{"data":123}"#))
+        try await assertFetchModelsThrows(.cancelled, response: .throwing(CancellationError()))
+        try await assertFetchModelsThrows(.cancelled, response: .throwing(URLError(.cancelled)))
+        try await assertFetchModelsThrows(.timeout, response: .throwing(URLError(.timedOut)))
     }
 
     func testCorrectionSmokeMapsServerMalformedTimeoutAndUnusableResponses() async throws {
@@ -560,6 +563,8 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the refund. Sure."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received. Sure."))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the: Sure."))
+        try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(CancellationError()))
+        try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(URLError(.cancelled)))
     }
 
     func testGatewayDiagnosticsRunsKeyboardPlainTextGrammarPathAndMeasuresPerformance() async throws {
@@ -919,6 +924,7 @@ private enum ExpectedNetworkError {
     case modelUnavailable
     case unusableCorrection
     case timeout
+    case cancelled
 
     func matches(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
@@ -927,7 +933,8 @@ private enum ExpectedNetworkError {
              (.noData, .noData),
              (.modelUnavailable, .modelUnavailable),
              (.unusableCorrection, .unusableCorrection),
-             (.timeout, .timeout):
+             (.timeout, .timeout),
+             (.cancelled, .cancelled):
             return true
         case let (.serverError(expected), .serverError(actual)):
             return actual == expected
