@@ -306,16 +306,12 @@ public final class GatewayClient: Sendable {
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let invalidPrefixes = ["```", "{", "["]
         let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected"]
-        let commentarySuffixes = ["hope this helps", "let me know", "thanks", "thank you", "done", "enjoy"]
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard !invalidPrefixes.contains(where: inspection.hasPrefix),
               !commentaryPrefixes.contains(where: {
                   inspection.hasPrefix($0) && !originalInspection.hasPrefix($0)
               }),
-              !commentarySuffixes.contains(where: {
-                  inspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0) &&
-                      !originalInspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0)
-              }),
+              !hasNewGrammarCommentarySuffix(inspection, original: originalInspection),
               corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GatewayClientError.invalidResponse
         }
@@ -364,6 +360,25 @@ public final class GatewayClient: Sendable {
         }
     }
 
+    private static func hasNewGrammarCommentarySuffix(_ corrected: String, original: String) -> Bool {
+        let correctedWords = grammarWords(in: corrected)
+        let originalWords = grammarWords(in: original)
+        let commentarySuffixes = [
+            "hope this helps", "happy to help", "let me know", "thank you", "thanks",
+            "sure thing", "all set", "sure", "okay", "ok", "done", "enjoy"
+        ]
+        return commentarySuffixes.contains { suffix in
+            let suffixWords = grammarWords(in: suffix)
+            guard correctedWords.count >= suffixWords.count,
+                  Array(correctedWords.suffix(suffixWords.count)) == suffixWords else {
+                return false
+            }
+            let originalTail = Array(originalWords.suffix(suffixWords.count))
+            return originalTail.count != suffixWords.count ||
+                !grammarWordsApproximatelyMatch(originalTail, suffixWords)
+        }
+    }
+
     private struct GrammarWordOccurrence {
         let value: String
         let start: Int
@@ -393,8 +408,8 @@ public final class GatewayClient: Sendable {
             let correctedSeparator = correctedCharacters[
                 correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
             ]
-            if grammarContainsBoundaryDelimiter(correctedSeparator),
-               !grammarContainsBoundaryDelimiter(sourceSeparator) {
+            if grammarContainsBoundaryDelimiter(correctedSeparator) ||
+               grammarContainsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -416,8 +431,8 @@ public final class GatewayClient: Sendable {
             let correctedSeparator = correctedCharacters[
                 correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
             ]
-            if grammarContainsBoundaryDelimiter(correctedSeparator),
-               !grammarContainsBoundaryDelimiter(sourceSeparator) {
+            if grammarContainsBoundaryDelimiter(correctedSeparator) ||
+               grammarContainsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }

@@ -391,6 +391,49 @@ final class ChatCompletionTests: XCTestCase {
             }
         }
 
+        let existingBoundaryCommentary = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This sentence needs correction. Sure thing."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await existingBoundaryCommentary.performWritingAction(
+                .fixGrammar,
+                text: "This sentnce need correction. Reply tomorrow.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let whitespaceBoundaryCommentary = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("This sentence needs correction Sure."))
+        )
+        await XCTAssertThrowsErrorAsync(
+            try await whitespaceBoundaryCommentary.performWritingAction(
+                .fixGrammar,
+                text: "This sentnce need correction today.",
+                model: "test-model"
+            )
+        ) { error in
+            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+        }
+
+        let sourceTypoCorrectedToSuffixWord = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("I am sure."))
+        )
+        do {
+            let corrected = try await sourceTypoCorrectedToSuffixWord.performWritingAction(
+                .fixGrammar,
+                text: "I am shure.",
+                model: "test-model"
+            )
+            XCTAssertEqual(corrected, "I am sure.")
+        } catch {
+            XCTFail("A source-owned suffix typo should remain correctable: \(error)")
+        }
+
         let shortTailOmission = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("This is a detailed sentence."))

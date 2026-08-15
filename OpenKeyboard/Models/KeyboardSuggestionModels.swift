@@ -436,6 +436,9 @@ struct GrammarCorrectionResponseValidator {
         guard !commentaryPrefixes.contains(where: {
             lower.hasPrefix($0) && !originalLower.hasPrefix($0)
         }) else { throw GrammarCorrectionResponseError.commentary }
+        guard !hasNewCommentarySuffix(lower, original: originalLower) else {
+            throw GrammarCorrectionResponseError.commentary
+        }
         guard !lower.hasPrefix("{") && !lower.hasPrefix("[") else { throw GrammarCorrectionResponseError.commentary }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
@@ -533,7 +536,7 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
             ]
-            if containsBoundaryDelimiter(correctedSeparator), !containsBoundaryDelimiter(sourceSeparator) {
+            if containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -555,7 +558,7 @@ struct GrammarCorrectionResponseValidator {
             let correctedSeparator = correctedCharacters[
                 correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
             ]
-            if containsBoundaryDelimiter(correctedSeparator), !containsBoundaryDelimiter(sourceSeparator) {
+            if containsBoundaryDelimiter(correctedSeparator) || containsBoundaryDelimiter(sourceSeparator) {
                 return true
             }
         }
@@ -585,6 +588,25 @@ struct GrammarCorrectionResponseValidator {
 
     private static func approximatelyMatches(_ lhs: String, _ rhs: String) -> Bool {
         wordEditDistance(lhs, rhs) <= max(2, max(lhs.count, rhs.count) / 3)
+    }
+
+    private static func hasNewCommentarySuffix(_ corrected: String, original: String) -> Bool {
+        let correctedWords = words(in: corrected)
+        let originalWords = words(in: original)
+        let commentarySuffixes = [
+            "hope this helps", "happy to help", "let me know", "thank you", "thanks",
+            "sure thing", "all set", "sure", "okay", "ok", "done", "enjoy"
+        ]
+        return commentarySuffixes.contains { suffix in
+            let suffixWords = words(in: suffix)
+            guard correctedWords.count >= suffixWords.count,
+                  Array(correctedWords.suffix(suffixWords.count)) == suffixWords else {
+                return false
+            }
+            let originalTail = Array(originalWords.suffix(suffixWords.count))
+            return originalTail.count != suffixWords.count ||
+                !zip(originalTail, suffixWords).allSatisfy { approximatelyMatches($0, $1) }
+        }
     }
 
     private static func containsBoundaryDelimiter(_ characters: ArraySlice<Character>) -> Bool {

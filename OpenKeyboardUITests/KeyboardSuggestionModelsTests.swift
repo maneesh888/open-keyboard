@@ -646,6 +646,22 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         }
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
+                "This sentence needs correction. Sure thing.",
+                original: "This sentnce need correction. Reply tomorrow."
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "This sentence needs correction Sure.",
+                original: "This sentnce need correction today."
+            )
+        )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated("I am sure.", original: "I am shure."),
+            "I am sure."
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
                 "i recieved teh refnd. Hope this helps.",
                 original: "  i recieved teh refnd.  "
             )
