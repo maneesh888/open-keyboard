@@ -101,6 +101,54 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertNil(json["temperature"])
     }
 
+    func testCanonicalGatewayClientMapsStructuredUnavailableModelErrors() async throws {
+        let unavailableBodies = [
+            #"{"error":{"message":"The model `missing-model` does not exist or is not available for this key.","type":"invalid_request_error","code":"model_not_found"}}"#,
+            #"{"detail":"unknown model: missing-model"}"#
+        ]
+        for body in unavailableBodies {
+            let client = CanonicalGatewayClient(transport: CanonicalGatewayClientTestTransport(
+                data: Data(body.utf8),
+                statusCode: 404
+            ))
+            do {
+                _ = try await client.chatCompletionContent(
+                    systemPrompt: "Correct grammar.",
+                    userPrompt: "i has text",
+                    operation: "fix_grammar",
+                    inputText: "i has text",
+                    maxTokens: 256,
+                    config: configuredGateway,
+                    temperature: nil,
+                    expectsStructuredResponse: false
+                )
+                XCTFail("Expected unavailable-model response to retain its typed category")
+            } catch let error as CanonicalGatewayClientError {
+                XCTAssertEqual(error, .modelUnavailable)
+            }
+        }
+
+        let genericClient = CanonicalGatewayClient(transport: CanonicalGatewayClientTestTransport(
+            data: Data(#"{"error":{"message":"Route not found"}}"#.utf8),
+            statusCode: 404
+        ))
+        do {
+            _ = try await genericClient.chatCompletionContent(
+                systemPrompt: "Correct grammar.",
+                userPrompt: "i has text",
+                operation: "fix_grammar",
+                inputText: "i has text",
+                maxTokens: 256,
+                config: configuredGateway,
+                temperature: nil,
+                expectsStructuredResponse: false
+            )
+            XCTFail("Expected generic HTTP failure")
+        } catch let error as CanonicalGatewayClientError {
+            XCTAssertEqual(error, .serverStatus(404))
+        }
+    }
+
     func testKeyboardAIServiceUsesCanonicalGatewayContractForCarouselCorrections() async throws {
         let assistantContent = "I have an apple."
         let responseBody = try JSONSerialization.data(withJSONObject: [
@@ -501,6 +549,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
     func testCorrectionSmokeMapsServerMalformedTimeoutAndUnusableResponses() async throws {
         try await assertCorrectionSmokeThrows(.serverError("HTTP 503"), response: .rawJSON("Gateway down", statusCode: 503))
+        try await assertCorrectionSmokeThrows(
+            .modelUnavailable,
+            response: .rawJSON(#"{"error":{"message":"model not found","code":"model_not_found"}}"#, statusCode: 404)
+        )
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .rawJSON(#"{"choices":[]}"#))
         try await assertCorrectionSmokeThrows(.timeout, response: .throwing(URLError(.timedOut)))
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))
@@ -862,6 +914,7 @@ private enum ExpectedNetworkError {
     case unauthorized
     case serverError(String)
     case noData
+    case modelUnavailable
     case unusableCorrection
     case timeout
 
@@ -870,6 +923,7 @@ private enum ExpectedNetworkError {
         switch (self, networkError) {
         case (.unauthorized, .unauthorized),
              (.noData, .noData),
+             (.modelUnavailable, .modelUnavailable),
              (.unusableCorrection, .unusableCorrection),
              (.timeout, .timeout):
             return true

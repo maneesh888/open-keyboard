@@ -87,6 +87,9 @@ struct CanonicalGatewayClient {
         }
         guard let http = response as? HTTPURLResponse else { throw CanonicalGatewayClientError.invalidResponse }
         if http.statusCode == 401 || http.statusCode == 403 { throw CanonicalGatewayClientError.unauthorized }
+        if Self.isModelUnavailableResponse(data, statusCode: http.statusCode) {
+            throw CanonicalGatewayClientError.modelUnavailable
+        }
         guard (200..<300).contains(http.statusCode) else { throw CanonicalGatewayClientError.serverStatus(http.statusCode) }
         guard let completion = try? JSONDecoder().decode(CanonicalChatCompletionResponse.self, from: data),
               let choice = completion.choices.first,
@@ -128,6 +131,45 @@ struct CanonicalGatewayClient {
             race.resolve(.failure(CancellationError()))
         }
         return (result.data, result.response)
+    }
+
+    private static func isModelUnavailableResponse(_ data: Data, statusCode: Int) -> Bool {
+        guard (400..<500).contains(statusCode),
+              let payload = try? JSONSerialization.jsonObject(with: data) else {
+            return false
+        }
+        let message = errorMetadataStrings(in: payload)
+            .joined(separator: " ")
+            .lowercased()
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+        guard message.contains("model") else { return false }
+        return [
+            "model not found",
+            "model is not available",
+            "model not available",
+            "model unavailable",
+            "model does not exist",
+            "model doesn't exist",
+            "no such model",
+            "unknown model",
+            "unsupported model",
+            "model not supported",
+            "model not loaded",
+            "model not installed"
+        ].contains(where: message.contains)
+    }
+
+    private static func errorMetadataStrings(in value: Any) -> [String] {
+        if let string = value as? String { return [string] }
+        if let values = value as? [Any] {
+            return values.flatMap(errorMetadataStrings)
+        }
+        guard let object = value as? [String: Any] else { return [] }
+        let errorKeys: Set<String> = ["error", "message", "detail", "code", "type", "reason"]
+        return object.flatMap { key, nestedValue in
+            errorKeys.contains(key.lowercased()) ? errorMetadataStrings(in: nestedValue) : []
+        }
     }
 
     func chatCompletionRequest(

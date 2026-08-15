@@ -430,9 +430,12 @@ struct GrammarCorrectionResponseValidator {
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = inspection.lowercased()
+        let originalLower = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !lower.hasPrefix("```") && !lower.hasSuffix("```") else { throw GrammarCorrectionResponseError.fenced }
         let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected"]
-        guard !commentaryPrefixes.contains(where: lower.hasPrefix) else { throw GrammarCorrectionResponseError.commentary }
+        guard !commentaryPrefixes.contains(where: {
+            lower.hasPrefix($0) && !originalLower.hasPrefix($0)
+        }) else { throw GrammarCorrectionResponseError.commentary }
         guard !lower.hasPrefix("{") && !lower.hasPrefix("[") else { throw GrammarCorrectionResponseError.commentary }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {

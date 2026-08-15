@@ -370,6 +370,17 @@ final class ChatCompletionTests: XCTestCase {
         ) { error in
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
+
+        let sourceOwnedPrefix = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("Here is the account update."))
+        )
+        let corrected = try? await sourceOwnedPrefix.performWritingAction(
+            .fixGrammar,
+            text: "Here is teh account update.",
+            model: "test-model"
+        )
+        XCTAssertEqual(corrected, "Here is the account update.")
     }
 
     func testPerformWritingActionEmptyChoicesMapsToInvalidResponse() async {

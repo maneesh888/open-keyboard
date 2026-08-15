@@ -303,12 +303,18 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let commentaryPrefixes = ["```", "here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected", "{", "["]
+        let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let invalidPrefixes = ["```", "{", "["]
+        let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected"]
         let commentarySuffixes = ["hope this helps", "let me know", "thanks", "thank you", "done", "enjoy"]
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
-        guard !commentaryPrefixes.contains(where: inspection.hasPrefix),
+        guard !invalidPrefixes.contains(where: inspection.hasPrefix),
+              !commentaryPrefixes.contains(where: {
+                  inspection.hasPrefix($0) && !originalInspection.hasPrefix($0)
+              }),
               !commentarySuffixes.contains(where: {
-                  inspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0)
+                  inspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0) &&
+                      !originalInspection.trimmingCharacters(in: .punctuationCharacters).hasSuffix($0)
               }),
               corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GatewayClientError.invalidResponse

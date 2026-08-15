@@ -638,6 +638,15 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
                 original: "This is a detailed sentence about updates."
             )
         )
+
+        let sourceOwnedPrefix = "Here is teh account update."
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "Here is the account update.",
+                original: sourceOwnedPrefix
+            ),
+            "Here is the account update."
+        )
     }
 
     func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {
