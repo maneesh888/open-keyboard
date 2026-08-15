@@ -474,19 +474,64 @@ struct GrammarTextChunk: Equatable, Sendable {
 struct GrammarTextChunker {
     static let maximumCharacters = 6_000
     static let absoluteMaximumCharacters = 24_000
+    private static let multiParagraphSafetyCharacters = 256
+    private static let multiParagraphChunkCharacters = 120
 
     static func chunks(in text: String, maximumCharacters: Int = GrammarTextChunker.maximumCharacters) -> [GrammarTextChunk] {
         let characters = Array(text)
+        let paragraphEnds = paragraphBoundaryEnds(in: characters)
+        if maximumCharacters == GrammarTextChunker.maximumCharacters,
+           characters.count >= multiParagraphSafetyCharacters,
+           paragraphEnds.count >= 2 {
+            return chunks(
+                in: characters,
+                sectionEnds: [characters.count],
+                maximumCharacters: multiParagraphChunkCharacters
+            )
+        }
         guard characters.count > maximumCharacters else {
             return [GrammarTextChunk(range: KeyboardTextRange(start: 0, end: characters.count), text: text)]
         }
 
+        return chunks(
+            in: characters,
+            sectionEnds: [characters.count],
+            maximumCharacters: maximumCharacters
+        )
+    }
+
+    private static func chunks(
+        in characters: [Character],
+        sectionEnds: [Int],
+        maximumCharacters: Int
+    ) -> [GrammarTextChunk] {
         var chunks: [GrammarTextChunk] = []
-        var start = 0
-        while start < characters.count {
-            let hardEnd = min(start + maximumCharacters, characters.count)
+        var sectionStart = 0
+        for sectionEnd in sectionEnds where sectionEnd > sectionStart {
+            appendChunks(
+                in: characters,
+                from: sectionStart,
+                to: sectionEnd,
+                maximumCharacters: maximumCharacters,
+                into: &chunks
+            )
+            sectionStart = sectionEnd
+        }
+        return chunks
+    }
+
+    private static func appendChunks(
+        in characters: [Character],
+        from sectionStart: Int,
+        to sectionEnd: Int,
+        maximumCharacters: Int,
+        into chunks: inout [GrammarTextChunk]
+    ) {
+        var start = sectionStart
+        while start < sectionEnd {
+            let hardEnd = min(start + maximumCharacters, sectionEnd)
             var end = hardEnd
-            if hardEnd < characters.count {
+            if hardEnd < sectionEnd {
                 let minimumEnd = start + maximumCharacters / 2
                 var candidate = hardEnd
                 var foundBoundary = false
@@ -504,7 +549,7 @@ struct GrammarTextChunker {
                 }
                 if !foundBoundary {
                     candidate = hardEnd + 1
-                    while candidate < characters.count {
+                    while candidate < sectionEnd {
                         let previous = characters[candidate - 1]
                         let next = characters[candidate]
                         let paragraphBoundary = previous == "\n" && (candidate < 2 || characters[candidate - 2] == "\n")
@@ -518,7 +563,7 @@ struct GrammarTextChunker {
                     }
                 }
                 if !foundBoundary {
-                    end = characters.count
+                    end = sectionEnd
                 }
             }
             let chunkText = String(characters[start..<end])
@@ -528,6 +573,24 @@ struct GrammarTextChunker {
             ))
             start = end
         }
-        return chunks
+    }
+
+    private static func paragraphBoundaryEnds(in characters: [Character]) -> [Int] {
+        guard characters.count >= 2 else { return [] }
+        var boundaries: [Int] = []
+        var index = 1
+        while index < characters.count {
+            guard characters[index - 1] == "\n", characters[index] == "\n" else {
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while end < characters.count, characters[end] == "\n" {
+                end += 1
+            }
+            boundaries.append(end)
+            index = end
+        }
+        return boundaries
     }
 }

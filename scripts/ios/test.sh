@@ -65,6 +65,19 @@ plist_set_or_add_string() {
   fi
 }
 
+plist_set_or_add_exact_string() {
+  local plist="$1"
+  local path="$2"
+  local value="$3"
+  local plist_path="${path#:}"
+  plist_path="${plist_path//:/.}"
+
+  if ! /usr/libexec/PlistBuddy -c "Print $path" "$plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Add $path string placeholder" "$plist" >/dev/null
+  fi
+  /usr/bin/plutil -replace "$plist_path" -string "$value" "$plist"
+}
+
 inject_xctestrun_gateway_env() {
   local xctestrun="$1"
   local roots=(
@@ -80,6 +93,9 @@ inject_xctestrun_gateway_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
     if [[ -n "${OPEN_KEYBOARD_REAL_SCREENSHOT_DIR:-}" ]]; then
       plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_REAL_SCREENSHOT_DIR" "$OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"
+    fi
+    if [[ -n "${OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE:-}" ]]; then
+      plist_set_or_add_exact_string "$xctestrun" "$root:OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE" "$OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE"
     fi
   done
 }
@@ -365,7 +381,7 @@ case "${1:-}" in
     case "$live_test_identifier" in
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured|\
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured|\
-      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardGrammarCorrectionSelectionWhenGatewayConfigured)
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested)
         ;;
       *)
         echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"

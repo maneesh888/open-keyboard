@@ -599,10 +599,19 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("```\n\(source)\n```", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("Here is the corrected text: \(source)", original: source))
+        XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("Certainly: \(source)", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("  This text is clean.\u{FFFD}\nIt stays here.  ", original: source))
 
         let longSource = String(repeating: "The unchanged source sentence has useful detail. ", count: 8)
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("A completely different short rewrite.", original: longSource))
+
+        let detailedSource = "This is a fairly detailed sentence about account updates."
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "This is a fairly detailed sentence.",
+                original: detailedSource
+            )
+        )
     }
 
     func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {
@@ -633,6 +642,51 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(chunks.allSatisfy { chunk in
             chunk.range.end == text.count || chunk.text.hasSuffix("\n") || ".!?".contains(chunk.text.last ?? "x")
         })
+    }
+
+    func testGrammarChunkerIsolatesSubstantialMultiParagraphTextForLowWeightModels() {
+        let text = """
+        our support team recieved teh report yestarday, but the adress and timline were wrng.
+
+        This clean paragraph should remain unchanged. 😊
+
+        please seperate the qustions, reveiw the checklist, and explan why the paymant failed.
+
+        the cliant definately need the final refnd tommorow.
+        """
+        let chunks = GrammarTextChunker.chunks(in: text)
+
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.map(\.text).joined(), text)
+        XCTAssertEqual(chunks.first?.range.start, 0)
+        XCTAssertEqual(chunks.last?.range.end, text.count)
+        XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
+        XCTAssertTrue(chunks[1].text.hasPrefix("This clean paragraph should remain unchanged. 😊\n\n"))
+        XCTAssertTrue(chunks[1].text.contains("please seperate the qustions"))
+    }
+
+    func testDenseDefiniteCorrectionsRemainValidWithoutDroppingCleanParagraphs() throws {
+        let source = """
+        our support team recieved teh report yestarday, but the adress and timline were wrng.
+
+        This clean paragraph should remain unchanged. 😊
+
+        please seperate the qustions, reveiw the checklist, and explan why the paymant failed.
+
+        the cliant definately need the final refnd tommorow.
+        """
+        let corrected = """
+        Our support team received the report yesterday, but the address and timeline were wrong.
+
+        This clean paragraph should remain unchanged. 😊
+
+        Please separate the questions, review the checklist, and explain why the payment failed.
+
+        The client definitely needs the final refund tomorrow.
+        """
+
+        XCTAssertEqual(try GrammarCorrectionResponseValidator.validated(corrected, original: source), corrected)
+        XCTAssertGreaterThanOrEqual(GrammarDiffService.edits(from: source, to: corrected).count, 15)
     }
 
     private static func multiCorrectionResponse() -> KeyboardSuggestionResponse {

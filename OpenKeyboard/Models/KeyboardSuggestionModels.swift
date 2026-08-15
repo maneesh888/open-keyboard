@@ -431,7 +431,7 @@ struct GrammarCorrectionResponseValidator {
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = inspection.lowercased()
         guard !lower.hasPrefix("```") && !lower.hasSuffix("```") else { throw GrammarCorrectionResponseError.fenced }
-        let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "i corrected", "the corrected"]
+        let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "certainly:", "i corrected", "the corrected"]
         guard !commentaryPrefixes.contains(where: lower.hasPrefix) else { throw GrammarCorrectionResponseError.commentary }
         guard !lower.hasPrefix("{") && !lower.hasPrefix("[") else { throw GrammarCorrectionResponseError.commentary }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
@@ -444,7 +444,15 @@ struct GrammarCorrectionResponseValidator {
         }
 
         let edits = GrammarDiffService.edits(from: original, to: corrected)
-        let changedCharacters = edits.reduce(0) { $0 + $1.originalText.count + $1.replacementText.count }
+        guard !edits.contains(where: isSuspiciousOmission) else {
+            throw GrammarCorrectionResponseError.truncated
+        }
+        guard !edits.contains(where: { isSuspiciousBoundaryCommentary($0, originalLength: original.count) }) else {
+            throw GrammarCorrectionResponseError.commentary
+        }
+        let changedCharacters = edits.reduce(0) {
+            $0 + max($1.originalText.count, $1.replacementText.count)
+        }
         let sourceWords = original.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
         let changedWords = edits.reduce(0) {
             $0 + max(
@@ -460,11 +468,26 @@ struct GrammarCorrectionResponseValidator {
             }
         }.count
         guard changedCharacters <= max(48, original.count * 45 / 100),
-              changedWords <= max(8, sourceWords * 35 / 100),
+              changedWords <= max(8, sourceWords * 60 / 100),
               approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
             throw GrammarCorrectionResponseError.suspiciousRewrite
         }
         return corrected
+    }
+
+    private static func isSuspiciousOmission(_ edit: GrammarEdit) -> Bool {
+        let removedWords = words(in: edit.originalText).count
+        let replacementWords = words(in: edit.replacementText).count
+        return removedWords >= 3 && replacementWords == 0
+    }
+
+    private static func isSuspiciousBoundaryCommentary(_ edit: GrammarEdit, originalLength: Int) -> Bool {
+        guard edit.originalText.isEmpty else { return false }
+        let inserted = edit.replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let insertedWords = words(in: inserted)
+        guard !insertedWords.isEmpty, insertedWords.count <= 4 else { return false }
+        let commentaryPunctuation = inserted.hasSuffix(":") || inserted.hasSuffix(",")
+        return commentaryPunctuation && (edit.range.start == 0 || edit.range.start == originalLength)
     }
 
     private static func words(in value: String) -> [String] {
