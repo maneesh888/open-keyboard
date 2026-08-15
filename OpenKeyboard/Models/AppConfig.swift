@@ -544,12 +544,30 @@ extension AppConfig {
         defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled")
     }
 
-    static func clear(from defaults: UserDefaults) {
-        secretStore.clearAPIKey()
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.initialPanelModeSeedID", "keyboardExtension.initialPanelModeSeededAt", "keyboardExtension.suggestionState", "keyboardExtension.suggestionStateSeedID", "keyboardExtension.suggestionStateSeededAt"].forEach {
+    static func clearKeyboardUITestState(from defaults: UserDefaults) {
+        [
+            "keyboardExtension.composingBuffer",
+            "keyboardExtension.lastDebugEvent",
+            "keyboardExtension.debugEvents",
+            "keyboardExtension.uiTestDebugStateEnabled",
+            "keyboardExtension.initialPanelMode",
+            "keyboardExtension.initialPanelModeSeedID",
+            "keyboardExtension.initialPanelModeSeededAt",
+            "keyboardExtension.suggestionState",
+            "keyboardExtension.suggestionStateSeedID",
+            "keyboardExtension.suggestionStateSeededAt"
+        ].forEach {
             defaults.removeObject(forKey: $0)
         }
         defaults.synchronize()
+    }
+
+    static func clear(from defaults: UserDefaults) {
+        secretStore.clearAPIKey()
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey].forEach {
+            defaults.removeObject(forKey: $0)
+        }
+        clearKeyboardUITestState(from: defaults)
     }
 }
 

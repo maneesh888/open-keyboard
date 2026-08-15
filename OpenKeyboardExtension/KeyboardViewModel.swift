@@ -365,7 +365,10 @@ final class KeyboardViewModel: ObservableObject {
         self.automaticAnalysisDelayNanoseconds = automaticAnalysisDelayNanoseconds
         self.config = loadConfig()
         self.gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
-        self.composingBuffer = Self.debugStateEnabled ? Self.loadPersistedComposingBuffer() : ""
+        // The composing buffer is runtime-only input state. UI tests may persist a
+        // redacted diagnostic copy, but a later normally installed extension must
+        // never restore that copy and send it instead of the host document context.
+        self.composingBuffer = ""
         let seededSuggestionState = Self.loadSeededSuggestionState()
         self.suggestionState = seededSuggestionState?.suggestionState
         self.actionPanelState = seededSuggestionState?.actionPanelState
@@ -1748,18 +1751,12 @@ final class KeyboardViewModel: ObservableObject {
             }
             return context
         }
-        if composingBuffer.isEmpty, Self.debugStateEnabled {
-            composingBuffer = Self.loadPersistedComposingBuffer()
-        }
         return composingBuffer
     }
 
     private func currentReplacementPlan() -> KeyboardReplacementPlan? {
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
         let contextAfterInput = textDocumentProxy.documentContextAfterInput
-        if composingBuffer.isEmpty, Self.debugStateEnabled {
-            composingBuffer = Self.loadPersistedComposingBuffer()
-        }
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
         let contextPlan = KeyboardReplacementPlanner.plan(
             contextBeforeInput: contextBeforeInput,
@@ -1792,9 +1789,6 @@ final class KeyboardViewModel: ObservableObject {
 
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
         let contextAfterInput = textDocumentProxy.documentContextAfterInput
-        if composingBuffer.isEmpty, Self.debugStateEnabled {
-            composingBuffer = Self.loadPersistedComposingBuffer()
-        }
         let fallbackContext = composingBuffer.isEmpty ? nil : composingBuffer
         let bufferPlan = KeyboardReplacementPlanner.grammarPlan(for: fallbackContext)
         if let contextPlan = KeyboardReplacementPlanner.grammarPlan(
@@ -1889,11 +1883,6 @@ final class KeyboardViewModel: ObservableObject {
     private static func sanitizedErrorMessage(_ error: Error) -> String {
         let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         return KeyboardActionErrorState.sanitized(message)
-    }
-
-    private static func loadPersistedComposingBuffer() -> String {
-        guard debugStateEnabled else { return "" }
-        return AppConfig.sharedDefaults()?.string(forKey: Keys.composingBuffer) ?? ""
     }
 
     private static func consumeInitialPanelModeSeed() -> KeyboardPanelMode {

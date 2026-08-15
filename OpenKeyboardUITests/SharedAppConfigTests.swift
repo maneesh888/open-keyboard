@@ -442,4 +442,28 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey))
     }
+
+    func testClearingKeyboardUITestStatePreservesRealGatewayConfiguration() {
+        secretStore.apiKey = "real-keychain-token"
+        defaults.set("https://gateway.example.com", forKey: AppConfig.gatewayURLKey)
+        defaults.set("gemma2:2b", forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
+        defaults.set(true, forKey: AppConfig.grammarCorrectionVerifiedKey)
+        defaults.set(AppConfig.grammarCorrectionCapabilityVersion, forKey: AppConfig.grammarCorrectionContractVersionKey)
+        defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
+        defaults.set("stale test text", forKey: "keyboardExtension.composingBuffer")
+        defaults.set("modelCapabilityError", forKey: "keyboardExtension.suggestionState")
+
+        AppConfig.clearKeyboardUITestState(from: defaults)
+
+        XCTAssertEqual(secretStore.apiKey, "real-keychain-token")
+        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example.com")
+        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), "gemma2:2b")
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey))
+        XCTAssertEqual(defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey), AppConfig.grammarCorrectionCapabilityVersion)
+        XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.composingBuffer"))
+        XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
+    }
 }

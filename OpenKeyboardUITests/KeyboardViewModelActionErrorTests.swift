@@ -1162,6 +1162,42 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
     }
 
+    func testPersistedUITestBufferNeverOverridesLiveDocumentText() async throws {
+        let defaults = try XCTUnwrap(AppConfig.sharedDefaults())
+        let debugKey = "keyboardExtension.uiTestDebugStateEnabled"
+        let bufferKey = "keyboardExtension.composingBuffer"
+        let previousDebugValue = defaults.object(forKey: debugKey)
+        let previousBufferValue = defaults.object(forKey: bufferKey)
+        defer {
+            defaults.removeObject(forKey: debugKey)
+            defaults.removeObject(forKey: bufferKey)
+            if let previousDebugValue { defaults.set(previousDebugValue, forKey: debugKey) }
+            if let previousBufferValue { defaults.set(previousBufferValue, forKey: bufferKey) }
+            defaults.synchronize()
+        }
+
+        defaults.set(true, forKey: debugKey)
+        defaults.set("Stale text left behind by an earlier XCTest run.", forKey: bufferKey)
+        defaults.synchronize()
+
+        let liveText = "Our support team definately need clearer notes."
+        let service = SequencedKeyboardAIService(results: [Self.plainGrammarResult(
+            "Our support team definitely needs clearer notes."
+        )])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: liveText),
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil { service.requestedTexts.count == 1 && !viewModel.isPerformingAIAction }
+
+        XCTAssertEqual(service.requestedTexts, [liveText])
+    }
+
     func testCompletedActionPanelKeepsExistingGrammarCorrectionLane() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)

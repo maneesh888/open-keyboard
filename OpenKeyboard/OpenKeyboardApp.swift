@@ -15,6 +15,7 @@ struct OpenKeyboardApp: App {
     
     init() {
         #if DEBUG
+        Self.clearStaleUITestKeyboardStateAtLaunchIfNeeded()
         Self.clearUITestConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayConfigAtLaunchIfNeeded()
         Self.seedUITestGatewayErrorAtLaunchIfNeeded()
@@ -72,6 +73,14 @@ struct OpenKeyboardApp: App {
     }
 
     #if DEBUG
+    private static func clearStaleUITestKeyboardStateAtLaunchIfNeeded() {
+        guard !ProcessInfo.processInfo.arguments.contains("--uitesting"),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+        AppConfig.clearKeyboardUITestState(from: sharedDefaults)
+    }
+
     private var editorHostPreviewState: KeyboardPreviewLabState? {
         guard isUITesting,
               let argument = launchArguments.first(where: { $0.hasPrefix("--editor-host-preview=") }) else {
