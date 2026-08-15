@@ -428,23 +428,22 @@ struct GrammarCorrectionResponseValidator {
         guard !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
             throw GrammarCorrectionResponseError.malformedUnicode
         }
-        let inspection = response.drop(while: { $0.isWhitespace })
+        let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines)
         let lower = inspection.lowercased()
         guard !lower.hasPrefix("```") && !lower.hasSuffix("```") else { throw GrammarCorrectionResponseError.fenced }
         let commentaryPrefixes = ["here is", "here's", "corrected text", "correction:", "sure,", "i corrected", "the corrected"]
         guard !commentaryPrefixes.contains(where: lower.hasPrefix) else { throw GrammarCorrectionResponseError.commentary }
         guard !lower.hasPrefix("{") && !lower.hasPrefix("[") else { throw GrammarCorrectionResponseError.commentary }
-        guard leadingWhitespace(in: response) == leadingWhitespace(in: original),
-              trailingWhitespace(in: response) == trailingWhitespace(in: original),
-              response.filter(\.isNewline).count == original.filter(\.isNewline).count else {
+        let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
+        guard corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GrammarCorrectionResponseError.truncated
         }
-        if response == original { return response }
-        if original.count >= 80, response.count < original.count * 3 / 5 {
+        if corrected == original { return corrected }
+        if original.count >= 80, corrected.count < original.count * 3 / 5 {
             throw GrammarCorrectionResponseError.truncated
         }
 
-        let edits = GrammarDiffService.edits(from: original, to: response)
+        let edits = GrammarDiffService.edits(from: original, to: corrected)
         let changedCharacters = edits.reduce(0) { $0 + $1.originalText.count + $1.replacementText.count }
         let sourceWords = original.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
         let changedWords = edits.reduce(0) {
@@ -454,7 +453,7 @@ struct GrammarCorrectionResponseValidator {
             )
         }
         let originalWords = words(in: original)
-        let responseWords = words(in: response)
+        let responseWords = words(in: corrected)
         let approximatelyPreservedWords = originalWords.filter { sourceWord in
             responseWords.contains { candidate in
                 wordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
@@ -465,7 +464,7 @@ struct GrammarCorrectionResponseValidator {
               approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
             throw GrammarCorrectionResponseError.suspiciousRewrite
         }
-        return response
+        return corrected
     }
 
     private static func words(in value: String) -> [String] {
@@ -497,6 +496,13 @@ struct GrammarCorrectionResponseValidator {
 
     private static func trailingWhitespace(in value: String) -> String {
         String(value.reversed().prefix(while: { $0.isWhitespace }).reversed())
+    }
+
+    private static func restoringOriginalBoundaryWhitespace(in response: String, original: String) -> String {
+        guard original.contains(where: { !$0.isWhitespace }) else { return original }
+        let withoutLeadingWhitespace = response.drop(while: { $0.isWhitespace })
+        let responseBody = withoutLeadingWhitespace.reversed().drop(while: { $0.isWhitespace }).reversed()
+        return leadingWhitespace(in: original) + String(responseBody) + trailingWhitespace(in: original)
     }
 }
 

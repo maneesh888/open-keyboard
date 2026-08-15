@@ -288,13 +288,14 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(output, "I have an apple.")
     }
 
-    func testPerformWritingActionRejectsChangedBoundaryWhitespace() async throws {
-        let http = DummyGatewayServer(.chatPlainText("  Corrected text.\n"))
+    func testPerformWritingActionRestoresOriginalBoundaryWhitespace() async throws {
+        let source = "  i has a apple  "
+        let http = DummyGatewayServer(.chatPlainText("\nI have an apple. \t"))
         let client = GatewayClient(config: validConfig, httpClient: http)
 
-        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "bad", model: "test-model")) { error in
-            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
-        }
+        let output = try await client.performWritingAction(.fixGrammar, text: source, model: "test-model")
+
+        XCTAssertEqual(output, "  I have an apple.  ")
     }
 
     func testPlainGrammarPreservesExactBoundaryWhitespace() async throws {

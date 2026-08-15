@@ -302,20 +302,19 @@ public final class GatewayClient: Sendable {
               !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
             throw GatewayClientError.invalidResponse
         }
-        let inspection = response.drop(while: { $0.isWhitespace }).lowercased()
+        let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let commentaryPrefixes = ["```", "here is", "here's", "corrected text", "correction:", "sure,", "i corrected", "the corrected", "{", "["]
+        let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
         guard !commentaryPrefixes.contains(where: inspection.hasPrefix),
-              response.filter(\.isNewline).count == original.filter(\.isNewline).count,
-              String(response.prefix(while: { $0.isWhitespace })) == String(original.prefix(while: { $0.isWhitespace })),
-              String(response.reversed().prefix(while: { $0.isWhitespace }).reversed()) == String(original.reversed().prefix(while: { $0.isWhitespace }).reversed()) else {
+              corrected.filter(\.isNewline).count == original.filter(\.isNewline).count else {
             throw GatewayClientError.invalidResponse
         }
-        if original.count >= 80, response.count < original.count * 3 / 5 {
+        if original.count >= 80, corrected.count < original.count * 3 / 5 {
             throw GatewayClientError.invalidResponse
         }
-        if response == original { return response }
+        if corrected == original { return corrected }
         let originalWords = grammarWords(in: original)
-        let responseWords = grammarWords(in: response)
+        let responseWords = grammarWords(in: corrected)
         let approximatelyPreservedWords = originalWords.filter { sourceWord in
             responseWords.contains { candidate in
                 grammarWordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
@@ -324,7 +323,16 @@ public final class GatewayClient: Sendable {
         guard approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
             throw GatewayClientError.invalidResponse
         }
-        return response
+        return corrected
+    }
+
+    private static func restoringOriginalBoundaryWhitespace(in response: String, original: String) -> String {
+        guard original.contains(where: { !$0.isWhitespace }) else { return original }
+        let withoutLeadingWhitespace = response.drop(while: { $0.isWhitespace })
+        let responseBody = withoutLeadingWhitespace.reversed().drop(while: { $0.isWhitespace }).reversed()
+        let originalLeadingWhitespace = original.prefix(while: { $0.isWhitespace })
+        let originalTrailingWhitespace = original.reversed().prefix(while: { $0.isWhitespace }).reversed()
+        return String(originalLeadingWhitespace) + String(responseBody) + String(originalTrailingWhitespace)
     }
 
     private static func grammarWords(in value: String) -> [String] {

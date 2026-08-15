@@ -391,7 +391,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testCorrectionSmokeBuildsAuthenticatedChatCompletionRequest() async throws {
-        let transport = NetworkManagerTestTransport(.chat(content: "I received the refund."))
+        let transport = NetworkManagerTestTransport(.chat(content: "I received the refund. "))
         let manager = NetworkManager(transport: transport)
 
         try await manager.testCorrectionSmoke(

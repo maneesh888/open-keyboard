@@ -592,14 +592,27 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     func testPlainTextGrammarResponseValidationPreservesExactTextAndRejectsUnsafeOutputs() throws {
         let source = "  This text is clean.\nIt stays here.  "
         XCTAssertEqual(try GrammarCorrectionResponseValidator.validated(source, original: source), source)
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated("\nThis text is clean.\nIt stays here. \t", original: source),
+            source
+        )
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("```\n\(source)\n```", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("Here is the corrected text: \(source)", original: source))
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("  This text is clean.\u{FFFD}\nIt stays here.  ", original: source))
-        XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("This text is clean.", original: source))
 
         let longSource = String(repeating: "The unchanged source sentence has useful detail. ", count: 8)
         XCTAssertThrowsError(try GrammarCorrectionResponseValidator.validated("A completely different short rewrite.", original: longSource))
+    }
+
+    func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {
+        let source = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
+        let corrected = "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund."
+
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(corrected + " ", original: source),
+            corrected
+        )
     }
 
     func testInstructionLikeSourceIsValidatedAsData() throws {
