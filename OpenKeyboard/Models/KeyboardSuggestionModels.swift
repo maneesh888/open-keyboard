@@ -761,6 +761,7 @@ struct GrammarCorrectionResponseValidator {
     private static let grammarWordFamilies: [Set<String>] = [
         ["am", "is", "are", "was", "were", "be", "been", "being"],
         ["have", "has", "had"], ["do", "does", "did", "done"],
+        ["dont", "doesnt", "didnt"],
         ["can", "could"], ["will", "would"], ["shall", "should"], ["may", "might"],
         ["a", "an", "the"], ["this", "these"], ["that", "those"],
         ["good", "well", "better", "best"], ["bad", "badly", "worse", "worst"],

@@ -537,6 +537,17 @@ final class ChatCompletionTests: XCTestCase {
         )
         XCTAssertEqual(correctedApostrophe, "I don't know.")
 
+        let contractionCorrection = GatewayClient(
+            config: validConfig,
+            httpClient: DummyGatewayServer(.chatPlainText("She doesn't receive updates."))
+        )
+        let correctedContraction = try? await contractionCorrection.performWritingAction(
+            .fixGrammar,
+            text: "She dont receive updates.",
+            model: "test-model"
+        )
+        XCTAssertEqual(correctedContraction, "She doesn't receive updates.")
+
         let relocatedLineBreak = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("First sentence. Second\nline stays."))

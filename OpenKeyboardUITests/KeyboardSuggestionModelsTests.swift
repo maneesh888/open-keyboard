@@ -711,6 +711,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             ),
             "I don't know."
         )
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(
+                "She doesn't receive updates.",
+                original: "She dont receive updates."
+            ),
+            "She doesn't receive updates."
+        )
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
                 "First sentence. Second\nline stays.",
