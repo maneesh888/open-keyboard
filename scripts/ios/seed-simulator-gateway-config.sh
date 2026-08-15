@@ -103,6 +103,7 @@ fi
 launch_arguments=(
   --uitesting
   --seed-functional-gateway-config
+  --keyboard-host-test
   --skip-onboarding
 )
 if [[ "$replace_existing_config" == true ]]; then
@@ -110,6 +111,7 @@ if [[ "$replace_existing_config" == true ]]; then
     --uitesting
     --clear-gateway-config
     --seed-functional-gateway-config
+    --keyboard-host-test
     --skip-onboarding
   )
 fi
