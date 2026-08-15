@@ -453,6 +453,9 @@ struct GrammarCorrectionResponseValidator {
         guard !edits.contains(where: { isSuspiciousBoundaryCommentary($0, original: original) }) else {
             throw GrammarCorrectionResponseError.commentary
         }
+        guard !hasSuspiciousBoundarySentenceSubstitution(original: original, corrected: corrected) else {
+            throw GrammarCorrectionResponseError.commentary
+        }
         let changedCharacters = edits.reduce(0) {
             $0 + max($1.originalText.count, $1.replacementText.count)
         }
@@ -499,6 +502,93 @@ struct GrammarCorrectionResponseValidator {
         let afterEdit = String(originalCharacters.dropFirst(edit.range.start))
         guard words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty else { return false }
         return true
+    }
+
+    private struct WordOccurrence {
+        let value: String
+        let start: Int
+        let end: Int
+    }
+
+    private static func hasSuspiciousBoundarySentenceSubstitution(original: String, corrected: String) -> Bool {
+        let sourceCharacters = Array(original)
+        let correctedCharacters = Array(corrected)
+        let sourceWords = wordOccurrences(in: sourceCharacters)
+        let correctedWords = wordOccurrences(in: correctedCharacters)
+        let comparableCount = min(sourceWords.count, correctedWords.count)
+        guard comparableCount >= 2 else { return false }
+
+        var preservedPrefixCount = 0
+        while preservedPrefixCount < comparableCount,
+              approximatelyMatches(
+                  sourceWords[preservedPrefixCount].value,
+                  correctedWords[preservedPrefixCount].value
+              ) {
+            preservedPrefixCount += 1
+        }
+        if preservedPrefixCount > 0, preservedPrefixCount < comparableCount {
+            let sourceSeparator = sourceCharacters[
+                sourceWords[preservedPrefixCount - 1].end..<sourceWords[preservedPrefixCount].start
+            ]
+            let correctedSeparator = correctedCharacters[
+                correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
+            ]
+            if containsSentenceBoundary(correctedSeparator), !containsSentenceBoundary(sourceSeparator) {
+                return true
+            }
+        }
+
+        var preservedSuffixCount = 0
+        while preservedSuffixCount < comparableCount,
+              approximatelyMatches(
+                  sourceWords[sourceWords.count - preservedSuffixCount - 1].value,
+                  correctedWords[correctedWords.count - preservedSuffixCount - 1].value
+              ) {
+            preservedSuffixCount += 1
+        }
+        if preservedSuffixCount > 0, preservedSuffixCount < comparableCount {
+            let sourceBoundaryIndex = sourceWords.count - preservedSuffixCount
+            let correctedBoundaryIndex = correctedWords.count - preservedSuffixCount
+            let sourceSeparator = sourceCharacters[
+                sourceWords[sourceBoundaryIndex - 1].end..<sourceWords[sourceBoundaryIndex].start
+            ]
+            let correctedSeparator = correctedCharacters[
+                correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
+            ]
+            if containsSentenceBoundary(correctedSeparator), !containsSentenceBoundary(sourceSeparator) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func wordOccurrences(in characters: [Character]) -> [WordOccurrence] {
+        var occurrences: [WordOccurrence] = []
+        var index = 0
+        while index < characters.count {
+            guard characters[index].isLetter || characters[index].isNumber else {
+                index += 1
+                continue
+            }
+            let start = index
+            while index < characters.count, characters[index].isLetter || characters[index].isNumber {
+                index += 1
+            }
+            occurrences.append(WordOccurrence(
+                value: String(characters[start..<index]).lowercased(),
+                start: start,
+                end: index
+            ))
+        }
+        return occurrences
+    }
+
+    private static func approximatelyMatches(_ lhs: String, _ rhs: String) -> Bool {
+        wordEditDistance(lhs, rhs) <= max(2, max(lhs.count, rhs.count) / 3)
+    }
+
+    private static func containsSentenceBoundary(_ characters: ArraySlice<Character>) -> Bool {
+        characters.contains(where: { ".!?".contains($0) })
     }
 
     private static func words(in value: String) -> [String] {
