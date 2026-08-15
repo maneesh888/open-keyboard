@@ -309,7 +309,7 @@ public final class GatewayClient: Sendable {
         }
         let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard isTopLevelStructuredJSON(inspection) == isTopLevelStructuredJSON(originalInspection) else {
+        guard isTopLevelJSONValue(inspection) == isTopLevelJSONValue(originalInspection) else {
             throw GatewayClientError.invalidResponse
         }
         let introducesOpeningFence = inspection.hasPrefix("```") && !originalInspection.hasPrefix("```")
@@ -349,12 +349,9 @@ public final class GatewayClient: Sendable {
         return corrected
     }
 
-    private static func isTopLevelStructuredJSON(_ value: String) -> Bool {
-        guard let data = value.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) else {
-            return false
-        }
-        return object is [Any] || object is [String: Any]
+    private static func isTopLevelJSONValue(_ value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
     }
 
     private static func hasSuspiciousBoundaryWordChange(
@@ -728,8 +725,12 @@ public final class GatewayClient: Sendable {
     private static let grammarDeletableWords = grammarInsertableWords
 
     private static let allowedGrammarWordReplacements: Set<String> = [
-        "has\u{1F}have", "a\u{1F}an", "is\u{1F}are", "need\u{1F}needs",
-        "dont\u{1F}doesnt", "hear\u{1F}here", "teh\u{1F}the",
+        "a\u{1F}an", "an\u{1F}a",
+        "is\u{1F}are", "are\u{1F}is", "was\u{1F}were", "were\u{1F}was",
+        "has\u{1F}have", "have\u{1F}has", "do\u{1F}does", "does\u{1F}do",
+        "need\u{1F}needs", "needs\u{1F}need",
+        "dont\u{1F}doesnt", "doesnt\u{1F}dont", "dose\u{1F}does",
+        "defiantly\u{1F}definitely", "hear\u{1F}here", "teh\u{1F}the",
         "recieved\u{1F}received", "definately\u{1F}definitely",
         "sentnce\u{1F}sentence", "refnd\u{1F}refund", "shure\u{1F}sure",
         "udpate\u{1F}update", "yestarday\u{1F}yesterday",

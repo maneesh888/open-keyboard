@@ -752,6 +752,17 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             ),
             "I wrote an apology, but the grammar needs work."
         )
+        for (source, response) in [
+            ("It dose not work.", "It does not work."),
+            ("I defiantly agree.", "I definitely agree."),
+            ("He are ready.", "He is ready."),
+            ("She have notes.", "She has notes.")
+        ] {
+            XCTAssertEqual(
+                try GrammarCorrectionResponseValidator.validated(response, original: source),
+                response
+            )
+        }
         XCTAssertThrowsError(
             try GrammarCorrectionResponseValidator.validated(
                 "First sentence. Second\nline stays.",
@@ -817,6 +828,12 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
             try GrammarCorrectionResponseValidator.validated(
                 #"{"the":"note"}"#,
                 original: "{the note}"
+            )
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                #""the update.""#,
+                original: "teh update."
             )
         )
         XCTAssertEqual(

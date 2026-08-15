@@ -582,6 +582,24 @@ final class ChatCompletionTests: XCTestCase {
         )
         XCTAssertEqual(correctedSpelling, "I wrote an apology, but the grammar needs work.")
 
+        for (source, response) in [
+            ("It dose not work.", "It does not work."),
+            ("I defiantly agree.", "I definitely agree."),
+            ("He are ready.", "He is ready."),
+            ("She have notes.", "She has notes.")
+        ] {
+            let contextualCorrection = GatewayClient(
+                config: validConfig,
+                httpClient: DummyGatewayServer(.chatPlainText(response))
+            )
+            let correctedContext = try? await contextualCorrection.performWritingAction(
+                .fixGrammar,
+                text: source,
+                model: "test-model"
+            )
+            XCTAssertEqual(correctedContext, response)
+        }
+
         let relocatedLineBreak = GatewayClient(
             config: validConfig,
             httpClient: DummyGatewayServer(.chatPlainText("First sentence. Second\nline stays."))
@@ -694,7 +712,8 @@ final class ChatCompletionTests: XCTestCase {
         for (source, response) in [
             ("Review *the note*.", "Review the *note*."),
             ("[the note]", #"["the","note"]"#),
-            ("{the note}", #"{"the":"note"}"#)
+            ("{the note}", #"{"the":"note"}"#),
+            ("teh update.", #""the update.""#)
         ] {
             let structuralRewrite = GatewayClient(
                 config: validConfig,
