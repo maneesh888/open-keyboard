@@ -490,8 +490,8 @@ struct GrammarCorrectionResponseValidator {
                 wordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
             }
         }.count
-        guard changedCharacters <= max(48, original.count * 45 / 100),
-              changedWords <= max(8, sourceWords * 60 / 100),
+        guard changedCharacters <= max(64, original.count * 65 / 100),
+              changedWords <= max(12, sourceWords * 70 / 100),
               approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
             throw GrammarCorrectionResponseError.suspiciousRewrite
         }
@@ -940,11 +940,14 @@ struct GrammarCorrectionResponseValidator {
         "a\u{1F}an", "an\u{1F}a",
         "is\u{1F}are", "are\u{1F}is", "was\u{1F}were", "were\u{1F}was",
         "has\u{1F}have", "have\u{1F}has", "do\u{1F}does", "does\u{1F}do",
+        "wrote\u{1F}written", "catches\u{1F}catch", "mistake\u{1F}mistakes", "sends\u{1F}send",
         "need\u{1F}needs", "needs\u{1F}need",
         "dont\u{1F}doesnt", "doesnt\u{1F}dont", "dose\u{1F}does",
         "defiantly\u{1F}definitely", "hear\u{1F}here", "teh\u{1F}the",
         "recieved\u{1F}received", "definately\u{1F}definitely",
-        "sentnce\u{1F}sentence", "refnd\u{1F}refund", "shure\u{1F}sure",
+        "ths\u{1F}this", "sentance\u{1F}sentence", "sentnce\u{1F}sentence",
+        "becaus\u{1F}because", "grammer\u{1F}grammar",
+        "refnd\u{1F}refund", "shure\u{1F}sure",
         "udpate\u{1F}update", "yestarday\u{1F}yesterday",
         "adress\u{1F}address", "timline\u{1F}timeline", "wrng\u{1F}wrong",
         "seperate\u{1F}separate", "qustions\u{1F}questions",
