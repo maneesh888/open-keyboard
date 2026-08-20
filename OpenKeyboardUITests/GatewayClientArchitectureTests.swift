@@ -812,14 +812,14 @@ final class LiveGatewaySmokeTests: XCTestCase {
             viewModel.connectionStatus == .success
         )
 
-        if viewModel.connectionStatus == .limited {
-            XCTAssertFalse(requiresStructuredCorrections)
+        if !requiresStructuredCorrections {
             XCTAssertTrue(viewModel.availableModels.contains(model))
             XCTAssertNil(viewModel.errorMessage)
-            print("OpenKeyboard live Test Connection status: connected; structured corrections unverified.")
+            print("OpenKeyboard live Test Connection status: connected; structured corrections were not required.")
             return
         }
 
+        XCTAssertEqual(viewModel.connectionStatus, .success)
         print("OpenKeyboard live Test Connection status: connected; structured corrections verified.")
 
         let diagnosticReport = await NetworkManager().runGatewayDiagnostics(

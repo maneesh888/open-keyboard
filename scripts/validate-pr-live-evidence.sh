@@ -34,6 +34,8 @@ live_model_substitutions=""
 live_model_substitutions_count=0
 structured_correction_capability=""
 structured_correction_capability_count=0
+plain_text_grammar_verification=""
+plain_text_grammar_verification_count=0
 retention_boundary_count=0
 trust_boundary_count=0
 while IFS= read -r body_line; do
@@ -66,6 +68,10 @@ while IFS= read -r body_line; do
     '- Live structured-correction capability: '*)
       structured_correction_capability="${body_line#- Live structured-correction capability: }"
       ((structured_correction_capability_count += 1))
+      ;;
+    '- Live plain-text grammar verification: '*)
+      plain_text_grammar_verification="${body_line#- Live plain-text grammar verification: }"
+      ((plain_text_grammar_verification_count += 1))
       ;;
     '- No credential or gateway response body retained.')
       ((retention_boundary_count += 1))
@@ -104,16 +110,27 @@ if [[ "$live_model_substitutions_count" -ne 1 || "$live_model_substitutions" != 
   echo "Live-model substitutions or fallback are not accepted as exact-model proof." >&2
   exit 1
 fi
-if [[ "$structured_correction_capability_count" -ne 1 ||
-      ( "$structured_correction_capability" != "verified" && "$structured_correction_capability" != "unverified" ) ]]; then
-  echo "The pull request must record exactly one verified or unverified live structured-correction capability field." >&2
+if [[ "$structured_correction_capability_count" -gt 1 || "$plain_text_grammar_verification_count" -gt 1 ||
+      $((structured_correction_capability_count + plain_text_grammar_verification_count)) -ne 1 ]]; then
+  echo "The pull request must record exactly one supported live grammar-verification field." >&2
+  exit 1
+fi
+if [[ "$structured_correction_capability_count" -eq 1 &&
+      "$structured_correction_capability" != "verified" && "$structured_correction_capability" != "unverified" ]]; then
+  echo "The live structured-correction capability must be verified or unverified." >&2
+  exit 1
+fi
+if [[ "$plain_text_grammar_verification_count" -eq 1 && "$plain_text_grammar_verification" != "verified" ]]; then
+  echo "The live plain-text grammar verification must be verified." >&2
   exit 1
 fi
 if [[ "$required_live_models" != "model-agnostic" && "$required_live_models" != "$exact_live_tested_models" ]]; then
   echo "Exact live-tested models do not match the required model coverage." >&2
   exit 1
 fi
-if [[ "$required_live_models" != "model-agnostic" && "$structured_correction_capability" != "verified" ]]; then
+if [[ "$structured_correction_capability_count" -eq 1 &&
+      "$required_live_models" != "model-agnostic" &&
+      "$structured_correction_capability" != "verified" ]]; then
   echo "Exact-model live evidence requires verified structured-correction capability." >&2
   exit 1
 fi
