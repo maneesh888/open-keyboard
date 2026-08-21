@@ -440,7 +440,11 @@ final class KeyboardViewModel: ObservableObject {
         documentRevision += 1
         clearComposingBuffer()
         typingPredictions = []
-        clearAutomaticAnalysisState()
+        if automaticAnalysisWarning != nil {
+            scheduleAutomaticAnalysisAfterTextChange()
+        } else {
+            clearAutomaticAnalysisState()
+        }
     }
 
     func deleteBackward() {

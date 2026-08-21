@@ -574,6 +574,35 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.aiStatus, "No issues found")
     }
 
+    func testReturnAfterAutomaticGrammarCapabilityFailureRetriesUpdatedText() async {
+        let original = "i has a apple"
+        let updated = "\(original)\n"
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = FailingThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.insert(original)
+        await waitUntil { viewModel.automaticAnalysisWarning?.scope == .grammar }
+
+        viewModel.insertReturn()
+        await waitUntil {
+            service.requestedTexts == [original, updated]
+                && viewModel.actionError == nil
+                && viewModel.automaticAnalysisWarning == nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(proxy.text, updated)
+        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+    }
+
     func testNoOpDocumentCallbackDuringAutomaticFailureStillShowsWarning() async {
         let original = "i has a apple"
         let proxy = FakeTextDocumentProxy(text: original)
