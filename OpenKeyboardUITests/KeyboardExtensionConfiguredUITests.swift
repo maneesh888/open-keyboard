@@ -250,6 +250,62 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("real-keyboard-model-not-compatible")
     }
 
+    func testRealKeyboardAutomaticModelFailureKeepsKeysTappable() throws {
+        let sourceText = "Please keep this text unchanged."
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-suggestion-state=automaticModelCapabilityWarning",
+            "--keyboard-host-text=\(encodedSource)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+
+        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists)
+        XCTAssertEqual(input.value as? String, sourceText)
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+
+        let qKey = keyboardApp.buttons["q"]
+        let spaceKey = keyboardApp.buttons["space"]
+        let aKey = keyboardApp.buttons["a"]
+        let shiftKey = keyboardApp.buttons["⇧"]
+        for key in [qKey, spaceKey, aKey, shiftKey] {
+            XCTAssertTrue(key.waitForExistence(timeout: 2), "Expected the real key grid to remain visible after automatic analysis failed")
+            XCTAssertTrue(key.isHittable, "Expected keyboard keys to remain tappable after automatic analysis failed")
+        }
+
+        shiftKey.tap()
+        shiftKey.tap()
+        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].exists)
+        try captureRealKeyboardStep("real-keyboard-automatic-model-warning-keys")
+
+        qKey.tap()
+        spaceKey.tap()
+        aKey.tap()
+
+        let editedText = "\(sourceText)q a"
+        expectation(for: NSPredicate(format: "value == %@", editedText), evaluatedWith: input)
+        waitForExpectations(timeout: 5)
+        XCTAssertEqual(input.value as? String, editedText)
+        XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists)
+
+        try captureRealKeyboardStep("real-keyboard-automatic-model-warning-after-edit")
+    }
+
     func testSeededRealKeyboardCorrectionCarouselCanNavigateCards() throws {
         let seededCorrectionText = "i has a apple and ths sentence"
         let app = configuredContainingApp(extraArguments: [

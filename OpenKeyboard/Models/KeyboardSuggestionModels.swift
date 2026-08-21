@@ -1650,6 +1650,10 @@ struct KeyboardActionOperationResult: Equatable {
         self.isNoChangeResult = isNoChangeResult
     }
 
+    var containsWarningItem: Bool {
+        items.contains(where: \.isWarning)
+    }
+
     @MainActor
     func suggestionResponse(sourceText: String? = nil) -> KeyboardSuggestionResponse {
         let mappedCorrections = items.compactMap(\.correctionSuggestion)
@@ -1715,7 +1719,7 @@ struct KeyboardActionOperationResult: Equatable {
             ))
         }
 
-        for item in items {
+        for item in items where !item.isWarning {
             append(item.replacement, title: item.title)
             append(item.text, title: item.title)
         }
@@ -1888,6 +1892,10 @@ struct KeyboardActionOperationResult: Equatable {
             self.category = category
         }
 
+        var isWarning: Bool {
+            type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "warning"
+        }
+
         var correctionSuggestion: KeyboardCorrectionSuggestion? {
             guard type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" else { return nil }
             let cleanOriginal = original?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -2017,6 +2025,7 @@ enum KeyboardActionProductOutcome: Equatable {
 enum KeyboardActionResultHandler {
     static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !result.containsWarningItem else { return .noUsableResult }
         if normalizedOperation == "fix_grammar" {
             guard let correctedText = result.correctedText else {
                 return result.isNoChangeResult ? .noChanges : .noUsableResult

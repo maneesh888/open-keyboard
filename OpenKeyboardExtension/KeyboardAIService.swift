@@ -474,9 +474,26 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         }
         let maximumAttempts = action.isTranslation ? 2 : 1
         for attempt in 0..<maximumAttempts {
-            let result = try await requestResult(action: action, text: text, prompt: prompt, config: config)
+            let result: KeyboardActionOperationResult
+            do {
+                result = try await requestResult(action: action, text: text, prompt: prompt, config: config)
+            } catch let error as KeyboardAIError {
+                let scopedError: KeyboardAIError
+                if error == .modelCapability, let target = action.translationTarget {
+                    scopedError = .unreliableTranslation(target)
+                } else {
+                    scopedError = error
+                }
+                if case .unreliableTranslation = scopedError,
+                   attempt < maximumAttempts - 1 {
+                    continue
+                }
+                throw scopedError
+            }
             guard let target = action.translationTarget else { return result }
-            guard translationValidator.validationFailure(for: result.displayText, target: target) != nil else {
+            let isUnusableTranslation = result.containsWarningItem
+                || translationValidator.validationFailure(for: result.displayText, target: target) != nil
+            guard isUnusableTranslation else {
                 return result
             }
             if attempt == maximumAttempts - 1 {
@@ -511,6 +528,9 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         do {
             return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
         } catch {
+            if let target = action.translationTarget {
+                throw KeyboardAIError.unreliableTranslation(target)
+            }
             throw KeyboardAIError.modelCapability
         }
     }

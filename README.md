@@ -90,6 +90,7 @@ The keyboard extension currently includes:
   - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
   - AI writing tools expose Improve, simple Rephrase, Translate, and independent rewrite-style actions without mixing them into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
 - typed keyboard errors keep gateway transport, authentication, missing-model, and per-operation model-capability failures distinct; an incompatible correction result does not disable unrelated writing actions.
+- automatic grammar-analysis failures stay as nonblocking toolbar warnings: the key grid and typed text remain available, and analysis retries after the next edit; manual AI-action failures remain scoped to the action that failed.
 - interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; the Settings model check uses at most two 20-second attempts.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
