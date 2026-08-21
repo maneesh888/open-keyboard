@@ -484,6 +484,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.openGrammarCorrection()
         await waitUntil { viewModel.actionError != nil }
 
+        XCTAssertEqual(viewModel.actionError?.scope, .grammar)
+        XCTAssertNil(viewModel.automaticAnalysisWarning)
         XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
         XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
         XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
@@ -505,6 +507,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.showActionPanel()
         await waitUntil { viewModel.actionError != nil }
 
+        XCTAssertEqual(viewModel.actionError?.scope, .writingAction)
+        XCTAssertNil(viewModel.automaticAnalysisWarning)
         XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
         XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
         XCTAssertEqual(proxy.text, original)
@@ -524,11 +528,16 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.insert(original)
-        await waitUntil { viewModel.actionError != nil }
+        await waitUntil { viewModel.automaticAnalysisWarning != nil }
 
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.scope, .grammar)
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.title, "Model not compatible")
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
         XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
         XCTAssertEqual(proxy.text, original)
         XCTAssertTrue(viewModel.canOpenActionPanel)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection)
     }
 
     func testTypingAfterAutomaticGrammarCapabilityFailureRetriesUpdatedText() async {
@@ -545,12 +554,18 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.insert(original)
-        await waitUntil { viewModel.actionError?.scope == .grammar }
+        await waitUntil { viewModel.automaticAnalysisWarning?.scope == .grammar }
+
+        viewModel.documentDidChange()
+        try? await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(service.requestedTexts, [original])
+        XCTAssertNotNil(viewModel.automaticAnalysisWarning)
 
         viewModel.insert(" today")
         await waitUntil {
             service.requestedTexts == [original, updated]
                 && viewModel.actionError == nil
+                && viewModel.automaticAnalysisWarning == nil
                 && !viewModel.isPerformingAIAction
         }
 
@@ -559,9 +574,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.aiStatus, "No issues found")
     }
 
-    func testBackToTypingAfterGrammarCapabilityFailureRetriesCurrentText() async {
+    func testBackToTypingAfterManualGrammarCapabilityFailureRetriesCurrentText() async {
         let original = "i has a apple"
-        let proxy = FakeTextDocumentProxy(text: "")
+        let proxy = FakeTextDocumentProxy(text: original)
         let service = FailingThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -571,9 +586,10 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             automaticAnalysisDelayNanoseconds: 0
         )
 
-        viewModel.insert(original)
+        viewModel.openGrammarCorrection()
         await waitUntil { viewModel.actionError?.scope == .grammar }
 
+        XCTAssertNil(viewModel.automaticAnalysisWarning)
         viewModel.retryAfterActionError()
         await waitUntil {
             service.requestedTexts == [original, original]
