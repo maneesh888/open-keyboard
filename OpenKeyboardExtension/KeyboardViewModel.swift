@@ -1469,7 +1469,15 @@ final class KeyboardViewModel: ObservableObject {
                     )
                     let options = self.actionPanelOptions(from: outcome, action: action)
                     guard !options.isEmpty else {
-                        self.showActionError(KeyboardAIError.modelCapability, scope: .writingAction)
+                        if let target = action.translationTarget {
+                            self.showTranslationCapabilityWarning(
+                                target: target,
+                                action: action,
+                                replacementPlan: replacementPlan
+                            )
+                        } else {
+                            self.showActionError(KeyboardAIError.modelCapability, scope: .writingAction)
+                        }
                         return
                     }
 
@@ -1490,7 +1498,7 @@ final class KeyboardViewModel: ObservableObject {
             } catch {
                 await MainActor.run {
                     self?.recordDebugEvent("action_panel_request_failed:\(Self.sanitizedErrorMessage(error))")
-                    if case .unreliableTranslation(let target) = error as? KeyboardAIError {
+                    if let target = Self.translationCapabilityWarningTarget(for: error, action: action) {
                         self?.showTranslationCapabilityWarning(
                             target: target,
                             action: action,
@@ -1501,6 +1509,24 @@ final class KeyboardViewModel: ObservableObject {
                     }
                 }
             }
+        }
+    }
+
+    private static func translationCapabilityWarningTarget(
+        for error: Error,
+        action: KeyboardAIAction
+    ) -> KeyboardTranslationTarget? {
+        guard let selectedTarget = action.translationTarget,
+              let keyboardError = error as? KeyboardAIError else {
+            return nil
+        }
+        switch keyboardError {
+        case .modelCapability:
+            return selectedTarget
+        case .unreliableTranslation(let target):
+            return target
+        default:
+            return nil
         }
     }
 

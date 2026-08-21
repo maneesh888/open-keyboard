@@ -373,6 +373,28 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 2)
     }
 
+    func testKeyboardAIServiceRetriesMalformedTranslationThenReturnsTargetedWarning() async throws {
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
+            #"{"malformed"#,
+            #"{"still-malformed"#
+        ])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        do {
+            _ = try await service.performResult(
+                action: .translate(.arabic),
+                on: "Good morning, I hope you are well.",
+                config: configuredGateway
+            )
+            XCTFail("Expected malformed translation output to become a targeted warning")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .unreliableTranslation(.arabic))
+            XCTAssertEqual(error.actionErrorKind, .translationCapability)
+        }
+
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
     func testKeyboardAIServiceRetriesShortWrongScriptTranslationThenAcceptsValidOutput() async throws {
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
             #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Yes","replacement":"Yes"}]}"#,

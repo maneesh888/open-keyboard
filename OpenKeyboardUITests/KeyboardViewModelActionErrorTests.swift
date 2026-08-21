@@ -972,6 +972,111 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
     }
 
+    func testTranslationModelCapabilityFailureStaysWarningScopedAndDoesNotAffectRewrite() async {
+        let sourceText = "Good morning, I hope you are well."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = TranslationCapabilityKeyboardAIService(
+            fallbackResult: Self.structuredRewriteResult(),
+            throwsGenericModelCapability: true
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelAction(.translate(nil))
+        viewModel.selectActionPanelTranslationTarget(.arabic)
+        await waitUntil {
+            viewModel.actionPanelState?.warningMessage != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.arabic)])
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(
+            viewModel.actionPanelState?.warningMessage,
+            "This model may not reliably translate to Arabic. Try again or choose another model."
+        )
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.selectActionPanelAction(.rewrite)
+        await waitUntil {
+            service.requestedActions.count == 3
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(service.requestedActions.last, .rewrite)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+        XCTAssertNil(viewModel.actionPanelState?.warningMessage)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
+    func testUnsafeTranslationWarningResultStaysWarningScopedAndDoesNotAffectRewrite() async {
+        let sourceText = "Goedemorgen, ik hoop dat het goed met je gaat."
+        let warningText = "The model returned malformed JSON and no safe keyboard text could be extracted."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.structuredRewriteResult(),
+            KeyboardActionOperationResult(
+                operation: "translate",
+                items: [
+                    KeyboardActionOperationResult.Item(
+                        id: "translation-warning",
+                        type: "warning",
+                        title: "Translation warning",
+                        text: warningText,
+                        replacement: warningText
+                    )
+                ],
+                isStructuredResponse: true
+            ),
+            Self.structuredRewriteResult()
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
+        viewModel.selectActionPanelAction(.translate(nil))
+        viewModel.selectActionPanelTranslationTarget(.englishAmerican)
+        await waitUntil {
+            viewModel.actionPanelState?.warningMessage != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(viewModel.panelMode, .actions)
+        XCTAssertEqual(
+            viewModel.actionPanelState?.warningMessage,
+            "This model may not reliably translate to English (American). Try again or choose another model."
+        )
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(proxy.text, sourceText)
+
+        viewModel.selectActionPanelAction(.rewrite)
+        await waitUntil {
+            service.requestedActions.count == 3
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
+
+        XCTAssertEqual(service.requestedActions.last, .rewrite)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+        XCTAssertNil(viewModel.actionPanelState?.warningMessage)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
     func testTranslationTargetSelectionDoesNotReuseCapturedTextAfterHostClears() async {
         let sourceText = "Good morning, I hope you are well."
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -2667,10 +2772,15 @@ private final class DelayedFailureThenSuccessfulGrammarAIService: KeyboardAIServ
 
 private final class TranslationCapabilityKeyboardAIService: KeyboardAIServiceProviding {
     let fallbackResult: KeyboardActionOperationResult
+    let throwsGenericModelCapability: Bool
     private(set) var requestedActions: [KeyboardAIAction] = []
 
-    init(fallbackResult: KeyboardActionOperationResult) {
+    init(
+        fallbackResult: KeyboardActionOperationResult,
+        throwsGenericModelCapability: Bool = false
+    ) {
         self.fallbackResult = fallbackResult
+        self.throwsGenericModelCapability = throwsGenericModelCapability
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
@@ -2684,6 +2794,9 @@ private final class TranslationCapabilityKeyboardAIService: KeyboardAIServicePro
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         requestedActions.append(action)
         if let target = action.translationTarget {
+            if throwsGenericModelCapability {
+                throw KeyboardAIError.modelCapability
+            }
             throw KeyboardAIError.unreliableTranslation(target)
         }
         return fallbackResult
