@@ -1600,7 +1600,15 @@ final class KeyboardViewModel: ObservableObject {
             }
         } catch {
             recordDebugEvent("automatic_analysis_failed:\(Self.sanitizedErrorMessage(error))")
-            guard !isGrammarCorrectionLoading else { return }
+            guard !Task.isCancelled,
+                  !isGrammarCorrectionLoading,
+                  panelMode == .keyboard,
+                  documentRevision == documentRevisionAtRequest,
+                  lastAnalyzedText == analysisText,
+                  currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest) == analysisText else {
+                recordDebugEvent("automatic_analysis_failure_discarded_stale_request")
+                return
+            }
             showAutomaticAnalysisWarning(error)
         }
     }
@@ -1725,6 +1733,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         textDocumentProxy.insertText(finalReplacement)
         documentRevision += 1
+        automaticAnalysisWarning = nil
         composingBuffer = finalReplacement
         rememberKeyboardReplacement(
             sourceText: plan.textForAI,
