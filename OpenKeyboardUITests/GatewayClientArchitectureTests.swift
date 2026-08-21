@@ -291,6 +291,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
             for: "يمكنك استخدام OpenAI للمساعدة في كتابة هذه الرسالة بوضوح.",
             target: .arabic
         ))
+        XCTAssertNil(validator.validationFailure(for: "Ja", target: .dutch))
     }
 
     func testTranslationValidatorRejectsPredominantlyWrongTargetLanguage() {
@@ -308,6 +309,14 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 for: "Good morning, I hope you are well and enjoying a wonderful day.",
                 target: .dutch
             ),
+            .predominantlyWrongLanguage
+        )
+        XCTAssertEqual(
+            validator.validationFailure(for: "Yes", target: .arabic),
+            .predominantlyWrongLanguage
+        )
+        XCTAssertEqual(
+            validator.validationFailure(for: "Bonjour", target: .dutch),
             .predominantlyWrongLanguage
         )
     }
@@ -359,6 +368,46 @@ final class GatewayClientArchitectureTests: XCTestCase {
             XCTAssertEqual(
                 error.errorDescription,
                 "This model may not reliably translate to Arabic. Try again or choose another model."
+            )
+        }
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceRetriesShortWrongScriptTranslationThenAcceptsValidOutput() async throws {
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Yes","replacement":"Yes"}]}"#,
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"نعم","replacement":"نعم"}]}"#
+        ])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .translate(.arabic),
+            on: "Yes",
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, "نعم")
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceRetriesShortSameScriptTranslationOnceThenReturnsTargetedFailure() async throws {
+        let wrongLanguage = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Bonjour","replacement":"Bonjour"}]}"#
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [wrongLanguage, wrongLanguage])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        do {
+            _ = try await service.performResult(
+                action: .translate(.dutch),
+                on: "Hello",
+                config: configuredGateway
+            )
+            XCTFail("Expected a target-specific translation capability failure")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .unreliableTranslation(.dutch))
+            XCTAssertEqual(error.actionErrorKind, .translationCapability)
+            XCTAssertEqual(
+                error.errorDescription,
+                "This model may not reliably translate to Dutch. Try again or choose another model."
             )
         }
         XCTAssertEqual(transport.requests.count, 2)

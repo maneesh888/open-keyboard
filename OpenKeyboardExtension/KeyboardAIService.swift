@@ -98,7 +98,7 @@ struct KeyboardTranslationOutputValidator {
             counts[script, default: 0] += 1
         }
         let totalScriptLetters = scriptCounts.values.reduce(0, +)
-        guard totalScriptLetters >= 4 else { return nil }
+        guard totalScriptLetters > 0 else { return nil }
 
         let expectedScript = target.expectedScript
         let expectedScriptCount = scriptCounts[expectedScript, default: 0]
@@ -113,7 +113,7 @@ struct KeyboardTranslationOutputValidator {
             return .suspiciousMixedScripts
         }
 
-        guard totalScriptLetters >= 18 else { return nil }
+        guard totalScriptLetters >= 4 else { return nil }
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(output)
         let hypotheses = recognizer.languageHypotheses(withMaximum: 4)
@@ -122,7 +122,11 @@ struct KeyboardTranslationOutputValidator {
             .map(\.value)
             .max() ?? 0
         let dominantConfidence = hypotheses.values.max() ?? 0
-        if expectedConfidence < 0.12, dominantConfidence >= 0.55 {
+        let isShortOutput = totalScriptLetters < 18
+        let minimumExpectedConfidence = isShortOutput ? 0.08 : 0.12
+        let minimumDominantConfidence = isShortOutput ? 0.60 : 0.55
+        if expectedConfidence < minimumExpectedConfidence,
+           dominantConfidence >= minimumDominantConfidence {
             return .predominantlyWrongLanguage
         }
         return nil
