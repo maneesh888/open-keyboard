@@ -185,7 +185,7 @@ struct GrammarEdit: Equatable, Identifiable, Sendable {
         return "Correction"
     }
 
-    private static func isSimpleInflectionPair(_ lhs: String, _ rhs: String) -> Bool {
+    static func isSimpleInflectionPair(_ lhs: String, _ rhs: String) -> Bool {
         lhs + "s" == rhs || rhs + "s" == lhs || lhs + "es" == rhs || rhs + "es" == lhs ||
             (lhs.hasSuffix("y") && String(lhs.dropLast()) + "ies" == rhs) ||
             (rhs.hasSuffix("y") && String(rhs.dropLast()) + "ies" == lhs)
@@ -829,6 +829,7 @@ struct GrammarCorrectionResponseValidator {
     private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
         guard source != corrected else { return true }
         return allowedGrammarWordReplacements.contains(source + "\u{1F}" + corrected) ||
+            GrammarEdit.isSimpleInflectionPair(source, corrected) ||
             hasSharedGrammarLemma(source, corrected) ||
             isSystemSpellingCorrection(source: source, corrected: corrected)
     }
@@ -867,14 +868,15 @@ struct GrammarCorrectionResponseValidator {
                 language: language
             )
             guard misspelledRange == range else { return false }
-            guard let firstGuess = checker.guesses(
-                forWordRange: range,
-                in: source,
+            let correctedRange = NSRange(location: 0, length: corrected.utf16.count)
+            let correctedMisspelledRange = checker.rangeOfMisspelledWord(
+                in: corrected,
+                range: correctedRange,
+                startingAt: 0,
+                wrap: false,
                 language: language
-            )?.first else {
-                return false
-            }
-            return firstGuess.caseInsensitiveCompare(corrected) == .orderedSame
+            )
+            return correctedMisspelledRange.location == NSNotFound
         }
     }
 
@@ -918,6 +920,9 @@ struct GrammarCorrectionResponseValidator {
         }
         if ["do", "does", "did"].contains(word) {
             return nextWord.hasSuffix("ed") || irregularPastTenseWords.contains(nextWord)
+        }
+        if ["has", "have", "had"].contains(word) {
+            return irregularPastTenseWords.contains(nextWord)
         }
         if ["am", "is", "are", "was", "were"].contains(word) {
             return nextWord.hasSuffix("s") && !nextWord.hasSuffix("ss")

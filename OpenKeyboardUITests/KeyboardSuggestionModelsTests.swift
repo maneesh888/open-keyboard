@@ -957,6 +957,24 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     func testPlainTextGrammarResponseAcceptsDenseMechanicalCorrections() throws {
         let source = "i has wrote ths sentance becaus this grammer checker should catches many mistake before i sends it"
         let corrected = "I have written this sentence because this grammar checker should catch many mistakes before I send it."
+        let conciseCorrection = "I wrote this sentence because this grammar checker should catch many mistakes before I send it."
+
+        XCTAssertEqual(try GrammarCorrectionResponseValidator.validated(corrected, original: source), corrected)
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validated(conciseCorrection, original: source),
+            conciseCorrection
+        )
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                "I worked on the report.",
+                original: "I have worked on the report."
+            )
+        )
+    }
+
+    func testPlainTextGrammarResponseAcceptsCuratedPlaygroundCorrection() throws {
+        let source = "The calendar say tommorow is free, but I promissed to reveiw the launch checklist."
+        let corrected = "The calendar says tomorrow is free, but I promised to review the launch checklist."
 
         XCTAssertEqual(try GrammarCorrectionResponseValidator.validated(corrected, original: source), corrected)
     }
