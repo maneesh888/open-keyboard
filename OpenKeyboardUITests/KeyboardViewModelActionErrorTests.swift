@@ -1018,9 +1018,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
     }
 
-    func testUnsafeTranslationWarningResultStaysWarningScopedAndDoesNotAffectRewrite() async {
+    func testSafeTranslationWarningResultStaysWarningScopedAndDoesNotAffectRewrite() async {
         let sourceText = "Goedemorgen, ik hoop dat het goed met je gaat."
-        let warningText = "The model returned malformed JSON and no safe keyboard text could be extracted."
+        let warningText = "No"
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
             Self.structuredRewriteResult(),

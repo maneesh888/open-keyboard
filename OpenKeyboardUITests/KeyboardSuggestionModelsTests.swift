@@ -444,6 +444,23 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testTranslateWarningItemNeverBecomesReplacementText() throws {
+        let result = try KeyboardActionOperationResult.parse(
+            #"{"operation":"translate","results":[{"id":"translation-warning","type":"warning","title":"Translation warning","text":"No","replacement":"No"}]}"#,
+            operation: "translate",
+            fallbackText: "Nee"
+        )
+
+        let outcome = KeyboardActionResultHandler.outcome(
+            operation: "translate",
+            result: result,
+            sourceText: "Nee"
+        )
+
+        XCTAssertEqual(outcome, .noUsableResult)
+        XCTAssertNotEqual(outcome, .replaceText("No"))
+    }
+
     func testRewriteOptionsDeduplicateTrimAndFilterUnsafeCandidates() throws {
         let json = #"""
         {

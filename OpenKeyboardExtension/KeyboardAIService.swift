@@ -478,14 +478,22 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             do {
                 result = try await requestResult(action: action, text: text, prompt: prompt, config: config)
             } catch let error as KeyboardAIError {
-                if case .unreliableTranslation = error,
+                let scopedError: KeyboardAIError
+                if error == .modelCapability, let target = action.translationTarget {
+                    scopedError = .unreliableTranslation(target)
+                } else {
+                    scopedError = error
+                }
+                if case .unreliableTranslation = scopedError,
                    attempt < maximumAttempts - 1 {
                     continue
                 }
-                throw error
+                throw scopedError
             }
             guard let target = action.translationTarget else { return result }
-            guard translationValidator.validationFailure(for: result.displayText, target: target) != nil else {
+            let isUnusableTranslation = result.containsWarningItem
+                || translationValidator.validationFailure(for: result.displayText, target: target) != nil
+            guard isUnusableTranslation else {
                 return result
             }
             if attempt == maximumAttempts - 1 {
