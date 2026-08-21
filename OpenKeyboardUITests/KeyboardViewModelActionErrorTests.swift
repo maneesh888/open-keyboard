@@ -574,6 +574,71 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.aiStatus, "No issues found")
     }
 
+    func testNoOpDocumentCallbackDuringAutomaticFailureStillShowsWarning() async {
+        let original = "i has a apple"
+        let proxy = FakeTextDocumentProxy(text: original)
+        let service = DelayedFailureThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil {
+            service.requestedTexts == [original]
+                && viewModel.aiStatus == "Analyzing…"
+        }
+
+        viewModel.documentDidChange()
+        await waitUntil { viewModel.automaticAnalysisWarning != nil }
+
+        XCTAssertEqual(service.requestedTexts, [original])
+        XCTAssertEqual(proxy.text, original)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.scope, .grammar)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.aiStatus, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+    }
+
+    func testChangedDocumentCallbackDuringAutomaticFailureRetriesUpdatedText() async {
+        let original = "i has a apple"
+        let updated = "i have an apple today"
+        let proxy = FakeTextDocumentProxy(text: original)
+        let service = DelayedFailureThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        await waitUntil {
+            service.requestedTexts == [original]
+                && viewModel.aiStatus == "Analyzing…"
+        }
+
+        proxy.replaceTextForTest(updated)
+        viewModel.documentDidChange()
+        await waitUntil {
+            service.requestedTexts == [original, updated]
+                && viewModel.completionPanelState == .noIssues
+                && !viewModel.isPerformingAIAction
+        }
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(proxy.text, updated)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertNil(viewModel.automaticAnalysisWarning)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+    }
+
     func testStaleAutomaticFailureCannotReplaceSuccessfulRetryAfterNextEdit() async {
         let original = "i has a apple"
         let updated = "\(original) today"

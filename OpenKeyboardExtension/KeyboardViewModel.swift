@@ -1066,19 +1066,27 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func documentDidChange() {
+        let currentAnalysisText = currentInputTextForAnalysis()
+        guard currentAnalysisText != lastAnalyzedText else {
+            return
+        }
         documentRevision += 1
         if automaticAnalysisWarning != nil {
             guard let lastAnalyzedText else {
-                self.lastAnalyzedText = currentInputTextForAnalysis()
+                self.lastAnalyzedText = currentAnalysisText
                 return
             }
-            if currentInputTextForAnalysis() != lastAnalyzedText {
+            if currentAnalysisText != lastAnalyzedText {
                 scheduleAutomaticAnalysisAfterTextChange()
             }
             return
         }
+        if isPerformingAIAction, aiStatus == "Analyzing…" {
+            scheduleAutomaticAnalysisAfterTextChange()
+            return
+        }
         guard let expectedText = suggestionState?.renderedGrammarText else { return }
-        if currentInputTextForAnalysis() != expectedText {
+        if currentAnalysisText != expectedText {
             invalidateGrammarSessionForDocumentEdit()
         }
     }
