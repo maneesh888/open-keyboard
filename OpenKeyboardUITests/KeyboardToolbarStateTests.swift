@@ -42,6 +42,10 @@ final class KeyboardToolbarStateTests: XCTestCase {
 
     func testTypedKeyboardErrorsUseDistinctTitles() {
         XCTAssertEqual(
+            KeyboardToolbarState(kind: .error(kind: .timeout, message: "The request exceeded its deadline.")).title,
+            "Request timed out"
+        )
+        XCTAssertEqual(
             KeyboardToolbarState(kind: .error(kind: .authentication, message: "Invalid API key")).title,
             "Invalid API key"
         )

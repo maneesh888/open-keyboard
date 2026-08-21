@@ -8,6 +8,29 @@
 import Foundation
 import Security
 
+private final class KeyboardUITestConfigProcessAuthorization: @unchecked Sendable {
+    private let lock = NSLock()
+    private var fingerprint: String?
+
+    func authorize(_ fingerprint: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.fingerprint = fingerprint
+    }
+
+    func isAuthorized(_ fingerprint: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return self.fingerprint == fingerprint
+    }
+
+    func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        fingerprint = nil
+    }
+}
+
 enum SettingsDocumentationLink {
     static let url = URL(string: "https://myadidi.com/projects/open-keyboard-llm-gateway/")!
 }
@@ -98,16 +121,62 @@ struct AppConfig: Codable {
     var gatewayURL: String
     var selectedModel: String
     var isConfigured: Bool
-    var supportsStructuredCorrections: Bool
-    var structuredCorrectionSchemaVersion: String
+    var grammarCorrectionVerified: Bool
+    var grammarCorrectionContractVersion: String
+
+    init(
+        apiKey: String,
+        gatewayURL: String,
+        selectedModel: String,
+        isConfigured: Bool,
+        grammarCorrectionVerified: Bool,
+        grammarCorrectionContractVersion: String
+    ) {
+        self.apiKey = apiKey
+        self.gatewayURL = gatewayURL
+        self.selectedModel = selectedModel
+        self.isConfigured = isConfigured
+        self.grammarCorrectionVerified = grammarCorrectionVerified
+        self.grammarCorrectionContractVersion = grammarCorrectionContractVersion
+    }
+
+    // Source compatibility for older tests and callers. These labels map only to the new
+    // plain-text grammar validation state; no structured grammar response is supported.
+    init(
+        apiKey: String,
+        gatewayURL: String,
+        selectedModel: String,
+        isConfigured: Bool,
+        supportsStructuredCorrections: Bool,
+        structuredCorrectionSchemaVersion: String
+    ) {
+        self.init(
+            apiKey: apiKey,
+            gatewayURL: gatewayURL,
+            selectedModel: selectedModel,
+            isConfigured: isConfigured,
+            grammarCorrectionVerified: supportsStructuredCorrections,
+            grammarCorrectionContractVersion: structuredCorrectionSchemaVersion
+        )
+    }
+
+    var supportsStructuredCorrections: Bool {
+        get { grammarCorrectionVerified }
+        set { grammarCorrectionVerified = newValue }
+    }
+
+    var structuredCorrectionSchemaVersion: String {
+        get { grammarCorrectionContractVersion }
+        set { grammarCorrectionContractVersion = newValue }
+    }
     
     static let `default` = AppConfig(
         apiKey: "",
         gatewayURL: "",
         selectedModel: "",
         isConfigured: false,
-        supportsStructuredCorrections: false,
-        structuredCorrectionSchemaVersion: ""
+        grammarCorrectionVerified: false,
+        grammarCorrectionContractVersion: ""
     )
     
     // App Group identifier for sharing non-sensitive data with keyboard extension
@@ -118,13 +187,29 @@ struct AppConfig: Codable {
     static let gatewayURLKey = "gatewayURL"
     static let selectedModelKey = "selectedModel"
     static let isConfiguredKey = "isConfigured"
-    static let supportsStructuredCorrectionsKey = "supportsStructuredCorrections"
-    static let structuredCorrectionSchemaVersionKey = "structuredCorrectionSchemaVersion"
+    // Preserve the existing App Group storage keys so installed builds migrate without losing
+    // their saved gateway state. Their values now describe plain-text grammar verification.
+    static let grammarCorrectionVerifiedKey = "supportsStructuredCorrections"
+    static let grammarCorrectionContractVersionKey = "structuredCorrectionSchemaVersion"
+    static let supportsStructuredCorrectionsKey = grammarCorrectionVerifiedKey
+    static let structuredCorrectionSchemaVersionKey = grammarCorrectionContractVersionKey
     static let gatewayConnectionErrorMessageKey = "gatewayConnectionErrorMessage"
     static let gatewayConnectionErrorUpdatedAtKey = "gatewayConnectionErrorUpdatedAt"
     static let gatewayConnectionLastTestedAtKey = "gatewayConnectionLastTestedAt"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
+    private static let keyboardUITestConfigOriginKey = "keyboardExtension.gatewayConfigIsUITestSeed"
+    private static let keyboardUITestConfigSeedIDKey = "keyboardExtension.gatewayConfigSeedID"
+    private static let keyboardUITestConfigSeededAtKey = "keyboardExtension.gatewayConfigSeededAt"
+    private static let keyboardUITestConfigAuthorization = KeyboardUITestConfigProcessAuthorization()
+
+    static var grammarCorrectionCapabilityVersion: String {
+        "fix_grammar/plain-text/\(SemanticPromptContract.version)"
+    }
+
+    var hasCurrentGrammarCorrectionCapabilityRecord: Bool {
+        grammarCorrectionContractVersion == Self.grammarCorrectionCapabilityVersion
+    }
 
 
     static var secretStore: AppConfigSecretStore = KeychainAppConfigSecretStore()
@@ -162,13 +247,24 @@ extension AppConfig {
             gatewayURL: defaults.string(forKey: AppConfig.gatewayURLKey) ?? "",
             selectedModel: defaults.string(forKey: AppConfig.selectedModelKey) ?? "",
             isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
-            supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
-            structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
+            grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
+            grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
         ).runtimeNormalized()
 
-        if loadedConfig.isKnownTestPlaceholderConfig,
-           !ProcessInfo.processInfo.arguments.contains("--uitesting"),
-           !isUITestDebugStateEnabled(in: defaults) {
+        let requiresUITestSeedAuthorization = loadedConfig.isKnownTestPlaceholderConfig ||
+            defaults.bool(forKey: keyboardUITestConfigOriginKey)
+        if requiresUITestSeedAuthorization,
+           !ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            let fingerprint = keyboardUITestConfigFingerprint(for: loadedConfig)
+            if keyboardUITestConfigAuthorization.isAuthorized(fingerprint) {
+                return loadedConfig
+            }
+            if hasFreshKeyboardExtensionUITestConfigSeed(in: defaults) ||
+                (loadedConfig.isKnownTestPlaceholderConfig && hasFreshKeyboardExtensionUITestSeed(in: defaults)) {
+                keyboardUITestConfigAuthorization.authorize(fingerprint)
+                consumeKeyboardExtensionUITestConfigSeed(from: defaults)
+                return loadedConfig
+            }
             clear(from: defaults)
             return .default
         }
@@ -196,6 +292,7 @@ extension AppConfig {
             unconfigured.apiKey = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return true
         }
 
@@ -203,15 +300,17 @@ extension AppConfig {
             var unconfigured = runtimeConfig
             unconfigured.apiKey = ""
             unconfigured.isConfigured = false
-            unconfigured.supportsStructuredCorrections = false
-            unconfigured.structuredCorrectionSchemaVersion = ""
+            unconfigured.grammarCorrectionVerified = false
+            unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return false
         }
 
         defaults.removeObject(forKey: AppConfig.apiKeyKey)
         runtimeConfig.saveNonSecretValues(to: defaults)
+        AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
         return true
     }
 
@@ -237,14 +336,19 @@ extension AppConfig {
             var unconfigured = self
             unconfigured.apiKey = ""
             unconfigured.isConfigured = false
-            unconfigured.supportsStructuredCorrections = false
-            unconfigured.structuredCorrectionSchemaVersion = ""
+            unconfigured.grammarCorrectionVerified = false
+            unconfigured.grammarCorrectionContractVersion = ""
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
+            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return false
         }
 
         runtimeNormalized().saveNonSecretValues(to: defaults)
+        defaults.set(true, forKey: AppConfig.keyboardUITestConfigOriginKey)
+        defaults.set(UUID().uuidString, forKey: AppConfig.keyboardUITestConfigSeedIDKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: AppConfig.keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
         return true
     }
 
@@ -252,8 +356,8 @@ extension AppConfig {
         defaults.set(gatewayURL, forKey: AppConfig.gatewayURLKey)
         defaults.set(selectedModel, forKey: AppConfig.selectedModelKey)
         defaults.set(isConfigured, forKey: AppConfig.isConfiguredKey)
-        defaults.set(supportsStructuredCorrections, forKey: AppConfig.supportsStructuredCorrectionsKey)
-        defaults.set(structuredCorrectionSchemaVersion, forKey: AppConfig.structuredCorrectionSchemaVersionKey)
+        defaults.set(grammarCorrectionVerified, forKey: AppConfig.grammarCorrectionVerifiedKey)
+        defaults.set(grammarCorrectionContractVersion, forKey: AppConfig.grammarCorrectionContractVersionKey)
         defaults.synchronize()
     }
 
@@ -267,8 +371,8 @@ extension AppConfig {
             gatewayURL: gatewayURL,
             selectedModel: selectedModel,
             isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
-            supportsStructuredCorrections: defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey),
-            structuredCorrectionSchemaVersion: defaults.string(forKey: AppConfig.structuredCorrectionSchemaVersionKey) ?? ""
+            grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
+            grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
         )
 
         return candidate.isConfigured
@@ -276,6 +380,7 @@ extension AppConfig {
             && !candidate.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !candidate.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !candidate.isKnownTestPlaceholderConfig
+            && !defaults.bool(forKey: keyboardUITestConfigOriginKey)
     }
 
     static func clearSharedConfig() {
@@ -389,29 +494,38 @@ extension AppConfig {
     private func runtimeNormalized() -> AppConfig {
         guard isConfigured else {
             var copy = self
-            copy.supportsStructuredCorrections = false
-            copy.structuredCorrectionSchemaVersion = ""
+            copy.grammarCorrectionVerified = false
+            copy.grammarCorrectionContractVersion = ""
             return copy
         }
         guard !hasGatewayRuntimeConfig else { return self }
 
         var copy = self
         copy.isConfigured = false
-        copy.supportsStructuredCorrections = false
-        copy.structuredCorrectionSchemaVersion = ""
+        copy.grammarCorrectionVerified = false
+        copy.grammarCorrectionContractVersion = ""
         return copy
     }
 
     private static var rejectedGatewayURLs: [String] {
-        [["https://gateway", "example", "invalid"].joined(separator: ".")]
+        [
+            ["https://gateway", "example", "invalid"].joined(separator: "."),
+            ["https://mock", "local", "invalid"].joined(separator: ".")
+        ]
     }
 
     private static var rejectedSelectedModels: [String] {
-        [["test", "placeholder", "model"].joined(separator: "-")]
+        [
+            ["test", "placeholder", "model"].joined(separator: "-"),
+            ["mock", "ui", "test", "model"].joined(separator: "-")
+        ]
     }
 
     private static var rejectedAPIKeys: [String] {
-        [["test", "placeholder", "key"].joined(separator: "-")]
+        [
+            ["test", "placeholder", "key"].joined(separator: "-"),
+            ["mock", "ui", "test", "key"].joined(separator: "-")
+        ]
     }
 
     struct RedactedVisibilityDiagnostic: Equatable {
@@ -486,12 +600,89 @@ extension AppConfig {
         defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled")
     }
 
-    static func clear(from defaults: UserDefaults) {
-        secretStore.clearAPIKey()
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, supportsStructuredCorrectionsKey, structuredCorrectionSchemaVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey, "keyboardExtension.composingBuffer", "keyboardExtension.lastDebugEvent", "keyboardExtension.debugEvents", "keyboardExtension.uiTestDebugStateEnabled", "keyboardExtension.initialPanelMode", "keyboardExtension.initialPanelModeSeedID", "keyboardExtension.initialPanelModeSeededAt", "keyboardExtension.suggestionState", "keyboardExtension.suggestionStateSeedID", "keyboardExtension.suggestionStateSeededAt"].forEach {
+    private static func hasFreshKeyboardExtensionUITestSeed(in defaults: UserDefaults) -> Bool {
+        guard isUITestDebugStateEnabled(in: defaults) else { return false }
+        let suggestionSeedID = defaults.string(forKey: "keyboardExtension.suggestionStateSeedID")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let panelSeedID = defaults.string(forKey: "keyboardExtension.initialPanelModeSeedID")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !suggestionSeedID.isEmpty,
+              suggestionSeedID == panelSeedID,
+              let suggestionSeededAt = defaults.object(forKey: "keyboardExtension.suggestionStateSeededAt") as? TimeInterval,
+              let panelSeededAt = defaults.object(forKey: "keyboardExtension.initialPanelModeSeededAt") as? TimeInterval else {
+            return false
+        }
+        let now = Date().timeIntervalSince1970
+        let maximumSeedAge: TimeInterval = 30
+        let maximumClockSkew: TimeInterval = 5
+        return suggestionSeededAt >= now - maximumSeedAge &&
+            suggestionSeededAt <= now + maximumClockSkew &&
+            panelSeededAt >= now - maximumSeedAge &&
+            panelSeededAt <= now + maximumClockSkew
+    }
+
+    private static func hasFreshKeyboardExtensionUITestConfigSeed(in defaults: UserDefaults) -> Bool {
+        guard defaults.bool(forKey: keyboardUITestConfigOriginKey),
+              isUITestDebugStateEnabled(in: defaults),
+              !(defaults.string(forKey: keyboardUITestConfigSeedIDKey) ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let seededAt = defaults.object(forKey: keyboardUITestConfigSeededAtKey) as? TimeInterval else {
+            return false
+        }
+        let now = Date().timeIntervalSince1970
+        return seededAt >= now - 30 && seededAt <= now + 5
+    }
+
+    private static func keyboardUITestConfigFingerprint(for config: AppConfig) -> String {
+        [
+            config.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+            config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        ].joined(separator: "\u{1F}")
+    }
+
+    private static func consumeKeyboardExtensionUITestConfigSeed(from defaults: UserDefaults) {
+        defaults.removeObject(forKey: keyboardUITestConfigSeedIDKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
+    }
+
+    private static func clearKeyboardUITestConfigMetadata(from defaults: UserDefaults) {
+        keyboardUITestConfigAuthorization.reset()
+        defaults.removeObject(forKey: keyboardUITestConfigOriginKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeedIDKey)
+        defaults.removeObject(forKey: keyboardUITestConfigSeededAtKey)
+        defaults.synchronize()
+    }
+
+    static func resetKeyboardUITestConfigProcessAuthorizationForTesting() {
+        keyboardUITestConfigAuthorization.reset()
+    }
+
+    static func clearKeyboardUITestState(from defaults: UserDefaults) {
+        [
+            "keyboardExtension.composingBuffer",
+            "keyboardExtension.lastDebugEvent",
+            "keyboardExtension.debugEvents",
+            "keyboardExtension.uiTestDebugStateEnabled",
+            "keyboardExtension.initialPanelMode",
+            "keyboardExtension.initialPanelModeSeedID",
+            "keyboardExtension.initialPanelModeSeededAt",
+            "keyboardExtension.suggestionState",
+            "keyboardExtension.suggestionStateSeedID",
+            "keyboardExtension.suggestionStateSeededAt"
+        ].forEach {
             defaults.removeObject(forKey: $0)
         }
         defaults.synchronize()
+    }
+
+    static func clear(from defaults: UserDefaults) {
+        secretStore.clearAPIKey()
+        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey].forEach {
+            defaults.removeObject(forKey: $0)
+        }
+        clearKeyboardUITestState(from: defaults)
+        clearKeyboardUITestConfigMetadata(from: defaults)
     }
 }
 

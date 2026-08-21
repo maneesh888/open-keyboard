@@ -56,6 +56,13 @@ enum KeyboardPanelLayout {
 struct KeyboardCompletionPanelState: Equatable {
     let title: String
     let message: String
+    let allowsGrammarCheckAgain: Bool
+
+    init(title: String, message: String, allowsGrammarCheckAgain: Bool = false) {
+        self.title = title
+        self.message = message
+        self.allowsGrammarCheckAgain = allowsGrammarCheckAgain
+    }
 
     static let allDone = KeyboardCompletionPanelState(
         title: "All Done",
@@ -64,7 +71,14 @@ struct KeyboardCompletionPanelState: Equatable {
 
     static let noIssues = KeyboardCompletionPanelState(
         title: "No issues found",
-        message: "There are no grammar or spelling suggestions."
+        message: "There are no grammar or spelling suggestions.",
+        allowsGrammarCheckAgain: true
+    )
+
+    static let grammarReviewComplete = KeyboardCompletionPanelState(
+        title: "Review complete",
+        message: "Your grammar choices are applied.",
+        allowsGrammarCheckAgain: true
     )
 
     static let rewriteApplied = KeyboardCompletionPanelState(

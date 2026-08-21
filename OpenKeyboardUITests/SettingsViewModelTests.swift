@@ -34,7 +34,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
 
@@ -62,7 +62,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: RejectedGatewayFixture.selectedModel,
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         viewModel.applyConfig(placeholder)
@@ -95,7 +95,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         viewModel.applyConfig(validated)
@@ -119,7 +119,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(
             config: config,
@@ -134,8 +134,8 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
         XCTAssertEqual(
-            viewModel.structuredCapabilityDisplay,
-            "openkeyboard.structured-corrections.v1"
+            viewModel.grammarCapabilityDisplay,
+            "Plain text verified"
         )
     }
 
@@ -146,7 +146,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -158,7 +158,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
     }
 
     func testEditingValidatedAPIKeyHidesTrustedDetailsAndShowsConnectionActions() {
@@ -168,7 +168,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -187,7 +187,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
 
@@ -214,7 +214,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
     }
 
 
@@ -229,7 +229,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester(), defaults: defaults)
@@ -262,7 +262,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -288,7 +288,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(healthSucceeds: false)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -312,7 +312,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -339,7 +339,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -355,6 +355,36 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.trustedModelLoaded)
     }
 
+    func testRecentLegacyStructuredCapabilityForcesPlainTextGrammarRevalidation() async {
+        let suiteName = "SettingsViewModelTests.saved-legacy-capability.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let config = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "apple-foundationmodel",
+            isConfigured: true,
+            supportsStructuredCorrections: false,
+            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+        )
+        let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertTrue(viewModel.shouldShowGatewayValidationPending)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+
+        await viewModel.validateSavedGatewayOnceOnLaunch()
+
+        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Plain text verified")
+    }
+
     func testRecentConnectedConfigPreservesUnverifiedModelCapabilityWithoutGatewayError() async {
         let suiteName = "SettingsViewModelTests.saved-limited.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -366,7 +396,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "gemma2:2b",
             isConfigured: true,
             supportsStructuredCorrections: false,
-            structuredCorrectionSchemaVersion: ""
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["gemma2:2b"], smokeSucceeds: false)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -375,7 +405,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertFalse(viewModel.hasConnectionError)
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Not verified for selected model")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Not verified for selected model")
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
@@ -395,7 +425,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -470,7 +500,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
-    func testModelFallbackUsesWorkingNonAppleModelWhenAppleSmokeFails() async {
+    func testModelCheckDoesNotFallbackWhenDiscoveredModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
             failingSmokeModels: ["apple-foundationmodel"]
@@ -481,9 +511,31 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel", "gpt-oss:120b-cloud"])
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+    }
+
+    func testConfiguredModelMustExistAndCannotBeReplacedByCatalogFallback() async {
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "gemma2:2b",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["another-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
+        XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
+        XCTAssertTrue(tester.smokeModels.isEmpty)
     }
 
     func testResetOnboardingClearsPersistedFlagAndShowsConfirmation() {
@@ -499,7 +551,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.onboardingResetMessage, "Onboarding will show again after you close Settings.")
     }
 
-    func testSuccessfulTestConnectionPersistsValidatedModelAndStructuredCapability() async {
+    func testSuccessfulTestConnectionPersistsValidatedModelAndGrammarCapability() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["gemma4:latest", "apple-foundationmodel"],
@@ -517,12 +569,12 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
-        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, "openkeyboard.structured-corrections.v1")
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
         XCTAssertEqual(tester.smokeModel, "apple-foundationmodel")
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "openkeyboard.structured-corrections.v1")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Plain text verified")
     }
 
     func testFailedTestConnectionDoesNotOverwriteExistingWorkingConfig() async {
@@ -532,7 +584,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "gemma4:latest",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(healthSucceeds: false)
         let viewModel = SettingsViewModel(config: existing, gatewayTester: tester)
@@ -571,7 +623,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .unknown)
         XCTAssertFalse(viewModel.trustedModelLoaded)
         XCTAssertEqual(viewModel.trustedModelDisplay, "Test connection to load model")
-        XCTAssertEqual(viewModel.structuredCapabilityDisplay, "Loaded after Test Connection")
+        XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Loaded after Test Connection")
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
     }
 
@@ -619,6 +671,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
         XCTAssertFalse(viewModel.hasConnectionError)
@@ -627,7 +680,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
     }
 
-    func testCorrectionTimeoutKeepsGatewayConnectedAndPersistsUnverifiedModelCapability() async {
+    func testCorrectionTimeoutShowsTimeoutFailureInsteadOfModelCapability() async {
         let suiteName = "SettingsViewModelTests.model-timeout.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -635,7 +688,7 @@ final class SettingsViewModelTests: XCTestCase {
             healthSucceeds: true,
             models: ["gpt-oss:120b-cloud"],
             smokeSucceeds: false,
-            smokeFailure: .timeout
+            smokeFailure: NetworkError.timeout
         )
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.gatewayURLInput = "https://gateway.example"
@@ -643,16 +696,57 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
-        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertTrue(viewModel.config.isConfigured)
-        XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
-        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertFalse(viewModel.hasConnectionError)
+        let timeoutMessage = "Gateway connected, but the selected model did not respond within 20 seconds. Choose a faster model or retry."
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertTrue(viewModel.config.gatewayURL.isEmpty)
+        XCTAssertTrue(viewModel.config.selectedModel.isEmpty)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertTrue(viewModel.hasConnectionError)
+        XCTAssertEqual(viewModel.errorMessage, timeoutMessage)
+        XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), timeoutMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+    }
+
+    func testCancelledConnectionCheckDoesNotPersistGatewayFailure() async {
+        let suiteName = "SettingsViewModelTests.connection-cancelled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(connectionFailure: CancellationError())
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+    }
+
+    func testCancelledCorrectionCheckDoesNotPersistGatewayFailure() async {
+        let suiteName = "SettingsViewModelTests.correction-cancelled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(
+            healthSucceeds: true,
+            models: ["gpt-oss:120b-cloud"],
+            smokeSucceeds: false,
+            smokeFailure: CancellationError()
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
     func testDefaultGatewayInputShowsHTTPSHelpButCannotTestUntilHostExists() {
@@ -701,7 +795,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
 
         let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester(), defaults: defaults)
@@ -723,7 +817,7 @@ final class SettingsViewModelTests: XCTestCase {
             selectedModel: "apple-foundationmodel",
             isConfigured: true,
             supportsStructuredCorrections: true,
-            structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+            structuredCorrectionSchemaVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         let tester = FakeGatewayTester(models: ["apple-foundationmodel"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: config, gatewayTester: tester, defaults: defaults)
@@ -845,7 +939,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
     }
 
-    func testModelValidationFallsBackWhenAppleFoundationModelFailsSmoke() async {
+    func testModelValidationDoesNotFallbackWhenAppleFoundationModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
@@ -858,9 +952,9 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel", "gpt-oss:120b-cloud"])
-        XCTAssertEqual(viewModel.config.selectedModel, "gpt-oss:120b-cloud")
+        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
+        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
     }
 
     func testResetOnboardingClearsSharedAndStandardFlags() {
@@ -922,7 +1016,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var models: [String]
     var smokeSucceeds: Bool
     var failingSmokeModels: Set<String>
-    var smokeFailure: NetworkError
+    var connectionFailure: Error?
+    var modelFetchFailure: Error?
+    var smokeFailure: Error
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
@@ -939,24 +1035,30 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         models: [String] = [],
         smokeSucceeds: Bool = true,
         failingSmokeModels: Set<String> = [],
-        smokeFailure: NetworkError = .unusableCorrection
+        connectionFailure: Error? = nil,
+        modelFetchFailure: Error? = nil,
+        smokeFailure: Error = NetworkError.unusableCorrection
     ) {
         self.healthSucceeds = healthSucceeds
         self.models = models
         self.smokeSucceeds = smokeSucceeds
         self.failingSmokeModels = failingSmokeModels
+        self.connectionFailure = connectionFailure
+        self.modelFetchFailure = modelFetchFailure
         self.smokeFailure = smokeFailure
     }
 
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
         healthChecks += 1
         testedGatewayURLs.append(gatewayURL)
+        if let connectionFailure { throw connectionFailure }
         return healthSucceeds
     }
 
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
         modelFetches += 1
         testedGatewayURLs.append(gatewayURL)
+        if let modelFetchFailure { throw modelFetchFailure }
         return models
     }
 

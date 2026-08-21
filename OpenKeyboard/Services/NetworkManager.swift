@@ -20,6 +20,7 @@ enum NetworkError: Error {
     case modelUnavailable
     case unusableCorrection
     case timeout
+    case cancelled
 
     var localizedDescription: String {
         switch self {
@@ -39,6 +40,8 @@ enum NetworkError: Error {
             return "Gateway connected, but the selected model did not return a usable correction."
         case .timeout:
             return "Gateway connected, but the selected model did not respond within the model-check limit."
+        case .cancelled:
+            return "The gateway request was cancelled."
         }
     }
 }
@@ -109,34 +112,9 @@ struct GatewayDiagnosticReport: Equatable {
     }
 }
 
-private enum GatewayDiagnosticValidationError: LocalizedError {
-    case invalidJSON(String)
-    case invalidOperation(expected: String, actual: String)
-    case noUsableOutput(String)
-    case unchangedOutput(String)
-    case notEnoughCorrectionDetail(required: Int, actual: Int)
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidJSON(let label):
-            return "\(label) did not return valid app JSON."
-        case .invalidOperation(let expected, let actual):
-            return "Expected \(expected), got \(actual)."
-        case .noUsableOutput(let label):
-            return "\(label) returned no usable output."
-        case .unchangedOutput(let label):
-            return "\(label) returned unchanged text."
-        case .notEnoughCorrectionDetail(let required, let actual):
-            return "Correction response returned \(actual) valid atomic item\(actual == 1 ? "" : "s"); \(required) required."
-        }
-    }
-}
-
 class NetworkManager {
     static let shared = NetworkManager()
     static let diagnosticSettingsCorrectionInput = "i recieved teh refnd."
-    static let diagnosticKeyboardCorrectionInput = "i recieved teh refnd"
-    static let diagnosticAtomicCorrectionInput = "teh cliant recieve a refnd"
     static let correctionSmokeTestPhrases: [String] = [
         "I sent teh cliant an update this morning, but the timline still sound confussing to everyone.",
         "Our suport team definately need clearer notes befor they reply to the customer about the delayed refnd.",
@@ -168,12 +146,13 @@ class NetworkManager {
         !((try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)).isEmpty)
     }
 
-    /// Run a correction smoke through the same structured chat completions contract
+    /// Run a correction smoke through the same plain-text chat completions contract
     /// used by the keyboard action path.
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
         let smokeInput = Self.diagnosticSettingsCorrectionInput
+        let grammarRendering = KeyboardGatewayActionContract.rendering(operation: "fix_grammar", text: smokeInput)
         let validationAttempts = 2
         for attempt in 1...validationAttempts {
             let content = try await chatCompletionContent(
@@ -182,13 +161,15 @@ class NetworkManager {
                 model: trimmedModel,
                 operation: "fix_grammar",
                 inputText: smokeInput,
-                systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-                userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: smokeInput),
-                maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
+                systemPrompt: grammarRendering.messages[0].content,
+                userPrompt: grammarRendering.messages[1].content,
+                maxTokens: grammarRendering.maxTokens,
+                temperature: grammarRendering.temperature,
+                expectsStructuredResponse: false,
                 timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
             do {
-                _ = try Self.validateAtomicCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
+                _ = try await Self.validatePlainTextCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
                 return
             } catch {
                 guard attempt < validationAttempts else { throw NetworkError.unusableCorrection }
@@ -202,15 +183,6 @@ class NetworkManager {
         var checks: [GatewayDiagnosticCheck] = []
 
         checks.append(await diagnosticCheck(
-            id: "health",
-            title: "Health",
-            endpoint: "GET /health"
-        ) {
-            try await checkHealth(gatewayURL: gatewayURL, apiKey: apiKey)
-            return "Gateway health is ok."
-        })
-
-        checks.append(await diagnosticCheck(
             id: "models",
             title: "Models",
             endpoint: "GET /v1/models"
@@ -221,122 +193,38 @@ class NetworkManager {
         })
 
         let modelsCheckPassed = checks.last?.status == .passed
-        let candidates = AppConfig.gatewayModelCandidates(from: models, currentModel: trimmedPreferredModel)
-        let selectedModel = candidates.first ?? trimmedPreferredModel
+        let selectedModel: String
+        let selectedModelIsAvailable: Bool
+        if trimmedPreferredModel.isEmpty {
+            selectedModel = AppConfig.gatewayModelCandidates(from: models, currentModel: "").first ?? ""
+            selectedModelIsAvailable = !selectedModel.isEmpty
+        } else if let exactModel = models.first(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(trimmedPreferredModel) == .orderedSame
+        }) {
+            selectedModel = exactModel.trimmingCharacters(in: .whitespacesAndNewlines)
+            selectedModelIsAvailable = true
+        } else {
+            selectedModel = trimmedPreferredModel
+            selectedModelIsAvailable = false
+        }
         guard !selectedModel.isEmpty, modelsCheckPassed else {
-            checks.append(contentsOf: Self.skippedDiagnosticChecks(reason: "Skipped because no model was available."))
+            checks.append(Self.skippedGrammarDiagnostic(reason: "Skipped because no model was available."))
             return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
         }
 
-        let settingsSmokeInput = Self.diagnosticSettingsCorrectionInput
-        checks.append(await chatDiagnosticCheck(
+        checks.append(await diagnosticCheck(
             id: "settings-correction-smoke",
-            title: "Settings correction",
-            operation: "fix_grammar",
-            inputText: settingsSmokeInput,
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: settingsSmokeInput),
-            maxTokens: KeyboardGatewayActionContract.maxTokens(operation: "fix_grammar"),
-            validationAttempts: 2
-        ) { content in
-            _ = try Self.validateAtomicCorrectionContent(content, inputText: settingsSmokeInput, minimumCount: 1)
-            return "Correction smoke returned usable structured JSON for: \"\(settingsSmokeInput)\""
-        })
-
-        let suggestionInput = Self.diagnosticKeyboardCorrectionInput
-        checks.append(await chatDiagnosticCheck(
-            id: "keyboard-correction-card-json",
-            title: "Keyboard correction cards",
-            operation: nil,
-            inputText: nil,
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: SemanticPromptContract.keyboardSuggestionsSystemInstruction,
-            userPrompt: KeyboardSuggestionParser.prompt(for: suggestionInput),
-            maxTokens: 1_200,
-            validationAttempts: 2
-        ) { content in
-            let parsed = try KeyboardSuggestionParser.parseAssistantContent(content)
-            let corrections = parsed.corrections.filter { $0.isAtomicCorrection(for: suggestionInput) }
-            guard !corrections.isEmpty else { throw GatewayDiagnosticValidationError.notEnoughCorrectionDetail(required: 1, actual: 0) }
-            return "Parsed \(corrections.count) valid keyboard correction card\(corrections.count == 1 ? "" : "s")."
-        })
-
-        let complexGrammarInput = Self.diagnosticAtomicCorrectionInput
-        checks.append(await chatDiagnosticCheck(
-            id: "atomic-correction-json",
-            title: "Atomic correction cards",
-            operation: "fix_grammar",
-            inputText: complexGrammarInput,
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "fix_grammar", text: complexGrammarInput),
-            maxTokens: 5_000,
-            validationAttempts: 2
-        ) { content in
-            let result = try Self.validateAtomicCorrectionContent(content, inputText: complexGrammarInput, minimumCount: 2)
-            let correctionCount = result.suggestionResponse(sourceText: complexGrammarInput).corrections.count
-            return "Parsed \(correctionCount) correction item\(correctionCount == 1 ? "" : "s")."
-        })
-
-        let rewriteInput = "hey team the app has issues and we need fix soon please check it"
-        checks.append(await chatDiagnosticCheck(
-            id: "rewrite-json",
-            title: "Rewrite JSON",
-            operation: "rewrite",
-            inputText: rewriteInput,
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "rewrite", text: rewriteInput),
-            maxTokens: 3_000,
-            optionalForSelectedModel: true
-        ) { content in
-            let result = try Self.validateStructuredActionContent(content, operation: "rewrite", fallbackText: rewriteInput, requireChangedOutput: true)
-            return "Parsed rewrite output, \(result.displayText.count) characters."
-        })
-
-        let summaryInput = "The keyboard extension now reads the same App Group gateway configuration as the host app. When the user tests the gateway in settings, the app loads models, stores the selected model, and runs a structured correction smoke request so the keyboard can rely on the same endpoint."
-        checks.append(await chatDiagnosticCheck(
-            id: "summarize-json",
-            title: "Summarize JSON",
-            operation: "summarize",
-            inputText: summaryInput,
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "summarize", text: summaryInput),
-            maxTokens: 2_000,
-            optionalForSelectedModel: true
-        ) { content in
-            let result = try Self.validateStructuredActionContent(content, operation: "summarize", fallbackText: summaryInput, requireChangedOutput: false)
-            return "Parsed summary output, \(result.displayText.count) characters."
-        })
-
-        let improveInput = "this message is confusing and it should sound better for the customer"
-        checks.append(await chatDiagnosticCheck(
-            id: "improve-rewrite-json",
-            title: "Improve via Rewrite JSON",
-            operation: "rewrite",
-            inputText: String(improveInput.prefix(500)),
-            model: selectedModel,
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
-            systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
-            userPrompt: KeyboardGatewayActionContract.prompt(operation: "improve", text: improveInput),
-            maxTokens: 3_000,
-            optionalForSelectedModel: true
-        ) { content in
-            let result = try Self.validateStructuredActionContent(content, operation: "rewrite", fallbackText: improveInput, requireChangedOutput: true)
-            return "Parsed improve rewrite output, \(result.displayText.count) characters."
+            title: "Plain-text grammar",
+            endpoint: "POST /v1/chat/completions"
+        ) {
+            guard selectedModelIsAvailable else { throw NetworkError.modelUnavailable }
+            try await testCorrectionSmoke(
+                gatewayURL: gatewayURL,
+                apiKey: apiKey,
+                model: selectedModel
+            )
+            return "Returned complete corrected text and derived local edits."
         })
 
         return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
@@ -380,6 +268,8 @@ class NetworkManager {
                 return "The selected model is not available for this key."
             case .unusableCorrection:
                 return "Gateway connected, but the selected model did not return a usable correction."
+            case .cancelled:
+                return "The gateway request was cancelled."
             default:
                 break
             }
@@ -427,31 +317,12 @@ class NetworkManager {
             return decoded.data.map(\.id)
         } catch let error as NetworkError {
             throw error
-        } catch {
-            throw NetworkError.networkError(error)
-        }
-    }
-
-    private func checkHealth(gatewayURL: String, apiKey: String) async throws {
-        let url = try Self.endpointURL(gatewayURL: gatewayURL, path: "health")
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 10
-
-        do {
-            let (data, response) = try await transport.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else { throw NetworkError.noData }
-            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 { throw NetworkError.unauthorized }
-            guard httpResponse.statusCode == 200 else { throw NetworkError.serverError("HTTP \(httpResponse.statusCode)") }
-            guard !data.isEmpty else { return }
-            guard let decoded = try? JSONDecoder().decode(HealthResponse.self, from: data),
-                  decoded.status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "ok" else {
-                throw NetworkError.noData
-            }
-        } catch let error as NetworkError {
-            throw error
+        } catch is CancellationError {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .cancelled {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .timedOut {
+            throw NetworkError.timeout
         } catch {
             throw NetworkError.networkError(error)
         }
@@ -466,6 +337,8 @@ class NetworkManager {
         systemPrompt: String,
         userPrompt: String,
         maxTokens: Int,
+        temperature: Double? = 0.1,
+        expectsStructuredResponse: Bool? = nil,
         timeoutInterval: TimeInterval
     ) async throws -> String {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -483,13 +356,21 @@ class NetworkManager {
                     gatewayURL: gatewayURL,
                     selectedModel: trimmedModel,
                     isConfigured: true,
-                    supportsStructuredCorrections: true,
-                    structuredCorrectionSchemaVersion: "openkeyboard.structured-corrections.v1"
+                    grammarCorrectionVerified: true,
+                    grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
                 ),
+                temperature: temperature,
+                expectsStructuredResponse: expectsStructuredResponse,
                 timeoutInterval: timeoutInterval
             )
         } catch let error as NetworkError {
             throw error
+        } catch is CancellationError {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .cancelled {
+            throw NetworkError.cancelled
+        } catch let error as URLError where error.code == .timedOut {
+            throw NetworkError.timeout
         } catch let error as CanonicalGatewayClientError {
             throw Self.networkError(from: error)
         } catch {
@@ -526,129 +407,34 @@ class NetworkManager {
         }
     }
 
-    private func chatDiagnosticCheck(
-        id: String,
-        title: String,
-        operation: String?,
-        inputText: String?,
-        model: String,
-        gatewayURL: String,
-        apiKey: String,
-        systemPrompt: String,
-        userPrompt: String,
-        maxTokens: Int,
-        optionalForSelectedModel: Bool = false,
-        validationAttempts: Int = 1,
-        validation: (String) throws -> String
-    ) async -> GatewayDiagnosticCheck {
-        let started = Date()
-        do {
-            let attempts = max(1, validationAttempts)
-            var lastValidationError: Error?
-            for attempt in 1...attempts {
-                let content = try await chatCompletionContent(
-                    gatewayURL: gatewayURL,
-                    apiKey: apiKey,
-                    model: model,
-                    operation: operation,
-                    inputText: inputText,
-                    systemPrompt: systemPrompt,
-                    userPrompt: userPrompt,
-                    maxTokens: maxTokens,
-                    timeoutInterval: GatewayRequestTimeouts.diagnosticAction
-                )
-                do {
-                    let message = try validation(content)
-                    return GatewayDiagnosticCheck(
-                        id: id,
-                        title: title,
-                        endpoint: "POST /v1/chat/completions",
-                        status: .passed,
-                        durationMilliseconds: Self.durationMilliseconds(since: started),
-                        message: attempt == 1 ? message : "\(message) Passed after \(attempt) attempts."
-                    )
-                } catch {
-                    lastValidationError = error
-                    guard attempt < attempts, Self.isModelCapabilityValidationError(error) else { throw error }
-                }
-            }
-            throw lastValidationError ?? GatewayDiagnosticValidationError.noUsableOutput(operation ?? title)
-        } catch {
-            let isOptionalCapabilityGap = optionalForSelectedModel && Self.isModelCapabilityValidationError(error)
-            let message = Self.diagnosticMessage(for: error)
-            return GatewayDiagnosticCheck(
-                id: id,
-                title: title,
-                endpoint: "POST /v1/chat/completions",
-                status: isOptionalCapabilityGap ? .skipped : .failed,
-                durationMilliseconds: Self.durationMilliseconds(since: started),
-                message: isOptionalCapabilityGap ? "Optional for \(model): \(message)" : message
-            )
-        }
-    }
-
-    private static func validateAtomicCorrectionContent(
+    @MainActor
+    private static func validatePlainTextCorrectionContent(
         _ content: String,
         inputText: String,
         minimumCount: Int
-    ) throws -> KeyboardActionOperationResult {
-        let result = try validateStructuredActionContent(
-            content,
-            operation: "fix_grammar",
-            fallbackText: inputText,
-            requireChangedOutput: true
-        )
-        let correctionCount = result.suggestionResponse(sourceText: inputText).corrections.count
-        guard correctionCount >= minimumCount else {
-            throw GatewayDiagnosticValidationError.notEnoughCorrectionDetail(
-                required: minimumCount,
-                actual: correctionCount
-            )
-        }
-        return result
-    }
-
-    private static func isModelCapabilityValidationError(_ error: Error) -> Bool {
-        error is GatewayDiagnosticValidationError || error is KeyboardSuggestionParserError
-    }
-
-    private static func validateStructuredActionContent(_ content: String, operation: String, fallbackText: String, requireChangedOutput: Bool) throws -> KeyboardActionOperationResult {
-        let result: KeyboardActionOperationResult
+    ) throws -> Int {
+        let corrected: String
         do {
-            result = try KeyboardActionOperationResult.parse(content, operation: operation, fallbackText: fallbackText)
+            corrected = try GrammarCorrectionResponseValidator.validated(content, original: inputText)
         } catch {
-            throw GatewayDiagnosticValidationError.invalidJSON(operation)
+            throw NetworkError.unusableCorrection
         }
-        if result.operation.trimmingCharacters(in: .whitespacesAndNewlines) != operation {
-            throw GatewayDiagnosticValidationError.invalidOperation(expected: operation, actual: result.operation)
-        }
-        guard result.isStructuredResponse else { throw GatewayDiagnosticValidationError.invalidJSON(operation) }
-        let output = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !output.isEmpty else { throw GatewayDiagnosticValidationError.noUsableOutput(operation) }
-        if requireChangedOutput && output.caseInsensitiveCompare(fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame {
-            throw GatewayDiagnosticValidationError.unchangedOutput(operation)
-        }
-        return result
+        let correctionCount = GrammarDiffService.edits(from: inputText, to: corrected).filter {
+            !$0.originalText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        guard correctionCount >= minimumCount else { throw NetworkError.unusableCorrection }
+        return correctionCount
     }
 
-    private static func skippedDiagnosticChecks(reason: String) -> [GatewayDiagnosticCheck] {
-        [
-            ("settings-correction-smoke", "Settings correction"),
-            ("keyboard-correction-card-json", "Keyboard correction cards"),
-            ("atomic-correction-json", "Atomic correction cards"),
-            ("rewrite-json", "Rewrite JSON"),
-            ("summarize-json", "Summarize JSON"),
-            ("improve-rewrite-json", "Improve via Rewrite JSON")
-        ].map { id, title in
-            GatewayDiagnosticCheck(
-                id: id,
-                title: title,
-                endpoint: "POST /v1/chat/completions",
-                status: .skipped,
-                durationMilliseconds: nil,
-                message: reason
-            )
-        }
+    private static func skippedGrammarDiagnostic(reason: String) -> GatewayDiagnosticCheck {
+        GatewayDiagnosticCheck(
+            id: "settings-correction-smoke",
+            title: "Plain-text grammar",
+            endpoint: "POST /v1/chat/completions",
+            status: .skipped,
+            durationMilliseconds: nil,
+            message: reason
+        )
     }
 
     private static func durationMilliseconds(since started: Date) -> Int {
@@ -659,8 +445,6 @@ class NetworkManager {
         let raw: String
         if let networkError = error as? NetworkError {
             raw = networkError.localizedDescription
-        } else if error is KeyboardSuggestionParserError {
-            raw = "Suggestion JSON did not return valid app JSON."
         } else if let localized = error as? LocalizedError, let description = localized.errorDescription {
             raw = description
         } else {
@@ -699,8 +483,4 @@ private struct ModelsResponse: Decodable {
     struct Model: Decodable {
         let id: String
     }
-}
-
-private struct HealthResponse: Decodable {
-    let status: String
 }

@@ -29,6 +29,11 @@ final class KeyboardViewController: UIInputViewController {
         refreshRuntimeState()
     }
 
+    override func textDidChange(_ textInput: UITextInput?) {
+        super.textDidChange(textInput)
+        viewModel?.documentDidChange()
+    }
+
     override func updateViewConstraints() {
         ensureKeyboardHeightConstraint()
         keyboardHeightConstraint?.constant = currentKeyboardHeight

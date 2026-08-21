@@ -86,23 +86,23 @@ struct SettingsView: View {
                         }
 
                         HStack(alignment: .firstTextBaseline) {
-                            Text("Structured corrections")
+                            Text("Grammar correction")
                             Spacer(minLength: 12)
-                            Text(viewModel.structuredCapabilityDisplay)
-                                .foregroundColor(viewModel.config.supportsStructuredCorrections ? .primary : .secondary)
+                            Text(viewModel.grammarCapabilityDisplay)
+                                .foregroundColor(viewModel.config.grammarCorrectionVerified ? .primary : .secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
                         }
 
                         Text(viewModel.connectionStatus == .limited
-                             ? "The gateway and selected model are available, but structured corrections were not verified."
-                             : "Model and structured corrections are trusted from the latest successful Test Connection.")
+                             ? "The gateway and selected model are available, but plain-text grammar correction was not verified."
+                             : "Model and plain-text grammar correction are trusted from the latest successful Test Connection.")
                             .font(.footnote)
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
 
                     if viewModel.connectionStatus == .success {
-                        Label("Connection verified. Model and structured corrections loaded from gateway.", systemImage: "checkmark.circle.fill")
+                        Label("Connection verified. Model and plain-text grammar correction are ready.", systemImage: "checkmark.circle.fill")
                             .foregroundColor(OpenKeyboardTheme.Semantic.success)
                             .listRowBackground(OpenKeyboardTheme.Surface.successBackground)
                             .accessibilityIdentifier("settings_connection_success")
@@ -124,7 +124,7 @@ struct SettingsView: View {
                 }
 
                 Section(header: Label("Gateway Diagnostics", systemImage: "waveform.path.ecg")) {
-                    Text("Run the full gateway contract check when basic connection passes but keyboard AI behavior needs deeper verification.")
+                    Text("Check model access and the same plain-text grammar flow used by the keyboard.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 

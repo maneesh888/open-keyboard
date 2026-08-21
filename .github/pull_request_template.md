@@ -59,15 +59,15 @@
 
 <!-- For no gateway impact, write "Local live verification: not required". -->
 <!-- For gateway impact, run ./scripts/check-live.sh gateway on exact HEAD and keep every canonical evidence line. -->
-<!-- Use model-agnostic only when no requirement names a model; still record the actual tested ID and do not infer structured-correction capability from a connected/capability-unverified pass. -->
-<!-- For an exact-model task, run OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway; Required and Exact live-tested models must match with no fallback, and structured corrections remain mandatory. -->
+<!-- Use model-agnostic only when no requirement names a model; still record the actual tested ID. Every gateway run must verify the production plain-text grammar flow. -->
+<!-- For an exact-model task, run OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway; Required and Exact live-tested models must match with no fallback. -->
 - Local live verification: not required
 - Live verification target: not required
 - Exact live-tested head: not required
 - Required live models: not required
 - Exact live-tested models: not required
 - Live-model substitutions: not required
-- Live structured-correction capability: not required
+- Live plain-text grammar verification: not required
 - No credential or gateway response body retained.
 - Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
 

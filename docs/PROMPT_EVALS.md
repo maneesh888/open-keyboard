@@ -75,8 +75,8 @@ OpenKeyboardCore/Tests/OpenKeyboardCoreTests/LivePromptEvaluationTests.swift
 Current live harness coverage:
 
 - Grammar correction sanity check.
-- Gemma-specific granular multi-error correction checks.
-- Gemma-specific valid structured JSON checks for grammar, rewrite, summarize, translate, and continue writing.
+- Gemma-specific complete plain-text multi-error grammar correction checks.
+- Gemma-specific valid structured JSON checks for rewrite, summarize, translate, and continue writing.
 - Rewrite clarity sanity check.
 - Prompt-injection-as-input summarization check.
 - Broad latency budget tracking per scenario.

@@ -88,6 +88,9 @@ class SettingsViewModel: ObservableObject {
 
     private static func settingsDisplayConfig(from config: AppConfig, defaults: UserDefaults?) -> AppConfig {
         guard config.isKnownTestPlaceholderConfig else { return config }
+        if ProcessInfo.processInfo.arguments.contains("--uitesting") {
+            return config
+        }
         if let defaults {
             AppConfig.clear(from: defaults)
         } else {
@@ -144,16 +147,16 @@ class SettingsViewModel: ObservableObject {
         !hasConnectionError && showsValidatedGatewayDetails && config.isConfigured && !config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var structuredCapabilityDisplay: String {
+    var grammarCapabilityDisplay: String {
         guard !hasConnectionError, showsValidatedGatewayDetails, config.isConfigured else {
             return "Loaded after Test Connection"
         }
-        guard config.supportsStructuredCorrections else { return "Not verified for selected model" }
-        return config.structuredCorrectionSchemaVersion.isEmpty ? "Structured corrections enabled" : config.structuredCorrectionSchemaVersion
+        guard config.grammarCorrectionVerified else { return "Not verified for selected model" }
+        return "Plain text verified"
     }
 
     var modelCapabilityMessage: String {
-        "Gateway connected and the model is available, but its structured correction response could not be verified. Basic AI actions remain available; use Diagnostics to inspect model capabilities."
+        "Gateway and model are available, but plain-text grammar correction could not be verified. Other AI actions remain available; use Diagnostics to test grammar."
     }
     
     func updateGatewayURLInput(_ value: String) {
@@ -230,78 +233,98 @@ class SettingsViewModel: ObservableObject {
             )
 
             if success {
-                let models = try? await gatewayTester.fetchModels(
+                let models = try await gatewayTester.fetchModels(
                     gatewayURL: draftGatewayURL,
                     apiKey: draftAPIKey
                 )
-                availableModels = models ?? []
-                let candidates = AppConfig.gatewayModelCandidates(from: availableModels, currentModel: config.selectedModel)
-                guard !candidates.isEmpty else {
+                availableModels = models
+                let configuredModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                let gatewayModel: String
+                if configuredModel.isEmpty {
+                    guard let discoveredModel = AppConfig.gatewayModelCandidates(
+                        from: availableModels,
+                        currentModel: ""
+                    ).first else {
+                        failConnection(with: "No models returned by gateway")
+                        return
+                    }
+                    gatewayModel = discoveredModel
+                } else if let exactModel = availableModels.first(where: {
+                    $0.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .caseInsensitiveCompare(configuredModel) == .orderedSame
+                })?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    gatewayModel = exactModel
+                } else {
+                    failConnection(with: NetworkError.modelUnavailable.localizedDescription)
+                    return
+                }
+                guard !gatewayModel.isEmpty else {
                     failConnection(with: "No models returned by gateway")
                     return
                 }
 
-                var smokeErrors: [Error] = []
-                for gatewayModel in candidates {
-                    do {
-                        try await gatewayTester.testCorrectionSmoke(
-                            gatewayURL: draftGatewayURL,
-                            apiKey: draftAPIKey,
-                            model: gatewayModel
-                        )
-                        let previousConfig = config
-                        config.gatewayURL = draftGatewayURL
-                        config.apiKey = draftAPIKey
-                        config.selectedModel = gatewayModel
-                        config.isConfigured = true
-                        config.supportsStructuredCorrections = true
-                        config.structuredCorrectionSchemaVersion = "openkeyboard.structured-corrections.v1"
-                        guard saveSettings() else {
-                            config = previousConfig
-                            failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
-                            return
-                        }
-
-                        connectionStatus = .success
-                        errorMessage = nil
-                        AppConfig.clearGatewayConnectionError(from: defaults)
-                        AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
-                        showsValidatedGatewayDetails = true
-                        return
-                    } catch {
-                        smokeErrors.append(error)
-                    }
-                }
-
-                let fallbackModel = candidates.first ?? config.selectedModel
-                if smokeErrors.count == candidates.count,
-                   smokeErrors.allSatisfy(Self.isStructuredCorrectionCapabilityMiss) {
+                do {
+                    try await gatewayTester.testCorrectionSmoke(
+                        gatewayURL: draftGatewayURL,
+                        apiKey: draftAPIKey,
+                        model: gatewayModel
+                    )
                     let previousConfig = config
                     config.gatewayURL = draftGatewayURL
                     config.apiKey = draftAPIKey
-                    config.selectedModel = fallbackModel
+                    config.selectedModel = gatewayModel
                     config.isConfigured = true
-                    config.supportsStructuredCorrections = false
-                    config.structuredCorrectionSchemaVersion = ""
+                    config.grammarCorrectionVerified = true
+                    config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
                     guard saveSettings() else {
                         config = previousConfig
                         failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
                         return
                     }
 
-                    connectionStatus = .limited
+                    connectionStatus = .success
                     errorMessage = nil
                     AppConfig.clearGatewayConnectionError(from: defaults)
                     AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
                     showsValidatedGatewayDetails = true
                     return
-                }
+                } catch {
+                    if Self.isCancellation(error) {
+                        throw NetworkError.cancelled
+                    }
+                    if Self.isGrammarCorrectionCapabilityMiss(error) {
+                        let previousConfig = config
+                        config.gatewayURL = draftGatewayURL
+                        config.apiKey = draftAPIKey
+                        config.selectedModel = gatewayModel
+                        config.isConfigured = true
+                        config.grammarCorrectionVerified = false
+                        config.grammarCorrectionContractVersion = AppConfig.grammarCorrectionCapabilityVersion
+                        guard saveSettings() else {
+                            config = previousConfig
+                            failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
+                            return
+                        }
 
-                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: smokeErrors.last ?? NetworkError.unusableCorrection, model: fallbackModel))
+                        connectionStatus = .limited
+                        errorMessage = nil
+                        AppConfig.clearGatewayConnectionError(from: defaults)
+                        AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
+                        showsValidatedGatewayDetails = true
+                        return
+                    }
+                    failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel))
+                }
             } else {
                 failConnection(with: "Connection failed")
             }
         } catch {
+            if Self.isCancellation(error) {
+                connectionStatus = .unknown
+                errorMessage = nil
+                showsValidatedGatewayDetails = false
+                return
+            }
             if let networkError = error as? NetworkError {
                 failConnection(with: networkError.localizedDescription)
             } else {
@@ -360,21 +383,30 @@ class SettingsViewModel: ObservableObject {
     }
 
     private static func validatedConnectionStatus(for config: AppConfig) -> ConnectionStatus {
-        config.supportsStructuredCorrections ? .success : .limited
+        config.grammarCorrectionVerified ? .success : .limited
     }
 
-    private static func isStructuredCorrectionCapabilityMiss(_ error: Error) -> Bool {
+    private static func isGrammarCorrectionCapabilityMiss(_ error: Error) -> Bool {
         guard let networkError = error as? NetworkError else { return false }
         switch networkError {
-        case .unusableCorrection, .timeout:
+        case .unusableCorrection:
             return true
         default:
             return false
         }
     }
 
+    private static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        guard let networkError = error as? NetworkError else { return false }
+        if case .cancelled = networkError { return true }
+        return false
+    }
+
     private static func hasRecentSavedGatewayValidation(for config: AppConfig, defaults: UserDefaults?, now: Date = Date()) -> Bool {
         guard config.isConfigured, config.hasCompleteGatewayRuntimeConfig else { return false }
+        guard config.hasCurrentGrammarCorrectionCapabilityRecord else { return false }
         guard let defaults, let lastTestedAt = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else { return false }
         let elapsed = now.timeIntervalSince(lastTestedAt)
         return elapsed >= 0 && elapsed < AppConfig.gatewayConnectionRetestInterval

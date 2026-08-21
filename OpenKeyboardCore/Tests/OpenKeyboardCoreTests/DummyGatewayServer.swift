@@ -26,6 +26,7 @@ final class DummyGatewayServer: HTTPClient, @unchecked Sendable {
         )
         case chatComplexSpellFix
         case chatPlainText(String)
+        case chatTruncated(String)
         case chatRawContent(String)
         case chatEmptyChoices
         case malformedJSON
@@ -56,6 +57,8 @@ final class DummyGatewayServer: HTTPClient, @unchecked Sendable {
                 ))
             case .chatPlainText(let content):
                 return .chat(content: content)
+            case .chatTruncated(let content):
+                return .json(#"{"choices":[{"message":{"content":"\#(DummyGatewayServer.jsonEscaped(content))"},"finish_reason":"length"}]}"#)
             case .chatRawContent(let content):
                 return .chat(content: content)
             case .chatEmptyChoices:

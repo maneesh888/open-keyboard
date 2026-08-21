@@ -11,19 +11,22 @@ struct KeyboardReplacementPlan: Equatable {
     let textForAI: String
     let leadingWhitespace: String
     let trailingWhitespace: String
+    let preservesOutputWhitespace: Bool
 
     init(
         textToDelete: String,
         textAfterCursorToDelete: String = "",
         textForAI: String,
         leadingWhitespace: String,
-        trailingWhitespace: String
+        trailingWhitespace: String,
+        preservesOutputWhitespace: Bool = false
     ) {
         self.textToDelete = textToDelete
         self.textAfterCursorToDelete = textAfterCursorToDelete
         self.textForAI = textForAI
         self.leadingWhitespace = leadingWhitespace
         self.trailingWhitespace = trailingWhitespace
+        self.preservesOutputWhitespace = preservesOutputWhitespace
     }
 
     var textToReplace: String {
@@ -31,6 +34,7 @@ struct KeyboardReplacementPlan: Equatable {
     }
 
     func replacementText(from aiOutput: String) -> String {
+        if preservesOutputWhitespace { return aiOutput }
         let trimmedOutput = aiOutput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedOutput.isEmpty else { return "" }
         return leadingWhitespace + trimmedOutput + trailingWhitespace
@@ -60,6 +64,25 @@ enum KeyboardReplacementPlanner {
             textForAI: textForAI,
             leadingWhitespace: leadingWhitespace,
             trailingWhitespace: trailingWhitespace
+        )
+    }
+
+    static func grammarPlan(for text: String?) -> KeyboardReplacementPlan? {
+        grammarPlan(contextBeforeInput: text, contextAfterInput: nil)
+    }
+
+    static func grammarPlan(contextBeforeInput: String?, contextAfterInput: String?) -> KeyboardReplacementPlan? {
+        let before = contextBeforeInput ?? ""
+        let after = contextAfterInput ?? ""
+        let document = before + after
+        guard !document.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return KeyboardReplacementPlan(
+            textToDelete: before,
+            textAfterCursorToDelete: after,
+            textForAI: document,
+            leadingWhitespace: "",
+            trailingWhitespace: "",
+            preservesOutputWhitespace: true
         )
     }
 }

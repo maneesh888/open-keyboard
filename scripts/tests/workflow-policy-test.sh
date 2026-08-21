@@ -247,7 +247,7 @@ rg --quiet 'Human approval evidence:' "$PR_TEMPLATE"
 rg --quiet 'Required live models:' "$PR_TEMPLATE"
 rg --quiet 'Exact live-tested models:' "$PR_TEMPLATE"
 rg --quiet 'Live-model substitutions:' "$PR_TEMPLATE"
-rg --quiet 'Live structured-correction capability:' "$PR_TEMPLATE"
+rg --quiet 'Live plain-text grammar verification:' "$PR_TEMPLATE"
 rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
 rg --fixed-strings --quiet '`Required technical checks`' "$BRANCH_PROTECTION_GUIDE"
@@ -307,11 +307,16 @@ rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'TESTED_MODEL.*REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'required_model=\$REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'tested_model=\$TESTED_MODEL' "$ROOT/scripts/check-live.sh"
-rg --quiet 'structured_corrections_required=\$REQUIRE_STRUCTURED_CORRECTIONS' "$ROOT/scripts/check-live.sh"
-rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS' "$ROOT/scripts/check-live.sh"
-rg --quiet 'OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'requiresStructuredCorrections' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
-rg --quiet 'connectionStatus == \.limited' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
+rg --quiet 'plain_text_grammar_verified=true' "$ROOT/scripts/check-live.sh"
+if rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS|structured_corrections_required' "$ROOT/scripts/check-live.sh"; then
+  echo "The exact-head live gate still has a structured-correction escape hatch." >&2
+  exit 1
+fi
+if rg --quiet 'OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS' "$ROOT/scripts/ios/test.sh"; then
+  echo "The live simulator smoke still injects the removed structured-correction requirement." >&2
+  exit 1
+fi
+rg --quiet 'Test Connection did not verify plain-text grammar' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
 rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
 rg --quiet 'exact seeded model without catalog fallback' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
 rg --quiet 'testRealKeyboardImproveReplacesTextWhenGatewayConfigured' "$ROOT/scripts/ios/test.sh"

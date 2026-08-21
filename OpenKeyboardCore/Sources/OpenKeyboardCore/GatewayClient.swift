@@ -1,5 +1,11 @@
 import Foundation
+import NaturalLanguage
 import SemanticPromptContract
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 public struct HTTPRequest: Equatable, Sendable {
     public var method: String
@@ -44,6 +50,9 @@ public struct WritingActionResult: Equatable, Sendable {
     }
 
     public var displayText: String {
+        if operation == "fix_grammar", let correctedText {
+            return correctedText
+        }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return correctedText.trimmingCharacters(in: .whitespacesAndNewlines)
         }
@@ -54,10 +63,6 @@ public struct WritingActionResult: Equatable, Sendable {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    }
-
-    public var isStructuredGrammarNoChange: Bool {
-        isStructuredResponse && (isNoChangeResult || (correctedText == nil && !items.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }))
     }
 }
 
@@ -135,8 +140,8 @@ public final class GatewayClient: Sendable {
 
     public func performWritingAction(_ action: WritingAction, text: String, model: String) async throws -> String {
         let result = try await performWritingActionResult(action, text: text, model: model)
-        if action == .fixGrammar, result.isStructuredGrammarNoChange {
-            throw GatewayClientError.invalidResponse
+        if action == .fixGrammar, let correctedText = result.correctedText {
+            return correctedText
         }
         let displayText = result.displayText
         guard !displayText.isEmpty else { throw GatewayClientError.invalidResponse }
@@ -145,6 +150,7 @@ public final class GatewayClient: Sendable {
 
     public func performWritingActionResult(_ action: WritingAction, text: String, model: String) async throws -> WritingActionResult {
         let prompt = WritingPromptBuilder.prompt(for: action, text: text)
+        let rendering = WritingPromptBuilder.rendering(for: action, text: text)
         let payload = ChatCompletionRequest(
             model: model,
             operation: action.operationName,
@@ -152,14 +158,14 @@ public final class GatewayClient: Sendable {
             messages: [
                 ChatMessage(
                     role: "system",
-                    content: action.requiresStructuredJSON
-                        ? WritingPromptBuilder.structuredSystemPrompt
-                        : SemanticPromptContract.unstructuredWritingSystemInstruction
+                    content: rendering?.messages.first?.content
+                        ?? SemanticPromptContract.unstructuredWritingSystemInstruction
                 ),
                 ChatMessage(role: "user", content: prompt)
             ],
-            responseFormat: action.requiresStructuredJSON ? .jsonObject : nil,
-            temperature: action.requiresStructuredJSON ? 0.1 : nil,
+            responseFormat: rendering?.responseFormatType == "json_object" ? .jsonObject : nil,
+            maxTokens: rendering?.maxTokens,
+            temperature: rendering?.temperature,
             stream: false
         )
 
@@ -174,14 +180,24 @@ public final class GatewayClient: Sendable {
         try mapStatus(response.statusCode)
 
         guard let completion = try? JSONDecoder().decode(ChatCompletionResponse.self, from: response.data),
-              let content = completion.choices.first?.message.content else {
+              let choice = completion.choices.first,
+              choice.finishReason != "length" else {
             throw GatewayClientError.invalidResponse
         }
 
-        return try Self.parseWritingActionResult(content, operation: action.operationName, fallbackText: text)
+        return try await Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
     }
 
-    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) throws -> WritingActionResult {
+    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) async throws -> WritingActionResult {
+        if operation == "fix_grammar" {
+            let corrected = try await validatedPlainTextGrammarResponse(content, original: fallbackText)
+            return WritingActionResult(
+                operation: operation,
+                items: [],
+                correctedText: corrected,
+                isNoChangeResult: corrected == fallbackText
+            )
+        }
         let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw GatewayClientError.invalidResponse }
         if let structuredContent = try normalizedStructuredContent(from: trimmed) {
@@ -234,12 +250,7 @@ public final class GatewayClient: Sendable {
         }
 
         let finalCorrectedText = correctedText ?? topLevelDisplayText
-        let hasCorrections = canonicalItems.contains { $0.type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" }
-        let trimmedFinalText = finalCorrectedText?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedFallbackText = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isNoChangeResult = operation == "fix_grammar" && !hasCorrections && (trimmedFinalText == nil || trimmedFinalText == trimmedFallbackText)
-
-        return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true, isNoChangeResult: isNoChangeResult)
+        return WritingActionResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true)
     }
 
     private static func normalizedStructuredContent(from trimmed: String) throws -> String? {
@@ -290,6 +301,663 @@ public final class GatewayClient: Sendable {
         trimmed = trimmed.replacingOccurrences(of: "```JSON", with: "")
         trimmed = trimmed.replacingOccurrences(of: "```", with: "")
         return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    @MainActor
+    private static func validatedPlainTextGrammarResponse(_ response: String, original: String) throws -> String {
+        guard !response.isEmpty,
+              !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let inspection = response.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let originalInspection = original.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard isTopLevelJSONValue(inspection) == isTopLevelJSONValue(originalInspection) else {
+            throw GatewayClientError.invalidResponse
+        }
+        guard outerBoundaryWrapperStructure(in: inspection) == outerBoundaryWrapperStructure(in: originalInspection) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let introducesOpeningFence = inspection.hasPrefix("```") && !originalInspection.hasPrefix("```")
+        let introducesClosingFence = inspection.hasSuffix("```") && !originalInspection.hasSuffix("```")
+        let introducesStructuredPrefix = ["{", "["].contains {
+            inspection.hasPrefix($0) && !originalInspection.hasPrefix($0)
+        }
+        let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
+        guard !introducesOpeningFence,
+              !introducesClosingFence,
+              !introducesStructuredPrefix,
+              !hasNewGrammarCommentaryPrefix(inspection, original: originalInspection),
+              !hasNewGrammarCommentarySuffix(inspection, original: originalInspection),
+              preservesNewlineStructure(original: original, corrected: corrected) else {
+            throw GatewayClientError.invalidResponse
+        }
+        if original.count >= 80, corrected.count < original.count * 3 / 5 {
+            throw GatewayClientError.invalidResponse
+        }
+        if corrected == original { return corrected }
+        let originalWords = grammarWords(in: original)
+        let responseWords = grammarWords(in: corrected)
+        guard !hasSuspiciousBoundaryWordChange(originalWords: originalWords, responseWords: responseWords) else {
+            throw GatewayClientError.invalidResponse
+        }
+        guard !hasSuspiciousBoundarySentenceSubstitution(original: original, corrected: corrected) else {
+            throw GatewayClientError.invalidResponse
+        }
+        let approximatelyPreservedWords = originalWords.filter { sourceWord in
+            responseWords.contains { candidate in
+                grammarWordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
+            }
+        }.count
+        guard approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
+            throw GatewayClientError.invalidResponse
+        }
+        return corrected
+    }
+
+    private static func isTopLevelJSONValue(_ value: String) -> Bool {
+        guard let data = value.data(using: .utf8) else { return false }
+        return (try? JSONSerialization.jsonObject(with: data, options: .fragmentsAllowed)) != nil
+    }
+
+    private struct OuterBoundaryWrapperStructure: Equatable {
+        let leading: Character?
+        let trailing: Character?
+    }
+
+    private static func outerBoundaryWrapperStructure(in value: String) -> OuterBoundaryWrapperStructure {
+        let boundaryQuotes: Set<Character> = ["\"", "'", "“", "”", "‘", "’", "«", "»", "‹", "›"]
+        let sentenceTerminals: Set<Character> = [".", "!", "?", "…"]
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OuterBoundaryWrapperStructure(
+            leading: trimmed.first.flatMap {
+                boundaryQuotes.contains($0) || $0.isPunctuation ? $0 : nil
+            },
+            trailing: trimmed.last.flatMap {
+                boundaryQuotes.contains($0) || ($0.isPunctuation && !sentenceTerminals.contains($0)) ? $0 : nil
+            }
+        )
+    }
+
+    private static func hasSuspiciousBoundaryWordChange(
+        originalWords: [String],
+        responseWords: [String]
+    ) -> Bool {
+        if responseWords.count < originalWords.count {
+            return responseWords == Array(originalWords.prefix(responseWords.count)) ||
+                responseWords == Array(originalWords.suffix(responseWords.count))
+        }
+        if responseWords.count > originalWords.count {
+            return originalWords == Array(responseWords.prefix(originalWords.count)) ||
+                originalWords == Array(responseWords.suffix(originalWords.count))
+        }
+        return false
+    }
+
+    private static func grammarWordsApproximatelyMatch(_ lhs: [String], _ rhs: [String]) -> Bool {
+        guard lhs.count == rhs.count else { return false }
+        return zip(lhs, rhs).allSatisfy { left, right in
+            grammarWordEditDistance(left, right) <= max(2, max(left.count, right.count) / 3)
+        }
+    }
+
+    private static func hasNewGrammarCommentarySuffix(_ corrected: String, original: String) -> Bool {
+        let correctedWords = grammarWords(in: corrected)
+        let originalWords = grammarWords(in: original)
+        let commentarySuffixes = [
+            "hope this helps", "happy to help", "let me know", "thank you", "thanks",
+            "sure thing", "all set", "sure", "okay", "ok", "done", "enjoy"
+        ]
+        return commentarySuffixes.contains { suffix in
+            let suffixWords = grammarWords(in: suffix)
+            guard correctedWords.count >= suffixWords.count,
+                  Array(correctedWords.suffix(suffixWords.count)) == suffixWords else {
+                return false
+            }
+            let originalTail = Array(originalWords.suffix(suffixWords.count))
+            return originalTail.count != suffixWords.count ||
+                !grammarWordsApproximatelyMatch(originalTail, suffixWords)
+        }
+    }
+
+    private static func hasNewGrammarCommentaryPrefix(_ corrected: String, original: String) -> Bool {
+        let correctedWords = grammarWords(in: corrected)
+        let originalWords = grammarWords(in: original)
+        let commentaryPrefixes = [
+            "here is", "here's", "corrected text", "the corrected", "i corrected",
+            "sure thing", "of course", "sure", "certainly", "okay", "ok", "done", "correction"
+        ]
+        return commentaryPrefixes.contains { prefix in
+            let prefixWords = grammarWords(in: prefix)
+            guard correctedWords.count >= prefixWords.count,
+                  Array(correctedWords.prefix(prefixWords.count)) == prefixWords else {
+                return false
+            }
+            let originalHead = Array(originalWords.prefix(prefixWords.count))
+            return originalHead.count != prefixWords.count ||
+                !grammarWordsApproximatelyMatch(originalHead, prefixWords)
+        }
+    }
+
+    private struct GrammarWordOccurrence {
+        let value: String
+        let start: Int
+        let end: Int
+    }
+
+    private struct GrammarLineStructure {
+        let lines: [String]
+        let separators: [Character]
+    }
+
+    private struct ProtectedGrammarStructure {
+        let segments: [String]
+        let tokens: [Character]
+    }
+
+    private static func preservesNewlineStructure(original: String, corrected: String) -> Bool {
+        let sourceStructure = grammarLineStructure(in: original)
+        let correctedStructure = grammarLineStructure(in: corrected)
+        guard sourceStructure.separators == correctedStructure.separators,
+              sourceStructure.lines.count == correctedStructure.lines.count else {
+            return false
+        }
+        return zip(sourceStructure.lines, correctedStructure.lines).allSatisfy { sourceLine, correctedLine in
+            grammarLeadingWhitespace(in: sourceLine) == grammarLeadingWhitespace(in: correctedLine) &&
+            grammarTrailingWhitespace(in: sourceLine) == grammarTrailingWhitespace(in: correctedLine) &&
+            preservesProtectedGrammarStructure(original: sourceLine, corrected: correctedLine) &&
+            !hasUnanchoredGrammarContent(
+                grammarWordOccurrences(in: Array(sourceLine)).map(\.value),
+                grammarWordOccurrences(in: Array(correctedLine)).map(\.value)
+            )
+        }
+    }
+
+    private static func preservesProtectedGrammarStructure(original: String, corrected: String) -> Bool {
+        let sourceStructure = protectedGrammarStructure(in: original)
+        let correctedStructure = protectedGrammarStructure(in: corrected)
+        guard sourceStructure.tokens == correctedStructure.tokens,
+              sourceStructure.segments.count == correctedStructure.segments.count else {
+            return false
+        }
+        var wordCountDeltas: [Int] = []
+        let segmentsAreValid = zip(sourceStructure.segments, correctedStructure.segments).allSatisfy { source, response in
+            let sourceWords = grammarWordOccurrences(in: Array(source)).map(\.value)
+            let responseWords = grammarWordOccurrences(in: Array(response)).map(\.value)
+            wordCountDeltas.append(responseWords.count - sourceWords.count)
+            return grammarLeadingWhitespace(in: source) == grammarLeadingWhitespace(in: response) &&
+            grammarTrailingWhitespace(in: source) == grammarTrailingWhitespace(in: response) &&
+            !hasUnanchoredGrammarContent(sourceWords, responseWords)
+        }
+        guard segmentsAreValid else { return false }
+        let hasInsertion = wordCountDeltas.contains(where: { $0 > 0 })
+        let hasDeletion = wordCountDeltas.contains(where: { $0 < 0 })
+        return !(hasInsertion && hasDeletion)
+    }
+
+    private static func protectedGrammarStructure(in value: String) -> ProtectedGrammarStructure {
+        var segments: [String] = []
+        var tokens: [Character] = []
+        var currentSegment = ""
+        let characters = Array(value)
+        for (index, character) in characters.enumerated() {
+            if isProtectedGrammarCharacter(character) ||
+                isProtectedMarkdownMarker(character, at: index, in: characters) ||
+                isProtectedGrammarQuote(character, at: index, in: characters) {
+                segments.append(currentSegment)
+                tokens.append(character)
+                currentSegment = ""
+            } else {
+                currentSegment.append(character)
+            }
+        }
+        segments.append(currentSegment)
+        return ProtectedGrammarStructure(segments: segments, tokens: tokens)
+    }
+
+    private static func isProtectedGrammarQuote(
+        _ character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> Bool {
+        let unambiguousQuotes: Set<Character> = ["\"", "“", "”", "‘", "«", "»", "‹", "›"]
+        if unambiguousQuotes.contains(character) { return true }
+        guard character == "'" || character == "’" else { return false }
+        let isInternalApostrophe = index > characters.startIndex &&
+            index + 1 < characters.endIndex &&
+            (characters[index - 1].isLetter || characters[index - 1].isNumber) &&
+            (characters[index + 1].isLetter || characters[index + 1].isNumber)
+        return !isInternalApostrophe
+    }
+
+    private static func isProtectedMarkdownMarker(
+        _ character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> Bool {
+        if character == "!" {
+            return index + 1 < characters.endIndex && characters[index + 1] == "["
+        }
+        let lineStart = characters[..<index].lastIndex(where: { $0.isNewline }).map { $0 + 1 } ?? 0
+        let prefix = characters[lineStart..<index]
+        if character == "-" {
+            return prefix.allSatisfy(\.isWhitespace) &&
+                index + 1 < characters.endIndex && characters[index + 1].isWhitespace
+        }
+        if character == "." {
+            let trimmedPrefix = prefix.drop(while: { $0.isWhitespace })
+            return !trimmedPrefix.isEmpty && trimmedPrefix.allSatisfy(\.isNumber) &&
+                index + 1 < characters.endIndex && characters[index + 1].isWhitespace
+        }
+        return false
+    }
+
+    private static func isProtectedGrammarCharacter(_ character: Character) -> Bool {
+        let formattingMarkers: Set<Character> = [
+            "*", "_", "~", "`", "#", ">", "<", "=", "|", "\\", "/", "@", "&", "%",
+            "[", "]", "(", ")", "{", "}"
+        ]
+        if formattingMarkers.contains(character) { return true }
+        if character.unicodeScalars.contains(where: { $0.properties.isEmojiPresentation }) { return true }
+        return character.unicodeScalars.contains { scalar in
+            switch scalar.properties.generalCategory {
+            case .mathSymbol, .currencySymbol, .modifierSymbol, .otherSymbol,
+                 .dashPunctuation, .openPunctuation, .closePunctuation,
+                 .initialPunctuation, .finalPunctuation:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
+    private static func grammarLeadingWhitespace(in value: String) -> String {
+        String(value.prefix(while: { $0.isWhitespace }))
+    }
+
+    private static func grammarTrailingWhitespace(in value: String) -> String {
+        String(value.reversed().prefix(while: { $0.isWhitespace }).reversed())
+    }
+
+    private static func grammarLineStructure(in value: String) -> GrammarLineStructure {
+        var lines: [String] = []
+        var separators: [Character] = []
+        var currentLine = ""
+        for character in value {
+            if character.isNewline {
+                lines.append(currentLine)
+                separators.append(character)
+                currentLine = ""
+            } else {
+                currentLine.append(character)
+            }
+        }
+        lines.append(currentLine)
+        return GrammarLineStructure(lines: lines, separators: separators)
+    }
+
+    private static func hasSuspiciousBoundarySentenceSubstitution(original: String, corrected: String) -> Bool {
+        let sourceCharacters = Array(original)
+        let correctedCharacters = Array(corrected)
+        let sourceWords = grammarWordOccurrences(in: sourceCharacters)
+        let correctedWords = grammarWordOccurrences(in: correctedCharacters)
+        let comparableCount = min(sourceWords.count, correctedWords.count)
+        guard !hasUnanchoredGrammarContent(
+            sourceWords.map(\.value),
+            correctedWords.map(\.value)
+        ) else { return true }
+        guard comparableCount >= 2 else { return false }
+
+        var preservedPrefixCount = 0
+        while preservedPrefixCount < comparableCount,
+              grammarWordsApproximatelyMatch(
+                  [sourceWords[preservedPrefixCount].value],
+                  [correctedWords[preservedPrefixCount].value]
+              ) {
+            preservedPrefixCount += 1
+        }
+        if preservedPrefixCount > 0, preservedPrefixCount < comparableCount {
+            let sourceSeparator = sourceCharacters[
+                sourceWords[preservedPrefixCount - 1].end..<sourceWords[preservedPrefixCount].start
+            ]
+            let correctedSeparator = correctedCharacters[
+                correctedWords[preservedPrefixCount - 1].end..<correctedWords[preservedPrefixCount].start
+            ]
+            if sourceSeparator != correctedSeparator,
+               grammarContainsBoundaryDelimiter(correctedSeparator) ||
+               grammarContainsBoundaryDelimiter(sourceSeparator) {
+                return true
+            }
+        }
+
+        var preservedSuffixCount = 0
+        while preservedSuffixCount < comparableCount,
+              grammarWordsApproximatelyMatch(
+                  [sourceWords[sourceWords.count - preservedSuffixCount - 1].value],
+                  [correctedWords[correctedWords.count - preservedSuffixCount - 1].value]
+              ) {
+            preservedSuffixCount += 1
+        }
+        if preservedSuffixCount > 0, preservedSuffixCount < comparableCount {
+            let sourceBoundaryIndex = sourceWords.count - preservedSuffixCount
+            let correctedBoundaryIndex = correctedWords.count - preservedSuffixCount
+            let sourceSeparator = sourceCharacters[
+                sourceWords[sourceBoundaryIndex - 1].end..<sourceWords[sourceBoundaryIndex].start
+            ]
+            let correctedSeparator = correctedCharacters[
+                correctedWords[correctedBoundaryIndex - 1].end..<correctedWords[correctedBoundaryIndex].start
+            ]
+            if sourceSeparator != correctedSeparator,
+               grammarContainsBoundaryDelimiter(correctedSeparator) ||
+               grammarContainsBoundaryDelimiter(sourceSeparator) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func hasUnanchoredGrammarContent(
+        _ sourceWords: [String],
+        _ correctedWords: [String]
+    ) -> Bool {
+        func expandingGrammarInsertions(
+            from states: Set<GrammarAlignmentState>,
+            beforeSourceIndex sourceIndex: Int
+        ) -> Set<GrammarAlignmentState> {
+            var expanded = states
+            for state in states {
+                guard state.correctedCount < correctedWords.count,
+                      state.gap == .none,
+                      isAllowedGrammarInsertion(
+                        correctedWords[state.correctedCount],
+                        at: state.correctedCount,
+                        beforeSourceIndex: sourceIndex,
+                        sourceWords: sourceWords,
+                        correctedWords: correctedWords
+                      ) else {
+                    continue
+                }
+                let inserted = GrammarAlignmentState(
+                    correctedCount: state.correctedCount + 1,
+                    gap: .insertion
+                )
+                expanded.insert(inserted)
+            }
+            return expanded
+        }
+
+        var reachableStates = expandingGrammarInsertions(
+            from: [GrammarAlignmentState(correctedCount: 0, gap: .none)],
+            beforeSourceIndex: 0
+        )
+        for sourceIndex in sourceWords.indices {
+            var nextStates: Set<GrammarAlignmentState> = []
+            let sourceWord = sourceWords[sourceIndex]
+            for state in reachableStates {
+                let canDeleteSource = isAllowedGrammarDeletion(
+                    sourceWord,
+                    at: sourceIndex,
+                    sourceWords: sourceWords
+                ) || isRepeatedSourceWord(at: sourceIndex, in: sourceWords)
+                if canDeleteSource, state.gap == .none {
+                    nextStates.insert(GrammarAlignmentState(correctedCount: state.correctedCount, gap: .deletion))
+                }
+                if state.correctedCount < correctedWords.count,
+                   isPlausibleGrammarWordReplacement(sourceWord, correctedWords[state.correctedCount]) {
+                    nextStates.insert(GrammarAlignmentState(
+                        correctedCount: state.correctedCount + 1,
+                        gap: .none
+                    ))
+                }
+            }
+            reachableStates = expandingGrammarInsertions(
+                from: nextStates,
+                beforeSourceIndex: sourceIndex + 1
+            )
+            if reachableStates.isEmpty { return true }
+        }
+        return !reachableStates.contains(where: { $0.correctedCount == correctedWords.count })
+    }
+
+    private enum GrammarAlignmentGap: Hashable {
+        case none
+        case insertion
+        case deletion
+    }
+
+    private struct GrammarAlignmentState: Hashable {
+        let correctedCount: Int
+        let gap: GrammarAlignmentGap
+    }
+
+    private static func isPlausibleGrammarWordReplacement(_ source: String, _ corrected: String) -> Bool {
+        guard source != corrected else { return true }
+        return allowedGrammarWordReplacements.contains(source + "\u{1F}" + corrected) ||
+            hasSharedGrammarLemma(source, corrected) ||
+            isSystemSpellingCorrection(source: source, corrected: corrected)
+    }
+
+    private static func hasSharedGrammarLemma(_ source: String, _ corrected: String) -> Bool {
+        let sourceForms = Set([source, grammarLemma(for: source)].compactMap { $0 })
+        let correctedForms = Set([corrected, grammarLemma(for: corrected)].compactMap { $0 })
+        return !sourceForms.isDisjoint(with: correctedForms)
+    }
+
+    private static func grammarLemma(for word: String) -> String? {
+        guard !word.isEmpty else { return nil }
+        let tagger = NLTagger(tagSchemes: [.lemma])
+        tagger.string = word
+        let lemma = tagger.tag(at: word.startIndex, unit: .word, scheme: .lemma).0?.rawValue.lowercased()
+        return lemma?.isEmpty == false ? lemma : nil
+    }
+
+    private static func isSystemSpellingCorrection(source: String, corrected: String) -> Bool {
+        guard grammarWordEditDistance(source, corrected) <= max(2, max(source.count, corrected.count) / 3) else {
+            return false
+        }
+        let range = NSRange(location: 0, length: source.utf16.count)
+#if canImport(UIKit)
+        let checker = UITextChecker()
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredLanguages = UITextChecker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
+        }
+        let languages = Array(Set(preferredLanguages + ["en_US", "en_GB"])).sorted()
+        return languages.contains { language in
+            let misspelledRange = checker.rangeOfMisspelledWord(
+                in: source,
+                range: range,
+                startingAt: 0,
+                wrap: false,
+                language: language
+            )
+            guard misspelledRange == range else { return false }
+            guard let firstGuess = checker.guesses(
+                forWordRange: range,
+                in: source,
+                language: language
+            )?.first else {
+                return false
+            }
+            return firstGuess.caseInsensitiveCompare(corrected) == .orderedSame
+        }
+#elseif canImport(AppKit)
+        let checker = NSSpellChecker.shared
+        let preferredPrefixes = Set(Locale.preferredLanguages.map { String($0.prefix(2)).lowercased() })
+        let preferredLanguages = checker.availableLanguages.filter {
+            preferredPrefixes.contains(String($0.prefix(2)).lowercased())
+        }
+        let languages = Array(Set(preferredLanguages + ["en_US", "en_GB"])).sorted()
+        return languages.contains { language in
+            var wordCount = 0
+            let misspelledRange = checker.checkSpelling(
+                of: source,
+                startingAt: 0,
+                language: language,
+                wrap: false,
+                inSpellDocumentWithTag: 0,
+                wordCount: &wordCount
+            )
+            guard misspelledRange == range else { return false }
+            guard let firstGuess = checker.guesses(
+                forWordRange: range,
+                in: source,
+                language: language,
+                inSpellDocumentWithTag: 0
+            )?.first else {
+                return false
+            }
+            return firstGuess.caseInsensitiveCompare(corrected) == .orderedSame
+        }
+#else
+        return false
+#endif
+    }
+
+    private static func isRepeatedSourceWord(at index: Int, in words: [String]) -> Bool {
+        (index > words.startIndex && words[index - 1] == words[index]) ||
+            (index + 1 < words.endIndex && words[index + 1] == words[index])
+    }
+
+    private static func isAllowedGrammarInsertion(
+        _ word: String,
+        at correctedIndex: Int,
+        beforeSourceIndex sourceIndex: Int,
+        sourceWords: [String],
+        correctedWords: [String]
+    ) -> Bool {
+        if grammarArticleWords.contains(word) { return true }
+        guard sourceWords.indices.contains(sourceIndex),
+              sourceWords[sourceIndex].hasSuffix("ing"),
+              correctedIndex > correctedWords.startIndex else {
+            return false
+        }
+        let subject = correctedWords[correctedIndex - 1]
+        switch word {
+        case "am": return subject == "i"
+        case "is": return ["he", "she", "it"].contains(subject)
+        case "are": return ["you", "we", "they"].contains(subject)
+        default: return false
+        }
+    }
+
+    private static func isAllowedGrammarDeletion(
+        _ word: String,
+        at sourceIndex: Int,
+        sourceWords: [String]
+    ) -> Bool {
+        if grammarArticleWords.contains(word) { return true }
+        guard sourceIndex + 1 < sourceWords.endIndex else { return false }
+        let nextWord = sourceWords[sourceIndex + 1]
+        if word == "to", sourceIndex > sourceWords.startIndex {
+            return modalWords.contains(sourceWords[sourceIndex - 1])
+        }
+        if ["do", "does", "did"].contains(word) {
+            return nextWord.hasSuffix("ed") || irregularPastTenseWords.contains(nextWord)
+        }
+        if ["am", "is", "are", "was", "were"].contains(word) {
+            return nextWord.hasSuffix("s") && !nextWord.hasSuffix("ss")
+        }
+        return false
+    }
+
+    private static let grammarArticleWords: Set<String> = ["a", "an", "the"]
+    private static let modalWords: Set<String> = [
+        "can", "could", "may", "might", "must", "shall", "should", "will", "would"
+    ]
+    private static let irregularPastTenseWords: Set<String> = [
+        "ate", "bought", "came", "did", "drank", "drove", "felt", "found", "gave", "got",
+        "had", "kept", "knew", "left", "lost", "made", "met", "paid", "ran", "said", "saw",
+        "sent", "slept", "spoke", "stood", "taught", "thought", "told", "took", "understood",
+        "went", "won", "wore", "wrote"
+    ]
+
+    private static let allowedGrammarWordReplacements: Set<String> = [
+        "a\u{1F}an", "an\u{1F}a",
+        "is\u{1F}are", "are\u{1F}is", "was\u{1F}were", "were\u{1F}was",
+        "has\u{1F}have", "have\u{1F}has", "do\u{1F}does", "does\u{1F}do",
+        "need\u{1F}needs", "needs\u{1F}need",
+        "dont\u{1F}doesnt", "doesnt\u{1F}dont", "dose\u{1F}does",
+        "defiantly\u{1F}definitely", "hear\u{1F}here", "teh\u{1F}the",
+        "recieved\u{1F}received", "definately\u{1F}definitely",
+        "sentnce\u{1F}sentence", "refnd\u{1F}refund", "shure\u{1F}sure",
+        "udpate\u{1F}update", "yestarday\u{1F}yesterday",
+        "adress\u{1F}address", "timline\u{1F}timeline", "wrng\u{1F}wrong",
+        "seperate\u{1F}separate", "qustions\u{1F}questions",
+        "reveiw\u{1F}review", "explan\u{1F}explain", "paymant\u{1F}payment",
+        "cliant\u{1F}client", "tommorow\u{1F}tomorrow"
+    ]
+
+    private static func grammarWordOccurrences(in characters: [Character]) -> [GrammarWordOccurrence] {
+        var occurrences: [GrammarWordOccurrence] = []
+        var index = 0
+        while index < characters.count {
+            guard characters[index].isLetter || characters[index].isNumber else {
+                index += 1
+                continue
+            }
+            let start = index
+            while index < characters.count {
+                if characters[index].isLetter || characters[index].isNumber {
+                    index += 1
+                    continue
+                }
+                let isInternalApostrophe = (characters[index] == "'" || characters[index] == "’") &&
+                    index > start && index + 1 < characters.count &&
+                    (characters[index + 1].isLetter || characters[index + 1].isNumber)
+                if isInternalApostrophe {
+                    index += 1
+                    continue
+                }
+                break
+            }
+            occurrences.append(GrammarWordOccurrence(
+                value: normalizedGrammarWord(String(characters[start..<index])),
+                start: start,
+                end: index
+            ))
+        }
+        return occurrences
+    }
+
+    private static func normalizedGrammarWord(_ value: String) -> String {
+        value.lowercased()
+            .replacingOccurrences(of: "'", with: "")
+            .replacingOccurrences(of: "’", with: "")
+    }
+
+    private static func grammarContainsBoundaryDelimiter(_ characters: ArraySlice<Character>) -> Bool {
+        characters.contains(where: { !$0.isWhitespace })
+    }
+
+    private static func restoringOriginalBoundaryWhitespace(in response: String, original: String) -> String {
+        guard original.contains(where: { !$0.isWhitespace }) else { return original }
+        let withoutLeadingWhitespace = response.drop(while: { $0.isWhitespace })
+        let responseBody = withoutLeadingWhitespace.reversed().drop(while: { $0.isWhitespace }).reversed()
+        let originalLeadingWhitespace = original.prefix(while: { $0.isWhitespace })
+        let originalTrailingWhitespace = original.reversed().prefix(while: { $0.isWhitespace }).reversed()
+        return String(originalLeadingWhitespace) + String(responseBody) + String(originalTrailingWhitespace)
+    }
+
+    private static func grammarWords(in value: String) -> [String] {
+        value.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).map { $0.lowercased() }
+    }
+
+    private static func grammarWordEditDistance(_ lhs: String, _ rhs: String) -> Int {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        var previous = Array(0...right.count)
+        for (leftIndex, leftCharacter) in left.enumerated() {
+            var current = [leftIndex + 1]
+            for (rightIndex, rightCharacter) in right.enumerated() {
+                current.append(min(
+                    current[rightIndex] + 1,
+                    previous[rightIndex + 1] + 1,
+                    previous[rightIndex] + (leftCharacter == rightCharacter ? 0 : 1)
+                ))
+            }
+            previous = current
+        }
+        return previous.last ?? 0
     }
 
     private func send(_ request: HTTPRequest) async throws -> HTTPResponse {
@@ -398,6 +1066,7 @@ private struct ChatCompletionRequest: Encodable {
     let inputText: String
     let messages: [ChatMessage]
     let responseFormat: ChatCompletionResponseFormat?
+    let maxTokens: Int?
     let temperature: Double?
     let stream: Bool
 
@@ -407,6 +1076,7 @@ private struct ChatCompletionRequest: Encodable {
         case inputText = "input_text"
         case messages
         case responseFormat = "response_format"
+        case maxTokens = "max_tokens"
         case temperature
         case stream
     }
@@ -428,6 +1098,12 @@ private struct ChatCompletionResponse: Decodable {
 
     struct Choice: Decodable {
         let message: ResponseMessage
+        let finishReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case message
+            case finishReason = "finish_reason"
+        }
     }
 
     struct ResponseMessage: Decodable {

@@ -65,6 +65,19 @@ plist_set_or_add_string() {
   fi
 }
 
+plist_set_or_add_exact_string() {
+  local plist="$1"
+  local path="$2"
+  local value="$3"
+  local plist_path="${path#:}"
+  plist_path="${plist_path//:/.}"
+
+  if ! /usr/libexec/PlistBuddy -c "Print $path" "$plist" >/dev/null 2>&1; then
+    /usr/libexec/PlistBuddy -c "Add $path string placeholder" "$plist" >/dev/null
+  fi
+  /usr/bin/plutil -replace "$plist_path" -string "$value" "$plist"
+}
+
 inject_xctestrun_gateway_env() {
   local xctestrun="$1"
   local roots=(
@@ -78,6 +91,12 @@ inject_xctestrun_gateway_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL" "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY" "$OPEN_KEYBOARD_SIMULATOR_API_KEY"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    if [[ -n "${OPEN_KEYBOARD_REAL_SCREENSHOT_DIR:-}" ]]; then
+      plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_REAL_SCREENSHOT_DIR" "$OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"
+    fi
+    if [[ -n "${OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE:-}" ]]; then
+      plist_set_or_add_exact_string "$xctestrun" "$root:OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE" "$OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE"
+    fi
   done
 }
 
@@ -97,7 +116,6 @@ inject_xctestrun_live_smoke_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX" "$gateway_url_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY_HEX" "$api_key_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
-    plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS" "$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS"
   done
 }
 
@@ -326,15 +344,6 @@ case "${1:-}" in
       echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
       exit 1
     fi
-    OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS="${OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS:-true}"
-    case "$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS" in
-      true|false) ;;
-      *)
-        echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS must be true or false.${NC}"
-        exit 2
-        ;;
-    esac
-
     echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
@@ -355,7 +364,6 @@ case "${1:-}" in
     export OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
     export OPEN_KEYBOARD_TEST_API_KEY_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
     export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
-    export OPEN_KEYBOARD_TEST_REQUIRE_STRUCTURED_CORRECTIONS="$OPEN_KEYBOARD_LIVE_REQUIRE_STRUCTURED_CORRECTIONS"
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
@@ -372,7 +380,8 @@ case "${1:-}" in
     live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
     case "$live_test_identifier" in
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured|\
-      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured)
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured|\
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested)
         ;;
       *)
         echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"

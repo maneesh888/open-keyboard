@@ -113,17 +113,15 @@ struct LiveAITestHarnessView: View {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 90
 
+        let rendering = KeyboardGatewayActionContract.rendering(operation: action, text: text)
         request.httpBody = try JSONEncoder().encode(ChatRequest(
             model: model,
-            operation: action,
-            inputText: String(text.prefix(500)),
-            messages: [
-                ChatMessage(role: "system", content: KeyboardGatewayActionContract.structuredSystemPrompt),
-                ChatMessage(role: "user", content: KeyboardGatewayActionContract.prompt(operation: action, text: text))
-            ],
-            responseFormat: .jsonObject,
-            maxTokens: maxTokens(for: action),
-            temperature: 0.1,
+            operation: rendering.wireOperationID ?? action,
+            inputText: text,
+            messages: rendering.messages.map { ChatMessage(role: $0.role, content: $0.content) },
+            responseFormat: rendering.responseFormatType == "json_object" ? .jsonObject : nil,
+            maxTokens: rendering.maxTokens,
+            temperature: rendering.temperature,
             stream: false
         ))
 
@@ -136,30 +134,20 @@ struct LiveAITestHarnessView: View {
         }
 
         let completion = try JSONDecoder().decode(ChatResponse.self, from: data)
-        guard let content = completion.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines),
-              !content.isEmpty else {
+        guard let choice = completion.choices.first,
+              choice.finishReason != "length",
+              !choice.message.content.isEmpty else {
             throw LiveAITestHarnessError.invalidResponse
         }
 
-        let result = try KeyboardActionOperationResult.parse(content, operation: action, fallbackText: text)
+        let result = action == "fix_grammar"
+            ? try KeyboardActionOperationResult.plainTextGrammarResponse(choice.message.content, original: text)
+            : try KeyboardActionOperationResult.parse(choice.message.content, operation: action, fallbackText: text)
         let output = result.displayText
         guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LiveAITestHarnessError.invalidResponse
         }
         return output
-    }
-
-    private func maxTokens(for action: String) throws -> Int {
-        switch action {
-        case "fix_grammar":
-            return 5_000
-        case "rewrite":
-            return 3_000
-        case "summarize":
-            return 2_000
-        default:
-            throw LiveAITestHarnessError.unsupportedAction
-        }
     }
 
     private func userMessage(for error: Error) -> String {
@@ -201,9 +189,9 @@ private struct ChatRequest: Encodable {
     let operation: String
     let inputText: String
     let messages: [ChatMessage]
-    let responseFormat: ChatResponseFormat
+    let responseFormat: ChatResponseFormat?
     let maxTokens: Int
-    let temperature: Double
+    let temperature: Double?
     let stream: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -235,5 +223,11 @@ private struct ChatResponse: Decodable {
 
 private struct ChatChoice: Decodable {
     let message: ChatMessage
+    let finishReason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case finishReason = "finish_reason"
+    }
 }
 #endif
