@@ -1565,6 +1565,7 @@ enum KeyboardActionErrorKind: Equatable {
     case authentication
     case modelUnavailable
     case modelCapability
+    case translationCapability
 
     var title: String {
         switch self {
@@ -1573,6 +1574,7 @@ enum KeyboardActionErrorKind: Equatable {
         case .authentication: return "Invalid API key"
         case .modelUnavailable: return "Model unavailable"
         case .modelCapability: return "Model not compatible"
+        case .translationCapability: return "Translation warning"
         }
     }
 }
@@ -1596,14 +1598,15 @@ struct KeyboardActionErrorState: Equatable {
         message: String
     ) {
         self.kind = kind
-        self.scope = kind == .modelCapability ? scope : .global
+        let isActionCapabilityIssue = kind == .modelCapability || kind == .translationCapability
+        self.scope = isActionCapabilityIssue ? scope : .global
         self.message = kind == .modelCapability ? Self.modelCapabilityMessage : Self.sanitized(message)
     }
 
     var title: String { kind.title }
 
     var blocksGrammarCorrection: Bool {
-        kind != .modelCapability || scope != .writingAction
+        ![.modelCapability, .translationCapability].contains(kind) || scope != .writingAction
     }
 
     static func sanitized(_ rawMessage: String) -> String {

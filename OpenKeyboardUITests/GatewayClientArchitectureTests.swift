@@ -276,6 +276,158 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertTrue(transport.requests.isEmpty)
     }
 
+    func testTranslationValidatorAcceptsExpectedTargetScriptAndLanguage() {
+        let validator = KeyboardTranslationOutputValidator()
+
+        XCTAssertNil(validator.validationFailure(
+            for: "صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع.",
+            target: .arabic
+        ))
+        XCTAssertNil(validator.validationFailure(
+            for: "Goedemorgen, ik hoop dat het goed met je gaat en dat je een fijne dag hebt.",
+            target: .dutch
+        ))
+        XCTAssertNil(validator.validationFailure(
+            for: "يمكنك استخدام OpenAI للمساعدة في كتابة هذه الرسالة بوضوح.",
+            target: .arabic
+        ))
+        XCTAssertNil(validator.validationFailure(for: "Ja", target: .dutch))
+    }
+
+    func testTranslationValidatorRejectsPredominantlyWrongTargetLanguage() {
+        let validator = KeyboardTranslationOutputValidator()
+
+        XCTAssertEqual(
+            validator.validationFailure(
+                for: "Good morning, I hope you are well and enjoying a wonderful day.",
+                target: .arabic
+            ),
+            .predominantlyWrongLanguage
+        )
+        XCTAssertEqual(
+            validator.validationFailure(
+                for: "Good morning, I hope you are well and enjoying a wonderful day.",
+                target: .dutch
+            ),
+            .predominantlyWrongLanguage
+        )
+        XCTAssertEqual(
+            validator.validationFailure(for: "Yes", target: .arabic),
+            .predominantlyWrongLanguage
+        )
+        XCTAssertEqual(
+            validator.validationFailure(for: "Bonjour", target: .dutch),
+            .predominantlyWrongLanguage
+        )
+    }
+
+    func testTranslationValidatorRejectsSuspiciousMixedScripts() {
+        let validator = KeyboardTranslationOutputValidator()
+
+        XCTAssertEqual(
+            validator.validationFailure(
+                for: "مرحبا بك في هذا الاختبار mixed text output",
+                target: .arabic
+            ),
+            .suspiciousMixedScripts
+        )
+    }
+
+    func testKeyboardAIServiceRetriesInvalidTranslationOnceThenAcceptsValidOutput() async throws {
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#,
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع.","replacement":"صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع."}]}"#
+        ])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .translate(.arabic),
+            on: "Good morning, I hope you are well and enjoying a wonderful day.",
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, "صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع.")
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceRetriesInvalidTranslationOnceThenReturnsTargetedFailure() async throws {
+        let wrongLanguage = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [wrongLanguage, wrongLanguage])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        do {
+            _ = try await service.performResult(
+                action: .translate(.arabic),
+                on: "Good morning, I hope you are well and enjoying a wonderful day.",
+                config: configuredGateway
+            )
+            XCTFail("Expected a target-specific translation capability failure")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .unreliableTranslation(.arabic))
+            XCTAssertEqual(error.actionErrorKind, .translationCapability)
+            XCTAssertEqual(
+                error.errorDescription,
+                "This model may not reliably translate to Arabic. Try again or choose another model."
+            )
+        }
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceRetriesShortWrongScriptTranslationThenAcceptsValidOutput() async throws {
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Yes","replacement":"Yes"}]}"#,
+            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"نعم","replacement":"نعم"}]}"#
+        ])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .translate(.arabic),
+            on: "Yes",
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, "نعم")
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceRetriesShortSameScriptTranslationOnceThenReturnsTargetedFailure() async throws {
+        let wrongLanguage = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Bonjour","replacement":"Bonjour"}]}"#
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [wrongLanguage, wrongLanguage])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        do {
+            _ = try await service.performResult(
+                action: .translate(.dutch),
+                on: "Hello",
+                config: configuredGateway
+            )
+            XCTFail("Expected a target-specific translation capability failure")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .unreliableTranslation(.dutch))
+            XCTAssertEqual(error.actionErrorKind, .translationCapability)
+            XCTAssertEqual(
+                error.errorDescription,
+                "This model may not reliably translate to Dutch. Try again or choose another model."
+            )
+        }
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testKeyboardAIServiceDoesNotValidateOrRetryOtherAIActions() async throws {
+        let content = #"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","title":"Rewrite","text":"مرحبا mixed script output","replacement":"مرحبا mixed script output"}]}"#
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [content])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .rewrite,
+            on: "Rewrite this text.",
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, "مرحبا mixed script output")
+        XCTAssertEqual(transport.requests.count, 1)
+    }
+
     func testKeyboardAIServicePreservesCanonicalGatewayErrorCategories() {
         XCTAssertEqual(
             KeyboardAIService.keyboardError(from: CanonicalGatewayClientError.unusableCorrection),
@@ -934,6 +1086,33 @@ private final class CanonicalGatewayClientTestTransport: GatewayChatTransporting
             headerFields: nil
         )!
         return (data, response)
+    }
+}
+
+private final class SequencedCanonicalGatewayClientTestTransport: GatewayChatTransporting {
+    private var responseBodies: [Data]
+    private(set) var requests: [URLRequest] = []
+
+    init(contents: [String]) {
+        responseBodies = contents.map { content in
+            try! JSONSerialization.data(withJSONObject: [
+                "choices": [["message": ["role": "assistant", "content": content]]]
+            ])
+        }
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        requests.append(request)
+        guard !responseBodies.isEmpty else {
+            throw CanonicalGatewayClientError.invalidResponse
+        }
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (responseBodies.removeFirst(), response)
     }
 }
 

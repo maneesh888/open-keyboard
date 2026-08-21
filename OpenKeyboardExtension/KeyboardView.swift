@@ -501,6 +501,32 @@ private struct AIActionPanel: View {
                         .lineLimit(2)
                         .accessibilityIdentifier("ai_action_loading_text")
                 }
+            } else if let warningMessage = state.warningMessage {
+                HStack(alignment: .top, spacing: 9) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                        .accessibilityHidden(true)
+                    Text(warningMessage)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(OpenKeyboardTheme.Text.primary)
+                        .lineLimit(4)
+                        .minimumScaleFactor(0.82)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    OpenKeyboardTheme.Surface.warningBackground,
+                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(OpenKeyboardTheme.Semantic.warning.opacity(0.6), lineWidth: 1)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("ai_translation_warning")
             } else if let selectedOption = state.selectedOption {
                 actionResultText(selectedOption.text)
             } else {

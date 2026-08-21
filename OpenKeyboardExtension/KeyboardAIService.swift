@@ -4,6 +4,7 @@
 //
 
 import Foundation
+import NaturalLanguage
 
 enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Sendable {
     case arabic = "ar"
@@ -61,6 +62,123 @@ enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Se
         case .french: return "French"
         case .portuguese: return "Portuguese"
         case .russian: return "Russian"
+        }
+    }
+
+    var translationCapabilityWarning: String {
+        "This model may not reliably translate to \(displayName). Try again or choose another model."
+    }
+}
+
+enum KeyboardTranslationValidationFailure: Equatable {
+    case predominantlyWrongLanguage
+    case suspiciousMixedScripts
+}
+
+struct KeyboardTranslationOutputValidator {
+    fileprivate enum Script: Hashable {
+        case latin
+        case arabic
+        case devanagari
+        case bengali
+        case telugu
+        case tamil
+        case malayalam
+        case cyrillic
+        case han
+        case other
+    }
+
+    func validationFailure(
+        for output: String,
+        target: KeyboardTranslationTarget
+    ) -> KeyboardTranslationValidationFailure? {
+        let scriptCounts = output.unicodeScalars.reduce(into: [Script: Int]()) { counts, scalar in
+            guard let script = Self.script(for: scalar) else { return }
+            counts[script, default: 0] += 1
+        }
+        let totalScriptLetters = scriptCounts.values.reduce(0, +)
+        guard totalScriptLetters > 0 else { return nil }
+
+        let expectedScript = target.expectedScript
+        let expectedScriptCount = scriptCounts[expectedScript, default: 0]
+        let unexpectedScriptCount = totalScriptLetters - expectedScriptCount
+        let expectedScriptRatio = Double(expectedScriptCount) / Double(totalScriptLetters)
+        let unexpectedScriptRatio = Double(unexpectedScriptCount) / Double(totalScriptLetters)
+
+        if expectedScriptRatio < 0.55 {
+            return .predominantlyWrongLanguage
+        }
+        if unexpectedScriptCount >= 4, unexpectedScriptRatio >= 0.20 {
+            return .suspiciousMixedScripts
+        }
+
+        guard totalScriptLetters >= 4 else { return nil }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(output)
+        let hypotheses = recognizer.languageHypotheses(withMaximum: 4)
+        let expectedConfidence = hypotheses
+            .filter { target.expectedLanguageCodes.contains($0.key.rawValue) }
+            .map(\.value)
+            .max() ?? 0
+        let dominantConfidence = hypotheses.values.max() ?? 0
+        let isShortOutput = totalScriptLetters < 18
+        let minimumExpectedConfidence = isShortOutput ? 0.08 : 0.12
+        let minimumDominantConfidence = isShortOutput ? 0.60 : 0.55
+        if expectedConfidence < minimumExpectedConfidence,
+           dominantConfidence >= minimumDominantConfidence {
+            return .predominantlyWrongLanguage
+        }
+        return nil
+    }
+
+    private static func script(for scalar: Unicode.Scalar) -> Script? {
+        let value = scalar.value
+        switch value {
+        case 0x0041...0x005A, 0x0061...0x007A, 0x00C0...0x024F, 0x1E00...0x1EFF:
+            return .latin
+        case 0x0400...0x052F:
+            return .cyrillic
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF:
+            return .arabic
+        case 0x0900...0x097F, 0xA8E0...0xA8FF:
+            return .devanagari
+        case 0x0980...0x09FF:
+            return .bengali
+        case 0x0B80...0x0BFF:
+            return .tamil
+        case 0x0C00...0x0C7F:
+            return .telugu
+        case 0x0D00...0x0D7F:
+            return .malayalam
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2EBEF:
+            return .han
+        default:
+            return CharacterSet.letters.contains(scalar) ? .other : nil
+        }
+    }
+}
+
+private extension KeyboardTranslationTarget {
+    var expectedScript: KeyboardTranslationOutputValidator.Script {
+        switch self {
+        case .arabic, .urdu: return .arabic
+        case .hindi, .marathi: return .devanagari
+        case .bengali: return .bengali
+        case .telugu: return .telugu
+        case .tamil: return .tamil
+        case .malayalam: return .malayalam
+        case .russian: return .cyrillic
+        case .chineseSimplified: return .han
+        case .dutch, .englishAmerican, .spanish, .french, .portuguese: return .latin
+        }
+    }
+
+    var expectedLanguageCodes: Set<String> {
+        switch self {
+        case .englishAmerican: return ["en", "en-US"]
+        case .chineseSimplified: return ["zh", "zh-Hans"]
+        default: return [rawValue]
         }
     }
 }
@@ -249,6 +367,7 @@ enum KeyboardAIError: LocalizedError, Equatable {
     case server(String)
     case invalidResponse
     case missingTranslationTarget
+    case unreliableTranslation(KeyboardTranslationTarget)
 
     var errorDescription: String? {
         switch self {
@@ -274,6 +393,8 @@ enum KeyboardAIError: LocalizedError, Equatable {
             return "No AI response"
         case .missingTranslationTarget:
             return "Choose a language"
+        case .unreliableTranslation(let target):
+            return target.translationCapabilityWarning
         }
     }
 
@@ -285,6 +406,8 @@ enum KeyboardAIError: LocalizedError, Equatable {
             return .modelUnavailable
         case .modelCapability:
             return .modelCapability
+        case .unreliableTranslation:
+            return .translationCapability
         case .timeout:
             return .timeout
         case .notConfigured, .missingInput, .invalidURL, .transport, .server, .invalidResponse, .missingTranslationTarget:
@@ -296,13 +419,16 @@ enum KeyboardAIError: LocalizedError, Equatable {
 final class KeyboardAIService: KeyboardAIServiceProviding {
     private let gatewayClient: CanonicalGatewayClient
     private let requestTimeoutInterval: TimeInterval
+    private let translationValidator: KeyboardTranslationOutputValidator
 
     init(
         gatewayClient: CanonicalGatewayClient = CanonicalGatewayClient(),
-        requestTimeoutInterval: TimeInterval = GatewayRequestTimeouts.keyboardAction
+        requestTimeoutInterval: TimeInterval = GatewayRequestTimeouts.keyboardAction,
+        translationValidator: KeyboardTranslationOutputValidator = KeyboardTranslationOutputValidator()
     ) {
         self.gatewayClient = gatewayClient
         self.requestTimeoutInterval = requestTimeoutInterval
+        self.translationValidator = translationValidator
     }
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
@@ -346,6 +472,26 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         guard let prompt = action.prompt(for: text) else {
             throw KeyboardAIError.missingTranslationTarget
         }
+        let maximumAttempts = action.isTranslation ? 2 : 1
+        for attempt in 0..<maximumAttempts {
+            let result = try await requestResult(action: action, text: text, prompt: prompt, config: config)
+            guard let target = action.translationTarget else { return result }
+            guard translationValidator.validationFailure(for: result.displayText, target: target) != nil else {
+                return result
+            }
+            if attempt == maximumAttempts - 1 {
+                throw KeyboardAIError.unreliableTranslation(target)
+            }
+        }
+        throw KeyboardAIError.modelCapability
+    }
+
+    private func requestResult(
+        action: KeyboardAIAction,
+        text: String,
+        prompt: String,
+        config: AppConfig
+    ) async throws -> KeyboardActionOperationResult {
         let output: String
         do {
             output = try await gatewayClient.chatCompletionContent(
