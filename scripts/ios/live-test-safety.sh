@@ -20,6 +20,49 @@ openkeyboard_restore_booted_simulator() {
   xcrun simctl bootstatus "$simulator" -b >/dev/null
 }
 
+openkeyboard_stop_simulator_app() {
+  local attempt
+
+  if ! pgrep -x Simulator >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! pkill -TERM -x Simulator >/dev/null 2>&1; then
+    echo "Live verification could not ask Simulator.app to close." >&2
+    return 1
+  fi
+
+  for attempt in {1..50}; do
+    if ! pgrep -x Simulator >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  if ! pgrep -x Simulator >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if ! pkill -KILL -x Simulator >/dev/null 2>&1; then
+    echo "Live verification could not force Simulator.app to close." >&2
+    return 1
+  fi
+
+  for attempt in {1..50}; do
+    if ! pgrep -x Simulator >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  if ! pgrep -x Simulator >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Simulator.app did not close after live verification." >&2
+  return 1
+}
+
 openkeyboard_cleanup_live_evidence_file() {
   local evidence_file="${1:-}"
 

@@ -307,6 +307,9 @@ ruby -e '
   unless deterministic_case.scan(expected).length == 2
     abort "Both deterministic UI invocations must use worktree-scoped DerivedData."
   end
+  unless deterministic_case.scan(/-parallel-testing-enabled NO/).length == 2
+    abort "Both deterministic UI invocations must stay serial on the fixed simulator destination."
+  end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-model-differential' "$ROOT/scripts/ios/test.sh"
@@ -388,6 +391,8 @@ rg --quiet 'simctl clone' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl shutdown' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'openkeyboard_restore_booted_simulator' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'openkeyboard_stop_simulator_app' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'OPEN_KEYBOARD_KEEP_SIMULATOR_APP_OPEN' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl bootstatus' "$LIVE_TEST_SAFETY"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
