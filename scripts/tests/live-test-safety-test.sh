@@ -52,6 +52,20 @@ write_valid_seed() {
   chmod 600 "$seed_file"
 }
 
+write_dual_profile_seed() {
+  local seed_file="$1"
+
+  printf '%s\n' \
+    'OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL=https://low-gateway.example.invalid' \
+    "OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY=$SECRET_SENTINEL-low" \
+    'OPEN_KEYBOARD_SIMULATOR_LOW_MODEL=low-model:2b' \
+    'OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL=https://high-gateway.example.invalid' \
+    "OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY=$SECRET_SENTINEL-high" \
+    'OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL=high-model:120b' \
+    > "$seed_file"
+  chmod 600 "$seed_file"
+}
+
 assert_output_excludes_secret() {
   local output_file="$1"
   local context="$2"
@@ -60,6 +74,31 @@ assert_output_excludes_secret() {
     echo "$context emitted a secret value." >&2
     exit 1
   fi
+}
+
+assert_simulator_profiles_unset() {
+  local variable_name
+
+  for variable_name in \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LOW_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE \
+    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE; do
+    if [[ -n "${!variable_name+x}" ]]; then
+      echo "Sensitive simulator profile variable was retained after cleanup: $variable_name" >&2
+      exit 1
+    fi
+  done
 }
 
 PRIMARY_CHECKOUT="$FIXTURE/machine one/Open Keyboard"
@@ -152,23 +191,133 @@ if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || \
   echo "The documented simulator seed keys were not loaded." >&2
   exit 1
 fi
-unset \
-  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
-  OPEN_KEYBOARD_SIMULATOR_API_KEY \
-  OPEN_KEYBOARD_SIMULATOR_MODEL
+openkeyboard_unset_simulator_gateway_profiles
 
-openkeyboard_require_exact_live_model 'gemma2:2b' 'gemma2:2b'
-openkeyboard_require_exact_live_model 'gpt-oss:120b-cloud' 'model-agnostic'
-if openkeyboard_require_exact_live_model 'gpt-oss:120b-cloud' 'gemma2:2b' >/dev/null 2>&1; then
+DUAL_PROFILE_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/dual-profile.env"
+write_dual_profile_seed "$DUAL_PROFILE_SEED"
+DUAL_PROFILE_OUTPUT="$FIXTURE/dual-profile-output.log"
+if ! openkeyboard_load_simulator_gateway_seed "$DUAL_PROFILE_SEED" > "$DUAL_PROFILE_OUTPUT" 2>&1; then
+  echo "The complete two-profile simulator seed could not be loaded." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$DUAL_PROFILE_OUTPUT" "Two-profile seed loading"
+openkeyboard_require_two_profile_gateway_seed
+
+openkeyboard_select_simulator_gateway_profile low
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "low" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "low-model:2b" || \
+      "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" != "https://low-gateway.example.invalid" ]]; then
+  echo "The low simulator gateway profile was not selected exactly." >&2
+  exit 1
+fi
+
+openkeyboard_select_simulator_gateway_profile high
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "high" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "high-model:120b" || \
+      "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" != "https://high-gateway.example.invalid" ]]; then
+  echo "The high simulator gateway profile was not selected exactly." >&2
+  exit 1
+fi
+
+openkeyboard_load_simulator_gateway_seed "$DUAL_PROFILE_SEED"
+openkeyboard_select_reference_simulator_gateway_profile
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "high" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "high-model:120b" ]]; then
+  echo "Reference live verification did not select the configured high profile." >&2
+  exit 1
+fi
+
+openkeyboard_load_simulator_gateway_seed "$VALID_SEED"
+openkeyboard_select_reference_simulator_gateway_profile
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "legacy" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "test-model" ]]; then
+  echo "The legacy single-profile fallback was not preserved." >&2
+  exit 1
+fi
+
+COMBINED_PROFILE_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/combined-profile.env"
+{
+  printf '%s\n' \
+    'OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=https://legacy-gateway.example.invalid' \
+    "OPEN_KEYBOARD_SIMULATOR_API_KEY=$SECRET_SENTINEL-legacy" \
+    'OPEN_KEYBOARD_SIMULATOR_MODEL=legacy-test-model'
+  printf '%s\n' \
+    'OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL=https://low-gateway.example.invalid' \
+    "OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY=$SECRET_SENTINEL-low" \
+    'OPEN_KEYBOARD_SIMULATOR_LOW_MODEL=low-model:2b' \
+    'OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL=https://high-gateway.example.invalid' \
+    "OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY=$SECRET_SENTINEL-high" \
+    'OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL=high-model:120b'
+} > "$COMBINED_PROFILE_SEED"
+chmod 600 "$COMBINED_PROFILE_SEED"
+openkeyboard_load_simulator_gateway_seed "$COMBINED_PROFILE_SEED"
+openkeyboard_select_simulator_gateway_profile low
+openkeyboard_select_simulator_gateway_profile legacy
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "legacy" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "legacy-test-model" || \
+      "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" != "https://legacy-gateway.example.invalid" ]]; then
+  echo "Legacy selection was contaminated by a previously selected differential profile." >&2
+  exit 1
+fi
+
+PARTIAL_PROFILE_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/partial-profile.env"
+printf '%s\n' \
+  'OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL=https://low-gateway.example.invalid' \
+  "OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY=$SECRET_SENTINEL-low" \
+  > "$PARTIAL_PROFILE_SEED"
+chmod 600 "$PARTIAL_PROFILE_SEED"
+PARTIAL_PROFILE_OUTPUT="$FIXTURE/partial-profile-output.log"
+if openkeyboard_load_simulator_gateway_seed "$PARTIAL_PROFILE_SEED" > "$PARTIAL_PROFILE_OUTPUT" 2>&1; then
+  echo "A partial simulator gateway profile was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$PARTIAL_PROFILE_OUTPUT" "Partial-profile rejection"
+assert_simulator_profiles_unset
+
+DUPLICATE_PROFILE_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/duplicate-profile.env"
+write_valid_seed "$DUPLICATE_PROFILE_SEED"
+printf 'OPEN_KEYBOARD_SIMULATOR_MODEL=second-model\n' >> "$DUPLICATE_PROFILE_SEED"
+DUPLICATE_PROFILE_OUTPUT="$FIXTURE/duplicate-profile-output.log"
+if openkeyboard_load_simulator_gateway_seed "$DUPLICATE_PROFILE_SEED" > "$DUPLICATE_PROFILE_OUTPUT" 2>&1; then
+  echo "A duplicate simulator gateway variable was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$DUPLICATE_PROFILE_OUTPUT" "Duplicate-variable rejection"
+assert_simulator_profiles_unset
+
+UNSAFE_MODEL_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/unsafe-model.env"
+printf '%s\n' \
+  'OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=https://gateway.example.invalid' \
+  "OPEN_KEYBOARD_SIMULATOR_API_KEY=$SECRET_SENTINEL" \
+  'OPEN_KEYBOARD_SIMULATOR_MODEL=unsafe model;echo-no' \
+  > "$UNSAFE_MODEL_SEED"
+chmod 600 "$UNSAFE_MODEL_SEED"
+UNSAFE_MODEL_OUTPUT="$FIXTURE/unsafe-model-output.log"
+if openkeyboard_load_simulator_gateway_seed "$UNSAFE_MODEL_SEED" > "$UNSAFE_MODEL_OUTPUT" 2>&1; then
+  echo "An unsafe simulator gateway model ID was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$UNSAFE_MODEL_OUTPUT" "Unsafe-model rejection"
+openkeyboard_unset_simulator_gateway_profiles
+assert_simulator_profiles_unset
+
+openkeyboard_require_exact_live_model 'low-test-model:2b' 'low-test-model:2b'
+openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'model-agnostic'
+if openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'low-test-model:2b' >/dev/null 2>&1; then
   echo "A different live model was accepted as exact Gemma proof." >&2
   exit 1
 fi
-if openkeyboard_require_exact_live_model 'gemma2:2b unsafe' 'gemma2:2b unsafe' >/dev/null 2>&1; then
+if openkeyboard_require_exact_live_model 'low-test-model:2b unsafe' 'low-test-model:2b unsafe' >/dev/null 2>&1; then
   echo "An unsafe live model identifier was accepted." >&2
   exit 1
 fi
-if openkeyboard_require_exact_live_model 'gemma2:2b' '' >/dev/null 2>&1; then
+if openkeyboard_require_exact_live_model 'low-test-model:2b' '' >/dev/null 2>&1; then
   echo "An empty required live model was accepted." >&2
+  exit 1
+fi
+long_model_id="$(printf 'm%.0s' {1..256})"
+if openkeyboard_require_exact_live_model "$long_model_id" "$long_model_id" >/dev/null 2>&1; then
+  echo "An overlong live model ID was accepted." >&2
   exit 1
 fi
 
@@ -379,6 +528,22 @@ fi
 
 valid_summary='{"result":"Passed","totalTestCount":1,"passedTests":1,"failedTests":0,"skippedTests":0,"expectedFailures":0}'
 printf '%s' "$valid_summary" | openkeyboard_assert_single_passing_test_summary
+printf '%s' "$valid_summary" | openkeyboard_assert_passing_test_summary_count 1
+if [[ "$(printf '%s' "$valid_summary" | openkeyboard_classify_low_differential_test_summary)" != "expected-model-capability" ]]; then
+  echo "A passing low-profile boundary test was not classified as the expected capability failure." >&2
+  exit 1
+fi
+
+diagnostic_summary='{"result":"Skipped","totalTestCount":1,"passedTests":0,"failedTests":0,"skippedTests":1,"expectedFailures":0}'
+if [[ "$(printf '%s' "$diagnostic_summary" | openkeyboard_classify_low_differential_test_summary)" != "diagnostic-boundary-not-established" ]]; then
+  echo "A low-profile success diagnostic skip was not classified truthfully." >&2
+  exit 1
+fi
+if printf '%s' '{"result":"Failed","totalTestCount":1,"passedTests":0,"failedTests":1,"skippedTests":0,"expectedFailures":0}' |
+    openkeyboard_classify_low_differential_test_summary >/dev/null 2>&1; then
+  echo "A failing low-profile test was accepted as differential evidence." >&2
+  exit 1
+fi
 
 assert_summary_rejected() {
   local summary="$1"
@@ -393,5 +558,9 @@ assert_summary_rejected '{"result":"Passed","totalTestCount":0,"passedTests":0,"
 assert_summary_rejected '{"result":"Skipped","totalTestCount":1,"passedTests":0,"failedTests":0,"skippedTests":1,"expectedFailures":0}'
 assert_summary_rejected '{"result":"Failed","totalTestCount":1,"passedTests":0,"failedTests":1,"skippedTests":0,"expectedFailures":0}'
 assert_summary_rejected '{"result":"Passed","totalTestCount":2,"passedTests":2,"failedTests":0,"skippedTests":0,"expectedFailures":0}'
+if printf '%s' "$valid_summary" | openkeyboard_assert_passing_test_summary_count 2 >/dev/null 2>&1; then
+  echo "A live test summary with the wrong exact count was accepted." >&2
+  exit 1
+fi
 
 echo "Live test safety regression tests passed."

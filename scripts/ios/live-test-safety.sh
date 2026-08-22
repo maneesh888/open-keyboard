@@ -279,11 +279,11 @@ openkeyboard_require_exact_live_model() {
   local tested_model="$1"
   local required_model="$2"
 
-  if [[ ! "$tested_model" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
+  if ! openkeyboard_is_safe_model_id "$tested_model"; then
     echo "Live verification requires one safe, non-empty seed model ID." >&2
     return 1
   fi
-  if [[ ! "$required_model" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
+  if ! openkeyboard_is_safe_model_id "$required_model"; then
     echo "The required live model must be one safe, non-empty model ID." >&2
     return 1
   fi
@@ -293,9 +293,174 @@ openkeyboard_require_exact_live_model() {
   fi
 }
 
+openkeyboard_is_safe_model_id() {
+  local model_id="$1"
+
+  [[ ${#model_id} -le 255 && "$model_id" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]
+}
+
+openkeyboard_unset_simulator_gateway_profiles() {
+  unset \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LOW_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE \
+    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE
+}
+
+openkeyboard_simulator_gateway_profile_state() {
+  local profile="$1"
+  local prefix url_name api_key_name model_name configured_count=0
+
+  case "$profile" in
+    legacy)
+      if [[ -n "${OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE:-}" ]]; then
+        printf '%s\n' "$OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE"
+        return 0
+      fi
+      prefix="OPEN_KEYBOARD_SIMULATOR"
+      ;;
+    low) prefix="OPEN_KEYBOARD_SIMULATOR_LOW" ;;
+    high) prefix="OPEN_KEYBOARD_SIMULATOR_HIGH" ;;
+    *)
+      echo "Unsupported simulator gateway profile role." >&2
+      return 2
+      ;;
+  esac
+  url_name="${prefix}_GATEWAY_URL"
+  api_key_name="${prefix}_API_KEY"
+  model_name="${prefix}_MODEL"
+
+  [[ -n "${!url_name:-}" ]] && configured_count=$((configured_count + 1))
+  [[ -n "${!api_key_name:-}" ]] && configured_count=$((configured_count + 1))
+  [[ -n "${!model_name:-}" ]] && configured_count=$((configured_count + 1))
+
+  case "$configured_count" in
+    0) printf '%s\n' "absent" ;;
+    3) printf '%s\n' "complete" ;;
+    *) printf '%s\n' "partial" ;;
+  esac
+}
+
+openkeyboard_validate_simulator_gateway_profiles() {
+  local profile state prefix model_name model_id complete_count=0
+
+  for profile in legacy low high; do
+    state="$(openkeyboard_simulator_gateway_profile_state "$profile")" || return 2
+    if [[ "$state" == "partial" ]]; then
+      echo "Simulator gateway profile '$profile' is partial; URL, API key, and model are required together." >&2
+      return 2
+    fi
+    if [[ "$state" == "complete" ]]; then
+      complete_count=$((complete_count + 1))
+      case "$profile" in
+        legacy) prefix="OPEN_KEYBOARD_SIMULATOR" ;;
+        low) prefix="OPEN_KEYBOARD_SIMULATOR_LOW" ;;
+        high) prefix="OPEN_KEYBOARD_SIMULATOR_HIGH" ;;
+      esac
+      model_name="${prefix}_MODEL"
+      model_id="${!model_name}"
+      if ! openkeyboard_is_safe_model_id "$model_id"; then
+        echo "Simulator gateway profile '$profile' has an unsafe model ID." >&2
+        return 2
+      fi
+    fi
+  done
+
+  if [[ "$complete_count" -eq 0 ]]; then
+    echo "The simulator gateway seed must define at least one complete credential profile." >&2
+    return 2
+  fi
+}
+
+openkeyboard_require_two_profile_gateway_seed() {
+  local low_state high_state
+  low_state="$(openkeyboard_simulator_gateway_profile_state low)" || return 2
+  high_state="$(openkeyboard_simulator_gateway_profile_state high)" || return 2
+  if [[ "$low_state" != "complete" || "$high_state" != "complete" ]]; then
+    echo "Two-profile live verification requires complete low and high simulator gateway profiles." >&2
+    return 2
+  fi
+  if [[ "$OPEN_KEYBOARD_SIMULATOR_LOW_MODEL" == "$OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL" ]]; then
+    echo "Two-profile live verification requires distinct low and high model IDs." >&2
+    return 2
+  fi
+}
+
+openkeyboard_select_simulator_gateway_profile() {
+  local profile="$1"
+  local prefix state url_name api_key_name model_name
+
+  case "$profile" in
+    legacy)
+      if [[ -n "${OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE:-}" ]]; then
+        prefix="OPEN_KEYBOARD_SIMULATOR_LEGACY"
+      else
+        prefix="OPEN_KEYBOARD_SIMULATOR"
+      fi
+      ;;
+    low) prefix="OPEN_KEYBOARD_SIMULATOR_LOW" ;;
+    high) prefix="OPEN_KEYBOARD_SIMULATOR_HIGH" ;;
+    *)
+      echo "Simulator gateway profile selection must be legacy, low, or high." >&2
+      return 2
+      ;;
+  esac
+  state="$(openkeyboard_simulator_gateway_profile_state "$profile")" || return 2
+  if [[ "$state" != "complete" ]]; then
+    echo "The requested simulator gateway profile is not completely configured." >&2
+    return 2
+  fi
+
+  url_name="${prefix}_GATEWAY_URL"
+  api_key_name="${prefix}_API_KEY"
+  model_name="${prefix}_MODEL"
+  printf -v OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL '%s' "${!url_name}"
+  printf -v OPEN_KEYBOARD_SIMULATOR_API_KEY '%s' "${!api_key_name}"
+  printf -v OPEN_KEYBOARD_SIMULATOR_MODEL '%s' "${!model_name}"
+  OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE="$profile"
+  export \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE
+}
+
+openkeyboard_select_reference_simulator_gateway_profile() {
+  local high_state legacy_state
+  high_state="$(openkeyboard_simulator_gateway_profile_state high)" || return 2
+  legacy_state="$(openkeyboard_simulator_gateway_profile_state legacy)" || return 2
+
+  if [[ "$high_state" == "complete" ]]; then
+    openkeyboard_select_simulator_gateway_profile high
+  elif [[ "$legacy_state" == "complete" ]]; then
+    openkeyboard_select_simulator_gateway_profile legacy
+  else
+    echo "Ordinary live verification requires the high profile or the legacy fallback profile." >&2
+    return 2
+  fi
+}
+
 openkeyboard_is_allowed_simulator_seed_key() {
   case "$1" in
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL|OPEN_KEYBOARD_SIMULATOR_API_KEY|OPEN_KEYBOARD_SIMULATOR_MODEL)
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL|\
+    OPEN_KEYBOARD_SIMULATOR_API_KEY|\
+    OPEN_KEYBOARD_SIMULATOR_MODEL|\
+    OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL|\
+    OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY|\
+    OPEN_KEYBOARD_SIMULATOR_LOW_MODEL|\
+    OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL|\
+    OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY|\
+    OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL)
       return 0
       ;;
     *)
@@ -306,13 +471,11 @@ openkeyboard_is_allowed_simulator_seed_key() {
 
 openkeyboard_load_simulator_gateway_seed() {
   local seed_file="$1"
-  local line line_number key value
+  local line line_number key value seen_keys legacy_state
   line_number=0
+  seen_keys=$'\n'
 
-  unset \
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
-    OPEN_KEYBOARD_SIMULATOR_API_KEY \
-    OPEN_KEYBOARD_SIMULATOR_MODEL
+  openkeyboard_unset_simulator_gateway_profiles
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line_number=$((line_number + 1))
@@ -328,6 +491,7 @@ openkeyboard_load_simulator_gateway_seed() {
 
     if [[ "$line" != *=* ]]; then
       echo "Invalid seed file line $line_number: expected KEY=value" >&2
+      openkeyboard_unset_simulator_gateway_profiles
       return 2
     fi
 
@@ -336,13 +500,22 @@ openkeyboard_load_simulator_gateway_seed() {
 
     if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
       echo "Invalid seed variable name on line $line_number" >&2
+      openkeyboard_unset_simulator_gateway_profiles
       return 2
     fi
 
     if ! openkeyboard_is_allowed_simulator_seed_key "$key"; then
       echo "Unsupported seed variable on line $line_number: $key" >&2
+      openkeyboard_unset_simulator_gateway_profiles
       return 2
     fi
+
+    if [[ "$seen_keys" == *$'\n'"$key"$'\n'* ]]; then
+      echo "Duplicate seed variable on line $line_number: $key" >&2
+      openkeyboard_unset_simulator_gateway_profiles
+      return 2
+    fi
+    seen_keys+="$key"$'\n'
 
     if [[ ${#value} -ge 2 && "$value" == \"*\" && "$value" == *\" ]]; then
       value="${value:1:${#value}-2}"
@@ -352,6 +525,22 @@ openkeyboard_load_simulator_gateway_seed() {
 
     printf -v "$key" '%s' "$value"
   done < "$seed_file"
+
+  if ! openkeyboard_validate_simulator_gateway_profiles; then
+    openkeyboard_unset_simulator_gateway_profiles
+    return 2
+  fi
+
+  legacy_state="$(openkeyboard_simulator_gateway_profile_state legacy)" || {
+    openkeyboard_unset_simulator_gateway_profiles
+    return 2
+  }
+  OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE="$legacy_state"
+  if [[ "$legacy_state" == "complete" ]]; then
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+  fi
 }
 
 openkeyboard_assert_single_passing_test_summary() {
@@ -373,6 +562,62 @@ openkeyboard_assert_single_passing_test_summary() {
   '
 }
 
+openkeyboard_assert_passing_test_summary_count() {
+  local expected_count="$1"
+
+  if [[ ! "$expected_count" =~ ^[1-9][0-9]*$ ]]; then
+    echo "Live verification requires a positive expected test count." >&2
+    return 2
+  fi
+  ruby -rjson -e '
+    expected_count = Integer(ARGV.fetch(0), 10)
+    summary = JSON.parse(STDIN.read)
+    expected = {
+      "result" => "Passed",
+      "totalTestCount" => expected_count,
+      "passedTests" => expected_count,
+      "failedTests" => 0,
+      "skippedTests" => 0,
+      "expectedFailures" => 0
+    }
+    mismatches = expected.reject { |key, value| summary[key] == value }
+    unless mismatches.empty?
+      warn "Live verification did not execute the exact expected passing test count."
+      exit 1
+    end
+  ' "$expected_count"
+}
+
+openkeyboard_classify_low_differential_test_summary() {
+  ruby -rjson -e '
+    summary = JSON.parse(STDIN.read)
+    passed = {
+      "result" => "Passed",
+      "totalTestCount" => 1,
+      "passedTests" => 1,
+      "failedTests" => 0,
+      "skippedTests" => 0,
+      "expectedFailures" => 0
+    }
+    diagnostic = {
+      "result" => "Skipped",
+      "totalTestCount" => 1,
+      "passedTests" => 0,
+      "failedTests" => 0,
+      "skippedTests" => 1,
+      "expectedFailures" => 0
+    }
+    if passed.all? { |key, value| summary[key] == value }
+      puts "expected-model-capability"
+    elsif diagnostic.all? { |key, value| summary[key] == value }
+      puts "diagnostic-boundary-not-established"
+    else
+      warn "Low-profile differential verification requires one pass or one explicit diagnostic skip."
+      exit 1
+    end
+  '
+}
+
 openkeyboard_assert_single_passing_xcresult() {
   local result_bundle="$1"
   local summary_file
@@ -386,4 +631,36 @@ openkeyboard_assert_single_passing_xcresult() {
     return 1
   fi
   rm -f -- "$summary_file"
+}
+
+openkeyboard_assert_passing_xcresult_count() {
+  local result_bundle="$1"
+  local expected_count="$2"
+  local summary_file
+
+  summary_file="$(dirname "$result_bundle")/test-summary.json"
+  xcrun xcresulttool get test-results summary \
+    --path "$result_bundle" \
+    --compact > "$summary_file"
+  if ! openkeyboard_assert_passing_test_summary_count "$expected_count" < "$summary_file"; then
+    rm -f -- "$summary_file"
+    return 1
+  fi
+  rm -f -- "$summary_file"
+}
+
+openkeyboard_classify_low_differential_xcresult() {
+  local result_bundle="$1"
+  local summary_file outcome
+
+  summary_file="$(dirname "$result_bundle")/test-summary.json"
+  xcrun xcresulttool get test-results summary \
+    --path "$result_bundle" \
+    --compact > "$summary_file"
+  if ! outcome="$(openkeyboard_classify_low_differential_test_summary < "$summary_file")"; then
+    rm -f -- "$summary_file"
+    return 1
+  fi
+  rm -f -- "$summary_file"
+  printf '%s\n' "$outcome"
 }

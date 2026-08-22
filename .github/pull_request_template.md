@@ -58,9 +58,11 @@
 ## Live gateway evidence
 
 <!-- For no gateway impact, write "Local live verification: not required". -->
-<!-- For gateway impact, run ./scripts/check-live.sh gateway on exact HEAD and keep every canonical evidence line. -->
+<!-- For ordinary gateway impact, run ./scripts/check-live.sh gateway on exact HEAD. -->
+<!-- For gateway-differential impact or pre-release proof, run ./scripts/check-live.sh gateway-differential. -->
 <!-- Use model-agnostic only when no requirement names a model; still record the actual tested ID. Every gateway run must verify the production plain-text grammar flow. -->
 <!-- For an exact-model task, run OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway; Required and Exact live-tested models must match with no fallback. -->
+<!-- Differential mappings must stay in canonical low=<id>, high=<id> order. Record outcomes and latencies without response bodies. -->
 - Local live verification: not required
 - Live verification target: not required
 - Exact live-tested head: not required
@@ -68,6 +70,11 @@
 - Exact live-tested models: not required
 - Live-model substitutions: not required
 - Live plain-text grammar verification: not required
+- Live baseline outcomes: not required
+- Live differential outcomes: not required
+- Live follow-up outcomes: not required
+- Live operation-scoped warning contracts: not required
+- Live profile latencies: not required
 - No credential or gateway response body retained.
 - Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
 

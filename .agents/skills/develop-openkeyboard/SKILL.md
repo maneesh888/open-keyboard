@@ -42,6 +42,10 @@ a higher cumulative gate without expanding the task's proof claim.
 7. Update affected documentation when a user-visible contract, proof route, workflow, or status source changes.
 8. Never claim evidence for an unexecuted simulator, extension lifecycle, device, gateway, signing, deployment, or release path.
 9. Never add fallback prompt copies. Make semantic changes in the shared package, classify version impact, regenerate adapters, inspect equivalence fixtures, and advance the consumer gitlink intentionally.
+10. For model-capability classification, long-input handling, parser compatibility, retry behavior,
+    automatic-analysis warnings, manual-action error scope, or Translate warning scope, use the
+    targeted two-profile matrix. Run deterministic prerequisites and the Xcode build once; never run
+    the full suite separately for both profiles.
 
 ## Lifecycle autonomy
 
@@ -77,6 +81,10 @@ ordinary pull-request workflow.
 - Run `./scripts/check.sh --full` for Release and before an authorized push.
 - Run `./scripts/check-semantic-prompt-contract.sh` whenever the contract gitlink, canonical semantics, schemas, fixtures, or generated-adapter wiring changes.
 - Run `./scripts/check-live.sh gateway` only when the exact-head classifier selects gateway impact.
+- Run `./scripts/check-live.sh gateway-differential` when the classifier selects
+  `gateway-differential` and for pre-release verification. Required/tested evidence stays in
+  canonical `low=<id>, high=<id>` order. A low success or intermittent boundary is diagnostic,
+  remains `UNVERIFIED`, and blocks guarded merge rather than becoming a flaky gate.
 - Never bypass hooks or scanners.
 
 Create PRs as drafts with a concise brief containing a separate row for every in-scope requirement,

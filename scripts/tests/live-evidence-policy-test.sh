@@ -68,10 +68,15 @@ valid_body="$(cat <<EOF
 - Local live verification: passed
 - Live verification target: gateway
 - Exact live-tested head: $HEAD_SHA
-- Required live models: gemma2:2b
-- Exact live-tested models: gemma2:2b
+- Required live models: reference-test-model
+- Exact live-tested models: reference-test-model
 - Live-model substitutions: none
 - Live plain-text grammar verification: verified
+- Live baseline outcomes: not required
+- Live differential outcomes: not required
+- Live follow-up outcomes: not required
+- Live operation-scoped warning contracts: not required
+- Live profile latencies: not required
 - No credential or gateway response body retained.
 - Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
 
@@ -92,16 +97,47 @@ contradictory_target_body="${valid_body/Live verification target: gateway/Live v
 Prose mention: Live verification target: gateway"
 duplicate_target_body="$valid_body
 - Live verification target: none"
-wrong_model_body="${valid_body/Exact live-tested models: gemma2:2b/Exact live-tested models: gpt-oss:120b-cloud}"
-substituted_model_body="${valid_body/Live-model substitutions: none/Live-model substitutions: gemma2:2b -> gpt-oss:120b-cloud}"
+wrong_model_body="${valid_body/Exact live-tested models: reference-test-model/Exact live-tested models: substituted-test-model}"
+substituted_model_body="${valid_body/Live-model substitutions: none/Live-model substitutions: reference-test-model -> substituted-test-model}"
 duplicate_models_body="$valid_body
-- Exact live-tested models: gemma2:2b"
-model_agnostic_body="${valid_body/Required live models: gemma2:2b/Required live models: model-agnostic}"
+- Exact live-tested models: reference-test-model"
+model_agnostic_body="${valid_body/Required live models: reference-test-model/Required live models: model-agnostic}"
 model_agnostic_unverified_body="${model_agnostic_body/Live plain-text grammar verification: verified/Live plain-text grammar verification: unverified}"
 exact_model_unverified_body="${valid_body/Live plain-text grammar verification: verified/Live plain-text grammar verification: unverified}"
 invalid_verification_body="${valid_body/Live plain-text grammar verification: verified/Live plain-text grammar verification: unknown}"
 duplicate_verification_body="$valid_body
 - Live plain-text grammar verification: verified"
+
+differential_body="$(cat <<EOF
+- Local live verification: passed
+- Live verification target: gateway-differential
+- Exact live-tested head: $HEAD_SHA
+- Required live models: low=low-test-model:2b, high=high-test-model:120b
+- Exact live-tested models: low=low-test-model:2b, high=high-test-model:120b
+- Live-model substitutions: none
+- Live plain-text grammar verification: verified
+- Live baseline outcomes: low=passed, high=passed
+- Live differential outcomes: low=expected-model-capability, high=passed
+- Live follow-up outcomes: low=passed, high=passed
+- Live operation-scoped warning contracts: verified
+- Live profile latencies: low=12.345s, high=23.456s
+- No credential or gateway response body retained.
+- Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.
+
+## Exact head SHA
+
+\`$HEAD_SHA\`
+EOF
+)"
+missing_profile_body="${differential_body/Required live models: low=low-test-model:2b, high=high-test-model:120b/Required live models: low=low-test-model:2b}"
+reversed_profile_body="${differential_body/Exact live-tested models: low=low-test-model:2b, high=high-test-model:120b/Exact live-tested models: high=high-test-model:120b, low=low-test-model:2b}"
+substituted_profile_body="${differential_body/Exact live-tested models: low=low-test-model:2b, high=high-test-model:120b/Exact live-tested models: low=low-test-model:2b, high=substituted-test-model:120b}"
+same_profile_body="${differential_body//high-test-model:120b/low-test-model:2b}"
+low_success_body="${differential_body/Live differential outcomes: low=expected-model-capability, high=passed/Live differential outcomes: low=passed, high=passed}"
+high_failure_body="${differential_body/Live differential outcomes: low=expected-model-capability, high=passed/Live differential outcomes: low=expected-model-capability, high=expected-model-capability}"
+missing_baseline_body="${differential_body/- Live baseline outcomes: low=passed, high=passed/}"
+unverified_warning_body="${differential_body/Live operation-scoped warning contracts: verified/Live operation-scoped warning contracts: unverified}"
+malformed_latency_body="${differential_body/Live profile latencies: low=12.345s, high=23.456s/Live profile latencies: high=23.456s, low=12.345s}"
 
 run_snapshot_gate() {
   local event_body="$1"
@@ -154,8 +190,9 @@ fi
 
 run_policy() {
   local body="$1"
+  local impact="${2:-gateway}"
 
-  LIVE_IMPACT=gateway \
+  LIVE_IMPACT="$impact" \
     HEAD_SHA="$HEAD_SHA" \
     PR_BODY="$body" \
     "$VALIDATOR" > "$OUTPUT" 2>&1
@@ -222,6 +259,48 @@ if run_policy "$invalid_verification_body"; then
 fi
 if run_policy "$duplicate_verification_body"; then
   echo "Duplicate plain-text grammar verification fields were accepted." >&2
+  exit 1
+fi
+
+if ! run_policy "$differential_body" gateway-differential; then
+  cat "$OUTPUT" >&2
+  echo "Valid targeted two-profile live evidence was rejected." >&2
+  exit 1
+fi
+if run_policy "$missing_profile_body" gateway-differential; then
+  echo "Differential evidence with a missing profile was accepted." >&2
+  exit 1
+fi
+if run_policy "$reversed_profile_body" gateway-differential; then
+  echo "Reversed differential profile mappings were accepted." >&2
+  exit 1
+fi
+if run_policy "$substituted_profile_body" gateway-differential; then
+  echo "A substituted high-profile model was accepted." >&2
+  exit 1
+fi
+if run_policy "$same_profile_body" gateway-differential; then
+  echo "The same model was accepted for both differential roles." >&2
+  exit 1
+fi
+if run_policy "$low_success_body" gateway-differential; then
+  echo "A low-model success was accepted as a stable capability boundary." >&2
+  exit 1
+fi
+if run_policy "$high_failure_body" gateway-differential; then
+  echo "A high-model capability failure was accepted." >&2
+  exit 1
+fi
+if run_policy "$missing_baseline_body" gateway-differential; then
+  echo "Missing differential baseline evidence was accepted." >&2
+  exit 1
+fi
+if run_policy "$unverified_warning_body" gateway-differential; then
+  echo "Unverified operation-scoped warning evidence was accepted." >&2
+  exit 1
+fi
+if run_policy "$malformed_latency_body" gateway-differential; then
+  echo "Malformed or reversed per-profile latency evidence was accepted." >&2
   exit 1
 fi
 

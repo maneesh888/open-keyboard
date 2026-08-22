@@ -72,7 +72,9 @@ Use the repo scripts before hand-written commands unless a targeted command is c
 - Full OpenKeyboard UI tests on iPhone 16: `./scripts/ios/test.sh ui`
 - Onboarding screenshots on iPhone 16 + iPhone SE: `./scripts/ios/test.sh screenshots`
 - Opt-in live gateway service smoke: `./scripts/ios/test.sh live-gateway-smoke`
+- Targeted low/high live-model matrix: `./scripts/ios/test.sh live-model-differential`
 - Exact-head live gateway gate: `./scripts/check-live.sh gateway`
+- Exact-head differential/pre-release gate: `./scripts/check-live.sh gateway-differential`
 - Opt-in real keyboard extension live test: `./scripts/ios/test.sh real-keyboard-live`
 - Opt-in live AI harness tests: `./scripts/ios/test.sh live-ui`
 - Independent exact-head PR review: project `pr-reviewer` via `$review-verify-merge-pr`
@@ -167,7 +169,8 @@ when invoked from a linked worktree; values must never be printed.
   extended ACL entries; a trusted secret manager may materialize it at the canonical path when
   cross-machine synchronization is desired, but agents must not transport it through Git or
   disposable worktrees.
-- The only accepted simulator seed keys are `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`, `OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL`.
+- The seed accepts complete `LOW` and `HIGH` URL/API-key/model triples for targeted differential verification. The existing `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`, `OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL` triple remains a complete legacy fallback for ordinary verification. Partial profiles, duplicates, unknown keys, unsafe model IDs, role reversal, substitution, and silent low-profile fallback are rejected.
+- Never hardcode profile model IDs or credentials in committed source, fixtures, documentation, or skills. Exact model identities belong in the ignored local seed and retained exact-head evidence.
 - Use `scripts/ios/openkeyboard-gateway.seed.env.example` as the template. Do not commit the filled seed.
 
 ## Task Mapping
@@ -177,8 +180,9 @@ when invoked from a linked worktree; values must never be printed.
 - Visual/UI layout: targeted tests plus `./scripts/ios/test.sh screenshots` or MCP/ClawMaster screenshot proof.
 - Keyboard extension config/action path: targeted tests plus `./scripts/ios/test.sh real-keyboard-live` or the focused smoke from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 - Live gateway contract/performance: `./scripts/ios/test.sh live-gateway-smoke`, app diagnostics, or explicit live Xcode proof. Report timing separately from correctness.
+- Model-capability classification, long-input handling, parser compatibility, retry behavior, automatic-analysis warnings, manual action error scope, or Translate warning scope: run `./scripts/ios/test.sh live-model-differential` after deterministic prerequisites. The runner builds once and reuses safe artifacts; it must not run the full suite per model.
 - Pre-commit broad check: `./scripts/check.sh --quick`, then any task-specific UI/live/screenshot route.
-- Pre-push/release check: `./scripts/check.sh --full`; gateway-impacting changes also require `./scripts/check-live.sh gateway`.
+- Pre-push/release check: `./scripts/check.sh --full`; ordinary gateway impact requires `./scripts/check-live.sh gateway`, while differential-classified changes and pre-release verification require `./scripts/check-live.sh gateway-differential`.
 
 ## Pull Request Review
 
@@ -187,7 +191,7 @@ when invoked from a linked worktree; values must never be printed.
 - Give every in-scope user requirement a stable ID, observable acceptance criterion, required proof type, exact evidence, and `VERIFIED` or `UNVERIFIED` status. Do not combine independent requirements.
 - Treat ambiguous, skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. Every unverified in-scope requirement is a blocker, not a residual proof limit.
 - Exact-model requirements must run that exact model without catalog fallback or substitution. A different working model proves only that different model.
-- For an exact-model requirement, run `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway`. Exact-model and model-agnostic runs both require the seeded model to complete the production plain-text grammar flow; a connected-but-unverified `.limited` result is never passing live evidence.
+- For an exact single-model requirement, run `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id> ./scripts/check-live.sh gateway`. For a differential requirement, run `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<exact-id>, high=<exact-id>' ./scripts/check-live.sh gateway-differential`. Required and tested roles must match in canonical low/high order with no substitution. A diagnostic or intermittent low boundary remains `UNVERIFIED` and blocks merge.
 - Run the independent review and GitHub checks concurrently where practical.
 - Any new commit invalidates the previous review, local full gate, GitHub check conclusions, and exact-head human merge authorization.
 - A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages while the exact-head independent reviewer reports operational confidence of exactly `100%`.

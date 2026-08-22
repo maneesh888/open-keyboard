@@ -15,7 +15,7 @@ if [[ "$LIVE_IMPACT" == "none" ]]; then
   exit 0
 fi
 
-if [[ "$LIVE_IMPACT" != "gateway" ]]; then
+if [[ "$LIVE_IMPACT" != "gateway" && "$LIVE_IMPACT" != "gateway-differential" ]]; then
   echo "Live-impact classification returned an unsupported target." >&2
   exit 2
 fi
@@ -34,6 +34,16 @@ live_model_substitutions=""
 live_model_substitutions_count=0
 plain_text_grammar_verification=""
 plain_text_grammar_verification_count=0
+live_baseline_outcomes=""
+live_baseline_outcomes_count=0
+live_differential_outcomes=""
+live_differential_outcomes_count=0
+live_follow_up_outcomes=""
+live_follow_up_outcomes_count=0
+live_operation_scoped_warning_contracts=""
+live_operation_scoped_warning_contracts_count=0
+live_profile_latencies=""
+live_profile_latencies_count=0
 retention_boundary_count=0
 trust_boundary_count=0
 while IFS= read -r body_line; do
@@ -67,6 +77,26 @@ while IFS= read -r body_line; do
       plain_text_grammar_verification="${body_line#- Live plain-text grammar verification: }"
       ((plain_text_grammar_verification_count += 1))
       ;;
+    '- Live baseline outcomes: '*)
+      live_baseline_outcomes="${body_line#- Live baseline outcomes: }"
+      ((live_baseline_outcomes_count += 1))
+      ;;
+    '- Live differential outcomes: '*)
+      live_differential_outcomes="${body_line#- Live differential outcomes: }"
+      ((live_differential_outcomes_count += 1))
+      ;;
+    '- Live follow-up outcomes: '*)
+      live_follow_up_outcomes="${body_line#- Live follow-up outcomes: }"
+      ((live_follow_up_outcomes_count += 1))
+      ;;
+    '- Live operation-scoped warning contracts: '*)
+      live_operation_scoped_warning_contracts="${body_line#- Live operation-scoped warning contracts: }"
+      ((live_operation_scoped_warning_contracts_count += 1))
+      ;;
+    '- Live profile latencies: '*)
+      live_profile_latencies="${body_line#- Live profile latencies: }"
+      ((live_profile_latencies_count += 1))
+      ;;
     '- No credential or gateway response body retained.')
       ((retention_boundary_count += 1))
       ;;
@@ -80,8 +110,13 @@ if [[ "$local_live_verification_count" -ne 1 || "$local_live_verification" != "p
   echo "The pull request must record exactly one passing local live-verification field." >&2
   exit 1
 fi
-if [[ "$live_verification_target_count" -ne 1 || "$live_verification_target" != "gateway" ]]; then
-  echo "The pull request must record exactly one gateway live-verification target." >&2
+if [[ "$live_verification_target_count" -ne 1 || \
+      ( "$live_verification_target" != "gateway" && "$live_verification_target" != "gateway-differential" ) ]]; then
+  echo "The pull request must record exactly one supported gateway live-verification target." >&2
+  exit 1
+fi
+if [[ "$live_verification_target" != "$LIVE_IMPACT" ]]; then
+  echo "The recorded live-verification target does not match the exact-head impact classification." >&2
   exit 1
 fi
 if [[ "$live_tested_head_count" -ne 1 ]]; then
@@ -111,6 +146,62 @@ fi
 if [[ "$required_live_models" != "model-agnostic" && "$required_live_models" != "$exact_live_tested_models" ]]; then
   echo "Exact live-tested models do not match the required model coverage." >&2
   exit 1
+fi
+
+if [[ "$live_verification_target" == "gateway-differential" ]]; then
+  if [[ ! "$required_live_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
+    echo "Differential required models must use canonical low=<id>, high=<id> order." >&2
+    exit 1
+  fi
+  required_low_model="${BASH_REMATCH[1]}"
+  required_high_model="${BASH_REMATCH[2]}"
+  if [[ "$required_low_model" == "$required_high_model" ]]; then
+    echo "Differential evidence requires distinct low and high model IDs." >&2
+    exit 1
+  fi
+  if [[ ! "$exact_live_tested_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
+    echo "Differential tested models must use canonical low=<id>, high=<id> order." >&2
+    exit 1
+  fi
+  if [[ "${BASH_REMATCH[1]}" != "$required_low_model" || "${BASH_REMATCH[2]}" != "$required_high_model" ]]; then
+    echo "Differential tested model roles were substituted or reversed." >&2
+    exit 1
+  fi
+  if [[ "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "low=passed, high=passed" ]]; then
+    echo "Differential evidence must verify the baseline on both profiles." >&2
+    exit 1
+  fi
+  if [[ "$live_differential_outcomes_count" -ne 1 || "$live_differential_outcomes" != "low=expected-model-capability, high=passed" ]]; then
+    echo "Differential evidence must retain the expected low boundary and high success." >&2
+    exit 1
+  fi
+  if [[ "$live_follow_up_outcomes_count" -ne 1 || "$live_follow_up_outcomes" != "low=passed, high=passed" ]]; then
+    echo "Differential evidence must verify the post-boundary follow-up on both profiles." >&2
+    exit 1
+  fi
+  if [[ "$live_operation_scoped_warning_contracts_count" -ne 1 || "$live_operation_scoped_warning_contracts" != "verified" ]]; then
+    echo "Differential evidence must verify operation-scoped warning contracts." >&2
+    exit 1
+  fi
+  if [[ "$live_profile_latencies_count" -ne 1 || \
+        ! "$live_profile_latencies" =~ ^low=[0-9]+([.][0-9]{3})?s,\ high=[0-9]+([.][0-9]{3})?s$ ]]; then
+    echo "Differential evidence must record canonical per-profile latencies." >&2
+    exit 1
+  fi
+else
+  if [[ "$exact_live_tested_models" != "model-agnostic" && \
+        ! "$exact_live_tested_models" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
+    echo "Ordinary gateway evidence contains an unsafe tested model ID." >&2
+    exit 1
+  fi
+  if [[ "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "not required" || \
+        "$live_differential_outcomes_count" -ne 1 || "$live_differential_outcomes" != "not required" || \
+        "$live_follow_up_outcomes_count" -ne 1 || "$live_follow_up_outcomes" != "not required" || \
+        "$live_operation_scoped_warning_contracts_count" -ne 1 || "$live_operation_scoped_warning_contracts" != "not required" || \
+        "$live_profile_latencies_count" -ne 1 || "$live_profile_latencies" != "not required" ]]; then
+    echo "Ordinary gateway evidence must not claim the differential matrix fields." >&2
+    exit 1
+  fi
 fi
 if [[ "$retention_boundary_count" -ne 1 ]]; then
   echo "The pull request must record exactly one live-proof retention boundary." >&2
