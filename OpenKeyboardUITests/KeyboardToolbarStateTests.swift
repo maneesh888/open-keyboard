@@ -60,6 +60,13 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(capability.title, "Model not compatible")
         XCTAssertEqual(capability.subtitle, KeyboardActionErrorState.modelCapabilityMessage)
         XCTAssertNotEqual(capability.title, "AI unavailable")
+
+        let grammarCapability = KeyboardToolbarState(kind: .error(
+            kind: .grammarCapability,
+            message: KeyboardActionErrorState.grammarCapabilityMessage
+        ))
+        XCTAssertEqual(grammarCapability.title, "Model couldn't correct this text")
+        XCTAssertEqual(grammarCapability.subtitle, KeyboardActionErrorState.grammarCapabilityMessage)
     }
 
     func testActionsStateUsesLoadedModel() {

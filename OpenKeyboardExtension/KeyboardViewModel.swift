@@ -2235,7 +2235,7 @@ final class KeyboardViewModel: ObservableObject {
                     scope: .grammar,
                     message: KeyboardActionErrorState.modelCapabilityMessage
                 )
-                aiStatus = KeyboardActionErrorState.modelCapabilityMessage
+                aiStatus = KeyboardActionErrorState.grammarCapabilityMessage
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -2245,7 +2245,7 @@ final class KeyboardViewModel: ObservableObject {
                 actionPanelState = nil
                 rewriteOptionsState = nil
                 actionError = nil
-                aiStatus = KeyboardActionErrorState.modelCapabilityMessage
+                aiStatus = KeyboardActionErrorState.grammarCapabilityMessage
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
