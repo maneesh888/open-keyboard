@@ -12,6 +12,28 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertLessThanOrEqual(error.message.count, 140)
     }
 
+    func testGrammarCapabilityFailureUsesSpecificModelCopyWithoutChangingWritingActionCopy() {
+        let grammarError = KeyboardActionErrorState(
+            kind: .modelCapability,
+            scope: .grammar,
+            message: KeyboardActionErrorState.modelCapabilityMessage
+        )
+        let writingActionError = KeyboardActionErrorState(
+            kind: .modelCapability,
+            scope: .writingAction,
+            message: KeyboardActionErrorState.modelCapabilityMessage
+        )
+
+        XCTAssertEqual(grammarError.kind, .grammarCapability)
+        XCTAssertEqual(grammarError.scope, .grammar)
+        XCTAssertEqual(grammarError.title, "Model couldn't correct this text")
+        XCTAssertEqual(grammarError.message, KeyboardActionErrorState.grammarCapabilityMessage)
+        XCTAssertEqual(grammarError.message.count, 140)
+        XCTAssertEqual(writingActionError.kind, .modelCapability)
+        XCTAssertEqual(writingActionError.title, "Model not compatible")
+        XCTAssertEqual(writingActionError.message, KeyboardActionErrorState.modelCapabilityMessage)
+    }
+
     func testParsesCorrectionsAndPredictions() throws {
         let json = """
         {"corrections":[{"label":"Correct capitalization","original":" i ","replacement":" I ","explanation":"Capitalize I.","category":"capitalization"}],"predictions":[{"label":"Suggestion","text":" apple ","kind":"nextWord"}]}

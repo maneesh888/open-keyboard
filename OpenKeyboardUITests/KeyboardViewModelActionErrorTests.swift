@@ -465,9 +465,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.performAIAction(.fixGrammar)
         await waitUntil { viewModel.actionError != nil }
 
-        XCTAssertEqual(viewModel.actionError?.kind, .modelCapability)
-        XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
-        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(viewModel.actionError?.kind, .grammarCapability)
+        XCTAssertEqual(viewModel.actionError?.title, "Model couldn't correct this text")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.grammarCapabilityMessage)
         XCTAssertEqual(proxy.text, source)
     }
 
@@ -486,9 +486,10 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(viewModel.actionError?.scope, .grammar)
         XCTAssertNil(viewModel.automaticAnalysisWarning)
-        XCTAssertEqual(viewModel.actionError?.title, "Model not compatible")
-        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.modelCapabilityMessage)
-        XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
+        XCTAssertEqual(viewModel.actionError?.kind, .grammarCapability)
+        XCTAssertEqual(viewModel.actionError?.title, "Model couldn't correct this text")
+        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.grammarCapabilityMessage)
+        XCTAssertEqual(viewModel.toolbarState.title, "Model couldn't correct this text")
         XCTAssertNotEqual(viewModel.toolbarState.title, "AI unavailable")
         XCTAssertEqual(proxy.text, original)
         XCTAssertTrue(viewModel.canOpenActionPanel, "A grammar capability failure must not disable unrelated writing actions")
@@ -532,9 +533,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertNil(viewModel.actionError)
         XCTAssertEqual(viewModel.automaticAnalysisWarning?.scope, .grammar)
-        XCTAssertEqual(viewModel.automaticAnalysisWarning?.title, "Model not compatible")
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.kind, .grammarCapability)
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.title, "Model couldn't correct this text")
+        XCTAssertEqual(viewModel.automaticAnalysisWarning?.message, KeyboardActionErrorState.grammarCapabilityMessage)
         XCTAssertEqual(viewModel.panelMode, .keyboard)
-        XCTAssertEqual(viewModel.toolbarState.title, "Model not compatible")
+        XCTAssertEqual(viewModel.toolbarState.title, "Model couldn't correct this text")
         XCTAssertEqual(proxy.text, original)
         XCTAssertTrue(viewModel.canOpenActionPanel)
         XCTAssertTrue(viewModel.canOpenGrammarCorrection)
@@ -629,7 +632,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNil(viewModel.actionError)
         XCTAssertEqual(viewModel.automaticAnalysisWarning?.scope, .grammar)
         XCTAssertEqual(viewModel.panelMode, .keyboard)
-        XCTAssertEqual(viewModel.aiStatus, KeyboardActionErrorState.modelCapabilityMessage)
+        XCTAssertEqual(viewModel.aiStatus, KeyboardActionErrorState.grammarCapabilityMessage)
         XCTAssertFalse(viewModel.isPerformingAIAction)
     }
 

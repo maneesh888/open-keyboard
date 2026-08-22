@@ -216,7 +216,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("empty-input-no-stale-corrections")
     }
 
-    func testRealKeyboardShowsModelNotCompatibleStateScreenshot() throws {
+    func testRealKeyboardShowsGrammarCorrectionFailureStateScreenshot() throws {
         let sourceText = "Please keep this text unchanged."
         let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
         let app = configuredContainingApp(extraArguments: [
@@ -240,14 +240,14 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "Open Keyboard extension did not appear"
         )
 
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].waitForExistence(timeout: 5))
         XCTAssertEqual(
             keyboardApp.staticTexts["ai_error_message"].label,
-            KeyboardActionErrorState.modelCapabilityMessage
+            KeyboardActionErrorState.grammarCapabilityMessage
         )
         XCTAssertEqual(input.value as? String, sourceText)
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
-        try captureRealKeyboardStep("real-keyboard-model-not-compatible")
+        try captureRealKeyboardStep("real-keyboard-grammar-correction-failure")
     }
 
     func testRealKeyboardAutomaticModelFailureKeepsKeysTappable() throws {
@@ -274,7 +274,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "Open Keyboard extension did not appear"
         )
 
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].waitForExistence(timeout: 5))
         XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists)
         XCTAssertEqual(input.value as? String, sourceText)
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
@@ -290,7 +290,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         shiftKey.tap()
         shiftKey.tap()
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].exists)
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].exists)
         try captureRealKeyboardStep("real-keyboard-automatic-model-warning-keys")
 
         qKey.tap()

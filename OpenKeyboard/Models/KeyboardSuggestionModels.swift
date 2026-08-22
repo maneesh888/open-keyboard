@@ -1565,6 +1565,7 @@ enum KeyboardActionErrorKind: Equatable {
     case authentication
     case modelUnavailable
     case modelCapability
+    case grammarCapability
     case translationCapability
 
     var title: String {
@@ -1574,6 +1575,7 @@ enum KeyboardActionErrorKind: Equatable {
         case .authentication: return "Invalid API key"
         case .modelUnavailable: return "Model unavailable"
         case .modelCapability: return "Model not compatible"
+        case .grammarCapability: return "Model couldn't correct this text"
         case .translationCapability: return "Translation warning"
         }
     }
@@ -1587,6 +1589,7 @@ enum KeyboardActionErrorScope: Equatable {
 
 struct KeyboardActionErrorState: Equatable {
     static let modelCapabilityMessage = "The selected model is not capable of this AI action. Choose another model or retry the model check."
+    static let grammarCapabilityMessage = "The selected model changed more than grammar, so your original text was kept. Try again. If this happens often, choose a more capable model."
 
     let kind: KeyboardActionErrorKind
     let scope: KeyboardActionErrorScope
@@ -1597,16 +1600,30 @@ struct KeyboardActionErrorState: Equatable {
         scope: KeyboardActionErrorScope = .global,
         message: String
     ) {
-        self.kind = kind
-        let isActionCapabilityIssue = kind == .modelCapability || kind == .translationCapability
+        let resolvedKind = kind == .modelCapability && scope == .grammar
+            ? KeyboardActionErrorKind.grammarCapability
+            : kind
+        self.kind = resolvedKind
+        let isActionCapabilityIssue = [
+            KeyboardActionErrorKind.modelCapability,
+            .grammarCapability,
+            .translationCapability
+        ].contains(resolvedKind)
         self.scope = isActionCapabilityIssue ? scope : .global
-        self.message = kind == .modelCapability ? Self.modelCapabilityMessage : Self.sanitized(message)
+        switch resolvedKind {
+        case .modelCapability:
+            self.message = Self.modelCapabilityMessage
+        case .grammarCapability:
+            self.message = Self.grammarCapabilityMessage
+        default:
+            self.message = Self.sanitized(message)
+        }
     }
 
     var title: String { kind.title }
 
     var blocksGrammarCorrection: Bool {
-        ![.modelCapability, .translationCapability].contains(kind) || scope != .writingAction
+        ![.modelCapability, .grammarCapability, .translationCapability].contains(kind) || scope != .writingAction
     }
 
     static func sanitized(_ rawMessage: String) -> String {
