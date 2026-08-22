@@ -47,25 +47,33 @@ jobs:
             chmod +x "$validator_path"
           done
           echo "root=$validator_root" >> "$GITHUB_OUTPUT"
+          if grep -Fq 'gateway-differential' "$validator_root/live-impact.sh" && \
+              grep -Fq 'gateway-differential' "$validator_root/validate-pr-live-evidence.sh"; then
+            echo "supports_differential=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "supports_differential=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Classify exact-head live impact
         env:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
+          TRUSTED_SUPPORTS_DIFFERENTIAL: ${{ steps.validators.outputs.supports_differential }}
         run: |
+          source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"
           checked_out_sha="$(git rev-parse HEAD)"
           if [[ "$checked_out_sha" != "$PR_HEAD_SHA" ]]; then
             echo "The checked-out commit does not match the pull-request head." >&2
             exit 1
           fi
 
-          live_impact="$(
+          trusted_live_impact="$(
             OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
               "$VALIDATOR_ROOT/live-impact.sh" "$PR_BASE_SHA" "$PR_HEAD_SHA"
           )"
-          case "$live_impact" in
-            none|gateway)
+          case "$trusted_live_impact" in
+            none|gateway|gateway-differential)
               ;;
             *)
               echo "Live-impact classification returned an invalid result." >&2
@@ -73,12 +81,28 @@ jobs:
               ;;
           esac
 
+          candidate_live_impact="$trusted_live_impact"
+          if [[ "$TRUSTED_SUPPORTS_DIFFERENTIAL" != "true" && "$trusted_live_impact" == "gateway" ]]; then
+            candidate_live_impact="$(
+              OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
+                "$GITHUB_WORKSPACE/scripts/live-impact.sh" "$PR_BASE_SHA" "$PR_HEAD_SHA"
+            )"
+          fi
+          openkeyboard_resolve_live_policy_bootstrap \
+            "$TRUSTED_SUPPORTS_DIFFERENTIAL" \
+            "$trusted_live_impact" \
+            "$candidate_live_impact"
+          live_impact="$OPEN_KEYBOARD_RESOLVED_LIVE_IMPACT"
+          bootstrap_differential="$OPEN_KEYBOARD_BOOTSTRAP_DIFFERENTIAL"
+
           if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "The pull-request head is not a full commit SHA." >&2
             exit 1
           fi
 
+          echo "TRUSTED_LIVE_IMPACT=$trusted_live_impact" >> "$GITHUB_ENV"
           echo "LIVE_IMPACT=$live_impact" >> "$GITHUB_ENV"
+          echo "LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=$bootstrap_differential" >> "$GITHUB_ENV"
 
       - name: Resolve immutable and current live-evidence snapshots
         env:
@@ -110,6 +134,7 @@ jobs:
           CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
         run: |
+          source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"
           for snapshot_name in event current; do
             case "$snapshot_name" in
               event)
@@ -125,8 +150,25 @@ jobs:
             fi
 
             echo "Validating $snapshot_name live-evidence snapshot."
-            HEAD_SHA="$EVENT_HEAD_SHA" \
-              LIVE_IMPACT="$LIVE_IMPACT" \
-              PR_BODY="$(< "$body_file")" \
-              "$VALIDATOR_ROOT/validate-pr-live-evidence.sh"
+            if [[ "$LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL" == "true" ]]; then
+              HEAD_SHA="$EVENT_HEAD_SHA" \
+                LIVE_IMPACT="gateway-differential" \
+                PR_BODY="$(< "$body_file")" \
+                "$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"
+
+              trusted_projection="$RUNNER_TEMP/$snapshot_name-trusted-gateway-projection.md"
+              openkeyboard_write_trusted_gateway_projection \
+                "$body_file" \
+                "$EVENT_HEAD_SHA" \
+                "$trusted_projection"
+              HEAD_SHA="$EVENT_HEAD_SHA" \
+                LIVE_IMPACT="$TRUSTED_LIVE_IMPACT" \
+                PR_BODY="$(< "$trusted_projection")" \
+                "$VALIDATOR_ROOT/validate-pr-live-evidence.sh"
+            else
+              HEAD_SHA="$EVENT_HEAD_SHA" \
+                LIVE_IMPACT="$LIVE_IMPACT" \
+                PR_BODY="$(< "$body_file")" \
+                "$VALIDATOR_ROOT/validate-pr-live-evidence.sh"
+            fi
           done

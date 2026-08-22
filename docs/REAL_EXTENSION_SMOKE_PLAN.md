@@ -166,3 +166,25 @@ This smoke is host/simulator proof, not default GitHub CI. Normal remote CI shou
 - `./scripts/ios/test.sh build`
 
 Real-extension smoke remains a focused host/manual-gated check until simulator setup, keyboard enablement, and proof attachment export are deterministic in CI.
+
+## Capability-warning and post-edit typing proof
+
+Capability-sensitive changes additionally run the focused installed-extension test below. It uses a
+deterministic debug state for the warning presentation; it does not claim the live low model emitted
+that warning during the screenshot run.
+
+```bash
+xcodebuild test \
+  -project OpenKeyboard.xcodeproj \
+  -scheme OpenKeyboard \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -configuration Debug \
+  -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticModelFailureKeepsKeysTappable \
+  CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+```
+
+Acceptance requires the real extension to show the nonblocking toolbar warning, preserve the host
+document, keep representative letter/space/shift keys hittable, accept a real edit, and retain the
+keyboard panel after that edit. Export and inspect both `real-keyboard-automatic-model-warning-keys`
+and `real-keyboard-automatic-model-warning-after-edit` attachments. Live transport/model evidence
+remains separate through `./scripts/check-live.sh gateway-differential`; Preview Lab is not proof.

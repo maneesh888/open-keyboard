@@ -75,6 +75,7 @@ credential-free push gate.
 | Visual layout | `./scripts/ios/test.sh screenshots` plus image inspection |
 | Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` when configured |
 | Gateway runtime or contract | `./scripts/check-live.sh gateway` on committed exact `HEAD` |
+| Model capability, long input, parser compatibility, retry, or operation-scoped warnings | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
 ## Persistent local configuration
@@ -104,6 +105,19 @@ Git and disposable worktrees must not transport it. Protected release signing us
 environment secrets instead of a local ignored file. Other live test routes that accept environment
 variables do not persist them in the repository.
 
+The strict seed parser accepts either a complete legacy URL/API-key/model triple or complete
+`LOW`/`HIGH` triples. A configured role can never be partial. Duplicate variables, unknown keys,
+unsafe model IDs, missing differential roles, identical role models, reversed mappings, and silent
+substitution are rejected without printing values. Ordinary checks use the high profile when it is
+configured and otherwise use the legacy fallback; they never silently use the low profile.
+
+The targeted differential runner performs deterministic prerequisites and `build-for-testing`
+once, then reuses the compiled `.xctestrun` for isolated low and high simulator clones. It runs one
+small baseline/boundary/follow-up test per role and removes both clones, injected environment,
+DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
+candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
+evidence.
+
 ## Hooks
 
 Enable committed hooks once per clone or worktree before the first commit or push:
@@ -126,12 +140,20 @@ The path must be `.githooks`.
   `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
-- Each live route parses its `.xcresult` and requires exactly one passing test with no failures,
-  skips, or expected failures; a successful `xcodebuild` process alone is not accepted as proof.
+- Ordinary and real-keyboard live routes parse `.xcresult` and require exactly one passing test with
+  no failures, skips, or expected failures. The differential route separately requires its exact
+  deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
+  diagnostic skip that the exact-head validator refuses as passing matrix evidence. A successful
+  `xcodebuild` process alone is never accepted as proof.
 - The real-keyboard route clones the selected simulator, immediately restores the source to its
   prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
   and deletes the clone on every handled exit. Source gateway configuration is not modified.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
+- The exact-head impact classifier selects `gateway-differential` only for changes touching
+  model-capability classification, long-input handling, parser compatibility, retry behavior,
+  automatic-analysis warnings, manual-action scope, Translate warning scope, or the matrix workflow
+  itself. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
+  explicitly. Unrelated pull requests do not run the two-profile matrix.
 
 ## GitHub checks
 
@@ -171,6 +193,14 @@ the seeded model through the production plain-text grammar flow; a connected-but
 `Required live verification` root job. It rejects duplicate, contradictory, fallback, and
 wrong-model fields in both the immutable event body and the current exact-head body. Local execution
 is contributor-attested; GitHub never receives the credential or gateway response.
+
+For `gateway-differential`, retained model fields use canonical
+`low=<exact-id>, high=<exact-id>` order. Separate canonical fields record baseline outcomes,
+long-text differential outcomes, follow-up outcomes, operation-scoped warning verification, and
+per-profile latency. The validator rejects missing roles, stale heads, duplicates, reversed or
+malformed mappings, substitutions, low success presented as a capability boundary, high failure,
+unverified scenarios, and contradictory evidence. GitHub still receives no credentials or response
+bodies.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a

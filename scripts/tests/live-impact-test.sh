@@ -31,50 +31,41 @@ if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$base_sha" "$do
   exit 1
 fi
 
-assert_gateway_path() {
+assert_impact_path() {
   local relative_path="$1"
+  local expected_impact="$2"
+  local fixture_content="${3:-gateway-sensitive change}"
   local path_sha
 
   git -C "$FIXTURE" checkout -q -B impact-case "$docs_sha"
   mkdir -p "$(dirname "$FIXTURE/$relative_path")"
-  printf 'gateway-sensitive change\n' > "$FIXTURE/$relative_path"
+  printf '%s\n' "$fixture_content" > "$FIXTURE/$relative_path"
   git -C "$FIXTURE" add -- "$relative_path"
   git -C "$FIXTURE" commit -q -m "impact $relative_path"
   path_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
-  if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$docs_sha" "$path_sha")" != "gateway" ]]; then
-    echo "Gateway-sensitive path was not classified for live verification: $relative_path" >&2
+  if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$docs_sha" "$path_sha")" != "$expected_impact" ]]; then
+    echo "Path did not receive expected live-impact classification $expected_impact: $relative_path" >&2
     exit 1
   fi
 }
 
 gateway_sensitive_paths=(
   .github/pull_request_template.md
-  .github/workflows/live.yml
   .githooks/pre-push
-  scripts/check-live.sh
   scripts/check.sh
-  scripts/live-impact.sh
-  scripts/validate-pr-live-evidence.sh
   scripts/ios/enable-openkeyboard-simulator-keyboard.sh
-  scripts/ios/live-test-safety.sh
-  scripts/ios/openkeyboard-gateway.seed.env.example
-  scripts/ios/seed-simulator-gateway-config.sh
-  scripts/ios/test.sh
   OpenKeyboard/Info.plist
   OpenKeyboard/Views/PlaygroundView.swift
   OpenKeyboard/Views/LiveAITestHarnessView.swift
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
-  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
   OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
   OpenKeyboardCore/Sources/AnotherModule/RuntimeContract.json
   OpenKeyboardExtension/Info.plist
-  OpenKeyboardExtension/KeyboardAIService.swift
   OpenKeyboardExtension/Nested/AnyExtensionRuntime.swift
   OpenKeyboardExtension/Resources/RuntimeConfiguration.plist.template
-  OpenKeyboardUITests/GatewayClientArchitectureTests.swift
   OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift
   OpenKeyboard.xcodeproj/project.pbxproj
   OpenKeyboard/OpenKeyboard.entitlements
@@ -82,8 +73,59 @@ gateway_sensitive_paths=(
 )
 
 for gateway_sensitive_path in "${gateway_sensitive_paths[@]}"; do
-  assert_gateway_path "$gateway_sensitive_path"
+  assert_impact_path "$gateway_sensitive_path" gateway
 done
+
+
+differential_workflow_paths=(
+  .github/workflows/live.yml
+  .gitmodules
+  Vendor/semantic-prompt-contract
+  scripts/check-live.sh
+  scripts/live-impact.sh
+  scripts/live-policy-bootstrap.sh
+  scripts/validate-pr-live-evidence.sh
+  scripts/ios/live-test-safety.sh
+  scripts/ios/openkeyboard-gateway.seed.env.example
+  scripts/ios/seed-simulator-gateway-config.sh
+  scripts/ios/test.sh
+)
+
+for differential_workflow_path in "${differential_workflow_paths[@]}"; do
+  assert_impact_path "$differential_workflow_path" gateway-differential
+done
+
+differential_model_pipeline_paths=(
+  OpenKeyboard/Models/KeyboardSuggestionModels.swift
+  OpenKeyboard/Services/CanonicalGatewayClient.swift
+  OpenKeyboard/Services/NetworkManager.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift
+  OpenKeyboardExtension/KeyboardAIService.swift
+  OpenKeyboardExtension/KeyboardViewModel.swift
+  OpenKeyboardUITests/GatewayClientArchitectureTests.swift
+  OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift
+)
+
+for differential_model_pipeline_path in "${differential_model_pipeline_paths[@]}"; do
+  assert_impact_path \
+    "$differential_model_pipeline_path" \
+    gateway-differential \
+    'numericThreshold = 0.50'
+done
+
+assert_impact_path \
+  OpenKeyboardExtension/KeyboardAIService.swift \
+  gateway-differential \
+  'if expectedScriptRatio < 0.50'
+assert_impact_path \
+  OpenKeyboardExtension/KeyboardViewModel.swift \
+  gateway-differential \
+  'let maximumAttempts = 1'
+assert_impact_path \
+  OpenKeyboard/Views/KeyboardPreviewLabView.swift \
+  gateway \
+  'unrelated keyboard layout adjustment'
 
 gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 

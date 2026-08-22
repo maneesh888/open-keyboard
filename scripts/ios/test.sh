@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -116,6 +116,9 @@ inject_xctestrun_live_smoke_env() {
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX" "$gateway_url_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_API_KEY_HEX" "$api_key_hex"
     plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_TEST_MODEL" "$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    if [[ -n "${OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE:-}" ]]; then
+      plist_set_or_add_string "$xctestrun" "$root:OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE" "$OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE"
+    fi
   done
 }
 
@@ -141,13 +144,8 @@ cleanup_sensitive_live_artifacts() {
   local original_status=$?
   local cleanup_status=0
 
-  if [[ -n "$SENSITIVE_LIVE_SIMULATOR" ]]; then
-    xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1 || true
-    if ! xcrun simctl delete "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1; then
-      echo -e "${RED}✗ Failed to delete the disposable live-test simulator.${NC}" >&2
-      cleanup_status=1
-    fi
-    SENSITIVE_LIVE_SIMULATOR=""
+  if ! delete_sensitive_live_simulator; then
+    cleanup_status=1
   fi
 
   if ! restore_sensitive_live_source_simulator; then
@@ -155,15 +153,14 @@ cleanup_sensitive_live_artifacts() {
     cleanup_status=1
   fi
 
+  openkeyboard_unset_simulator_gateway_profiles
   unset \
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
-    OPEN_KEYBOARD_SIMULATOR_API_KEY \
-    OPEN_KEYBOARD_SIMULATOR_MODEL \
     OPEN_KEYBOARD_TEST_GATEWAY_URL \
     OPEN_KEYBOARD_TEST_API_KEY \
     OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX \
     OPEN_KEYBOARD_TEST_API_KEY_HEX \
-    OPEN_KEYBOARD_TEST_MODEL
+    OPEN_KEYBOARD_TEST_MODEL \
+    OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE
 
   if [[ -n "$SENSITIVE_LIVE_WORKSPACE" ]]; then
     if ! rm -rf -- "$SENSITIVE_LIVE_WORKSPACE"; then
@@ -181,6 +178,44 @@ cleanup_sensitive_live_artifacts() {
     exit "$cleanup_status"
   fi
   return "$cleanup_status"
+}
+
+delete_sensitive_live_simulator() {
+  if [[ -z "$SENSITIVE_LIVE_SIMULATOR" ]]; then
+    return 0
+  fi
+
+  xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1 || true
+  if ! xcrun simctl delete "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1; then
+    echo -e "${RED}✗ Failed to delete the disposable live-test simulator.${NC}" >&2
+    return 1
+  fi
+  SENSITIVE_LIVE_SIMULATOR=""
+}
+
+select_loaded_live_profile() {
+  local requested_profile="${1:-reference}"
+
+  case "$requested_profile" in
+    reference)
+      openkeyboard_select_reference_simulator_gateway_profile
+      ;;
+    legacy|low|high)
+      openkeyboard_select_simulator_gateway_profile "$requested_profile"
+      ;;
+    *)
+      echo -e "${RED}✗ Live profile must be reference, legacy, low, or high.${NC}" >&2
+      return 2
+      ;;
+  esac
+}
+
+monotonic_seconds() {
+  ruby -e 'printf "%.6f", Process.clock_gettime(Process::CLOCK_MONOTONIC)'
+}
+
+elapsed_seconds() {
+  ruby -e 'printf "%.3f", Float(ARGV.fetch(1)) - Float(ARGV.fetch(0))' "$1" "$2"
 }
 
 begin_sensitive_live_workspace() {
@@ -292,6 +327,7 @@ case "${1:-}" in
       -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests \
+      -skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests \
       -skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
@@ -340,11 +376,9 @@ case "${1:-}" in
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-gateway-smoke.xcresult"
 
     openkeyboard_load_simulator_gateway_seed "$seed_file"
-    if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
-      echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
-      exit 1
-    fi
+    select_loaded_live_profile "${OPEN_KEYBOARD_LIVE_PROFILE:-reference}"
     echo "Loaded live gateway smoke configuration from ignored local seed file. Values are not printed."
+    echo "Credential profile: $OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE"
     run_xcodebuild xcodebuild build-for-testing \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
@@ -361,9 +395,7 @@ case "${1:-}" in
     fi
 
     inject_xctestrun_live_smoke_env "$xctestrun"
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
-    export OPEN_KEYBOARD_TEST_API_KEY_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
-    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
@@ -372,6 +404,130 @@ case "${1:-}" in
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
     echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
     echo "Sensitive live-test artifacts will be removed before exit."
+    ;;
+
+  live-model-differential)
+    echo -e "${YELLOW}Running targeted two-profile live-model differential verification...${NC}"
+    require_xcodebuild
+    begin_sensitive_live_workspace live-model-differential
+    seed_file="$(
+      openkeyboard_require_local_seed_file \
+        "$REPO_ROOT" \
+        "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+    )" || exit 2
+    openkeyboard_load_simulator_gateway_seed "$seed_file"
+    openkeyboard_require_two_profile_gateway_seed
+    low_model="$OPEN_KEYBOARD_SIMULATOR_LOW_MODEL"
+    high_model="$OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL"
+    derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
+
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
+    echo "Building the targeted live-test artifacts once."
+    run_xcodebuild xcodebuild build-for-testing \
+      -project "$PROJECT" \
+      -scheme "$SCHEME" \
+      -destination "$destination" \
+      -configuration Debug \
+      -derivedDataPath "$derived_data" \
+      CODE_SIGN_IDENTITY="" \
+      CODE_SIGNING_REQUIRED=NO
+
+    xctestrun="$(find "$derived_data/Build/Products" -name '*.xctestrun' -print -quit)"
+    if [[ -z "$xctestrun" ]]; then
+      echo -e "${RED}✗ .xctestrun file was not produced under $derived_data/Build/Products${NC}"
+      exit 1
+    fi
+
+    contract_result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-model-contracts.xcresult"
+    echo "Running deterministic operation-scoped warning prerequisites once."
+    run_xcodebuild xcodebuild test-without-building \
+      -xctestrun "$xctestrun" \
+      -destination "$destination" \
+      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceClassifiesMalformedStructuredJSONAsModelCapabilityFailure \
+      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRetriesGenericTranslationCapabilityFailureThenScopesWarning \
+      -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testModelCapabilityFailureIsShownForRewriteActionPanelAndPreservesText \
+      -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testAutomaticGrammarCapabilityFailureShowsTypedStateAndPreservesText \
+      -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testTypingAfterAutomaticGrammarCapabilityFailureRetriesUpdatedText \
+      -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testTranslationModelCapabilityFailureStaysWarningScopedAndDoesNotAffectRewrite \
+      -resultBundlePath "$contract_result_bundle"
+    openkeyboard_assert_passing_xcresult_count "$contract_result_bundle" 6
+
+    low_latency=""
+    high_latency=""
+    low_differential_outcome=""
+    low_baseline_outcome="unverified"
+    low_follow_up_outcome="unverified"
+    high_baseline_outcome="unverified"
+    high_differential_outcome="unverified"
+    high_follow_up_outcome="unverified"
+    for profile_role in low high; do
+      if [[ "$profile_role" == "high" ]]; then
+        delete_sensitive_live_simulator
+        create_sensitive_live_simulator "iPhone 16"
+        destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
+      fi
+
+      openkeyboard_load_simulator_gateway_seed "$seed_file"
+      openkeyboard_select_simulator_gateway_profile "$profile_role"
+      OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE="$profile_role"
+      inject_xctestrun_live_smoke_env "$xctestrun"
+      openkeyboard_unset_simulator_gateway_profiles
+      profile_result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-model-$profile_role.xcresult"
+      profile_started_at="$(monotonic_seconds)"
+      echo "Running isolated $profile_role profile baseline, boundary, and follow-up scenarios."
+      profile_command_passed="true"
+      if ! run_xcodebuild xcodebuild test-without-building \
+          -xctestrun "$xctestrun" \
+          -destination "$destination" \
+          -only-testing:OpenKeyboardUITests/LiveModelDifferentialTests/testConfiguredProfileDifferentialContract \
+          -resultBundlePath "$profile_result_bundle"; then
+        profile_command_passed="false"
+      fi
+      profile_finished_at="$(monotonic_seconds)"
+      if [[ "$profile_role" == "low" ]]; then
+        if [[ "$profile_command_passed" == "true" ]]; then
+          if low_differential_outcome="$(
+              openkeyboard_classify_low_differential_xcresult "$profile_result_bundle"
+            )"; then
+            low_baseline_outcome="passed"
+            low_follow_up_outcome="passed"
+          else
+            low_differential_outcome="unverified"
+          fi
+        else
+          low_differential_outcome="unverified"
+        fi
+      else
+        if [[ "$profile_command_passed" == "true" ]] && \
+            openkeyboard_assert_single_passing_xcresult "$profile_result_bundle"; then
+          high_baseline_outcome="passed"
+          high_differential_outcome="passed"
+          high_follow_up_outcome="passed"
+        fi
+      fi
+      profile_latency="$(elapsed_seconds "$profile_started_at" "$profile_finished_at")"
+      case "$profile_role" in
+        low) low_latency="$profile_latency" ;;
+        high) high_latency="$profile_latency" ;;
+      esac
+    done
+
+    evidence_lines="$(printf '%s\n' \
+      "models=low=$low_model, high=$high_model" \
+      "baseline_outcomes=low=$low_baseline_outcome, high=$high_baseline_outcome" \
+      "differential_outcomes=low=$low_differential_outcome, high=$high_differential_outcome" \
+      "follow_up_outcomes=low=$low_follow_up_outcome, high=$high_follow_up_outcome" \
+      'operation_scoped_warning_contracts=verified' \
+      "profile_latencies=low=${low_latency}s, high=${high_latency}s")"
+    printf '%s\n' "$evidence_lines"
+    if [[ -n "${OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT:-}" ]]; then
+      umask 077
+      printf '%s\n' "$evidence_lines" > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
+      chmod 600 "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
+    fi
+    echo -e "${GREEN}✓ Targeted two-profile live-model differential verification complete${NC}"
+    echo "Sensitive per-profile test state and artifacts will be removed before exit."
     ;;
 
   real-keyboard-live)
@@ -401,10 +557,7 @@ case "${1:-}" in
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/real-keyboard-live.xcresult"
     openkeyboard_load_simulator_gateway_seed "$seed_file"
-    if [[ -z "${OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_API_KEY:-}" || -z "${OPEN_KEYBOARD_SIMULATOR_MODEL:-}" ]]; then
-      echo -e "${RED}✗ Seed file must define OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL, OPEN_KEYBOARD_SIMULATOR_API_KEY, and OPEN_KEYBOARD_SIMULATOR_MODEL.${NC}"
-      exit 1
-    fi
+    select_loaded_live_profile "${OPEN_KEYBOARD_LIVE_PROFILE:-reference}"
 
     xcrun simctl boot "$simulator" >/dev/null 2>&1 || true
     xcrun simctl bootstatus "$simulator" -b >/dev/null
@@ -431,6 +584,7 @@ case "${1:-}" in
     xcrun simctl bootstatus "$simulator" -b >/dev/null
     "$REPO_ROOT/scripts/ios/seed-simulator-gateway-config.sh" \
       --seed-file "$seed_file" \
+      --profile "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" \
       --simulator "$simulator" \
       --replace-existing-config
 
@@ -441,9 +595,7 @@ case "${1:-}" in
     fi
 
     inject_xctestrun_gateway_env "$xctestrun"
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
-    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
-    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
@@ -485,13 +637,14 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|real-keyboard-live|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  deterministic-ui - Run UI-target tests without credential/state-dependent suites"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"
+    echo "  live-model-differential - Build once and run the targeted low/high live-model matrix"
     echo "  real-keyboard-live - Seed ignored local gateway credentials, then run real keyboard extension live test"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"

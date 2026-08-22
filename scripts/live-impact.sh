@@ -37,6 +37,7 @@ git -C "$ROOT" diff \
   "$BASE_SHA...$HEAD_SHA" > "$changed_paths_file"
 
 live_required="false"
+differential_required="false"
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
     .github/pull_request_template.md | \
@@ -64,9 +65,42 @@ while IFS= read -r -d '' changed_path; do
       live_required="true"
       ;;
   esac
+
+  case "$changed_path" in
+    .github/workflows/live.yml | \
+      .gitmodules | \
+      Vendor/semantic-prompt-contract | \
+      scripts/check-live.sh | \
+      scripts/live-impact.sh | \
+      scripts/live-policy-bootstrap.sh | \
+      scripts/validate-pr-live-evidence.sh | \
+      scripts/ios/live-test-safety.sh | \
+      scripts/ios/openkeyboard-gateway.seed.env.example | \
+      scripts/ios/seed-simulator-gateway-config.sh | \
+      scripts/ios/test.sh)
+      differential_required="true"
+      ;;
+    OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
+      OpenKeyboard/Services/CanonicalGatewayClient.swift | \
+      OpenKeyboard/Services/NetworkManager.swift | \
+      OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift | \
+      OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift | \
+      OpenKeyboardExtension/KeyboardAIService.swift | \
+      OpenKeyboardExtension/KeyboardViewModel.swift | \
+      OpenKeyboardUITests/GatewayClientArchitectureTests.swift | \
+      OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift)
+      # These files define or prove model selection, parsing, capability classification,
+      # retries, and operation-scoped warning state. Line-keyword matching can miss
+      # semantic changes such as numeric threshold or retry-count edits, so changes to
+      # these narrowly selected model-pipeline files always require the differential gate.
+      differential_required="true"
+      ;;
+  esac
 done < "$changed_paths_file"
 
-if [[ "$live_required" == "true" ]]; then
+if [[ "$differential_required" == "true" ]]; then
+  echo "gateway-differential"
+elif [[ "$live_required" == "true" ]]; then
   echo "gateway"
 else
   echo "none"

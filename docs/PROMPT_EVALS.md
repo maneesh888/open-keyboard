@@ -88,9 +88,30 @@ Normal CI compiles the file and skips live execution unless all live env vars ar
 
 Live eval fixtures must use synthetic, non-sensitive text only. Do not add real private user text, secrets, API keys, Authorization headers, or production conversation content to live eval scenarios.
 
+## Targeted capability differential
+
+The exact-head workflow has a separate targeted route for a known low/high model boundary:
+
+```bash
+./scripts/ios/test.sh live-model-differential
+./scripts/check-live.sh gateway-differential
+```
+
+It is not a second full prompt-evaluation run. Deterministic warning/state prerequisites and the
+Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate case,
+and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
+target-specific translation-capability classification or structurally usable Malayalam output,
+operation-scoped UI/ViewModel contracts, and latency—not generated wording.
+
+A candidate fixture is blocking only after the low profile repeatedly produces the canonical
+capability failure and the high profile succeeds on the identical operation/text. If the low model
+succeeds or fluctuates, the runner records `diagnostic-boundary-not-established`; exact-head policy
+must reject that as verified differential evidence instead of creating a flaky gate.
+
 ## CI/logging safety
 
 - Do not print API keys or Authorization headers.
 - Do not print full selected/private text in CI logs.
-- Store raw logs in `.ci-results/`, which must remain ignored.
-- Summarize results in `docs/CI_LOG_INDEX.md`.
+- Do not retain raw gateway responses or secret-bearing live logs, even in ignored directories.
+- Retain only redacted outcome, exact model identity, exact head, and latency summaries required by
+  the pull-request evidence contract.

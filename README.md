@@ -235,15 +235,37 @@ These commands use the canonical seed and are credential-gated:
 
 ```bash
 ./scripts/check-live.sh gateway
+./scripts/check-live.sh gateway-differential
 ./scripts/ios/test.sh live-gateway-smoke
+./scripts/ios/test.sh live-model-differential
 ./scripts/ios/test.sh real-keyboard-live
 ```
+
+The seed may contain complete `LOW` and `HIGH` URL/API-key/model triples for targeted model
+comparison. Every configured role must be complete, model IDs must pass the strict safety grammar,
+and the parser rejects duplicate or unknown variables. Ordinary gateway verification selects the
+high profile when present; otherwise it accepts the documented complete legacy triple. It never
+silently substitutes the low profile. The committed seed example documents both formats without
+containing real endpoints, keys, or model IDs.
+
+`live-model-differential` builds the test artifacts once, runs the deterministic operation-scoped
+warning prerequisites once, then executes only the baseline, fixed long-text boundary, and
+post-boundary follow-up on isolated low and high profiles. Low success on the boundary is recorded
+as diagnostic—not converted into a flaky pass—and exact-head policy rejects it as verified matrix
+evidence. High-profile structural success remains independently required. Per-profile wall-clock
+latency is retained without response bodies.
 
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set
 `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-model-id>`; the check fails before testing if the seed does
 not match. Model-specific pull requests must record the required and exact tested model IDs, and a
 different working model does not satisfy that evidence.
+
+Changes to model-capability classification, long-input handling, parser compatibility, retry
+behavior, automatic-analysis warnings, manual-action error scope, or Translate warning scope use
+`./scripts/check-live.sh gateway-differential`. Pre-release verification uses the same targeted
+matrix; unrelated pull requests continue to run deterministic checks once and do not run the
+matrix.
 
 `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` may select another regular, ignored, untracked, private
 file, but it must remain under the primary checkout's `.agent/local-seeds/` directory. Direct Swift

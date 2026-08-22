@@ -6,7 +6,7 @@ source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
 
 usage() {
   cat <<'USAGE'
-Usage: scripts/ios/seed-simulator-gateway-config.sh --seed-file <path> [--simulator <name-or-udid>] [--replace-existing-config]
+Usage: scripts/ios/seed-simulator-gateway-config.sh --seed-file <path> [--profile <reference|legacy|low|high>] [--simulator <name-or-udid>] [--replace-existing-config]
 
 Explicitly seeds a booted iOS Simulator OpenKeyboard install with real gateway
 configuration for local actual-keyboard testing. This is a developer-only flow;
@@ -17,10 +17,14 @@ uses the seed when no complete config is available. Pass
 --replace-existing-config only for disposable simulators where clearing first is
 intended.
 
-Required seed file variables:
+Legacy fallback seed variables:
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=https://your-gateway.example
   OPEN_KEYBOARD_SIMULATOR_API_KEY=your-real-key
   OPEN_KEYBOARD_SIMULATOR_MODEL=your-model
+
+Two-profile live verification instead defines complete LOW and HIGH triples.
+The default reference selection uses HIGH when present, otherwise the legacy
+fallback. It never silently selects LOW.
 
 The real seed file must live in the primary checkout's ignored local path:
   <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
@@ -31,6 +35,7 @@ USAGE
 
 seed_file=""
 simulator="booted"
+profile="reference"
 replace_existing_config=false
 
 while [[ $# -gt 0 ]]; do
@@ -41,6 +46,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --simulator)
       simulator="${2:-}"
+      shift 2
+      ;;
+    --profile)
+      profile="${2:-}"
       shift 2
       ;;
     --replace-existing-config|--clear-existing-config)
@@ -68,18 +77,18 @@ fi
 seed_file="$(openkeyboard_require_local_seed_file "$REPO_ROOT" "$seed_file")" || exit 2
 
 openkeyboard_load_simulator_gateway_seed "$seed_file"
-
-required=(
-  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL
-  OPEN_KEYBOARD_SIMULATOR_API_KEY
-  OPEN_KEYBOARD_SIMULATOR_MODEL
-)
-for key in "${required[@]}"; do
-  if [[ -z "${!key:-}" ]]; then
-    echo "Missing required seed variable: $key" >&2
+case "$profile" in
+  reference)
+    openkeyboard_select_reference_simulator_gateway_profile
+    ;;
+  legacy|low|high)
+    openkeyboard_select_simulator_gateway_profile "$profile"
+    ;;
+  *)
+    echo "--profile must be reference, legacy, low, or high." >&2
     exit 2
-  fi
-done
+    ;;
+esac
 
 api_key_length=${#OPEN_KEYBOARD_SIMULATOR_API_KEY}
 if [[ "$api_key_length" -lt 8 ]]; then
@@ -91,6 +100,7 @@ bundle_id="com.maneesh.openkeyboard"
 
 echo "Seeding OpenKeyboard simulator gateway config explicitly."
 echo "Simulator: $simulator"
+echo "Credential profile: $OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE"
 echo "Gateway URL: <configured>"
 echo "Model: <configured>"
 echo "API key: <configured>"

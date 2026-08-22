@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 LIVE_WORKFLOW="$ROOT/.github/workflows/live.yml"
+PRE_PUSH_HOOK="$ROOT/.githooks/pre-push"
 DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
@@ -27,12 +28,15 @@ DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
+LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
+LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
 for required_file in \
   "$CI_WORKFLOW" \
   "$LIVE_WORKFLOW" \
+  "$PRE_PUSH_HOOK" \
   "$DEPLOY_WORKFLOW" \
   "$DEPENDABOT" \
   "$REVIEWER_AGENT" \
@@ -56,6 +60,8 @@ for required_file in \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
   "$LIVE_TEST_SAFETY_POLICY_TEST" \
+  "$LIVE_POLICY_BOOTSTRAP" \
+  "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -87,6 +93,17 @@ if rg --quiet '^  workflow_dispatch:' "$CI_WORKFLOW"; then
   exit 1
 fi
 rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'supports_differential=false' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'TRUSTED_LIVE_IMPACT=$trusted_live_impact' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=$bootstrap_differential' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'openkeyboard_resolve_live_policy_bootstrap' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'openkeyboard_write_trusted_gateway_projection' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet '"$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'trusted-gateway-projection.md' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'LIVE_IMPACT="$TRUSTED_LIVE_IMPACT"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_EVIDENCE_VALIDATOR"
@@ -95,6 +112,10 @@ rg --quiet 'live_tested_head_count' "$LIVE_EVIDENCE_VALIDATOR"
 rg --quiet 'required_live_models_count' "$LIVE_EVIDENCE_VALIDATOR"
 rg --quiet 'exact_live_tested_models_count' "$LIVE_EVIDENCE_VALIDATOR"
 rg --quiet 'live_model_substitutions_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_baseline_outcomes_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_differential_outcomes_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_follow_up_outcomes_count' "$LIVE_EVIDENCE_VALIDATOR"
+rg --quiet 'live_profile_latencies_count' "$LIVE_EVIDENCE_VALIDATOR"
 rg --quiet 'required_live_models.*exact_live_tested_models' "$LIVE_EVIDENCE_VALIDATOR"
 rg --quiet 'live_tested_head.*HEAD_SHA' "$LIVE_EVIDENCE_VALIDATOR"
 rg --fixed-strings --quiet 'jq -r '\''.pull_request.body // ""'\'' "$GITHUB_EVENT_PATH" > "$EVENT_BODY_FILE"' "$LIVE_WORKFLOW"
@@ -247,6 +268,11 @@ rg --quiet 'Human approval evidence:' "$PR_TEMPLATE"
 rg --quiet 'Required live models:' "$PR_TEMPLATE"
 rg --quiet 'Exact live-tested models:' "$PR_TEMPLATE"
 rg --quiet 'Live-model substitutions:' "$PR_TEMPLATE"
+rg --quiet 'Live baseline outcomes:' "$PR_TEMPLATE"
+rg --quiet 'Live differential outcomes:' "$PR_TEMPLATE"
+rg --quiet 'Live follow-up outcomes:' "$PR_TEMPLATE"
+rg --quiet 'Live operation-scoped warning contracts:' "$PR_TEMPLATE"
+rg --quiet 'Live profile latencies:' "$PR_TEMPLATE"
 rg --quiet 'Live plain-text grammar verification:' "$PR_TEMPLATE"
 rg --quiet 'Exact reviewed head:' "$PR_TEMPLATE"
 rg --quiet '^## Exact head SHA$' "$PR_TEMPLATE"
@@ -270,6 +296,7 @@ ruby -e '
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
+rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping' "$ROOT/scripts/ios/test.sh"
 ruby -e '
@@ -282,6 +309,7 @@ ruby -e '
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'begin_sensitive_live_workspace live-model-differential' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
@@ -298,12 +326,37 @@ ruby -e '
     abort "Both live gateway Xcode invocations must use the disposable simulator destination."
   end
 ' "$ROOT/scripts/ios/test.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  differential_case = source.match(/^  live-model-differential\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
+  abort "The iOS test runner is missing live-model-differential mode." unless differential_case
+  unless differential_case.scan(/xcodebuild build-for-testing/).length == 1
+    abort "The differential live runner must build its Xcode test artifacts exactly once."
+  end
+  unless differential_case.include?("for profile_role in low high")
+    abort "The differential live runner must execute profiles in canonical low/high order."
+  end
+  unless differential_case.scan(/xcodebuild test-without-building/).length == 2
+    abort "The differential live runner must reuse one build for one prerequisite command and the per-profile loop."
+  end
+  unless differential_case.include?(%q{openkeyboard_assert_passing_xcresult_count "$contract_result_bundle" 6})
+    abort "The differential live runner must prove its deterministic warning prerequisites ran once."
+  end
+  unless differential_case.include?(%q{openkeyboard_classify_low_differential_xcresult "$profile_result_bundle"}) &&
+      differential_case.include?(%q{openkeyboard_assert_single_passing_xcresult "$profile_result_bundle"})
+    abort "The differential runner must classify low diagnostic success and require high-profile success."
+  end
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/seed-simulator-gateway-config.sh"
 rg --quiet 'openkeyboard_require_local_seed_file' "$ROOT/scripts/check-live.sh"
 rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
+rg --quiet 'OPEN_KEYBOARD_LIVE_REQUIRED_MODELS' "$ROOT/scripts/check-live.sh"
+rg --quiet 'gateway-differential' "$ROOT/scripts/check-live.sh"
+rg --quiet 'required_models=\$REQUIRED_MODELS' "$ROOT/scripts/check-live.sh"
+rg --quiet 'tested_models=\$TESTED_MODELS' "$ROOT/scripts/check-live.sh"
 rg --quiet 'TESTED_MODEL.*REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'required_model=\$REQUIRED_MODEL' "$ROOT/scripts/check-live.sh"
 rg --quiet 'tested_model=\$TESTED_MODEL' "$ROOT/scripts/check-live.sh"
@@ -324,8 +377,8 @@ if rg --quiet 'testRealKeyboardFixGrammarReplacesTextWhenGatewayConfigured' "$RO
   echo "The live route still selects the removed real-keyboard test name." >&2
   exit 1
 fi
-if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts/ios/test.sh")" -ne 2 ]]; then
-  echo "Both credentialed live routes must require exactly one passing xcresult test." >&2
+if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts/ios/test.sh")" -ne 3 ]]; then
+  echo "Every single-test credentialed live route must require exactly one passing xcresult test." >&2
   exit 1
 fi
 rg --quiet 'SENSITIVE_LIVE_SIMULATOR' "$ROOT/scripts/ios/test.sh"

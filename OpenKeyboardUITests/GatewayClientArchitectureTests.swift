@@ -333,6 +333,18 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testLongMalayalamLiveOracleRejectsTrivialFragmentsAndAcceptsSubstantialText() {
+        let source = Array(repeating: "source", count: 79).joined(separator: " ")
+        let trivial = LongMalayalamTranslationEvidence(translation: "മ", source: source)
+        let substantial = LongMalayalamTranslationEvidence(
+            translation: String(repeating: "മലയാളം പരിഭാഷ ", count: 30),
+            source: source
+        )
+
+        XCTAssertFalse(trivial.isUsable)
+        XCTAssertTrue(substantial.isUsable)
+    }
+
     func testKeyboardAIServiceRetriesInvalidTranslationOnceThenAcceptsValidOutput() async throws {
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
             #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#,
@@ -1014,6 +1026,244 @@ final class NetworkManagerGatewayTests: XCTestCase {
         } catch {
             XCTAssertTrue(expected.matches(error), "Unexpected error: \(error)", file: file, line: line)
         }
+    }
+}
+
+@MainActor
+final class LiveModelDifferentialTests: XCTestCase {
+    func testConfiguredProfileDifferentialContract() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let gatewayURL = Self.decodedHexEnvironmentValue(
+            "OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX",
+            from: environment
+        ),
+        let apiKey = Self.decodedHexEnvironmentValue(
+            "OPEN_KEYBOARD_TEST_API_KEY_HEX",
+            from: environment
+        ),
+        let model = environment["OPEN_KEYBOARD_TEST_MODEL"],
+        let role = environment["OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE"],
+        !model.isEmpty else {
+            throw XCTSkip("The targeted live-model profile environment is not configured.")
+        }
+        guard role == "low" || role == "high" else {
+            XCTFail("The targeted live-model role must be low or high.")
+            return
+        }
+
+        let models = try await NetworkManager().fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)
+        guard models.contains(model) else {
+            XCTFail("The exact selected model must exist in the authenticated catalog.")
+            return
+        }
+
+        let config = AppConfig(
+            apiKey: apiKey,
+            gatewayURL: gatewayURL,
+            selectedModel: model,
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertEqual(config.selectedModel, model)
+        let service = KeyboardAIService(requestTimeoutInterval: 90)
+
+        let baselineStartedAt = Date()
+        let baseline: KeyboardActionOperationResult
+        do {
+            baseline = try await service.performResult(
+                action: .fixGrammar,
+                on: Self.baselineFixture,
+                config: config
+            )
+        } catch let error as KeyboardAIError {
+            XCTFail("The short baseline failed with canonical classification \(error.actionErrorKind).")
+            return
+        } catch {
+            XCTFail("The short baseline failed without a canonical keyboard classification.")
+            return
+        }
+        let baselineLatency = Date().timeIntervalSince(baselineStartedAt)
+        XCTAssertEqual(baseline.operation, "fix_grammar")
+        XCTAssertFalse(baseline.isStructuredResponse)
+        XCTAssertFalse(baseline.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(baseline.containsWarningItem)
+
+        let boundaryStartedAt = Date()
+        var lowBoundaryEstablished = true
+        switch role {
+        case "low":
+            do {
+                let result = try await service.performResult(
+                    action: .translate(.malayalam),
+                    on: Self.longCapabilityFixture,
+                    config: config
+                )
+                XCTAssertEqual(result.operation, "translate")
+                XCTAssertTrue(result.isStructuredResponse)
+                XCTAssertFalse(result.items.isEmpty)
+                XCTAssertFalse(result.containsWarningItem)
+                lowBoundaryEstablished = false
+            } catch let error as KeyboardAIError {
+                XCTAssertEqual(error, .unreliableTranslation(.malayalam))
+                XCTAssertEqual(error.actionErrorKind, .translationCapability)
+            }
+        case "high":
+            let result: KeyboardActionOperationResult
+            do {
+                result = try await service.performResult(
+                    action: .translate(.malayalam),
+                    on: Self.longCapabilityFixture,
+                    config: config
+                )
+            } catch let error as KeyboardAIError {
+                XCTFail("The high-profile boundary request failed with canonical classification \(error.actionErrorKind).")
+                return
+            } catch {
+                XCTFail("The high-profile boundary request failed without a canonical keyboard classification.")
+                return
+            }
+            XCTAssertEqual(result.operation, "translate")
+            XCTAssertTrue(result.isStructuredResponse)
+            XCTAssertFalse(result.items.isEmpty)
+            XCTAssertFalse(result.containsWarningItem)
+            assertUsableLongMalayalamTranslation(
+                result.displayText,
+                source: Self.longCapabilityFixture
+            )
+        default:
+            XCTFail("Unsupported targeted live-model role.")
+            return
+        }
+        let boundaryLatency = Date().timeIntervalSince(boundaryStartedAt)
+
+        let followUpStartedAt = Date()
+        let followUp: KeyboardActionOperationResult
+        do {
+            followUp = try await service.performResult(
+                action: .translate(.malayalam),
+                on: Self.followUpFixture,
+                config: config
+            )
+        } catch let error as KeyboardAIError {
+            XCTFail("The short follow-up failed with canonical classification \(error.actionErrorKind).")
+            return
+        } catch {
+            XCTFail("The short follow-up failed without a canonical keyboard classification.")
+            return
+        }
+        let followUpLatency = Date().timeIntervalSince(followUpStartedAt)
+        XCTAssertEqual(followUp.operation, "translate")
+        XCTAssertTrue(followUp.isStructuredResponse)
+        XCTAssertFalse(followUp.items.isEmpty)
+        XCTAssertFalse(followUp.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(followUp.containsWarningItem)
+        XCTAssertTrue(
+            followUp.displayText.unicodeScalars.contains {
+                (0x0D00...0x0D7F).contains($0.value)
+            },
+            "The short follow-up must contain usable Malayalam text."
+        )
+
+        print(String(
+            format: "LIVE_MODEL_DIFFERENTIAL_LATENCY role=%@ baseline=%.3f boundary=%.3f follow_up=%.3f",
+            role,
+            baselineLatency,
+            boundaryLatency,
+            followUpLatency
+        ))
+        if role == "low" && !lowBoundaryEstablished {
+            throw XCTSkip("The fixed low-profile translation succeeded; capability boundary remains diagnostic only.")
+        }
+    }
+
+    private static let baselineFixture = "Our support team definately needs the corrected refund note."
+    private static let followUpFixture = "Good morning, I hope you are well."
+    private static let longCapabilityFixture = """
+    Each morning the community garden opens before the streets become busy. Volunteers check the paths, water young plants, and place clean tools beside the storage shed. They leave simple notes about work that is finished and tasks that still need attention, so the next group can continue without repeating anything.
+
+    During the afternoon, families visit the garden to learn how vegetables grow. Children compare leaves, watch insects move between flowers, and help collect dry seeds for the next season.
+    """
+
+    private func assertUsableLongMalayalamTranslation(
+        _ translation: String,
+        source: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let evidence = LongMalayalamTranslationEvidence(translation: translation, source: source)
+
+        XCTAssertNotEqual(evidence.translatedText, source, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(
+            evidence.translatedWordCount,
+            evidence.minimumTranslatedWordCount,
+            "The high-profile result is too short to be a usable translation of the long fixture.",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(
+            evidence.malayalamLetterCount,
+            evidence.minimumMalayalamLetterCount,
+            "The high-profile result contains too little Malayalam text for the long fixture.",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(
+            evidence.targetScriptRatio,
+            0.60,
+            "The high-profile long translation is not predominantly Malayalam.",
+            file: file,
+            line: line
+        )
+    }
+
+    private static func decodedHexEnvironmentValue(
+        _ key: String,
+        from environment: [String: String]
+    ) -> String? {
+        guard let encoded = environment[key],
+              !encoded.isEmpty,
+              encoded.count.isMultiple(of: 2),
+              encoded.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(encoded.count / 2)
+        var index = encoded.startIndex
+        while index < encoded.endIndex {
+            let next = encoded.index(index, offsetBy: 2)
+            guard let byte = UInt8(encoded[index..<next], radix: 16) else { return nil }
+            bytes.append(byte)
+            index = next
+        }
+        return String(bytes: bytes, encoding: .utf8)
+    }
+}
+
+private struct LongMalayalamTranslationEvidence {
+    let translatedText: String
+    let sourceWordCount: Int
+    let translatedWordCount: Int
+    let malayalamLetterCount: Int
+    let targetScriptRatio: Double
+
+    init(translation: String, source: String) {
+        translatedText = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+        sourceWordCount = source.split(whereSeparator: { $0.isWhitespace }).count
+        translatedWordCount = translatedText.split(whereSeparator: { $0.isWhitespace }).count
+        let letterScalars = translatedText.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        malayalamLetterCount = letterScalars.filter { (0x0D00...0x0D7F).contains($0.value) }.count
+        targetScriptRatio = letterScalars.isEmpty
+            ? 0
+            : Double(malayalamLetterCount) / Double(letterScalars.count)
+    }
+
+    var minimumTranslatedWordCount: Int { max(20, sourceWordCount / 3) }
+    var minimumMalayalamLetterCount: Int { max(40, sourceWordCount / 2) }
+    var isUsable: Bool {
+        translatedWordCount >= minimumTranslatedWordCount &&
+            malayalamLetterCount >= minimumMalayalamLetterCount &&
+            targetScriptRatio >= 0.60
     }
 }
 
