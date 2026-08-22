@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 LIVE_WORKFLOW="$ROOT/.github/workflows/live.yml"
+PRE_PUSH_HOOK="$ROOT/.githooks/pre-push"
 DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
@@ -33,6 +34,7 @@ SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 for required_file in \
   "$CI_WORKFLOW" \
   "$LIVE_WORKFLOW" \
+  "$PRE_PUSH_HOOK" \
   "$DEPLOY_WORKFLOW" \
   "$DEPENDABOT" \
   "$REVIEWER_AGENT" \
@@ -87,6 +89,8 @@ if rg --quiet '^  workflow_dispatch:' "$CI_WORKFLOW"; then
   exit 1
 fi
 rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_EVIDENCE_VALIDATOR"

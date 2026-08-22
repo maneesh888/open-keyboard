@@ -68,6 +68,11 @@ case "$LIVE_IMPACT" in
     OPEN_KEYBOARD_LIVE_EXPECTED_SHA="$HEAD_SHA" \
       "$ROOT/scripts/check-live.sh" gateway
     ;;
+  gateway-differential)
+    echo "Differential gateway-impacting changes require exact-head two-profile live verification."
+    OPEN_KEYBOARD_LIVE_EXPECTED_SHA="$HEAD_SHA" \
+      "$ROOT/scripts/check-live.sh" gateway-differential
+    ;;
   *)
     echo "Live-impact classification returned an invalid result." >&2
     exit 1
