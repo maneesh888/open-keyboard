@@ -98,9 +98,10 @@ The exact-head workflow has a separate targeted route for a known low/high model
 ```
 
 It is not a second full prompt-evaluation run. Deterministic warning/state prerequisites and the
-Xcode build run once; only a short baseline, one fixed public long-text Rewrite case, and a short
-follow-up run per isolated profile. Assertions cover exact selected identity, canonical error or
-structural success, operation-scoped UI/ViewModel contracts, and latency—not generated wording.
+Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate case,
+and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
+target-specific translation-capability classification or structurally usable Malayalam output,
+operation-scoped UI/ViewModel contracts, and latency—not generated wording.
 
 A candidate fixture is blocking only after the low profile repeatedly produces the canonical
 capability failure and the high profile succeeds on the identical operation/text. If the low model

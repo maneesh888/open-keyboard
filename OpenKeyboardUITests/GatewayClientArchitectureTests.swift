@@ -1083,23 +1083,24 @@ final class LiveModelDifferentialTests: XCTestCase {
         case "low":
             do {
                 let result = try await service.performResult(
-                    action: .rewrite,
+                    action: .translate(.malayalam),
                     on: Self.longCapabilityFixture,
                     config: config
                 )
-                XCTAssertEqual(result.operation, "rewrite")
+                XCTAssertEqual(result.operation, "translate")
                 XCTAssertTrue(result.isStructuredResponse)
                 XCTAssertFalse(result.items.isEmpty)
                 XCTAssertFalse(result.containsWarningItem)
                 lowBoundaryEstablished = false
             } catch let error as KeyboardAIError {
-                XCTAssertEqual(error, .modelCapability)
+                XCTAssertEqual(error, .unreliableTranslation(.malayalam))
+                XCTAssertEqual(error.actionErrorKind, .translationCapability)
             }
         case "high":
             let result: KeyboardActionOperationResult
             do {
                 result = try await service.performResult(
-                    action: .rewrite,
+                    action: .translate(.malayalam),
                     on: Self.longCapabilityFixture,
                     config: config
                 )
@@ -1110,11 +1111,17 @@ final class LiveModelDifferentialTests: XCTestCase {
                 XCTFail("The high-profile boundary request failed without a canonical keyboard classification.")
                 return
             }
-            XCTAssertEqual(result.operation, "rewrite")
+            XCTAssertEqual(result.operation, "translate")
             XCTAssertTrue(result.isStructuredResponse)
             XCTAssertFalse(result.items.isEmpty)
             XCTAssertFalse(result.containsWarningItem)
             XCTAssertFalse(result.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
+            XCTAssertTrue(
+                result.displayText.unicodeScalars.contains {
+                    (0x0D00...0x0D7F).contains($0.value)
+                },
+                "The high-profile translation must contain usable Malayalam text."
+            )
         default:
             XCTFail("Unsupported targeted live-model role.")
             return
@@ -1125,7 +1132,7 @@ final class LiveModelDifferentialTests: XCTestCase {
         let followUp: KeyboardActionOperationResult
         do {
             followUp = try await service.performResult(
-                action: .fixGrammar,
+                action: .translate(.malayalam),
                 on: Self.followUpFixture,
                 config: config
             )
@@ -1137,10 +1144,17 @@ final class LiveModelDifferentialTests: XCTestCase {
             return
         }
         let followUpLatency = Date().timeIntervalSince(followUpStartedAt)
-        XCTAssertEqual(followUp.operation, "fix_grammar")
-        XCTAssertFalse(followUp.isStructuredResponse)
+        XCTAssertEqual(followUp.operation, "translate")
+        XCTAssertTrue(followUp.isStructuredResponse)
+        XCTAssertFalse(followUp.items.isEmpty)
         XCTAssertFalse(followUp.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
         XCTAssertFalse(followUp.containsWarningItem)
+        XCTAssertTrue(
+            followUp.displayText.unicodeScalars.contains {
+                (0x0D00...0x0D7F).contains($0.value)
+            },
+            "The short follow-up must contain usable Malayalam text."
+        )
 
         print(String(
             format: "LIVE_MODEL_DIFFERENTIAL_LATENCY role=%@ baseline=%.3f boundary=%.3f follow_up=%.3f",
@@ -1150,26 +1164,16 @@ final class LiveModelDifferentialTests: XCTestCase {
             followUpLatency
         ))
         if role == "low" && !lowBoundaryEstablished {
-            throw XCTSkip("The fixed low-profile fixture succeeded; capability boundary remains diagnostic only.")
+            throw XCTSkip("The fixed low-profile translation succeeded; capability boundary remains diagnostic only.")
         }
     }
 
     private static let baselineFixture = "Our support team definately needs the corrected refund note."
-    private static let followUpFixture = "The short follow up note definately needs one correction."
+    private static let followUpFixture = "Good morning, I hope you are well."
     private static let longCapabilityFixture = """
-    The neighborhood library are preparing a public workshop about reliable note taking. The coordinator recieve the first draft on Monday, but several sections was unclear and the examples did not explain how a reader should verify each claim. The volunteers plans to revise the guide before the weekend so families can use it without needing private accounts or specialized tools.
+    Each morning the community garden opens before the streets become busy. Volunteers check the paths, water young plants, and place clean tools beside the storage shed. They leave simple notes about work that is finished and tasks that still need attention, so the next group can continue without repeating anything.
 
-    The opening section describe how to capture a meeting decision, name the person responsible, and record a realistic due date. It also remind readers that a summary should preserve the original meaning instead of adding confident details that nobody discussed. One example list a room change, a supply request, and a follow-up call, yet the verbs does not agree with their subjects.
-
-    The second section compare short notes with longer project updates. A short note are useful when the context is already shared, while a detailed update help a new participant understand the goal, the current evidence, and the remaining uncertainty. The draft repeat this comparison several times because the editor want the test fixture to remain long enough to exercise a known model boundary.
-
-    The third section explain how corrections should stay scoped to the selected document. If an analysis fail, the original sentences must remain available, the editing controls must keep working, and the next real edit should start a fresh attempt. A warning from one operation must not become replacement text or prevent a later supported request from finishing normally.
-
-    The fourth section cover translation review. It say that a target-specific warning belongs beside the selected language, that the source paragraph should never disappear, and that retry behavior must follow the existing policy. It also state that Rewrite, Improve, grammar review, and later translation attempts remains independent after one model cannot produce a usable result.
-
-    The fifth section describe a small quality checklist. Reviewers checks that the chosen model identity matches the requested profile, that successful output has the expected structure, and that failures use the canonical category. They measures latency separately for each profile and avoid saving response bodies, credentials, or private user text in any retained artifact.
-
-    The final section bring the workshop back to ordinary writing. Participants practices with a fictional garden schedule, a community notice, and a maintenance log. Every sample is intentionally non-private, and each paragraph contain a few stable grammar mistakes so a capable model can return at least one concrete correction without guessing personal facts.
+    During the afternoon, families visit the garden to learn how vegetables grow. Children compare leaves, watch insects move between flowers, and help collect dry seeds for the next season.
     """
 
     private static func decodedHexEnvironmentValue(
