@@ -154,10 +154,10 @@ require_clean_checkout
 if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
   evidence_file="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-live-evidence.XXXXXX")"
   chmod 600 "$evidence_file"
-  cleanup_evidence_file() {
-    rm -f -- "$evidence_file"
-  }
-  trap cleanup_evidence_file EXIT HUP INT TERM
+  trap 'openkeyboard_cleanup_live_evidence_file "$evidence_file"' EXIT
+  trap 'openkeyboard_exit_after_live_evidence_signal 129 "$evidence_file"' HUP
+  trap 'openkeyboard_exit_after_live_evidence_signal 130 "$evidence_file"' INT
+  trap 'openkeyboard_exit_after_live_evidence_signal 143 "$evidence_file"' TERM
   echo "Running the targeted two-profile live-model matrix for exact HEAD."
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE="$SEED_FILE" \
   OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT="$evidence_file" \

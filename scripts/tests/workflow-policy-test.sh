@@ -28,6 +28,8 @@ DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
+LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
+LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
@@ -58,6 +60,8 @@ for required_file in \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
   "$LIVE_TEST_SAFETY_POLICY_TEST" \
+  "$LIVE_POLICY_BOOTSTRAP" \
+  "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -92,6 +96,9 @@ rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'supports_differential=false' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'TRUSTED_LIVE_IMPACT=$trusted_live_impact' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=$bootstrap_differential' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'openkeyboard_resolve_live_policy_bootstrap' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'openkeyboard_write_trusted_gateway_projection' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet '"$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'trusted-gateway-projection.md' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'LIVE_IMPACT="$TRUSTED_LIVE_IMPACT"' "$LIVE_WORKFLOW"

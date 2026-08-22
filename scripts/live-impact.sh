@@ -68,8 +68,11 @@ while IFS= read -r -d '' changed_path; do
 
   case "$changed_path" in
     .github/workflows/live.yml | \
+      .gitmodules | \
+      Vendor/semantic-prompt-contract | \
       scripts/check-live.sh | \
       scripts/live-impact.sh | \
+      scripts/live-policy-bootstrap.sh | \
       scripts/validate-pr-live-evidence.sh | \
       scripts/ios/live-test-safety.sh | \
       scripts/ios/openkeyboard-gateway.seed.env.example | \
@@ -81,6 +84,7 @@ while IFS= read -r -d '' changed_path; do
       OpenKeyboard/Services/CanonicalGatewayClient.swift | \
       OpenKeyboard/Services/NetworkManager.swift | \
       OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift | \
+      OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift | \
       OpenKeyboardExtension/KeyboardAIService.swift | \
       OpenKeyboardExtension/KeyboardViewModel.swift | \
       OpenKeyboardUITests/GatewayClientArchitectureTests.swift | \

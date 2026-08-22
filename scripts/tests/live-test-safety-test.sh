@@ -210,12 +210,52 @@ if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "low" || \
   echo "The low simulator gateway profile was not selected exactly." >&2
   exit 1
 fi
+if bash -c '[[ -n "${OPEN_KEYBOARD_SIMULATOR_API_KEY+x}" || -n "${OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY+x}" || -n "${OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY+x}" ]]'; then
+  echo "A selected simulator API key leaked into an unrelated child environment." >&2
+  exit 1
+fi
 
 openkeyboard_select_simulator_gateway_profile high
 if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "high" || \
       "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "high-model:120b" || \
       "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" != "https://high-gateway.example.invalid" ]]; then
   echo "The high simulator gateway profile was not selected exactly." >&2
+  exit 1
+fi
+if bash -c '[[ -n "${OPEN_KEYBOARD_SIMULATOR_API_KEY+x}" || -n "${OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY+x}" || -n "${OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY+x}" ]]'; then
+  echo "A reselected simulator API key leaked into an unrelated child environment." >&2
+  exit 1
+fi
+
+SIGNAL_EVIDENCE_FILE="$FIXTURE/signal-evidence"
+SIGNAL_READY_FILE="$FIXTURE/signal-ready"
+printf 'sensitive evidence\n' > "$SIGNAL_EVIDENCE_FILE"
+bash -c '
+  source "$1"
+  evidence_file="$2"
+  ready_file="$3"
+  trap '\''openkeyboard_exit_after_live_evidence_signal 143 "$evidence_file"'\'' TERM
+  : > "$ready_file"
+  while :; do sleep 1; done
+' _ "$ROOT/scripts/ios/live-test-safety.sh" "$SIGNAL_EVIDENCE_FILE" "$SIGNAL_READY_FILE" &
+signal_test_pid=$!
+for _ in {1..100}; do
+  [[ -f "$SIGNAL_READY_FILE" ]] && break
+  sleep 0.01
+done
+if [[ ! -f "$SIGNAL_READY_FILE" ]]; then
+  kill -TERM "$signal_test_pid" >/dev/null 2>&1 || true
+  wait "$signal_test_pid" >/dev/null 2>&1 || true
+  echo "Signal-cleanup regression process did not become ready." >&2
+  exit 1
+fi
+kill -TERM "$signal_test_pid"
+set +e
+wait "$signal_test_pid"
+signal_status=$?
+set -e
+if [[ "$signal_status" -ne 143 || -e "$SIGNAL_EVIDENCE_FILE" ]]; then
+  echo "Live-evidence signal cleanup did not remove evidence and exit with signal status." >&2
   exit 1
 fi
 

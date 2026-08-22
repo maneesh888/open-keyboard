@@ -61,6 +61,7 @@ jobs:
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
           TRUSTED_SUPPORTS_DIFFERENTIAL: ${{ steps.validators.outputs.supports_differential }}
         run: |
+          source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"
           checked_out_sha="$(git rev-parse HEAD)"
           if [[ "$checked_out_sha" != "$PR_HEAD_SHA" ]]; then
             echo "The checked-out commit does not match the pull-request head." >&2
@@ -80,26 +81,19 @@ jobs:
               ;;
           esac
 
-          live_impact="$trusted_live_impact"
-          bootstrap_differential="false"
+          candidate_live_impact="$trusted_live_impact"
           if [[ "$TRUSTED_SUPPORTS_DIFFERENTIAL" != "true" && "$trusted_live_impact" == "gateway" ]]; then
             candidate_live_impact="$(
               OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
                 "$GITHUB_WORKSPACE/scripts/live-impact.sh" "$PR_BASE_SHA" "$PR_HEAD_SHA"
             )"
-            case "$candidate_live_impact" in
-              gateway-differential)
-                live_impact="gateway-differential"
-                bootstrap_differential="true"
-                ;;
-              none|gateway)
-                ;;
-              *)
-                echo "Candidate live-impact classification returned an invalid result." >&2
-                exit 1
-                ;;
-            esac
           fi
+          openkeyboard_resolve_live_policy_bootstrap \
+            "$TRUSTED_SUPPORTS_DIFFERENTIAL" \
+            "$trusted_live_impact" \
+            "$candidate_live_impact"
+          live_impact="$OPEN_KEYBOARD_RESOLVED_LIVE_IMPACT"
+          bootstrap_differential="$OPEN_KEYBOARD_BOOTSTRAP_DIFFERENTIAL"
 
           if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "The pull-request head is not a full commit SHA." >&2
@@ -140,6 +134,7 @@ jobs:
           CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
         run: |
+          source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"
           for snapshot_name in event current; do
             case "$snapshot_name" in
               event)
@@ -161,31 +156,11 @@ jobs:
                 PR_BODY="$(< "$body_file")" \
                 "$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"
 
-              required_models="$(sed -n 's/^- Required live models: //p' "$body_file")"
-              tested_models="$(sed -n 's/^- Exact live-tested models: //p' "$body_file")"
-              if [[ ! "$required_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
-                echo "Bootstrap differential required-model mapping is invalid." >&2
-                exit 1
-              fi
-              required_high_model="${BASH_REMATCH[2]}"
-              if [[ ! "$tested_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
-                echo "Bootstrap differential tested-model mapping is invalid." >&2
-                exit 1
-              fi
-              tested_high_model="${BASH_REMATCH[2]}"
-
               trusted_projection="$RUNNER_TEMP/$snapshot_name-trusted-gateway-projection.md"
-              {
-                echo '- Local live verification: passed'
-                echo '- Live verification target: gateway'
-                echo "- Exact live-tested head: $EVENT_HEAD_SHA"
-                echo "- Required live models: $required_high_model"
-                echo "- Exact live-tested models: $tested_high_model"
-                echo '- Live-model substitutions: none'
-                echo '- Live plain-text grammar verification: verified'
-                echo '- No credential or gateway response body retained.'
-                echo '- Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.'
-              } > "$trusted_projection"
+              openkeyboard_write_trusted_gateway_projection \
+                "$body_file" \
+                "$EVENT_HEAD_SHA" \
+                "$trusted_projection"
               HEAD_SHA="$EVENT_HEAD_SHA" \
                 LIVE_IMPACT="$TRUSTED_LIVE_IMPACT" \
                 PR_BODY="$(< "$trusted_projection")" \

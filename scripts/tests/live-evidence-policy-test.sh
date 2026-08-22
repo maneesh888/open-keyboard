@@ -165,7 +165,9 @@ run_snapshot_gate() {
   CURRENT_BODY_FILE="$CURRENT_BODY_FILE" \
     EVENT_BODY_FILE="$EVENT_BODY_FILE" \
     EVENT_HEAD_SHA="$HEAD_SHA" \
+    GITHUB_WORKSPACE="$ROOT" \
     LIVE_IMPACT=gateway \
+    RUNNER_TEMP="$FIXTURE" \
     VALIDATOR_ROOT="$ROOT/scripts" \
     bash -e -o pipefail "$ENFORCER" >> "$OUTPUT" 2>&1
 }

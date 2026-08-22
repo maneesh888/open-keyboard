@@ -395,9 +395,7 @@ case "${1:-}" in
     fi
 
     inject_xctestrun_live_smoke_env "$xctestrun"
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL" | od -An -tx1 | tr -d ' \n')"
-    export OPEN_KEYBOARD_TEST_API_KEY_HEX="$(printf '%s' "$OPEN_KEYBOARD_SIMULATOR_API_KEY" | od -An -tx1 | tr -d ' \n')"
-    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
@@ -473,8 +471,8 @@ case "${1:-}" in
       openkeyboard_load_simulator_gateway_seed "$seed_file"
       openkeyboard_select_simulator_gateway_profile "$profile_role"
       OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE="$profile_role"
-      export OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE
       inject_xctestrun_live_smoke_env "$xctestrun"
+      openkeyboard_unset_simulator_gateway_profiles
       profile_result_bundle="$SENSITIVE_LIVE_WORKSPACE/live-model-$profile_role.xcresult"
       profile_started_at="$(monotonic_seconds)"
       echo "Running isolated $profile_role profile baseline, boundary, and follow-up scenarios."
@@ -597,9 +595,7 @@ case "${1:-}" in
     fi
 
     inject_xctestrun_gateway_env "$xctestrun"
-    export OPEN_KEYBOARD_TEST_GATEWAY_URL="$OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL"
-    export OPEN_KEYBOARD_TEST_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
-    export OPEN_KEYBOARD_TEST_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \

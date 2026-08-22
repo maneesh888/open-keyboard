@@ -20,6 +20,23 @@ openkeyboard_restore_booted_simulator() {
   xcrun simctl bootstatus "$simulator" -b >/dev/null
 }
 
+openkeyboard_cleanup_live_evidence_file() {
+  local evidence_file="${1:-}"
+
+  if [[ -n "$evidence_file" ]]; then
+    rm -f -- "$evidence_file"
+  fi
+}
+
+openkeyboard_exit_after_live_evidence_signal() {
+  local signal_status="$1"
+  local evidence_file="${2:-}"
+
+  trap - EXIT HUP INT TERM
+  openkeyboard_cleanup_live_evidence_file "$evidence_file"
+  exit "$signal_status"
+}
+
 openkeyboard_primary_checkout_root() {
   local repository_root="$1"
   local common_directory canonical_common_directory primary_checkout
@@ -428,11 +445,6 @@ openkeyboard_select_simulator_gateway_profile() {
   printf -v OPEN_KEYBOARD_SIMULATOR_API_KEY '%s' "${!api_key_name}"
   printf -v OPEN_KEYBOARD_SIMULATOR_MODEL '%s' "${!model_name}"
   OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE="$profile"
-  export \
-    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
-    OPEN_KEYBOARD_SIMULATOR_API_KEY \
-    OPEN_KEYBOARD_SIMULATOR_MODEL \
-    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE
 }
 
 openkeyboard_select_reference_simulator_gateway_profile() {
