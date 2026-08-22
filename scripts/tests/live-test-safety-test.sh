@@ -25,6 +25,72 @@ if openkeyboard_restore_booted_simulator fixture-simulator; then
 fi
 unset -f xcrun
 
+SIMULATOR_APP_RUNNING="true"
+SIMULATOR_APP_TERM_REQUESTS=0
+SIMULATOR_APP_KILL_REQUESTS=0
+pgrep() {
+  [[ "$SIMULATOR_APP_RUNNING" == "true" ]]
+}
+pkill() {
+  case "$*" in
+    '-TERM -x Simulator')
+      SIMULATOR_APP_TERM_REQUESTS=$((SIMULATOR_APP_TERM_REQUESTS + 1))
+      SIMULATOR_APP_RUNNING="false"
+      ;;
+    '-KILL -x Simulator')
+      SIMULATOR_APP_KILL_REQUESTS=$((SIMULATOR_APP_KILL_REQUESTS + 1))
+      SIMULATOR_APP_RUNNING="false"
+      ;;
+    *)
+      echo "Simulator cleanup used an unexpected process selector." >&2
+      return 1
+      ;;
+  esac
+}
+sleep() {
+  return 0
+}
+if ! openkeyboard_stop_simulator_app || \
+    [[ "$SIMULATOR_APP_TERM_REQUESTS" -ne 1 || \
+       "$SIMULATOR_APP_KILL_REQUESTS" -ne 0 ]]; then
+  echo "Simulator cleanup did not close a running Simulator.app process." >&2
+  exit 1
+fi
+if ! openkeyboard_stop_simulator_app || \
+    [[ "$SIMULATOR_APP_TERM_REQUESTS" -ne 1 || \
+       "$SIMULATOR_APP_KILL_REQUESTS" -ne 0 ]]; then
+  echo "Simulator cleanup was not idempotent after Simulator.app exited." >&2
+  exit 1
+fi
+SIMULATOR_APP_RUNNING="true"
+pkill() {
+  case "$*" in
+    '-TERM -x Simulator')
+      SIMULATOR_APP_TERM_REQUESTS=$((SIMULATOR_APP_TERM_REQUESTS + 1))
+      ;;
+    '-KILL -x Simulator')
+      SIMULATOR_APP_KILL_REQUESTS=$((SIMULATOR_APP_KILL_REQUESTS + 1))
+      SIMULATOR_APP_RUNNING="false"
+      ;;
+    *) return 1 ;;
+  esac
+}
+if ! openkeyboard_stop_simulator_app || \
+    [[ "$SIMULATOR_APP_TERM_REQUESTS" -ne 2 || \
+       "$SIMULATOR_APP_KILL_REQUESTS" -ne 1 ]]; then
+  echo "Simulator cleanup did not force-close an unresponsive Simulator.app process." >&2
+  exit 1
+fi
+SIMULATOR_APP_RUNNING="true"
+pkill() {
+  return 1
+}
+if openkeyboard_stop_simulator_app >/dev/null 2>&1; then
+  echo "Simulator cleanup accepted a failed termination request." >&2
+  exit 1
+fi
+unset -f pgrep pkill sleep
+
 initialize_repository() {
   local repository="$1"
 

@@ -126,6 +126,8 @@ SENSITIVE_LIVE_WORKSPACE=""
 SENSITIVE_LIVE_SIMULATOR=""
 SENSITIVE_LIVE_SOURCE_SIMULATOR=""
 SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
+SENSITIVE_LIVE_CLOSE_SIMULATOR_APP="true"
+SENSITIVE_LIVE_SIMULATOR_WAS_CREATED="false"
 
 restore_sensitive_live_source_simulator() {
   if [[ "$SENSITIVE_LIVE_SOURCE_WAS_BOOTED" != "true" || -z "$SENSITIVE_LIVE_SOURCE_SIMULATOR" ]]; then
@@ -150,6 +152,12 @@ cleanup_sensitive_live_artifacts() {
 
   if ! restore_sensitive_live_source_simulator; then
     echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
+    cleanup_status=1
+  fi
+
+  if [[ "$SENSITIVE_LIVE_SIMULATOR_WAS_CREATED" == "true" && \
+        "$SENSITIVE_LIVE_CLOSE_SIMULATOR_APP" == "true" ]] && \
+      ! openkeyboard_stop_simulator_app; then
     cleanup_status=1
   fi
 
@@ -221,6 +229,15 @@ elapsed_seconds() {
 begin_sensitive_live_workspace() {
   local label="$1"
 
+  case "${OPEN_KEYBOARD_KEEP_SIMULATOR_APP_OPEN:-false}" in
+    false) SENSITIVE_LIVE_CLOSE_SIMULATOR_APP="true" ;;
+    true) SENSITIVE_LIVE_CLOSE_SIMULATOR_APP="false" ;;
+    *)
+      echo -e "${RED}✗ OPEN_KEYBOARD_KEEP_SIMULATOR_APP_OPEN must be true or false.${NC}" >&2
+      exit 2
+      ;;
+  esac
+
   SENSITIVE_LIVE_WORKSPACE="$(
     mktemp -d "${TMPDIR:-/tmp}/openkeyboard-$label.XXXXXX"
   )"
@@ -273,6 +290,7 @@ create_sensitive_live_simulator() {
     echo -e "${RED}✗ Failed to create a disposable live-test simulator.${NC}" >&2
     exit 1
   fi
+  SENSITIVE_LIVE_SIMULATOR_WAS_CREATED="true"
   if ! restore_sensitive_live_source_simulator; then
     echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
     exit 1
@@ -323,6 +341,7 @@ case "${1:-}" in
       -destination "$DESTINATION" \
       -configuration Debug \
       -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
+      -parallel-testing-enabled NO \
       -only-testing:OpenKeyboardUITests \
       -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
@@ -337,6 +356,7 @@ case "${1:-}" in
       -destination "$DESTINATION" \
       -configuration Debug \
       -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
+      -parallel-testing-enabled NO \
       -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO

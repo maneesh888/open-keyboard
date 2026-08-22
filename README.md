@@ -255,6 +255,11 @@ as diagnostic—not converted into a flaky pass—and exact-head policy rejects 
 evidence. High-profile structural success remains independently required. Per-profile wall-clock
 latency is retained without response bodies.
 
+Credentialed live routes remove every disposable simulator clone and close Simulator.app on exit,
+including handled failures and interruptions, so deleted clone windows do not accumulate across
+the full pre-push workflow. Set `OPEN_KEYBOARD_KEEP_SIMULATOR_APP_OPEN=true` to retain Simulator.app
+during an intentional interactive development session.
+
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set
 `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-model-id>`; the check fails before testing if the seed does

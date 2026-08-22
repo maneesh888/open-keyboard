@@ -58,6 +58,9 @@ Release readiness additionally requires exact-head GitHub checks and an independ
 - `--quick`: hygiene, OpenKeyboardCore tests, and app plus keyboard-extension build.
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
 
+The deterministic UI gate runs serially on its fixed iPhone 16 destination so concurrent XCTest
+runners do not compete for the same simulator or leave extra simulator UI behind.
+
 Screenshots, real extension testing, and live gateway verification remain separate because they
 require simulator state, human inspection, or local credentials.
 
@@ -140,6 +143,10 @@ The path must be `.githooks`.
   `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
+- Credentialed live routes close Simulator.app after removing their disposable devices so deleted
+  clone windows do not accumulate across the full pre-push workflow. Set
+  `OPEN_KEYBOARD_KEEP_SIMULATOR_APP_OPEN=true` only when an intentional interactive development
+  session needs Simulator.app to remain open.
 - Ordinary and real-keyboard live routes parse `.xcresult` and require exactly one passing test with
   no failures, skips, or expected failures. The differential route separately requires its exact
   deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
