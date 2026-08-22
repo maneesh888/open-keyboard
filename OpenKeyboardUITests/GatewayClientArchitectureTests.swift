@@ -333,6 +333,18 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testLongMalayalamLiveOracleRejectsTrivialFragmentsAndAcceptsSubstantialText() {
+        let source = Array(repeating: "source", count: 79).joined(separator: " ")
+        let trivial = LongMalayalamTranslationEvidence(translation: "മ", source: source)
+        let substantial = LongMalayalamTranslationEvidence(
+            translation: String(repeating: "മലയാളം പരിഭാഷ ", count: 30),
+            source: source
+        )
+
+        XCTAssertFalse(trivial.isUsable)
+        XCTAssertTrue(substantial.isUsable)
+    }
+
     func testKeyboardAIServiceRetriesInvalidTranslationOnceThenAcceptsValidOutput() async throws {
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
             #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#,
@@ -1115,12 +1127,9 @@ final class LiveModelDifferentialTests: XCTestCase {
             XCTAssertTrue(result.isStructuredResponse)
             XCTAssertFalse(result.items.isEmpty)
             XCTAssertFalse(result.containsWarningItem)
-            XCTAssertFalse(result.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
-            XCTAssertTrue(
-                result.displayText.unicodeScalars.contains {
-                    (0x0D00...0x0D7F).contains($0.value)
-                },
-                "The high-profile translation must contain usable Malayalam text."
+            assertUsableLongMalayalamTranslation(
+                result.displayText,
+                source: Self.longCapabilityFixture
             )
         default:
             XCTFail("Unsupported targeted live-model role.")
@@ -1176,6 +1185,38 @@ final class LiveModelDifferentialTests: XCTestCase {
     During the afternoon, families visit the garden to learn how vegetables grow. Children compare leaves, watch insects move between flowers, and help collect dry seeds for the next season.
     """
 
+    private func assertUsableLongMalayalamTranslation(
+        _ translation: String,
+        source: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let evidence = LongMalayalamTranslationEvidence(translation: translation, source: source)
+
+        XCTAssertNotEqual(evidence.translatedText, source, file: file, line: line)
+        XCTAssertGreaterThanOrEqual(
+            evidence.translatedWordCount,
+            evidence.minimumTranslatedWordCount,
+            "The high-profile result is too short to be a usable translation of the long fixture.",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(
+            evidence.malayalamLetterCount,
+            evidence.minimumMalayalamLetterCount,
+            "The high-profile result contains too little Malayalam text for the long fixture.",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(
+            evidence.targetScriptRatio,
+            0.60,
+            "The high-profile long translation is not predominantly Malayalam.",
+            file: file,
+            line: line
+        )
+    }
+
     private static func decodedHexEnvironmentValue(
         _ key: String,
         from environment: [String: String]
@@ -1196,6 +1237,33 @@ final class LiveModelDifferentialTests: XCTestCase {
             index = next
         }
         return String(bytes: bytes, encoding: .utf8)
+    }
+}
+
+private struct LongMalayalamTranslationEvidence {
+    let translatedText: String
+    let sourceWordCount: Int
+    let translatedWordCount: Int
+    let malayalamLetterCount: Int
+    let targetScriptRatio: Double
+
+    init(translation: String, source: String) {
+        translatedText = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+        sourceWordCount = source.split(whereSeparator: { $0.isWhitespace }).count
+        translatedWordCount = translatedText.split(whereSeparator: { $0.isWhitespace }).count
+        let letterScalars = translatedText.unicodeScalars.filter { CharacterSet.letters.contains($0) }
+        malayalamLetterCount = letterScalars.filter { (0x0D00...0x0D7F).contains($0.value) }.count
+        targetScriptRatio = letterScalars.isEmpty
+            ? 0
+            : Double(malayalamLetterCount) / Double(letterScalars.count)
+    }
+
+    var minimumTranslatedWordCount: Int { max(20, sourceWordCount / 3) }
+    var minimumMalayalamLetterCount: Int { max(40, sourceWordCount / 2) }
+    var isUsable: Bool {
+        translatedWordCount >= minimumTranslatedWordCount &&
+            malayalamLetterCount >= minimumMalayalamLetterCount &&
+            targetScriptRatio >= 0.60
     }
 }
 

@@ -89,6 +89,12 @@ if rg --quiet '^  workflow_dispatch:' "$CI_WORKFLOW"; then
   exit 1
 fi
 rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'supports_differential=false' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'TRUSTED_LIVE_IMPACT=$trusted_live_impact' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=$bootstrap_differential' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet '"$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'trusted-gateway-projection.md' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'LIVE_IMPACT="$TRUSTED_LIVE_IMPACT"' "$LIVE_WORKFLOW"
 rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK"
 rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"

@@ -85,10 +85,11 @@ while IFS= read -r -d '' changed_path; do
       OpenKeyboardExtension/KeyboardViewModel.swift | \
       OpenKeyboardUITests/GatewayClientArchitectureTests.swift | \
       OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift)
-      if git -C "$ROOT" diff --no-ext-diff --unified=0 "$BASE_SHA...$HEAD_SHA" -- "$changed_path" |
-          grep -E '^[+-][^+-].*(modelCapability|translationCapability|translationWarning|Translate warning|unusableCorrection|invalidResponse|longCapability|GrammarTextChunker|chunk|long input|automaticAnalysisWarning|automatic analysis|retry|parser|parse|decode|structured|selectedActionError|actionErrorState|manual action|LiveModelDifferential)' >/dev/null; then
-        differential_required="true"
-      fi
+      # These files define or prove model selection, parsing, capability classification,
+      # retries, and operation-scoped warning state. Line-keyword matching can miss
+      # semantic changes such as numeric threshold or retry-count edits, so changes to
+      # these narrowly selected model-pipeline files always require the differential gate.
+      differential_required="true"
       ;;
   esac
 done < "$changed_paths_file"

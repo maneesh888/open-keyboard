@@ -61,14 +61,11 @@ gateway_sensitive_paths=(
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
-  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
   OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
   OpenKeyboardCore/Sources/AnotherModule/RuntimeContract.json
   OpenKeyboardExtension/Info.plist
-  OpenKeyboardExtension/KeyboardAIService.swift
   OpenKeyboardExtension/Nested/AnyExtensionRuntime.swift
   OpenKeyboardExtension/Resources/RuntimeConfiguration.plist.template
-  OpenKeyboardUITests/GatewayClientArchitectureTests.swift
   OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift
   OpenKeyboard.xcodeproj/project.pbxproj
   OpenKeyboard/OpenKeyboard.entitlements
@@ -95,24 +92,34 @@ for differential_workflow_path in "${differential_workflow_paths[@]}"; do
   assert_impact_path "$differential_workflow_path" gateway-differential
 done
 
-assert_impact_path \
-  OpenKeyboardExtension/KeyboardViewModel.swift \
-  gateway-differential \
-  'automaticAnalysisWarning retry modelCapability'
-assert_impact_path \
-  OpenKeyboardExtension/KeyboardViewModel.swift \
-  gateway-differential \
-  'selectedActionErrorState translationWarning'
-assert_impact_path \
-  OpenKeyboard/Services/CanonicalGatewayClient.swift \
-  gateway-differential \
-  'decode structured response parser'
+differential_model_pipeline_paths=(
+  OpenKeyboard/Models/KeyboardSuggestionModels.swift
+  OpenKeyboard/Services/CanonicalGatewayClient.swift
+  OpenKeyboard/Services/NetworkManager.swift
+  OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
+  OpenKeyboardExtension/KeyboardAIService.swift
+  OpenKeyboardExtension/KeyboardViewModel.swift
+  OpenKeyboardUITests/GatewayClientArchitectureTests.swift
+  OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift
+)
+
+for differential_model_pipeline_path in "${differential_model_pipeline_paths[@]}"; do
+  assert_impact_path \
+    "$differential_model_pipeline_path" \
+    gateway-differential \
+    'numericThreshold = 0.50'
+done
+
 assert_impact_path \
   OpenKeyboardExtension/KeyboardAIService.swift \
   gateway-differential \
-  'chunk long input boundary'
+  'if expectedScriptRatio < 0.50'
 assert_impact_path \
   OpenKeyboardExtension/KeyboardViewModel.swift \
+  gateway-differential \
+  'let maximumAttempts = 1'
+assert_impact_path \
+  OpenKeyboard/Views/KeyboardPreviewLabView.swift \
   gateway \
   'unrelated keyboard layout adjustment'
 
