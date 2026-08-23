@@ -277,9 +277,16 @@ class NetworkManager {
             timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
         )
         do {
-            _ = try SemanticPromptContract.validateGatewayPromptResponse(content, presetID: presetID)
+            let validatedOutput = try SemanticPromptContract.validateGatewayPromptResponse(content, presetID: presetID)
             if presetID == Self.grammarDiagnosticPresetID {
                 _ = try await Self.validatePlainTextCorrectionContent(content, inputText: preset.input, minimumCount: 1)
+            } else if presetID == Self.translationDiagnosticPresetID,
+                      TranslationLanguageOutputValidator().validationFailure(
+                          for: validatedOutput,
+                          expectedScript: .latin,
+                          expectedLanguageCodes: ["nl"]
+                      ) != nil {
+                throw NetworkError.unusableCapability("Dutch translation")
             }
         } catch let error as NetworkError {
             throw error

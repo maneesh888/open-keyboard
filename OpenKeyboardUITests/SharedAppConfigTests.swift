@@ -8,21 +8,45 @@ private enum RejectedGatewayFixture {
 }
 
 private final class InMemoryAppConfigSecretStore: AppConfigSecretStore {
-    var apiKey: String?
+    private var legacyAPIKey: String?
+    private var referencedAPIKeys: [String: String] = [:]
+    private var latestReference: String?
+    var apiKey: String? {
+        get { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
+        set { legacyAPIKey = newValue }
+    }
 
-    func loadAPIKey() -> String? { apiKey }
+    func loadAPIKey() -> String? { legacyAPIKey }
+    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
     var shouldFailSave = false
 
     @discardableResult
     func saveAPIKey(_ apiKey: String) -> Bool {
         guard !shouldFailSave else { return false }
-        self.apiKey = apiKey
+        legacyAPIKey = apiKey
+        return true
+    }
+
+    @discardableResult
+    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
+        guard !shouldFailSave else { return false }
+        referencedAPIKeys[reference] = apiKey
+        latestReference = reference
         return true
     }
 
     @discardableResult
     func clearAPIKey() -> Bool {
-        apiKey = nil
+        legacyAPIKey = nil
+        return true
+    }
+
+    @discardableResult
+    func clearAPIKey(reference: String) -> Bool {
+        referencedAPIKeys.removeValue(forKey: reference)
+        if latestReference == reference {
+            latestReference = referencedAPIKeys.keys.first
+        }
         return true
     }
 }
@@ -165,6 +189,44 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(loaded.isConfigured)
         XCTAssertTrue(loaded.grammarCorrectionVerified)
         XCTAssertEqual(loaded.grammarCorrectionContractVersion, previous.grammarCorrectionContractVersion)
+    }
+
+    func testStagedReplacementSecretCannotTearPublishedProfileAndCommitIncludesTimestamp() throws {
+        let previousDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let previous = AppConfig(
+            apiKey: "previous-secret",
+            gatewayURL: "https://previous.example",
+            selectedModel: "previous-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(previous.save(to: defaults, validatedAt: previousDate))
+
+        XCTAssertTrue(secretStore.saveAPIKey("staged-secret", reference: "interrupted-replacement"))
+        let duringInterruptedReplacement = AppConfig.load(from: defaults)
+        XCTAssertEqual(duringInterruptedReplacement.apiKey, previous.apiKey)
+        XCTAssertEqual(duringInterruptedReplacement.gatewayURL, previous.gatewayURL)
+        XCTAssertEqual(duringInterruptedReplacement.selectedModel, previous.selectedModel)
+        XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), previousDate)
+
+        let replacementDate = Date(timeIntervalSince1970: 1_700_000_123)
+        let replacement = AppConfig(
+            apiKey: "replacement-secret",
+            gatewayURL: "https://replacement.example",
+            selectedModel: "replacement-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(replacement.save(to: defaults, validatedAt: replacementDate))
+
+        let committed = AppConfig.load(from: defaults)
+        XCTAssertEqual(committed.apiKey, replacement.apiKey)
+        XCTAssertEqual(committed.gatewayURL, replacement.gatewayURL)
+        XCTAssertEqual(committed.selectedModel, replacement.selectedModel)
+        XCTAssertTrue(committed.grammarCorrectionVerified)
+        XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), replacementDate)
     }
 
     func testLegacyDefaultsAPIKeyMigratesToSecretStoreAndIsRemovedFromDefaults() throws {

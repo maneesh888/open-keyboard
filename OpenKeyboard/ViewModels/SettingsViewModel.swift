@@ -354,7 +354,8 @@ class SettingsViewModel: ObservableObject {
                         grammarCorrectionVerified: true,
                         grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
                     )
-                    guard saveConfig(validatedConfig) else {
+                    let validatedAt = Date()
+                    guard saveConfig(validatedConfig, validatedAt: validatedAt) else {
                         failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
                         return
                     }
@@ -364,7 +365,6 @@ class SettingsViewModel: ObservableObject {
                     errorMessage = nil
                     modelSelectionMessage = nil
                     AppConfig.clearGatewayConnectionError(from: defaults)
-                    AppConfig.saveGatewayConnectionLastTestedAt(to: defaults)
                     showsValidatedGatewayDetails = true
                     return
                 } catch {
@@ -442,11 +442,11 @@ class SettingsViewModel: ObservableObject {
         return Self.exactModel(selectedModelInput, in: availableModels) ?? ""
     }
 
-    private func saveConfig(_ candidate: AppConfig) -> Bool {
+    private func saveConfig(_ candidate: AppConfig, validatedAt: Date) -> Bool {
         if let defaults {
-            return candidate.save(to: defaults)
+            return candidate.save(to: defaults, validatedAt: validatedAt)
         }
-        return candidate.save()
+        return candidate.save(validatedAt: validatedAt)
     }
 
     private static func normalizedModelChoices(_ models: [String]) -> [String] {

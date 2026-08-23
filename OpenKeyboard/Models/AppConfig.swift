@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import NaturalLanguage
 import Security
 
 private final class KeyboardUITestConfigProcessAuthorization: @unchecked Sendable {
@@ -39,6 +40,15 @@ protocol AppConfigSecretStore {
     func loadAPIKey() -> String?
     @discardableResult func saveAPIKey(_ apiKey: String) -> Bool
     @discardableResult func clearAPIKey() -> Bool
+    func loadAPIKey(reference: String) -> String?
+    @discardableResult func saveAPIKey(_ apiKey: String, reference: String) -> Bool
+    @discardableResult func clearAPIKey(reference: String) -> Bool
+}
+
+extension AppConfigSecretStore {
+    func loadAPIKey(reference: String) -> String? { loadAPIKey() }
+    @discardableResult func saveAPIKey(_ apiKey: String, reference: String) -> Bool { saveAPIKey(apiKey) }
+    @discardableResult func clearAPIKey(reference: String) -> Bool { true }
 }
 
 final class KeychainAppConfigSecretStore: AppConfigSecretStore {
@@ -53,7 +63,15 @@ final class KeychainAppConfigSecretStore: AppConfigSecretStore {
     }
 
     func loadAPIKey() -> String? {
-        var query = baseQuery()
+        loadAPIKey(account: account)
+    }
+
+    func loadAPIKey(reference: String) -> String? {
+        loadAPIKey(account: versionedAccount(reference: reference))
+    }
+
+    private func loadAPIKey(account: String) -> String? {
+        var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -69,12 +87,21 @@ final class KeychainAppConfigSecretStore: AppConfigSecretStore {
 
     @discardableResult
     func saveAPIKey(_ apiKey: String) -> Bool {
+        saveAPIKey(apiKey, account: account)
+    }
+
+    @discardableResult
+    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
+        saveAPIKey(apiKey, account: versionedAccount(reference: reference))
+    }
+
+    private func saveAPIKey(_ apiKey: String, account: String) -> Bool {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let data = trimmed.data(using: .utf8) else {
-            return clearAPIKey()
+            return clearAPIKey(account: account)
         }
 
-        var query = baseQuery()
+        var query = baseQuery(account: account)
         let attributes: [String: Any] = [kSecValueData as String: data]
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if updateStatus == errSecSuccess { return true }
@@ -87,12 +114,21 @@ final class KeychainAppConfigSecretStore: AppConfigSecretStore {
 
     @discardableResult
     func clearAPIKey() -> Bool {
-        let status = SecItemDelete(baseQuery() as CFDictionary)
+        clearAPIKey(account: account)
+    }
+
+    @discardableResult
+    func clearAPIKey(reference: String) -> Bool {
+        clearAPIKey(account: versionedAccount(reference: reference))
+    }
+
+    private func clearAPIKey(account: String) -> Bool {
+        let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
     }
 
     func baseQueryForTesting() -> [String: Any] {
-        baseQuery()
+        baseQuery(account: account)
     }
 
     private static func defaultSharedAccessGroup() -> String? {
@@ -103,7 +139,11 @@ final class KeychainAppConfigSecretStore: AppConfigSecretStore {
         return appIdentifierPrefix + sharedAccessGroupSuffix
     }
 
-    private func baseQuery() -> [String: Any] {
+    private func versionedAccount(reference: String) -> String {
+        "\(account).profile.\(reference)"
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
         var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -113,6 +153,92 @@ final class KeychainAppConfigSecretStore: AppConfigSecretStore {
             query[kSecAttrAccessGroup as String] = accessGroup
         }
         return query
+    }
+}
+
+private struct StoredGatewayProfile: Codable {
+    static let schemaVersion = 1
+
+    let schemaVersion: Int
+    let secretReference: String
+    let gatewayURL: String
+    let selectedModel: String
+    let isConfigured: Bool
+    let grammarCorrectionVerified: Bool
+    let grammarCorrectionContractVersion: String
+    var lastValidatedAt: TimeInterval?
+}
+
+enum KeyboardTranslationValidationFailure: Equatable {
+    case predominantlyWrongLanguage
+    case suspiciousMixedScripts
+}
+
+struct TranslationLanguageOutputValidator {
+    enum Script: Hashable {
+        case latin
+        case arabic
+        case devanagari
+        case bengali
+        case telugu
+        case tamil
+        case malayalam
+        case cyrillic
+        case han
+        case other
+    }
+
+    func validationFailure(
+        for output: String,
+        expectedScript: Script,
+        expectedLanguageCodes: Set<String>
+    ) -> KeyboardTranslationValidationFailure? {
+        let scriptCounts = output.unicodeScalars.reduce(into: [Script: Int]()) { counts, scalar in
+            guard let script = Self.script(for: scalar) else { return }
+            counts[script, default: 0] += 1
+        }
+        let totalScriptLetters = scriptCounts.values.reduce(0, +)
+        guard totalScriptLetters > 0 else { return nil }
+
+        let expectedScriptCount = scriptCounts[expectedScript, default: 0]
+        let unexpectedScriptCount = totalScriptLetters - expectedScriptCount
+        let expectedScriptRatio = Double(expectedScriptCount) / Double(totalScriptLetters)
+        let unexpectedScriptRatio = Double(unexpectedScriptCount) / Double(totalScriptLetters)
+        if expectedScriptRatio < 0.55 { return .predominantlyWrongLanguage }
+        if unexpectedScriptCount >= 4, unexpectedScriptRatio >= 0.20 { return .suspiciousMixedScripts }
+
+        guard totalScriptLetters >= 4 else { return nil }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(output)
+        let hypotheses = recognizer.languageHypotheses(withMaximum: 4)
+        let expectedConfidence = hypotheses
+            .filter { expectedLanguageCodes.contains($0.key.rawValue) }
+            .map(\.value)
+            .max() ?? 0
+        let dominantConfidence = hypotheses.values.max() ?? 0
+        let isShortOutput = totalScriptLetters < 18
+        let minimumExpectedConfidence = isShortOutput ? 0.08 : 0.12
+        let minimumDominantConfidence = isShortOutput ? 0.60 : 0.55
+        if expectedConfidence < minimumExpectedConfidence,
+           dominantConfidence >= minimumDominantConfidence {
+            return .predominantlyWrongLanguage
+        }
+        return nil
+    }
+
+    private static func script(for scalar: Unicode.Scalar) -> Script? {
+        switch scalar.value {
+        case 0x0041...0x005A, 0x0061...0x007A, 0x00C0...0x024F, 0x1E00...0x1EFF: return .latin
+        case 0x0400...0x052F: return .cyrillic
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: return .arabic
+        case 0x0900...0x097F, 0xA8E0...0xA8FF: return .devanagari
+        case 0x0980...0x09FF: return .bengali
+        case 0x0B80...0x0BFF: return .tamil
+        case 0x0C00...0x0C7F: return .telugu
+        case 0x0D00...0x0D7F: return .malayalam
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2EBEF: return .han
+        default: return CharacterSet.letters.contains(scalar) ? .other : nil
+        }
     }
 }
 
@@ -196,6 +322,7 @@ struct AppConfig: Codable {
     static let gatewayConnectionErrorMessageKey = "gatewayConnectionErrorMessage"
     static let gatewayConnectionErrorUpdatedAtKey = "gatewayConnectionErrorUpdatedAt"
     static let gatewayConnectionLastTestedAtKey = "gatewayConnectionLastTestedAt"
+    static let gatewayProfileKey = "gatewayProfile.v1"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
     private static let keyboardUITestConfigOriginKey = "keyboardExtension.gatewayConfigIsUITestSeed"
@@ -230,26 +357,39 @@ extension AppConfig {
     }
 
     static func load(from defaults: UserDefaults) -> AppConfig {
-        let legacyDefaultsAPIKey = defaults.string(forKey: AppConfig.apiKeyKey) ?? ""
-        let keychainAPIKey = secretStore.loadAPIKey() ?? ""
-        let apiKey = keychainAPIKey.isEmpty ? legacyDefaultsAPIKey : keychainAPIKey
+        let storedProfile = storedGatewayProfile(from: defaults)
+        let loadedConfig: AppConfig
+        if let storedProfile {
+            loadedConfig = AppConfig(
+                apiKey: secretStore.loadAPIKey(reference: storedProfile.secretReference) ?? "",
+                gatewayURL: storedProfile.gatewayURL,
+                selectedModel: storedProfile.selectedModel,
+                isConfigured: storedProfile.isConfigured,
+                grammarCorrectionVerified: storedProfile.grammarCorrectionVerified,
+                grammarCorrectionContractVersion: storedProfile.grammarCorrectionContractVersion
+            ).runtimeNormalized()
+        } else {
+            let legacyDefaultsAPIKey = defaults.string(forKey: AppConfig.apiKeyKey) ?? ""
+            let keychainAPIKey = secretStore.loadAPIKey() ?? ""
+            let apiKey = keychainAPIKey.isEmpty ? legacyDefaultsAPIKey : keychainAPIKey
 
-        if keychainAPIKey.isEmpty, !legacyDefaultsAPIKey.isEmpty {
-            if secretStore.saveAPIKey(legacyDefaultsAPIKey) {
+            if keychainAPIKey.isEmpty, !legacyDefaultsAPIKey.isEmpty {
+                if secretStore.saveAPIKey(legacyDefaultsAPIKey) {
+                    defaults.removeObject(forKey: AppConfig.apiKeyKey)
+                }
+            } else if !legacyDefaultsAPIKey.isEmpty {
                 defaults.removeObject(forKey: AppConfig.apiKeyKey)
             }
-        } else if !legacyDefaultsAPIKey.isEmpty {
-            defaults.removeObject(forKey: AppConfig.apiKeyKey)
-        }
 
-        let loadedConfig = AppConfig(
-            apiKey: apiKey,
-            gatewayURL: defaults.string(forKey: AppConfig.gatewayURLKey) ?? "",
-            selectedModel: defaults.string(forKey: AppConfig.selectedModelKey) ?? "",
-            isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
-            grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
-            grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
-        ).runtimeNormalized()
+            loadedConfig = AppConfig(
+                apiKey: apiKey,
+                gatewayURL: defaults.string(forKey: AppConfig.gatewayURLKey) ?? "",
+                selectedModel: defaults.string(forKey: AppConfig.selectedModelKey) ?? "",
+                isConfigured: defaults.bool(forKey: AppConfig.isConfiguredKey),
+                grammarCorrectionVerified: defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey),
+                grammarCorrectionContractVersion: defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey) ?? ""
+            ).runtimeNormalized()
+        }
 
         let requiresUITestSeedAuthorization = loadedConfig.isKnownTestPlaceholderConfig ||
             defaults.bool(forKey: keyboardUITestConfigOriginKey)
@@ -273,37 +413,79 @@ extension AppConfig {
     }
 
     @discardableResult
-    func save() -> Bool {
+    func save(validatedAt: Date? = nil) -> Bool {
         guard let sharedDefaults = AppConfig.sharedDefaults() else {
             return false
         }
 
-        return save(to: sharedDefaults)
+        return save(to: sharedDefaults, validatedAt: validatedAt)
     }
 
     @discardableResult
-    func save(to defaults: UserDefaults) -> Bool {
+    func save(to defaults: UserDefaults, validatedAt: Date? = nil) -> Bool {
         let runtimeConfig = runtimeNormalized()
         let trimmedAPIKey = runtimeConfig.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let previousProfile = AppConfig.storedGatewayProfile(from: defaults)
 
         guard runtimeConfig.isConfigured else {
+            if let previousProfile {
+                _ = AppConfig.secretStore.clearAPIKey(reference: previousProfile.secretReference)
+            }
             _ = AppConfig.secretStore.clearAPIKey()
             var unconfigured = runtimeConfig
             unconfigured.apiKey = ""
+            defaults.removeObject(forKey: AppConfig.gatewayProfileKey)
             defaults.removeObject(forKey: AppConfig.apiKeyKey)
             unconfigured.saveNonSecretValues(to: defaults)
             AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
             return true
         }
 
-        // Keep the published App Group profile untouched until the replacement secret is
-        // available. A Keychain failure must not tear down a previously working profile.
-        guard AppConfig.secretStore.saveAPIKey(trimmedAPIKey) else { return false }
+        // Stage the replacement secret under a new reference, then atomically publish one
+        // App Group record containing every non-secret profile field and that reference.
+        // Readers therefore observe either the complete previous profile or the complete new one.
+        let secretReference = UUID().uuidString.lowercased()
+        guard AppConfig.secretStore.saveAPIKey(trimmedAPIKey, reference: secretReference) else { return false }
+        let profile = StoredGatewayProfile(
+            schemaVersion: StoredGatewayProfile.schemaVersion,
+            secretReference: secretReference,
+            gatewayURL: runtimeConfig.gatewayURL,
+            selectedModel: runtimeConfig.selectedModel,
+            isConfigured: runtimeConfig.isConfigured,
+            grammarCorrectionVerified: runtimeConfig.grammarCorrectionVerified,
+            grammarCorrectionContractVersion: runtimeConfig.grammarCorrectionContractVersion,
+            lastValidatedAt: validatedAt?.timeIntervalSince1970 ?? previousProfile?.lastValidatedAt
+        )
+        guard AppConfig.publish(profile, to: defaults) else {
+            _ = AppConfig.secretStore.clearAPIKey(reference: secretReference)
+            return false
+        }
 
         defaults.removeObject(forKey: AppConfig.apiKeyKey)
         runtimeConfig.saveNonSecretValues(to: defaults)
+        _ = AppConfig.secretStore.clearAPIKey()
+        if let previousProfile, previousProfile.secretReference != secretReference {
+            _ = AppConfig.secretStore.clearAPIKey(reference: previousProfile.secretReference)
+        }
         AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
         return true
+    }
+
+    private static func storedGatewayProfile(from defaults: UserDefaults) -> StoredGatewayProfile? {
+        guard let data = defaults.data(forKey: gatewayProfileKey),
+              let profile = try? JSONDecoder().decode(StoredGatewayProfile.self, from: data),
+              profile.schemaVersion == StoredGatewayProfile.schemaVersion,
+              !profile.secretReference.isEmpty else {
+            return nil
+        }
+        return profile
+    }
+
+    private static func publish(_ profile: StoredGatewayProfile, to defaults: UserDefaults) -> Bool {
+        guard let data = try? JSONEncoder().encode(profile) else { return false }
+        defaults.set(data, forKey: gatewayProfileKey)
+        defaults.synchronize()
+        return defaults.data(forKey: gatewayProfileKey) == data
     }
 
     @discardableResult
@@ -314,6 +496,11 @@ extension AppConfig {
     ) -> Bool {
         guard overwriteExistingRealConfig || !AppConfig.hasExistingRealConfig(in: defaults) else {
             return false
+        }
+        if overwriteExistingRealConfig,
+           let previousProfile = AppConfig.storedGatewayProfile(from: defaults) {
+            _ = AppConfig.secretStore.clearAPIKey(reference: previousProfile.secretReference)
+            defaults.removeObject(forKey: AppConfig.gatewayProfileKey)
         }
 
         let didSaveSecret = AppConfig.secretStore.saveAPIKey(apiKey)
@@ -354,6 +541,22 @@ extension AppConfig {
     }
 
     static func hasExistingRealConfig(in defaults: UserDefaults) -> Bool {
+        if let profile = storedGatewayProfile(from: defaults) {
+            let candidate = AppConfig(
+                apiKey: secretStore.loadAPIKey(reference: profile.secretReference) ?? "",
+                gatewayURL: profile.gatewayURL,
+                selectedModel: profile.selectedModel,
+                isConfigured: profile.isConfigured,
+                grammarCorrectionVerified: profile.grammarCorrectionVerified,
+                grammarCorrectionContractVersion: profile.grammarCorrectionContractVersion
+            ).runtimeNormalized()
+            return candidate.isConfigured
+                && !candidate.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !candidate.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !candidate.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !candidate.isKnownTestPlaceholderConfig
+                && !defaults.bool(forKey: keyboardUITestConfigOriginKey)
+        }
         let keychainAPIKey = secretStore.loadAPIKey()?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let legacyDefaultsAPIKey = defaults.string(forKey: AppConfig.apiKeyKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let gatewayURL = defaults.string(forKey: AppConfig.gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -418,6 +621,9 @@ extension AppConfig {
     }
 
     static func gatewayConnectionLastTestedAt(from defaults: UserDefaults) -> Date? {
+        if let timestamp = storedGatewayProfile(from: defaults)?.lastValidatedAt, timestamp > 0 {
+            return Date(timeIntervalSince1970: timestamp)
+        }
         guard defaults.object(forKey: gatewayConnectionLastTestedAtKey) != nil else { return nil }
         let timestamp = defaults.double(forKey: gatewayConnectionLastTestedAtKey)
         guard timestamp > 0 else { return nil }
@@ -426,12 +632,20 @@ extension AppConfig {
 
     static func saveGatewayConnectionLastTestedAt(_ date: Date = Date(), to defaults: UserDefaults? = sharedDefaults()) {
         guard let defaults else { return }
+        if var profile = storedGatewayProfile(from: defaults) {
+            profile.lastValidatedAt = date.timeIntervalSince1970
+            _ = publish(profile, to: defaults)
+        }
         defaults.set(date.timeIntervalSince1970, forKey: gatewayConnectionLastTestedAtKey)
         defaults.synchronize()
     }
 
     static func clearGatewayConnectionLastTestedAt(from defaults: UserDefaults? = sharedDefaults()) {
         guard let defaults else { return }
+        if var profile = storedGatewayProfile(from: defaults) {
+            profile.lastValidatedAt = nil
+            _ = publish(profile, to: defaults)
+        }
         defaults.removeObject(forKey: gatewayConnectionLastTestedAtKey)
         defaults.synchronize()
     }
@@ -669,8 +883,11 @@ extension AppConfig {
     }
 
     static func clear(from defaults: UserDefaults) {
+        if let profile = storedGatewayProfile(from: defaults) {
+            secretStore.clearAPIKey(reference: profile.secretReference)
+        }
         secretStore.clearAPIKey()
-        [apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey].forEach {
+        [gatewayProfileKey, apiKeyKey, gatewayURLKey, selectedModelKey, isConfiguredKey, grammarCorrectionVerifiedKey, grammarCorrectionContractVersionKey, gatewayConnectionErrorMessageKey, gatewayConnectionErrorUpdatedAtKey, gatewayConnectionLastTestedAtKey].forEach {
             defaults.removeObject(forKey: $0)
         }
         clearKeyboardUITestState(from: defaults)

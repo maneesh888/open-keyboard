@@ -923,6 +923,28 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 4)
     }
 
+    func testGatewayDiagnosticsRejectsSchemaValidNonDutchTranslation() async throws {
+        let frenchResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"La connexion de la passerelle est prête pour les actions d'écriture.","replacement":"La connexion de la passerelle est prête pour les actions d'écriture."}],"corrected_text":"La connexion de la passerelle est prête pour les actions d'écriture."}"#
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: frenchResponse)
+        ])
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        let translation = try XCTUnwrap(report.checks.first { $0.id == "settings-translation-dutch" })
+        XCTAssertEqual(translation.status, .failed)
+        XCTAssertEqual(translation.message, NetworkError.unusableCapability("Dutch translation").localizedDescription)
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
     func testGatewayDiagnosticsFailsWhenPlainTextGrammarIsUnusable() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
@@ -1575,19 +1597,37 @@ private final class NetworkManagerTestTransport: NetworkManagerTransporting {
 }
 
 private final class NetworkManagerInMemorySecretStore: AppConfigSecretStore {
-    var apiKey: String?
+    private var legacyAPIKey: String?
+    private var referencedAPIKeys: [String: String] = [:]
+    private var latestReference: String?
+    var apiKey: String? { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
 
-    func loadAPIKey() -> String? { apiKey }
+    func loadAPIKey() -> String? { legacyAPIKey }
+    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
 
     @discardableResult
     func saveAPIKey(_ apiKey: String) -> Bool {
-        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return true
+    }
+
+    @discardableResult
+    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
+        referencedAPIKeys[reference] = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        latestReference = reference
         return true
     }
 
     @discardableResult
     func clearAPIKey() -> Bool {
-        apiKey = nil
+        legacyAPIKey = nil
+        return true
+    }
+
+    @discardableResult
+    func clearAPIKey(reference: String) -> Bool {
+        referencedAPIKeys.removeValue(forKey: reference)
+        if latestReference == reference { latestReference = referencedAPIKeys.keys.first }
         return true
     }
 }

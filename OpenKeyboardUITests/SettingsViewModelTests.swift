@@ -593,6 +593,9 @@ final class SettingsViewModelTests: XCTestCase {
     }
 
     func testChangedCredentialsWithZeroModelsPreserveCompletePreviousProfile() async {
+        let suiteName = "SettingsViewModelTests.zero-models.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let configured = AppConfig(
             apiKey: "existing-key",
             gatewayURL: "https://existing.example",
@@ -601,8 +604,9 @@ final class SettingsViewModelTests: XCTestCase {
             grammarCorrectionVerified: true,
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
+        XCTAssertTrue(configured.save(to: defaults))
         let tester = FakeGatewayTester(models: [])
-        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
         viewModel.updateGatewayURLInput("https://empty.example")
         viewModel.updateAPIKeyInput("replacement-key")
 
@@ -613,6 +617,12 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.apiKey, "existing-key")
         XCTAssertEqual(viewModel.config.selectedModel, "old-model")
         XCTAssertTrue(tester.smokeModels.isEmpty)
+        let persisted = AppConfig.load(from: defaults)
+        XCTAssertEqual(persisted.gatewayURL, configured.gatewayURL)
+        XCTAssertEqual(persisted.apiKey, configured.apiKey)
+        XCTAssertEqual(persisted.selectedModel, configured.selectedModel)
+        XCTAssertTrue(persisted.isConfigured)
+        XCTAssertTrue(persisted.grammarCorrectionVerified)
     }
 
     func testResetOnboardingClearsPersistedFlagAndShowsConfirmation() {
@@ -1108,21 +1118,40 @@ private func defaultsSuiteName(_ defaults: UserDefaults) -> String {
 }
 
 private final class SettingsInMemorySecretStore: AppConfigSecretStore {
-    var apiKey: String?
+    private var legacyAPIKey: String?
+    private var referencedAPIKeys: [String: String] = [:]
+    private var latestReference: String?
+    var apiKey: String? { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
     var shouldFailSave = false
 
-    func loadAPIKey() -> String? { apiKey }
+    func loadAPIKey() -> String? { legacyAPIKey }
+    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
 
     @discardableResult
     func saveAPIKey(_ apiKey: String) -> Bool {
         guard !shouldFailSave else { return false }
-        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return true
+    }
+
+    @discardableResult
+    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
+        guard !shouldFailSave else { return false }
+        referencedAPIKeys[reference] = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        latestReference = reference
         return true
     }
 
     @discardableResult
     func clearAPIKey() -> Bool {
-        apiKey = nil
+        legacyAPIKey = nil
+        return true
+    }
+
+    @discardableResult
+    func clearAPIKey(reference: String) -> Bool {
+        referencedAPIKeys.removeValue(forKey: reference)
+        if latestReference == reference { latestReference = referencedAPIKeys.keys.first }
         return true
     }
 }
