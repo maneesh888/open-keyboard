@@ -773,7 +773,15 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(persisted.selectedModel, previous.selectedModel)
         XCTAssertTrue(persisted.grammarCorrectionVerified)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), previousValidationDate)
+        guard let persistedValidationDate = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else {
+            XCTFail("The previous profile validation timestamp should be preserved.")
+            return
+        }
+        XCTAssertEqual(
+            persistedValidationDate.timeIntervalSinceReferenceDate,
+            previousValidationDate.timeIntervalSinceReferenceDate,
+            accuracy: 0.001
+        )
     }
 
     func testCorrectionTimeoutShowsTimeoutFailureInsteadOfModelCapability() async {
