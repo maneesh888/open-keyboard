@@ -52,6 +52,26 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
+                    if viewModel.shouldShowModelSelection {
+                        Picker("Model", selection: Binding(
+                            get: { viewModel.selectedModelInput },
+                            set: { viewModel.updateSelectedModelInput($0) }
+                        )) {
+                            Text("Select a model").tag("")
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .accessibilityIdentifier("settings_gateway_model_picker")
+
+                        if let message = viewModel.modelSelectionMessage {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                                .accessibilityIdentifier("settings_gateway_model_selection_required")
+                        }
+                    }
+
                     if viewModel.shouldShowConnectionActions {
                         Button(action: {
                             dismissKeyboard()
@@ -124,7 +144,7 @@ struct SettingsView: View {
                 }
 
                 Section(header: Label("Gateway Diagnostics", systemImage: "waveform.path.ecg")) {
-                    Text("Check model access and the same plain-text grammar flow used by the keyboard.")
+                    Text("Check the exact selected model with one fast probe each for grammar, Rewrite/Improve, and translation to Dutch.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 

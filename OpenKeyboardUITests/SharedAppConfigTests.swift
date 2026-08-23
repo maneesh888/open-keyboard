@@ -127,12 +127,44 @@ final class SharedAppConfigTests: XCTestCase {
         let extensionLoadedConfig = AppConfig.load(from: defaults)
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
         XCTAssertNil(secretStore.apiKey)
-        XCTAssertEqual(extensionLoadedConfig.gatewayURL, fixtureGatewayURL)
-        XCTAssertEqual(extensionLoadedConfig.selectedModel, fixtureModel)
+        XCTAssertEqual(extensionLoadedConfig.gatewayURL, "")
+        XCTAssertEqual(extensionLoadedConfig.selectedModel, "")
         XCTAssertEqual(extensionLoadedConfig.apiKey, "")
         XCTAssertFalse(extensionLoadedConfig.isConfigured)
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertFalse(extensionLoadedConfig.supportsStructuredCorrections)
+    }
+
+    func testFailedReplacementSavePreservesCompletePreviousAppGroupProfile() throws {
+        let previous = AppConfig(
+            apiKey: "previous-secret",
+            gatewayURL: "https://previous.example",
+            selectedModel: "previous-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(previous.save(to: defaults))
+        secretStore.shouldFailSave = true
+
+        let replacement = AppConfig(
+            apiKey: "replacement-secret",
+            gatewayURL: "https://replacement.example",
+            selectedModel: "replacement-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+
+        XCTAssertFalse(replacement.save(to: defaults))
+
+        let loaded = AppConfig.load(from: defaults)
+        XCTAssertEqual(loaded.apiKey, previous.apiKey)
+        XCTAssertEqual(loaded.gatewayURL, previous.gatewayURL)
+        XCTAssertEqual(loaded.selectedModel, previous.selectedModel)
+        XCTAssertTrue(loaded.isConfigured)
+        XCTAssertTrue(loaded.grammarCorrectionVerified)
+        XCTAssertEqual(loaded.grammarCorrectionContractVersion, previous.grammarCorrectionContractVersion)
     }
 
     func testLegacyDefaultsAPIKeyMigratesToSecretStoreAndIsRemovedFromDefaults() throws {

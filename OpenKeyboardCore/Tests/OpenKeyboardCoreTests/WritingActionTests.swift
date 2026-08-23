@@ -4,7 +4,7 @@ import XCTest
 
 final class WritingActionTests: XCTestCase {
     func testSharedContractVersionIsPinned() {
-        XCTAssertEqual(WritingPromptBuilder.contractVersion, "3.0.0")
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "3.1.0")
     }
 
     func testBuiltInActionsHaveStableTitles() {

@@ -296,17 +296,9 @@ extension AppConfig {
             return true
         }
 
-        guard AppConfig.secretStore.saveAPIKey(trimmedAPIKey) else {
-            var unconfigured = runtimeConfig
-            unconfigured.apiKey = ""
-            unconfigured.isConfigured = false
-            unconfigured.grammarCorrectionVerified = false
-            unconfigured.grammarCorrectionContractVersion = ""
-            defaults.removeObject(forKey: AppConfig.apiKeyKey)
-            unconfigured.saveNonSecretValues(to: defaults)
-            AppConfig.clearKeyboardUITestConfigMetadata(from: defaults)
-            return false
-        }
+        // Keep the published App Group profile untouched until the replacement secret is
+        // available. A Keychain failure must not tear down a previously working profile.
+        guard AppConfig.secretStore.saveAPIKey(trimmedAPIKey) else { return false }
 
         defaults.removeObject(forKey: AppConfig.apiKeyKey)
         runtimeConfig.saveNonSecretValues(to: defaults)

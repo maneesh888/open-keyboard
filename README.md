@@ -138,7 +138,7 @@ does not inject Open Keyboard prompts or rebuild the message conversation.
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `3.0.0`. This path is a checkout
+`Vendor/semantic-prompt-contract` Git submodule at contract version `3.1.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
 and UI tests compile the same generated Swift adapter. UI, request transport, gateway
