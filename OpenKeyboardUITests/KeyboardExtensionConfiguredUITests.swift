@@ -165,27 +165,27 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertFalse(keyboardApp.staticTexts["Gateway not configured"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Pair gateway in app"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
+        XCTAssertTrue(
+            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 2),
+            "Left correction/status lane should stay enabled while the sparkle action is available"
+        )
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
         keyboardApp.buttons["ai_sparkle_action"].tap()
         XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 2))
-        XCTAssertFalse(keyboardApp.staticTexts["ai_action_loading_text"].exists)
-        let emptyPrompt = keyboardApp.staticTexts["ai_action_empty_text"]
-        XCTAssertTrue(emptyPrompt.waitForExistence(timeout: 2))
-        XCTAssertEqual(emptyPrompt.label, "Choose a style or action")
+        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
-        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_translate"] {
-            XCTAssertNotEqual(keyboardApp.buttons[identifier].value as? String, "Selected")
-        }
+        XCTAssertEqual(keyboardApp.buttons["ai_action_improve"].value as? String, "Selected")
 
         let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
         XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))
         backToKeyboard.tap()
-        XCTAssertFalse(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 1))
-        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+        XCTAssertTrue(
+            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 5),
+            "Left correction/status lane was not enabled after returning from the sparkle action panel"
+        )
         XCTAssertEqual(input.value as? String, sourceText)
     }
 
@@ -650,7 +650,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let improve = actionCarousel.buttons["ai_action_improve"]
         XCTAssertTrue(improve.waitForExistence(timeout: 5))
-        XCTAssertNotEqual(improve.value as? String, "Selected")
+        XCTAssertEqual(improve.value as? String, "Selected")
         XCTAssertGreaterThanOrEqual(improve.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
 
         for identifier in ["ai_action_rewrite", "ai_action_translate"] {
@@ -667,7 +667,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         }
 
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_empty_text"].waitForExistence(timeout: 5))
-        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "Choose a style or action")
+        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "No suggestion yet")
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
 
         let fixedControlIdentifiers = ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"]
@@ -1264,33 +1264,33 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
     }
 }
 
-final class StyleFirstActionScreenshotUITests: XCTestCase {
+final class PlainTextActionScreenshotUITests: XCTestCase {
     private let sourceText = "Please send the customer an update about delivery 42."
 
-    func testStyleFirstOptionLoadingSuccessAndFailureScreenshots() {
+    func testExistingActionChoicesLoadingSuccessAndFailureScreenshots() {
         capture(
             state: "actionCarouselPanel",
             panel: "actions",
             expectedIdentifier: "ai_action_panel",
-            attachmentName: "style-first-01-option-selection"
+            attachmentName: "plain-text-01-existing-action-choices"
         )
         capture(
             state: "actionLoadingPanel",
             panel: "actions",
             expectedIdentifier: "ai_action_loading_text",
-            attachmentName: "style-first-02-loading"
+            attachmentName: "plain-text-02-default-improve-loading"
         )
         capture(
             state: "improvePanel",
             panel: "actions",
             expectedIdentifier: "ai_action_result_text",
-            attachmentName: "style-first-03-success"
+            attachmentName: "plain-text-03-single-improve-result"
         )
         capture(
             state: "modelCapabilityError",
             panel: "keyboard",
             expectedIdentifier: "ai_error_panel",
-            attachmentName: "style-first-04-failure"
+            attachmentName: "plain-text-04-failure"
         )
     }
 

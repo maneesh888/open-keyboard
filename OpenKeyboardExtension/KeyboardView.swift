@@ -452,7 +452,7 @@ private struct AIActionPanel: View {
         HStack(spacing: 10) {
             OpenKeyboardBrandMark(size: 30, symbolSize: 13)
 
-            Text(state.selectedAction?.actionPanelTitle ?? "Choose a style or action")
+            Text(state.selectedAction.actionPanelTitle)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(OpenKeyboardTheme.Text.primary)
                 .lineLimit(1)
@@ -481,7 +481,7 @@ private struct AIActionPanel: View {
                 HStack(spacing: 10) {
                     ProgressView()
                         .scaleEffect(0.88)
-                    Text("\(state.selectedAction?.title ?? "Working")…")
+                    Text("\(state.selectedAction.title)…")
                         .font(.system(size: 18, weight: .regular))
                         .foregroundColor(OpenKeyboardTheme.Text.primary)
                         .lineLimit(2)
@@ -560,7 +560,7 @@ private struct AIActionPanel: View {
                 )
         }
         .buttonStyle(.plain)
-        .disabled(!actionsEnabled && !state.isLoading)
+        .disabled(!actionsEnabled || state.isLoading)
         .accessibilityIdentifier("ai_translation_target_\(target.rawValue)")
         .accessibilityValue(isSelected ? "Selected" : "")
     }
@@ -604,7 +604,7 @@ private struct AIActionPanel: View {
     }
 
     private func actionCard(_ action: KeyboardAIAction) -> some View {
-        let isSelected = state.selectedAction.map { action.representsSameMode(as: $0) } ?? false
+        let isSelected = action.representsSameMode(as: state.selectedAction)
         return Button {
             onSelect(action)
         } label: {
@@ -626,7 +626,7 @@ private struct AIActionPanel: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(!actionsEnabled && !state.isLoading)
+        .disabled(!actionsEnabled || state.isLoading)
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
         .accessibilityValue(isSelected ? "Selected" : "")
     }
@@ -666,7 +666,7 @@ private struct AIActionPanel: View {
                     accessibilityLabel: "Run again",
                     action: onRegenerate
                 )
-                .disabled(!actionsEnabled || state.isLoading || state.selectedAction?.isReadyForActionPanelRequest != true)
+                .disabled(!actionsEnabled || state.isLoading || !state.selectedAction.isReadyForActionPanelRequest)
                 .accessibilityIdentifier("ai_action_rerun")
 
                 panelGroupedButton(

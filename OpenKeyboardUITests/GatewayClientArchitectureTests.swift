@@ -2,7 +2,7 @@ import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
-        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.0.0")
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.0.1")
         let renderings = try KeyboardRewriteStyle.allCases.map { style in
             try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).rendering(for: "Source text"))
         }
@@ -10,6 +10,22 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(Set(systemInstructions).count, KeyboardRewriteStyle.allCases.count)
         XCTAssertTrue(renderings.allSatisfy { $0.messages.last?.content == "Source text" })
         XCTAssertTrue(renderings.allSatisfy { $0.responseFormatType == nil && $0.plainTextValidationPolicy != nil })
+    }
+
+    func testImproveIsConservativeWhileRephraseAllowsBroaderRestructuring() throws {
+        let source = "Please send the customer an update."
+        let improve = try XCTUnwrap(KeyboardAIAction.improve.rendering(for: source))
+        let rephrase = try XCTUnwrap(KeyboardAIAction.rewrite.rendering(for: source))
+        let improveInstruction = try XCTUnwrap(improve.messages.first?.content)
+        let rephraseInstruction = try XCTUnwrap(rephrase.messages.first?.content)
+
+        XCTAssertTrue(improveInstruction.contains("smallest wording, grammar, and flow edits"))
+        XCTAssertTrue(improveInstruction.contains("preserve the original sentence structure"))
+        XCTAssertTrue(rephraseInstruction.contains("broadly restructure sentences"))
+        XCTAssertTrue(rephraseInstruction.contains("substantially different wording"))
+        XCTAssertNotEqual(improveInstruction, rephraseInstruction)
+        XCTAssertNil(improve.responseFormatType)
+        XCTAssertNil(rephrase.responseFormatType)
     }
 
     func testProductionPromptBuilderContainsAllFiveOperationContracts() {
@@ -53,7 +69,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 XCTAssertNil(rendering.responseFormatType)
                 XCTAssertNotNil(rendering.plainTextValidationPolicy)
                 let systemInstruction = rendering.messages.first?.content ?? ""
-                for rule in ["clarity, flow, and readability", "Preserve the source meaning and facts", "one complete plain-text replacement"] {
+                for rule in ["clarity, flow, and readability", "broadly restructure sentences", "one complete plain-text replacement"] {
                     XCTAssertTrue(systemInstruction.localizedCaseInsensitiveContains(rule), "rewrite missing rule: \(rule)")
                 }
                 continue

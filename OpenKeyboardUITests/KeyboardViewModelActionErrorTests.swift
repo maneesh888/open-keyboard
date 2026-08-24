@@ -167,7 +167,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             )
 
             XCTAssertEqual(viewModel.panelMode, .actions)
-            XCTAssertNil(viewModel.actionPanelState?.selectedAction)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
             XCTAssertEqual(viewModel.actionPanelState?.options, [])
             XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))
             XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionStateSeedID"))
@@ -250,9 +250,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             )
 
             XCTAssertEqual(viewModel.panelMode, .actions)
-            XCTAssertNil(viewModel.actionPanelState?.selectedAction)
+            XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
             XCTAssertFalse(viewModel.actionPanelState?.showsTranslationTargetSelector ?? true)
-            XCTAssertEqual(viewModel.actionPanelState?.contextSelectionPrompt, "Choose a style or action")
+            XCTAssertNil(viewModel.actionPanelState?.contextSelectionPrompt)
             XCTAssertEqual(viewModel.actionPanelState?.isLoading, false)
             XCTAssertNil(viewModel.actionPanelState?.selectedOption)
             XCTAssertEqual(
@@ -804,9 +804,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, "please make this better")
         XCTAssertEqual(proxy.text, "please make this better")
 
-        viewModel.performAIAction(.rewrite)
-        await Task.yield()
-        try? await Task.sleep(nanoseconds: 50_000_000)
+        await waitUntil { viewModel.actionError != nil }
         XCTAssertNotNil(viewModel.actionError)
 
         viewModel.clearActionError()
@@ -814,7 +812,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .keyboard)
     }
 
-    func testActionPanelOpensWithoutRequestThenEachStyleSelectionRequestsOnce() async {
+    func testActionPanelOpensWithImproveThenEachDifferentRewriteSelectionRequestsOnce() async {
         let sourceText = "All of these are no bulb in the universe."
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
@@ -833,13 +831,15 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
-        XCTAssertNil(viewModel.actionPanelState?.selectedAction)
-        XCTAssertFalse(viewModel.actionPanelState?.isLoading ?? true)
-        XCTAssertEqual(service.requestedActions, [])
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
         XCTAssertEqual(proxy.text, sourceText)
 
-        viewModel.selectActionPanelAction(.improve)
-        await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
+        await waitUntil {
+            service.requestedActions == [.improve]
+                && viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer."
+                && !viewModel.isPerformingAIAction
+        }
 
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
@@ -899,7 +899,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { service.requestedActions.count == 1 }
         viewModel.selectActionPanelAction(.rewriteStyle(.professional))
         await waitUntil {
@@ -933,7 +932,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { service.requestedActions.count == 1 }
         viewModel.selectActionPanelAction(.rewriteStyle(.shorten))
         await waitUntil { viewModel.actionPanelState?.selectedOption != nil }
@@ -965,7 +963,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         UIPasteboard.general.string = "sentinel"
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.rewrite)
         await waitUntil { service.requestedActions.count == 1 }
         proxy.replaceTextForTest(edited)
         viewModel.documentDidChange()
@@ -993,7 +990,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.rewrite)
         await waitUntil { service.requestedActions.count == 1 }
         viewModel.showKeyboardPanel()
         try? await Task.sleep(nanoseconds: 120_000_000)
@@ -1007,8 +1003,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testExtensionDisappearanceInvalidatesPendingStyleResultWithoutChangingDocument() async {
         let source = "Please send fact 42 to the customer today."
         let service = DelayedSequencedKeyboardAIService(
-            results: [Self.rewriteResult("Please send fact 42 clearly to the customer today.")],
-            delays: [80_000_000]
+            results: [
+                Self.rewriteResult("Please send fact 42 clearly to the customer today."),
+                Self.rewriteResult("Please send the customer a professional fact 42 update today.")
+            ],
+            delays: [80_000_000, 80_000_000]
         )
         let proxy = FakeTextDocumentProxy(text: source)
         let viewModel = KeyboardViewModel(
@@ -1019,8 +1018,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.rewriteStyle(.professional))
         await waitUntil { service.requestedActions.count == 1 }
+        viewModel.selectActionPanelAction(.rewriteStyle(.professional))
+        await waitUntil { service.requestedActions.count == 2 }
         viewModel.extensionWillDisappear()
         try? await Task.sleep(nanoseconds: 120_000_000)
 
@@ -1034,7 +1034,10 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     func testTranslateWaitsForTargetThenAppliesSelectedLanguageResult() async {
         let sourceText = "Good morning, I hope you are well."
         let proxy = FakeTextDocumentProxy(text: sourceText)
-        let service = SequencedKeyboardAIService(results: [Self.structuredTranslationResult()])
+        let service = SequencedKeyboardAIService(results: [
+            Self.rewriteResult(),
+            Self.structuredTranslationResult()
+        ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
             aiService: service,
@@ -1043,9 +1046,10 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
         viewModel.selectActionPanelAction(.translate(nil))
 
-        XCTAssertEqual(service.requestedActions, [])
+        XCTAssertEqual(service.requestedActions, [.improve])
         XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(nil))
         XCTAssertTrue(viewModel.actionPanelState?.isWaitingForTranslationTarget ?? false)
         XCTAssertFalse(viewModel.actionPanelState?.isLoading ?? true)
@@ -1055,12 +1059,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         viewModel.selectActionPanelTranslationTarget(.dutch)
         await waitUntil {
-            service.requestedActions.count == 1
+            service.requestedActions.count == 2
                 && viewModel.actionPanelState?.selectedOption?.text == "Goedemorgen, ik hoop dat het goed met je gaat."
                 && !viewModel.isPerformingAIAction
         }
 
-        XCTAssertEqual(service.requestedActions, [.translate(.dutch)])
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.dutch)])
         XCTAssertEqual(viewModel.actionPanelState?.selectedTranslationTarget, .dutch)
         XCTAssertEqual(viewModel.actionPanelState?.actionResultViewportHeight, KeyboardPanelLayout.actionPanelContextualResultHeight)
         XCTAssertEqual(proxy.text, sourceText)
@@ -1090,6 +1094,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
+        await waitUntil {
+            service.requestedActions == [.improve]
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
         viewModel.selectActionPanelAction(.translate(nil))
         viewModel.selectActionPanelTranslationTarget(.arabic)
         await waitUntil {
@@ -1097,7 +1106,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
                 && !viewModel.isPerformingAIAction
         }
 
-        XCTAssertEqual(service.requestedActions, [.translate(.arabic)])
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.arabic)])
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(
             viewModel.actionPanelState?.warningMessage,
@@ -1110,13 +1119,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
 
         viewModel.rerunSelectedActionPanelAction()
-        await waitUntil { service.requestedActions.count == 2 && !viewModel.isPerformingAIAction }
+        await waitUntil { service.requestedActions.count == 3 && !viewModel.isPerformingAIAction }
         XCTAssertEqual(service.requestedActions.last, .translate(.arabic))
         XCTAssertEqual(proxy.text, sourceText)
 
         viewModel.selectActionPanelAction(.rewrite)
         await waitUntil {
-            service.requestedActions.count == 3
+            service.requestedActions.count == 4
                 && viewModel.actionPanelState?.selectedOption != nil
                 && !viewModel.isPerformingAIAction
         }
@@ -1141,6 +1150,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
+        await waitUntil {
+            service.requestedActions == [.improve]
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
         viewModel.selectActionPanelAction(.translate(nil))
         viewModel.selectActionPanelTranslationTarget(.arabic)
         await waitUntil {
@@ -1148,7 +1162,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
                 && !viewModel.isPerformingAIAction
         }
 
-        XCTAssertEqual(service.requestedActions, [.translate(.arabic)])
+        XCTAssertEqual(service.requestedActions, [.improve, .translate(.arabic)])
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(
             viewModel.actionPanelState?.warningMessage,
@@ -1159,7 +1173,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         viewModel.selectActionPanelAction(.rewrite)
         await waitUntil {
-            service.requestedActions.count == 2
+            service.requestedActions.count == 3
                 && viewModel.actionPanelState?.selectedOption != nil
                 && !viewModel.isPerformingAIAction
         }
@@ -1176,6 +1190,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let warningText = "No"
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
+            Self.rewriteResult(),
             KeyboardActionOperationResult(
                 operation: "translate",
                 items: [
@@ -1199,6 +1214,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
+        await waitUntil {
+            service.requestedActions == [.improve]
+                && viewModel.actionPanelState?.selectedOption != nil
+                && !viewModel.isPerformingAIAction
+        }
         viewModel.selectActionPanelAction(.translate(nil))
         viewModel.selectActionPanelTranslationTarget(.englishAmerican)
         await waitUntil {
@@ -1216,7 +1236,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         viewModel.selectActionPanelAction(.rewrite)
         await waitUntil {
-            service.requestedActions.count == 2
+            service.requestedActions.count == 3
                 && viewModel.actionPanelState?.selectedOption != nil
                 && !viewModel.isPerformingAIAction
         }
@@ -1293,7 +1313,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { service.requestedActions.count == 1 && !viewModel.isPerformingAIAction }
 
         proxy.replaceTextForTest("")
@@ -1311,6 +1330,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let changedText = "This host text changed before Apply."
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
+            Self.rewriteResult(),
             Self.structuredTranslationResult(),
             Self.structuredTranslationResult()
         ])
@@ -1322,10 +1342,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
         viewModel.selectActionPanelAction(.translate(nil))
         viewModel.selectActionPanelTranslationTarget(.dutch)
         await waitUntil {
-            service.requestedActions.count == 1
+            service.requestedActions.count == 2
                 && viewModel.actionPanelState?.selectedOption != nil
                 && !viewModel.isPerformingAIAction
         }
@@ -1335,18 +1356,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(proxy.text, changedText)
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, changedText)
-        XCTAssertNil(viewModel.actionPanelState?.selectedAction)
-        XCTAssertNil(viewModel.actionPanelState?.selectedOption)
-        XCTAssertEqual(service.requestedActions.count, 1)
-
-        viewModel.selectActionPanelAction(.translate(nil))
-        viewModel.selectActionPanelTranslationTarget(.dutch)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .translate(.dutch))
         await waitUntil {
-            service.requestedActions.count == 2
+            service.requestedActions.count == 3
                 && viewModel.actionPanelState?.selectedOption != nil
                 && !viewModel.isPerformingAIAction
         }
-        XCTAssertEqual(service.requestedTexts, [sourceText, changedText])
+        XCTAssertEqual(service.requestedTexts, [sourceText, sourceText, changedText])
         XCTAssertEqual(proxy.text, changedText)
 
         viewModel.applySelectedActionPanelAction()
@@ -1490,7 +1506,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
 
         XCTAssertEqual(viewModel.actionPanelState?.isCarouselVisible, true)
@@ -1522,7 +1537,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { service.requestedTexts.count == 1 && !viewModel.isPerformingAIAction }
 
         XCTAssertEqual(service.requestedTexts, [sourceText])
@@ -1547,7 +1561,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { service.requestedTexts.count == 1 && !viewModel.isPerformingAIAction }
 
         proxy.replaceTextForTest(editedText, cursorOffset: beforeCursor.count)
@@ -1572,7 +1585,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
         viewModel.applySelectedActionPanelAction()
 
@@ -1670,7 +1682,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(viewModel.canOpenAnalysisResult)
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
 
         XCTAssertEqual(viewModel.panelMode, .actions)
@@ -2083,7 +2094,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil { viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer." && !viewModel.isPerformingAIAction }
 
         viewModel.applySelectedActionPanelAction()
@@ -2119,7 +2129,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.automaticAnalysisWarning != nil }
 
         viewModel.showActionPanel()
-        viewModel.selectActionPanelAction(.improve)
         await waitUntil {
             viewModel.actionPanelState?.selectedOption?.text == replacement
                 && !viewModel.isPerformingAIAction
@@ -2164,16 +2173,16 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
-        XCTAssertNil(viewModel.actionPanelState?.selectedAction)
-        XCTAssertFalse(viewModel.actionPanelState?.isLoading ?? true)
-        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
+        XCTAssertTrue(viewModel.isPerformingAIAction)
 
         try? await Task.sleep(nanoseconds: 90_000_000)
 
         XCTAssertEqual(viewModel.panelMode, .actions)
         XCTAssertEqual(viewModel.actionPanelState?.sourceText, sourceText)
-        XCTAssertNil(viewModel.actionPanelState?.selectedAction)
-        XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .improve)
+        XCTAssertNotNil(viewModel.actionPanelState?.selectedOption)
         XCTAssertNil(viewModel.currentCorrection)
         XCTAssertEqual(proxy.text, sourceText)
     }

@@ -10,7 +10,7 @@ struct KeyboardActionPanelState: Equatable {
     let sourceText: String
     let replacementPlan: KeyboardReplacementPlan
     let sourceRevision: Int
-    var selectedAction: KeyboardAIAction?
+    var selectedAction: KeyboardAIAction
     var options: [KeyboardRewriteOption]
     var selectedOptionID: String
     var isCarouselVisible: Bool
@@ -30,7 +30,7 @@ struct KeyboardActionPanelState: Equatable {
         sourceText: String,
         replacementPlan: KeyboardReplacementPlan,
         sourceRevision: Int = 0,
-        selectedAction: KeyboardAIAction? = nil,
+        selectedAction: KeyboardAIAction = .improve,
         options: [KeyboardRewriteOption] = [],
         isCarouselVisible: Bool = true,
         isLoading: Bool = false,
@@ -49,7 +49,7 @@ struct KeyboardActionPanelState: Equatable {
         self.resultStyleRevision = options.isEmpty ? nil : 0
     }
 
-    init(sourceText: String, selectedAction: KeyboardAIAction? = nil) {
+    init(sourceText: String, selectedAction: KeyboardAIAction = .improve) {
         self.init(
             sourceText: sourceText,
             replacementPlan: KeyboardReplacementPlan(
@@ -72,19 +72,18 @@ struct KeyboardActionPanelState: Equatable {
     }
 
     var selectedTranslationTarget: KeyboardTranslationTarget? {
-        selectedAction?.translationTarget
+        selectedAction.translationTarget
     }
 
     var showsTranslationTargetSelector: Bool {
-        isCarouselVisible && selectedAction?.isTranslation == true
+        isCarouselVisible && selectedAction.isTranslation
     }
 
     var isWaitingForTranslationTarget: Bool {
-        selectedAction?.isTranslation == true && selectedTranslationTarget == nil && !isLoading
+        selectedAction.isTranslation && selectedTranslationTarget == nil && !isLoading
     }
 
     var contextSelectionPrompt: String? {
-        if selectedAction == nil { return "Choose a style or action" }
         if isWaitingForTranslationTarget { return "Choose a language" }
         return nil
     }
@@ -107,7 +106,7 @@ struct KeyboardActionPanelState: Equatable {
     }
 
     mutating func selectTranslationTarget(_ target: KeyboardTranslationTarget) {
-        guard selectedAction?.isTranslation == true else { return }
+        guard selectedAction.isTranslation else { return }
         selectedAction = .translate(target)
         styleRevision += 1
         beginLoading()
@@ -415,11 +414,11 @@ final class KeyboardViewModel: ObservableObject {
             sourceText: replacementPlan.textForAI,
             replacementPlan: replacementPlan,
             sourceRevision: documentRevision,
-            selectedAction: nil,
-            isLoading: false
+            selectedAction: .improve,
+            isLoading: true
         )
         panelMode = .actions
-        aiStatus = "Choose a style or action"
+        requestActionPanelResult(.improve, replacementPlan: replacementPlan)
     }
 
     func showKeyboardPanel() {
@@ -488,21 +487,20 @@ final class KeyboardViewModel: ObservableObject {
                 sourceRevision: documentRevision,
                 selectedAction: state.selectedAction,
                 isCarouselVisible: state.isCarouselVisible,
-                isLoading: state.selectedAction?.isReadyForActionPanelRequest == true
+                isLoading: state.selectedAction.isReadyForActionPanelRequest
             )
         }
         actionPanelState = state
-        guard let selectedAction = state.selectedAction,
-              selectedAction.isReadyForActionPanelRequest else {
+        guard state.selectedAction.isReadyForActionPanelRequest else {
             aiStatus = state.contextSelectionPrompt ?? "Choose an option"
             return
         }
-        requestActionPanelResult(selectedAction, replacementPlan: state.replacementPlan)
+        requestActionPanelResult(state.selectedAction, replacementPlan: state.replacementPlan)
     }
 
     func selectActionPanelTranslationTarget(_ target: KeyboardTranslationTarget) {
         guard var state = actionPanelState,
-              state.selectedAction?.isTranslation == true else {
+              state.selectedAction.isTranslation else {
             return
         }
         invalidateActionPanelRequest()
@@ -523,8 +521,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         state.selectTranslationTarget(target)
         actionPanelState = state
-        guard let selectedAction = state.selectedAction else { return }
-        requestActionPanelResult(selectedAction, replacementPlan: replacementPlan)
+        requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
     }
 
     func applySelectedActionPanelAction() {
@@ -539,15 +536,18 @@ final class KeyboardViewModel: ObservableObject {
         }
         guard replacementPlan == state.replacementPlan,
               documentRevision == state.sourceRevision else {
-            actionPanelState = KeyboardActionPanelState(
+            let refreshedState = KeyboardActionPanelState(
                 sourceText: replacementPlan.textForAI,
                 replacementPlan: replacementPlan,
                 sourceRevision: documentRevision,
-                selectedAction: nil,
+                selectedAction: state.selectedAction,
                 isCarouselVisible: state.isCarouselVisible,
-                isLoading: false
+                isLoading: state.selectedAction.isReadyForActionPanelRequest
             )
-            aiStatus = "Source changed. Choose a style or action"
+            actionPanelState = refreshedState
+            if state.selectedAction.isReadyForActionPanelRequest {
+                requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
+            }
             return
         }
         invalidateActionPanelRequest()
@@ -566,15 +566,14 @@ final class KeyboardViewModel: ObservableObject {
         }
         aiStatus = state.selectedAction == .improve
             ? "Improvement applied"
-            : "\(state.selectedAction?.title ?? "Rewrite") applied"
+            : "\(state.selectedAction.title) applied"
         panelMode = .correctionComplete
     }
 
     func rerunSelectedActionPanelAction() {
         guard let state = actionPanelState,
               !state.isLoading,
-              let selectedAction = state.selectedAction,
-              selectedAction.isReadyForActionPanelRequest else {
+              state.selectedAction.isReadyForActionPanelRequest else {
             return
         }
         guard let replacementPlan = currentActionPanelReplacementPlan() else {
@@ -592,7 +591,7 @@ final class KeyboardViewModel: ObservableObject {
                 isLoading: true
             )
         }
-        requestActionPanelResult(selectedAction, replacementPlan: replacementPlan)
+        requestActionPanelResult(state.selectedAction, replacementPlan: replacementPlan)
     }
 
     func toggleActionPanelCarousel() {
@@ -681,11 +680,11 @@ final class KeyboardViewModel: ObservableObject {
                 sourceText: replacementPlan.textForAI,
                 replacementPlan: replacementPlan,
                 sourceRevision: documentRevision,
-                selectedAction: nil,
-                isLoading: false
+                selectedAction: .improve,
+                isLoading: true
             )
             panelMode = .actions
-            aiStatus = "Choose a style or action"
+            requestActionPanelResult(.improve, replacementPlan: replacementPlan)
         } else {
             actionPanelState = nil
             panelMode = .keyboard
@@ -2043,7 +2042,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = Self.actionCarouselPanelState
                 actionError = nil
-                aiStatus = "Choose a style or action"
+                aiStatus = "Ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -2281,6 +2280,7 @@ final class KeyboardViewModel: ObservableObject {
                     leadingWhitespace: "",
                     trailingWhitespace: ""
                 ),
+                selectedAction: .improve,
                 isCarouselVisible: true,
                 isLoading: false
             )
@@ -2296,7 +2296,7 @@ final class KeyboardViewModel: ObservableObject {
                     leadingWhitespace: "",
                     trailingWhitespace: ""
                 ),
-                selectedAction: .rewriteStyle(.professional),
+                selectedAction: .improve,
                 isCarouselVisible: true,
                 isLoading: true
             )
