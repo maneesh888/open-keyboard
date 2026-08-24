@@ -302,6 +302,17 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         }
     }
 
+    var contractOperationID: String {
+        switch self {
+        case .improve: return "improve"
+        case .fixGrammar: return "fix_grammar"
+        case .rewrite: return "rewrite"
+        case .rewriteStyle(let style): return "rewrite_\(style.rawValue)"
+        case .summarize: return "summarize"
+        case .translate: return "translate"
+        }
+    }
+
     var title: String {
         switch self {
         case .improve: return "Improve"
@@ -324,28 +335,31 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
     }
 
     var maxTokens: Int {
-        KeyboardGatewayActionContract.maxTokens(operation: operationName)
+        KeyboardGatewayActionContract.maxTokens(operation: contractOperationID)
     }
 
     func prompt(for text: String) -> String? {
-        if self == .improve {
-            return KeyboardGatewayActionContract.prompt(operation: "improve", text: text)
-        }
         if case .translate(let target) = self {
             guard let target else { return nil }
             return KeyboardGatewayActionContract.prompt(
-                operation: operationName,
+                operation: contractOperationID,
                 text: text,
                 translationLanguage: target.promptLanguage
             )
         }
-        if case .rewriteStyle(let style) = self {
-            return KeyboardGatewayActionContract.prompt(
-                operation: "rewrite_\(style.rawValue)",
-                text: text
+        return KeyboardGatewayActionContract.prompt(operation: contractOperationID, text: text)
+    }
+
+    func rendering(for text: String) -> SemanticPromptRendering? {
+        if case .translate(let target) = self {
+            guard let target else { return nil }
+            return KeyboardGatewayActionContract.rendering(
+                operation: contractOperationID,
+                text: text,
+                translationLanguage: target.promptLanguage
             )
         }
-        return KeyboardGatewayActionContract.prompt(operation: operationName, text: text)
+        return KeyboardGatewayActionContract.rendering(operation: contractOperationID, text: text)
     }
 }
 
@@ -353,6 +367,41 @@ protocol KeyboardAIServiceProviding: AnyObject {
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse
     func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult
+}
+
+struct KeyboardAIProfileSnapshot: Equatable, Sendable {
+    let endpoint: String
+    let credential: String
+    let modelID: String
+    let isConfigured: Bool
+
+    init(config: AppConfig) {
+        endpoint = config.gatewayURL
+        credential = config.apiKey
+        modelID = config.selectedModel
+        isConfigured = config.isConfigured
+    }
+
+    fileprivate var gatewayConfig: AppConfig {
+        AppConfig(
+            apiKey: credential,
+            gatewayURL: endpoint,
+            selectedModel: modelID,
+            isConfigured: isConfigured,
+            grammarCorrectionVerified: false,
+            grammarCorrectionContractVersion: ""
+        )
+    }
+}
+
+extension KeyboardAIServiceProviding {
+    func performResult(
+        action: KeyboardAIAction,
+        on text: String,
+        profile: KeyboardAIProfileSnapshot
+    ) async throws -> KeyboardActionOperationResult {
+        try await performResult(action: action, on: text, config: profile.gatewayConfig)
+    }
 }
 
 enum KeyboardAIError: LocalizedError, Equatable {
@@ -469,14 +518,21 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         if action == .fixGrammar {
             return try await performGrammarCorrection(on: text, config: config)
         }
-        guard let prompt = action.prompt(for: text) else {
+        guard let rendering = action.rendering(for: text),
+              let prompt = rendering.messages.last?.content else {
             throw KeyboardAIError.missingTranslationTarget
         }
         let maximumAttempts = action.isTranslation ? 2 : 1
         for attempt in 0..<maximumAttempts {
             let result: KeyboardActionOperationResult
             do {
-                result = try await requestResult(action: action, text: text, prompt: prompt, config: config)
+                result = try await requestResult(
+                    action: action,
+                    text: text,
+                    prompt: prompt,
+                    rendering: rendering,
+                    config: config
+                )
             } catch let error as KeyboardAIError {
                 let scopedError: KeyboardAIError
                 if error == .modelCapability, let target = action.translationTarget {
@@ -507,17 +563,21 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         action: KeyboardAIAction,
         text: String,
         prompt: String,
+        rendering: SemanticPromptRendering,
         config: AppConfig
     ) async throws -> KeyboardActionOperationResult {
         let output: String
         do {
             output = try await gatewayClient.chatCompletionContent(
-                systemPrompt: KeyboardGatewayActionContract.structuredSystemPrompt,
+                systemPrompt: rendering.messages.first?.content
+                    ?? KeyboardGatewayActionContract.structuredSystemPrompt,
                 userPrompt: prompt,
                 operation: action.operationName,
                 inputText: text,
-                maxTokens: action.maxTokens,
+                maxTokens: rendering.maxTokens,
                 config: config,
+                temperature: rendering.temperature,
+                expectsStructuredResponse: rendering.responseFormatType != nil,
                 timeoutInterval: requestTimeoutInterval
             )
         } catch let error as CancellationError {
@@ -526,6 +586,15 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw Self.keyboardError(from: error)
         }
         do {
+            if rendering.plainTextValidationPolicy != nil {
+                return try KeyboardActionOperationResult.plainTextReplacement(
+                    output,
+                    contractOperationID: action.contractOperationID,
+                    wireOperation: action.operationName,
+                    title: action.title,
+                    source: text
+                )
+            }
             return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
         } catch {
             if let target = action.translationTarget {

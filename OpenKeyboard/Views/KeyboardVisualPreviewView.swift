@@ -79,8 +79,6 @@ struct KeyboardPreviewLabView: View {
             return "Detail panel shown after tapping the issue count/card; this is where apply/dismiss can wire into the replacement planner later."
         case .actions:
             return "Right sparkle Improve mode with generated text, action carousel, rerun, copy, back, and accept controls."
-        case .rewriteOptions:
-            return "Rephrase result panel with the selected suggestion as the main content and horizontal alternatives available on demand."
         case .correctionComplete:
             return "Completion panel after suggestions are resolved."
         }
@@ -91,7 +89,7 @@ struct KeyboardVisualPreviewView: View {
     let panel: KeyboardVisualPreviewPanel
 
     var body: some View {
-        let showsToolbar = panel != .actions && panel != .rewriteOptions
+        let showsToolbar = panel != .actions
         let viewportHeight = panel == .actions
             ? KeyboardVisualPreviewLayout.actionPanelHeight
             : KeyboardVisualPreviewLayout.expandedPanelHeight
@@ -116,8 +114,6 @@ struct KeyboardVisualPreviewView: View {
                     correctionDetailPanel
                 case .actions:
                     actionPanel
-                case .rewriteOptions:
-                    rewriteOptionsPanel
                 case .correctionComplete:
                     correctionCompletePanel
                 }
@@ -143,7 +139,7 @@ struct KeyboardVisualPreviewView: View {
 
     private var toolbarState: PreviewToolbarDisplay {
         switch panel {
-        case .keyboard, .actions, .rewriteOptions, .correctionComplete:
+        case .keyboard, .actions, .correctionComplete:
             return PreviewToolbarDisplay(title: "Open Keyboard AI", subtitle: "Ready", issueCount: 0)
         case .issue:
             return PreviewToolbarDisplay(title: "2 writing suggestions", subtitle: "Spelling and grammar suggestions", issueCount: 2)
@@ -165,7 +161,6 @@ struct KeyboardVisualPreviewView: View {
         case .predictionOnly: return .predictionOnly
         case .correctionDetail: return .correctionDetail
         case .actions: return .actions
-        case .rewriteOptions: return .rewriteOptions
         case .correctionComplete: return .correctionComplete
         }
     }
@@ -428,101 +423,6 @@ struct KeyboardVisualPreviewView: View {
                 .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
         )
         .accessibilityIdentifier("preview_ai_action_panel")
-    }
-
-    private var rewriteOptionsPanel: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                OpenKeyboardBrandMark(size: 30, symbolSize: 13)
-                Text("Rephrase text.")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(OpenKeyboardTheme.Text.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                Spacer(minLength: 0)
-            }
-            Divider()
-                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
-                .padding(.top, 8)
-
-            Text("None of these are bulbs in the universe.")
-                .font(.system(size: 19, weight: .regular))
-                .foregroundColor(OpenKeyboardTheme.Text.primary)
-                .lineLimit(4)
-                .minimumScaleFactor(0.72)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: 84, alignment: .topLeading)
-                .padding(.top, 10)
-                .accessibilityIdentifier("preview_rewrite_result_text")
-
-            Spacer(minLength: 8)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    previewRewriteOption("Clearer", text: "None of these are bulbs in the universe.", selected: true, identifier: "preview_rewrite_option_0")
-                    previewRewriteOption("Natural", text: "There are no bulbs anywhere in the universe.", selected: false, identifier: "preview_rewrite_option_1")
-                    previewRewriteOption("Concise", text: "No bulbs exist in the universe.", selected: false, identifier: "preview_rewrite_option_2")
-                }
-                .padding(.horizontal, 1)
-            }
-            .frame(height: 38)
-            .padding(.bottom, 7)
-            .accessibilityIdentifier("preview_rewrite_options_carousel")
-
-            Divider()
-                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
-
-            previewImproveControls(applyIdentifier: "preview_rewrite_apply", backIdentifier: "preview_rewrite_back")
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .frame(
-            maxWidth: .infinity,
-            minHeight: KeyboardVisualPreviewLayout.expandedPanelHeight,
-            maxHeight: KeyboardVisualPreviewLayout.expandedPanelHeight,
-            alignment: .topLeading
-        )
-        .background(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 24,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 24,
-                style: .continuous
-            )
-                .fill(OpenKeyboardTheme.Surface.overlayBackground)
-                .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
-        )
-        .accessibilityIdentifier("preview_rewrite_options_panel")
-    }
-
-    private func previewRewriteOption(_ title: String, text: String, selected: Bool, identifier: String) -> some View {
-        HStack(spacing: 7) {
-            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(selected ? OpenKeyboardTheme.Semantic.primaryAction : OpenKeyboardTheme.Text.secondaryStrong)
-
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(OpenKeyboardTheme.Text.primary)
-                .lineLimit(1)
-
-            Text(text)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .padding(.horizontal, 12)
-        .frame(width: 184, height: 32, alignment: .leading)
-        .background(OpenKeyboardTheme.Surface.overlayBackground.opacity(selected ? 0.98 : 0.72), in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(selected ? OpenKeyboardTheme.Semantic.primaryAction.opacity(0.95) : OpenKeyboardTheme.Stroke.control.opacity(0.9), lineWidth: selected ? 1.5 : 1)
-        )
-        .accessibilityIdentifier(identifier)
-        .accessibilityValue(selected ? "Selected" : "")
     }
 
     private var correctionCompletePanel: some View {

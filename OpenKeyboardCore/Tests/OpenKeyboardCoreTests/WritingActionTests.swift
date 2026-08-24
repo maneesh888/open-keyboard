@@ -4,7 +4,7 @@ import XCTest
 
 final class WritingActionTests: XCTestCase {
     func testSharedContractVersionIsPinned() {
-        XCTAssertEqual(WritingPromptBuilder.contractVersion, "3.0.0")
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "4.0.0")
     }
 
     func testBuiltInActionsHaveStableTitles() {
@@ -47,9 +47,9 @@ final class WritingActionTests: XCTestCase {
                 operation: "rewrite",
                 requiredRules: [
                     "clarity, flow, and readability",
-                    "preserving the original meaning, facts, tone",
-                    "complete rewritten text",
-                    "Do not add commentary or invent information",
+                    "preserve the source meaning and facts",
+                    "one complete plain-text replacement",
+                    "Do not truncate the source or invent information",
                 ]
             ),
             Scenario(
@@ -98,6 +98,19 @@ final class WritingActionTests: XCTestCase {
                 continue
             }
 
+            if scenario.action == .rewrite {
+                let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: scenario.action, text: input))
+                XCTAssertEqual(prompt, input)
+                XCTAssertNil(rendering.responseFormatType)
+                XCTAssertNotNil(rendering.plainTextValidationPolicy)
+                XCTAssertEqual(rendering.messages.count, 2)
+                let instructions = rendering.messages.first?.content ?? ""
+                for rule in scenario.requiredRules {
+                    XCTAssertTrue(instructions.localizedCaseInsensitiveContains(rule), "\(scenario.operation) missing rule: \(rule)")
+                }
+                continue
+            }
+
             XCTAssertTrue(prompt.contains("Operation: \(scenario.operation)"), scenario.operation)
             XCTAssertTrue(prompt.contains("Return strict JSON only"), scenario.operation)
             XCTAssertTrue(prompt.contains("{\"operation\":\"\(scenario.operation)\""), scenario.operation)
@@ -127,7 +140,7 @@ final class WritingActionTests: XCTestCase {
 
     func testOnlyBuiltInActionsRequireStructuredJSON() {
         XCTAssertFalse(WritingAction.fixGrammar.requiresStructuredJSON)
-        XCTAssertTrue(WritingAction.rewrite.requiresStructuredJSON)
+        XCTAssertFalse(WritingAction.rewrite.requiresStructuredJSON)
         XCTAssertTrue(WritingAction.summarize.requiresStructuredJSON)
         XCTAssertTrue(WritingAction.translate(language: "Arabic").requiresStructuredJSON)
         XCTAssertTrue(WritingAction.continueWriting.requiresStructuredJSON)

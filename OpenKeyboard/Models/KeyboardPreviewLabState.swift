@@ -46,7 +46,6 @@ enum KeyboardVisualPreviewPanel: String {
     case predictionOnly
     case correctionDetail
     case actions
-    case rewriteOptions
     case correctionComplete
 }
 
@@ -71,7 +70,6 @@ enum KeyboardPreviewLabState: String, CaseIterable, Identifiable {
     case predictionOnly
     case correctionDetail
     case actions
-    case rewriteOptions
     case correctionComplete
 
     var id: String { rawValue }
@@ -86,7 +84,6 @@ enum KeyboardPreviewLabState: String, CaseIterable, Identifiable {
         case .predictionOnly: return "Prediction only"
         case .correctionDetail: return "Correction detail"
         case .actions: return "Improve text"
-        case .rewriteOptions: return "Rephrase result"
         case .correctionComplete: return "All clear"
         }
     }
@@ -101,7 +98,6 @@ enum KeyboardPreviewLabState: String, CaseIterable, Identifiable {
         case .predictionOnly: return .predictionOnly
         case .correctionDetail: return .correctionDetail
         case .actions: return .actions
-        case .rewriteOptions: return .rewriteOptions
         case .correctionComplete: return .correctionComplete
         }
     }

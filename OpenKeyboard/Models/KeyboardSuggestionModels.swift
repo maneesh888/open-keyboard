@@ -1696,39 +1696,6 @@ struct KeyboardActionOperationResult: Equatable {
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    func rewriteOptions(sourceText: String, maxOptions: Int = 5) -> [KeyboardRewriteOption] {
-        let normalizedSource = Self.normalizedCandidateKey(sourceText)
-        var seen = Set<String>()
-        var options: [KeyboardRewriteOption] = []
-
-        func append(_ candidate: String?, title: String?) {
-            guard options.count < maxOptions else { return }
-            let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !text.isEmpty else { return }
-            guard KeyboardReplacementTextSafety.isSafeReplacementText(text) else { return }
-            let key = Self.normalizedCandidateKey(text)
-            guard !key.isEmpty, key != normalizedSource, !seen.contains(key) else { return }
-            seen.insert(key)
-
-            let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let optionTitle = cleanTitle?.isEmpty == false ? cleanTitle ?? "" : "Option \(options.count + 1)"
-            options.append(KeyboardRewriteOption(
-                id: "rewrite-option-\(options.count + 1)",
-                title: optionTitle,
-                text: text
-            ))
-        }
-
-        for item in items where !item.isWarning {
-            append(item.replacement, title: item.title)
-            append(item.text, title: item.title)
-        }
-        append(correctedText, title: "Suggested rewrite")
-        append(displayText, title: "Suggested rewrite")
-
-        return options
-    }
-
     @MainActor
     static func plainTextGrammarResponse(_ content: String, original: String) throws -> KeyboardActionOperationResult {
         let corrected = try GrammarCorrectionResponseValidator.validated(content, original: original)
@@ -1737,6 +1704,39 @@ struct KeyboardActionOperationResult: Equatable {
             items: [],
             correctedText: corrected,
             isNoChangeResult: corrected == original
+        )
+    }
+
+    static func plainTextReplacement(
+        _ content: String,
+        contractOperationID: String,
+        wireOperation: String,
+        title: String,
+        source: String
+    ) throws -> KeyboardActionOperationResult {
+        let replacement: String
+        do {
+            replacement = try SemanticPromptContract.validatePlainTextResponse(
+                content,
+                operationID: contractOperationID,
+                source: source
+            )
+        } catch {
+            throw KeyboardActionOperationResultError.invalidResponse
+        }
+        return KeyboardActionOperationResult(
+            operation: wireOperation,
+            items: [
+                Item(
+                    id: "plain-text-result",
+                    type: "suggestion",
+                    title: title,
+                    text: replacement,
+                    original: source,
+                    replacement: replacement
+                )
+            ],
+            correctedText: replacement
         )
     }
 
@@ -2016,7 +2016,6 @@ struct KeyboardActionOperationResult: Equatable {
 
 enum KeyboardActionProductOutcome: Equatable {
     case showCorrections(KeyboardSuggestionResponse)
-    case showRewriteOptions([KeyboardRewriteOption])
     case replaceText(String)
     case noChanges
     case noUsableResult
@@ -2039,9 +2038,12 @@ enum KeyboardActionResultHandler {
             ))
         }
         if normalizedOperation == "rewrite" {
-            let options = result.rewriteOptions(sourceText: sourceText)
-            guard !options.isEmpty else { return .noUsableResult }
-            return .showRewriteOptions(options)
+            let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !displayText.isEmpty,
+                  KeyboardReplacementTextSafety.isSafeReplacementText(displayText) else {
+                return .noUsableResult
+            }
+            return .replaceText(displayText)
         }
 
         let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)

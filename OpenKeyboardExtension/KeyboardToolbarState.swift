@@ -9,7 +9,6 @@ import Foundation
 enum KeyboardPanelMode: Equatable {
     case keyboard
     case actions
-    case rewriteOptions
     case correctionDetail
     case correctionComplete
 }

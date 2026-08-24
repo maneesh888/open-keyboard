@@ -185,6 +185,34 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
 
+        if let rendering,
+           rendering.plainTextValidationPolicy != nil {
+            let replacement: String
+            do {
+                replacement = try SemanticPromptContract.validatePlainTextResponse(
+                    choice.message.content,
+                    operationID: rendering.operationID,
+                    source: text
+                )
+            } catch {
+                throw GatewayClientError.invalidResponse
+            }
+            return WritingActionResult(
+                operation: action.operationName,
+                items: [
+                    WritingActionResultItem(
+                        id: "plain-text-result",
+                        type: "suggestion",
+                        title: action.title,
+                        text: replacement,
+                        original: text,
+                        replacement: replacement
+                    )
+                ],
+                correctedText: replacement
+            )
+        }
+
         return try await Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
     }
 

@@ -185,9 +185,9 @@ struct CanonicalGatewayClient {
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isPlainTextGrammar = operation?.trimmingCharacters(in: .whitespacesAndNewlines) == "fix_grammar"
+        let isPlainTextRawInput = operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty != nil
             && expectsStructuredResponse == false
-        let prompt = isPlainTextGrammar ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let prompt = isPlainTextRawInput ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.isConfigured, !apiKey.isEmpty else { throw CanonicalGatewayClientError.notConfigured }
         guard !model.isEmpty else { throw CanonicalGatewayClientError.modelUnavailable }
         guard !prompt.isEmpty else { throw CanonicalGatewayClientError.missingInput }
@@ -201,7 +201,7 @@ struct CanonicalGatewayClient {
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
             operation: normalizedOperation,
-            inputText: (isPlainTextGrammar ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
+            inputText: (isPlainTextRawInput ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)

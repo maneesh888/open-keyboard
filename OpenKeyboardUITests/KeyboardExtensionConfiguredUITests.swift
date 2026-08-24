@@ -907,69 +907,6 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         add(attachment)
     }
 
-    func testRealKeyboardRewriteOptionsWorkflowScreenshotsWhenExplicitlyRequested() throws {
-        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !screenshotDirectory.isEmpty else {
-            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard rewrite screenshots.")
-        }
-
-        let sourceText = "All of these are no bulb in the universe."
-        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
-        let hostArguments = [
-            "--keyboard-host-test",
-            "--keyboard-host-autofocus",
-            "--keyboard-host-prefer-openkeyboard",
-            "--keyboard-host-text=\(encodedSource)"
-        ]
-
-        let app = configuredContainingApp(extraArguments: hostArguments)
-        app.launch()
-        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
-
-        let input = app.textViews["keyboard_host_text_editor"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard rewrite screenshots")
-        tapCenter(of: input)
-
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let keyboardApp = XCUIApplication()
-        XCTAssertTrue(
-            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
-            "Open Keyboard extension did not appear"
-        )
-
-        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
-
-        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
-        XCTAssertTrue(waitForEnabledAITrigger(keyboardApp: keyboardApp, timeout: 10))
-        keyboardApp.buttons["ai_sparkle_action"].tap()
-        XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 5))
-        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("02-real-keyboard-ai-action-screen")
-
-        seedKeyboardExtensionDebugState(suggestionState: "rewriteOptions", initialPanel: "rewriteOptions")
-        reopenHostInput(input)
-        XCTAssertTrue(
-            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
-            "Open Keyboard extension did not appear for seeded rewrite options"
-        )
-        XCTAssertTrue(keyboardApp.buttons["ai_rewrite_option_1"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("03-real-keyboard-rewrite-options-carousel")
-
-        let secondOption = keyboardApp.buttons["ai_rewrite_option_1"]
-        XCTAssertTrue(secondOption.waitForExistence(timeout: 5))
-        secondOption.tap()
-
-        let apply = keyboardApp.buttons["ai_rewrite_apply"]
-        XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        apply.tap()
-
-        let rewritten = NSPredicate(format: "value CONTAINS[c] %@", "There are no bulbs anywhere in the universe.")
-        expectation(for: rewritten, evaluatedWith: input)
-        waitForExpectations(timeout: 10)
-        XCTAssertTrue(keyboardApp.staticTexts["Rewrite applied"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("04-real-keyboard-rewrite-applied")
-    }
-
     func testRealKeyboardImproveReplacesTextWithExistingSimulatorGatewayConfig() throws {
         try skipUnlessExistingSimulatorGatewayConfigIsPresent()
 
@@ -1309,6 +1246,105 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         for label in labels {
             springboard.buttons[label].tapIfExists()
         }
+    }
+}
+
+final class StyleFirstActionScreenshotUITests: XCTestCase {
+    private let sourceText = "Please send the customer an update about delivery 42."
+
+    func testStyleFirstOptionLoadingSuccessAndFailureScreenshots() {
+        capture(
+            state: "actionCarouselPanel",
+            panel: "actions",
+            expectedIdentifier: "ai_action_panel",
+            attachmentName: "style-first-01-option-selection"
+        )
+        capture(
+            state: "actionLoadingPanel",
+            panel: "actions",
+            expectedIdentifier: "ai_action_loading_text",
+            attachmentName: "style-first-02-loading"
+        )
+        capture(
+            state: "improvePanel",
+            panel: "actions",
+            expectedIdentifier: "ai_action_result_text",
+            attachmentName: "style-first-03-success"
+        )
+        capture(
+            state: "modelCapabilityError",
+            panel: "keyboard",
+            expectedIdentifier: "ai_error_panel",
+            attachmentName: "style-first-04-failure"
+        )
+    }
+
+    private func capture(
+        state: String,
+        panel: String,
+        expectedIdentifier: String,
+        attachmentName: String
+    ) {
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--clear-gateway-config",
+            "--seed-gateway-config",
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=\(state)",
+            "--keyboard-initial-panel=\(panel)"
+        ]
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://mock.local.invalid"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = "mock-ui-test-key"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = "mock-ui-test-model"
+        app.launch()
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+
+        let keyboardApp = XCUIApplication()
+        let expected = keyboardApp.descendants(matching: .any)[expectedIdentifier]
+        let deadline = Date().addingTimeInterval(30)
+        while Date() < deadline, !expected.exists {
+            if let openKeyboard = openKeyboardMenuItem(in: keyboardApp) {
+                openKeyboard.tap()
+            } else {
+                let switcher = keyboardApp.buttons["Next keyboard"].firstMatch
+                if switcher.waitForExistence(timeout: 1) {
+                    switcher.press(forDuration: 1)
+                }
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertTrue(expected.exists, "Expected seeded state \(state)")
+        app.staticTexts["Keyboard Extension Host"]
+            .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .tap()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+
+        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        attachment.name = attachmentName
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.terminate()
+    }
+
+    private func openKeyboardMenuItem(in keyboardApp: XCUIApplication) -> XCUIElement? {
+        let predicate = NSPredicate(format: "label BEGINSWITH %@", "Open Keyboard")
+        for query in [
+            keyboardApp.cells.matching(predicate),
+            keyboardApp.buttons.matching(predicate),
+            keyboardApp.staticTexts.matching(predicate)
+        ] {
+            let candidate = query.firstMatch
+            if candidate.exists { return candidate }
+        }
+        return nil
     }
 }
 

@@ -29,6 +29,11 @@ final class KeyboardViewController: UIInputViewController {
         refreshRuntimeState()
     }
 
+    override func viewWillDisappear(_ animated: Bool) {
+        viewModel?.extensionWillDisappear()
+        super.viewWillDisappear(animated)
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         viewModel?.documentDidChange()
