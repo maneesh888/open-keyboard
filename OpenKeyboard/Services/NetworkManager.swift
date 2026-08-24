@@ -117,7 +117,7 @@ struct GatewayDiagnosticReport: Equatable {
 
 class NetworkManager {
     static let shared = NetworkManager()
-    static let grammarDiagnosticPresetID = "structured-grammar-multi-error"
+    static let grammarDiagnosticPresetID = "plain-grammar-fast"
     static let rewriteDiagnosticPresetID = "structured-operation-rewrite"
     static let translationDiagnosticPresetID = "structured-operation-translate-dutch"
     static var diagnosticSettingsCorrectionInput: String {

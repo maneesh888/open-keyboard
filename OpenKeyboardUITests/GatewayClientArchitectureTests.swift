@@ -1,11 +1,12 @@
 import XCTest
 
+private let validFastGrammarDiagnosticResponse = "The gateway connection is ready."
 private let validRewriteDiagnosticResponse = #"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","title":"Rewrite","text":"Hi team, please review and fix the app issues soon.","replacement":"Hi team, please review and fix the app issues soon."}],"corrected_text":"Hi team, please review and fix the app issues soon."}"#
 private let validDutchDiagnosticResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"De gatewayverbinding is klaar voor schrijfacties.","replacement":"De gatewayverbinding is klaar voor schrijfacties."}],"corrected_text":"De gatewayverbinding is klaar voor schrijfacties."}"#
 
 final class GatewayClientArchitectureTests: XCTestCase {
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
-        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "3.1.0")
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "3.2.0")
         let prompts = try KeyboardRewriteStyle.allCases.map { style in
             try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).prompt(for: "Source text"))
         }
@@ -667,7 +668,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testCorrectionSmokeBuildsAuthenticatedChatCompletionRequest() async throws {
-        let transport = NetworkManagerTestTransport(.chat(content: "I has a apple,ths is nt sound god"))
+        let transport = NetworkManagerTestTransport(.chat(content: validFastGrammarDiagnosticResponse))
         let manager = NetworkManager(transport: transport)
 
         try await manager.testCorrectionSmoke(
@@ -702,7 +703,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testCorrectionSmokeRetriesOneUnusablePlainTextResponse() async throws {
         let transport = NetworkManagerTestTransport([
             .chat(content: "This sentence is already fine."),
-            .chat(content: "I has a apple,ths is nt sound god")
+            .chat(content: validFastGrammarDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -801,7 +802,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testGatewayDiagnosticsRunsKeyboardPlainTextGrammarPathAndMeasuresPerformance() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validFastGrammarDiagnosticResponse),
             .chat(content: validRewriteDiagnosticResponse),
             .chat(content: validDutchDiagnosticResponse)
         ])
@@ -855,7 +856,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testGatewayDiagnosticsDoesNotSubstituteForUnavailablePreferredModel() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["another-model"]),
-            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validFastGrammarDiagnosticResponse),
             .chat(content: validRewriteDiagnosticResponse),
             .chat(content: validDutchDiagnosticResponse)
         ])
@@ -886,7 +887,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testGatewayDiagnosticsPreservesExactPreferredModelCasing() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["GEMMA2:2B"]),
-            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validFastGrammarDiagnosticResponse),
             .chat(content: validRewriteDiagnosticResponse),
             .chat(content: validDutchDiagnosticResponse)
         ])
@@ -1011,7 +1012,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let frenchResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"La connexion de la passerelle est prête pour les actions d'écriture.","replacement":"La connexion de la passerelle est prête pour les actions d'écriture."}],"corrected_text":"La connexion de la passerelle est prête pour les actions d'écriture."}"#
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validFastGrammarDiagnosticResponse),
             .chat(content: validRewriteDiagnosticResponse),
             .chat(content: frenchResponse)
         ])
