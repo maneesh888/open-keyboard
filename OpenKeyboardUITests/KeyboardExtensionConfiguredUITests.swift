@@ -172,7 +172,12 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
         keyboardApp.buttons["ai_sparkle_action"].tap()
         XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 2))
-        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 2))
+        let observedImmediateImproveRequest = keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 1)
+            || keyboardApp.staticTexts["ai_action_result_text"].waitForExistence(timeout: 2)
+        XCTAssertTrue(
+            observedImmediateImproveRequest,
+            "Opening the action panel should immediately show Improve loading or its completed replacement"
+        )
         XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
