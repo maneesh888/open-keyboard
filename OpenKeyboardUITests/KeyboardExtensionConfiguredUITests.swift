@@ -609,6 +609,8 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = [
             "--uitesting",
+            "--clear-gateway-config",
+            "--seed-gateway-config",
             "--keyboard-host-test",
             "--keyboard-host-autofocus",
             "--keyboard-host-prefer-openkeyboard",
@@ -616,6 +618,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "--keyboard-suggestion-state=actionCarouselPanel",
             "--keyboard-initial-panel=actions"
         ]
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://mock.local.invalid"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_API_KEY"] = "mock-ui-test-key"
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_MODEL"] = "mock-ui-test-model"
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
 
@@ -632,6 +637,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let panel = keyboardApp.otherElements["ai_action_panel"]
         XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        app.staticTexts["Keyboard Extension Host"].tap()
         XCTAssertEqual(panel.frame.height, KeyboardPanelLayout.actionPanelHeight, accuracy: 1)
 
         let actionCarousel = keyboardApp.scrollViews["ai_action_carousel"]
@@ -642,17 +648,24 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         let improve = actionCarousel.buttons["ai_action_improve"]
         XCTAssertTrue(improve.waitForExistence(timeout: 5))
-        XCTAssertEqual(improve.value as? String, "Selected")
+        XCTAssertNotEqual(improve.value as? String, "Selected")
         XCTAssertGreaterThanOrEqual(improve.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
+
+        for identifier in ["ai_action_rewrite", "ai_action_translate"] {
+            let button = actionCarousel.buttons[identifier]
+            XCTAssertTrue(button.waitForExistence(timeout: 5))
+            XCTAssertNotEqual(button.value as? String, "Selected")
+        }
 
         for style in KeyboardRewriteStyle.allCases {
             let button = actionCarousel.buttons["ai_action_rewrite_\(style.rawValue)"]
             XCTAssertTrue(button.waitForExistence(timeout: 5), "\(style.displayName) action was missing from the primary carousel")
+            XCTAssertNotEqual(button.value as? String, "Selected")
             XCTAssertGreaterThanOrEqual(button.frame.height, KeyboardPanelLayout.actionCarouselButtonHeight)
         }
 
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_empty_text"].waitForExistence(timeout: 5))
-        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "No suggestion yet")
+        XCTAssertEqual(keyboardApp.staticTexts["ai_action_empty_text"].label, "Choose a style or action")
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
 
         let fixedControlIdentifiers = ["back_to_keyboard", "ai_action_rerun", "ai_action_toggle_carousel", "ai_action_copy", "ai_action_apply"]
