@@ -603,4 +603,38 @@ if printf '%s' "$valid_summary" | openkeyboard_assert_passing_test_summary_count
   exit 1
 fi
 
+VALID_DIAGNOSTIC_ATTACHMENT="$FIXTURE/live-gateway-diagnostics-low.txt"
+printf '%s\n' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed latency_ms=12' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=failed latency_ms=34' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed latency_ms=56' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=failed latency_ms=78' \
+  > "$VALID_DIAGNOSTIC_ATTACHMENT"
+expected_diagnostic_evidence="$(printf '%s\n' \
+  'diagnostic_outcomes_low=transport=passed, grammar=failed, rewrite=passed, translation=failed' \
+  'diagnostic_latencies_low=transport=12ms, grammar=34ms, rewrite=56ms, translation=78ms')"
+actual_diagnostic_evidence="$(
+  openkeyboard_format_live_diagnostic_attachment low "$VALID_DIAGNOSTIC_ATTACHMENT"
+)"
+if [[ "$actual_diagnostic_evidence" != "$expected_diagnostic_evidence" ]]; then
+  echo "Sanitized live diagnostic attachment evidence was formatted incorrectly." >&2
+  exit 1
+fi
+if openkeyboard_format_live_diagnostic_attachment high "$VALID_DIAGNOSTIC_ATTACHMENT" >/dev/null 2>&1; then
+  echo "A live diagnostic attachment for the wrong role was accepted." >&2
+  exit 1
+fi
+
+INVALID_DIAGNOSTIC_ATTACHMENT="$FIXTURE/live-gateway-diagnostics-invalid.txt"
+printf '%s\n' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed latency_ms=12' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=passed latency_ms=34' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed latency_ms=56 secret=value' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=passed latency_ms=78' \
+  > "$INVALID_DIAGNOSTIC_ATTACHMENT"
+if openkeyboard_format_live_diagnostic_attachment low "$INVALID_DIAGNOSTIC_ATTACHMENT" >/dev/null 2>&1; then
+  echo "Malformed live diagnostic evidence was accepted." >&2
+  exit 1
+fi
+
 echo "Live test safety regression tests passed."

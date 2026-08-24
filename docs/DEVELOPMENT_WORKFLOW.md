@@ -116,7 +116,10 @@ once, then reuses the compiled `.xctestrun` for isolated low and high simulator 
 small baseline/boundary/follow-up test per role and removes both clones, injected environment,
 DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
 candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
-evidence.
+evidence. Before cleanup, the runner exports one sanitized text attachment per role and requires
+separate transport, grammar, rewrite, and translation status and latency rows in canonical order.
+The attachment grammar rejects extra content so credentials and response bodies cannot enter the
+retained summary.
 
 ## Hooks
 

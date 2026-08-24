@@ -301,6 +301,34 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
     }
 
+    func testVersionedSplitProfileIsPreservedWhenAtomicSecureMigrationFails() throws {
+        let reference = "legacy-profile-failed-migration-reference"
+        secretStore.saveLegacyAPIKey("legacy-referenced-key", reference: reference)
+        let legacyProfile = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": 1,
+            "secretReference": reference,
+            "gatewayURL": fixtureGatewayURL,
+            "selectedModel": fixtureModel,
+            "isConfigured": true,
+            "grammarCorrectionVerified": true,
+            "grammarCorrectionContractVersion": AppConfig.grammarCorrectionCapabilityVersion,
+            "lastValidatedAt": 1_700_000_789
+        ])
+        defaults.set(legacyProfile, forKey: AppConfig.gatewayProfileKey)
+        secretStore.shouldFailSave = true
+
+        let loadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(loadedConfig.apiKey, "legacy-referenced-key")
+        XCTAssertEqual(loadedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, fixtureModel)
+        XCTAssertTrue(loadedConfig.isConfigured)
+        XCTAssertEqual(defaults.data(forKey: AppConfig.gatewayProfileKey), legacyProfile)
+        XCTAssertEqual(secretStore.loadLegacyAPIKey(reference: reference), "legacy-referenced-key")
+        XCTAssertNil(secretStore.loadProfile())
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+    }
+
     func testLegacyDefaultsProfileIsPreservedWhenSecureMigrationFails() throws {
         secretStore.shouldFailSave = true
         defaults.set("fake-legacy-test-token", forKey: AppConfig.apiKeyKey)

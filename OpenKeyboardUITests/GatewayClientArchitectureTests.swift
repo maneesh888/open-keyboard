@@ -854,7 +854,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
     func testGatewayDiagnosticsDoesNotSubstituteForUnavailablePreferredModel() async throws {
         let transport = NetworkManagerTestTransport([
-            .models(["another-model"])
+            .models(["another-model"]),
+            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -865,16 +868,49 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         XCTAssertEqual(report.selectedModel, "gemma2:2b")
-        let grammarCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
-        XCTAssertEqual(grammarCheck.status, .failed)
-        XCTAssertEqual(grammarCheck.message, NetworkError.modelUnavailable.localizedDescription)
-        XCTAssertEqual(report.failedCount, 3)
+        XCTAssertFalse(report.hasFailures)
         XCTAssertEqual(report.checks.count, 4)
-        XCTAssertEqual(transport.requests.map { $0.url?.path }, ["/v1/models"])
+        XCTAssertEqual(transport.requests.map { $0.url?.path }, [
+            "/v1/models",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions"
+        ])
+        for request in transport.requests.dropFirst() {
+            let bodyData = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, "gemma2:2b")
+        }
+    }
+
+    func testGatewayDiagnosticsPreservesExactPreferredModelCasing() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["GEMMA2:2B"]),
+            .chat(content: "I has a apple,ths is nt sound god"),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gemma2:2b"
+        )
+
+        XCTAssertEqual(report.selectedModel, "gemma2:2b")
+        XCTAssertFalse(report.hasFailures)
+        for request in transport.requests.dropFirst() {
+            let bodyData = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, "gemma2:2b")
+        }
     }
 
     func testGatewayDiagnosticsReportsEveryCapabilityFailureWhenModelsFail() async throws {
         let transport = NetworkManagerTestTransport([
+            .status(503),
+            .status(503),
+            .status(503),
             .status(503)
         ])
         let manager = NetworkManager(transport: transport)
@@ -897,7 +933,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
             "settings-translation-dutch"
         ])
         XCTAssertTrue(report.checks.dropFirst().allSatisfy { $0.status == .failed })
-        XCTAssertEqual(transport.requests.count, 1)
+        XCTAssertEqual(transport.requests.count, 4)
     }
 
     func testGatewayDiagnosticsUsesOneAttemptPerCapabilityAndContinuesAfterFailure() async throws {
@@ -920,6 +956,54 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
         XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
         XCTAssertTrue(report.hasFailures)
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
+    func testGatewayDiagnosticsContinuesAfterCancellationAndAttemptsEveryCapabilityOnce() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .throwing(CancellationError()),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .failed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
+    func testGatewayDiagnosticsSanitizesSensitiveFailureAndContinues() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .throwing(SensitiveDiagnosticTransportError()),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        let grammar = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
+        XCTAssertEqual(grammar.status, .failed)
+        XCTAssertFalse(grammar.message.localizedCaseInsensitiveContains("authorization"))
+        XCTAssertFalse(grammar.message.localizedCaseInsensitiveContains("bearer"))
+        XCTAssertFalse(grammar.message.contains("sensitive-diagnostic-value"))
+        XCTAssertEqual(
+            NetworkManager.diagnosticMessage(for: SensitiveDiagnosticTransportError()),
+            "Gateway returned an invalid response."
+        )
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
         XCTAssertEqual(transport.requests.count, 4)
     }
 
@@ -1130,6 +1214,7 @@ final class LiveModelDifferentialTests: XCTestCase {
             apiKey: apiKey,
             preferredModel: model
         )
+        try attachLiveGatewayDiagnosticEvidence(diagnosticReport, role: role)
         let transportCheck = try XCTUnwrap(diagnosticReport.checks.first { $0.id == "models" })
         XCTAssertEqual(transportCheck.status, .passed, transportCheck.message)
         print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=transport status=\(transportCheck.status.rawValue.lowercased()) latency=\(transportCheck.durationDisplay)")
@@ -1311,6 +1396,27 @@ final class LiveModelDifferentialTests: XCTestCase {
         }
         return String(bytes: bytes, encoding: .utf8)
     }
+
+    private func attachLiveGatewayDiagnosticEvidence(
+        _ report: GatewayDiagnosticReport,
+        role: String
+    ) throws {
+        let capabilities: [(id: String, evidenceName: String)] = [
+            ("models", "transport"),
+            ("settings-correction-smoke", "grammar"),
+            ("settings-rewrite-improve", "rewrite"),
+            ("settings-translation-dutch", "translation")
+        ]
+        let lines = try capabilities.map { capability in
+            let check = try XCTUnwrap(report.checks.first { $0.id == capability.id })
+            let latency = try XCTUnwrap(check.durationMilliseconds)
+            return "LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(capability.evidenceName) status=\(check.status.rawValue.lowercased()) latency_ms=\(latency)"
+        }
+        let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
+        attachment.name = "live-gateway-diagnostics-\(role)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }
 
 private struct LongMalayalamTranslationEvidence {
@@ -1441,6 +1547,7 @@ final class LiveGatewaySmokeTests: XCTestCase {
               !value.isEmpty else { return nil }
         return value
     }
+
 }
 
 private final class CanonicalGatewayClientTestTransport: GatewayChatTransporting {
@@ -1538,6 +1645,12 @@ private enum ExpectedNetworkError {
         default:
             return false
         }
+    }
+}
+
+private struct SensitiveDiagnosticTransportError: LocalizedError {
+    var errorDescription: String? {
+        #"Authorization: Bearer sensitive-diagnostic-value {"error":"private"}"#
     }
 }
 

@@ -346,7 +346,15 @@ ruby -e '
       differential_case.include?(%q{openkeyboard_assert_single_passing_xcresult "$profile_result_bundle"})
     abort "The differential runner must classify low diagnostic success and require high-profile success."
   end
+  unless differential_case.include?(%q{openkeyboard_extract_live_diagnostic_evidence "$profile_result_bundle" "$profile_role"})
+    abort "The differential runner must retain sanitized per-profile diagnostic capability evidence."
+  end
 ' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'live-gateway-diagnostics-\(role)' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
+rg --quiet '^openkeyboard_format_live_diagnostic_attachment()' "$ROOT/scripts/ios/live-test-safety.sh"
+rg --quiet '^openkeyboard_extract_live_diagnostic_evidence()' "$ROOT/scripts/ios/live-test-safety.sh"
+rg --quiet 'DIAGNOSTIC_OUTCOMES_LOW_LINE' "$ROOT/scripts/check-live.sh"
+rg --quiet 'DIAGNOSTIC_LATENCIES_HIGH_LINE' "$ROOT/scripts/check-live.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'source .*live-test-safety\.sh' "$ROOT/scripts/check-live.sh"

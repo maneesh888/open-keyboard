@@ -253,7 +253,10 @@ warning prerequisites once, then executes only the baseline, fixed long-text bou
 post-boundary follow-up on isolated low and high profiles. Low success on the boundary is recorded
 as diagnostic—not converted into a flaky pass—and exact-head policy rejects it as verified matrix
 evidence. High-profile structural success remains independently required. Per-profile wall-clock
-latency is retained without response bodies.
+latency is retained without response bodies. The same private result bundles retain a sanitized
+attachment for each role with separate transport, grammar, rewrite, and translation pass/fail plus
+per-capability latency; the live runner validates and reports those fields before deleting the
+temporary attachments.
 
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set

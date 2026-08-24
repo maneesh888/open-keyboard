@@ -201,19 +201,7 @@ class NetworkManager {
             return "Loaded \(models.count) model\(models.count == 1 ? "" : "s")."
         })
 
-        let modelsCheckPassed = checks.last?.status == .passed
-        let selectedModel: String
-        let selectedModelIsAvailable: Bool
-        if let exactModel = models.first(where: {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                .caseInsensitiveCompare(trimmedPreferredModel) == .orderedSame
-        }) {
-            selectedModel = exactModel.trimmingCharacters(in: .whitespacesAndNewlines)
-            selectedModelIsAvailable = true
-        } else {
-            selectedModel = trimmedPreferredModel
-            selectedModelIsAvailable = false
-        }
+        let selectedModel = trimmedPreferredModel
 
         let capabilities: [(id: String, title: String, presetID: String, success: String)] = [
             (
@@ -241,7 +229,11 @@ class NetworkManager {
                 title: capability.title,
                 endpoint: "POST /v1/chat/completions"
             ) {
-                guard modelsCheckPassed, selectedModelIsAvailable else { throw NetworkError.modelUnavailable }
+                // Capability probes are deliberately independent from model discovery. The exact
+                // selected model may still accept completions when /models is unavailable or
+                // incomplete, and a failed probe must not prevent the remaining probes from
+                // reporting their own outcome.
+                guard !selectedModel.isEmpty else { throw NetworkError.modelUnavailable }
                 try await testDiagnosticCapability(
                     gatewayURL: gatewayURL,
                     apiKey: apiKey,
@@ -503,7 +495,7 @@ class NetworkManager {
         max(0, Int((Date().timeIntervalSince(started) * 1000).rounded()))
     }
 
-    private static func diagnosticMessage(for error: Error) -> String {
+    static func diagnosticMessage(for error: Error) -> String {
         let raw: String
         if let networkError = error as? NetworkError {
             raw = networkError.localizedDescription
