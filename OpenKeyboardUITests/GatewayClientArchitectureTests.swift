@@ -973,10 +973,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let suiteName = "NetworkManagerGatewayTests.fallback.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let transport = NetworkManagerTestTransport([
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
@@ -1000,7 +1000,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertEqual(viewModel.config.selectedModel, "")
-        XCTAssertNil(secretStore.apiKey)
+        XCTAssertNil(secureStore.apiKey)
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
             "/v1/models",
             "/v1/models",
@@ -1022,10 +1022,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let suiteName = "NetworkManagerGatewayTests.failure.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let transport = NetworkManagerTestTransport([
             .models(["apple-foundationmodel"]),
@@ -1049,7 +1049,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
-        XCTAssertNil(secretStore.apiKey)
+        XCTAssertNil(secureStore.apiKey)
         XCTAssertNotNil(AppConfig.gatewayConnectionError(from: defaults))
     }
 
@@ -1353,10 +1353,10 @@ final class LiveGatewaySmokeTests: XCTestCase {
         let suiteName = "LiveGatewaySmokeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let initialConfig = AppConfig(
             apiKey: "",
@@ -1395,10 +1395,13 @@ final class LiveGatewaySmokeTests: XCTestCase {
             "The live proof must exercise the exact seeded model without catalog fallback."
         )
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), viewModel.config.gatewayURL)
-        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), viewModel.config.selectedModel)
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
-        XCTAssertNotNil(secretStore.apiKey)
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
+        XCTAssertNotNil(secureStore.apiKey)
+        XCTAssertEqual(AppConfig.load(from: defaults), viewModel.config)
         XCTAssertTrue(viewModel.config.grammarCorrectionVerified)
 
         print("OpenKeyboard live Test Connection transport: passed; grammar save validation: passed.")
@@ -1596,38 +1599,50 @@ private final class NetworkManagerTestTransport: NetworkManagerTransporting {
     }
 }
 
-private final class NetworkManagerInMemorySecretStore: AppConfigSecretStore {
+private final class NetworkManagerInMemorySecureStore: AppConfigSecureStore {
+    private var profileData: Data?
     private var legacyAPIKey: String?
     private var referencedAPIKeys: [String: String] = [:]
-    private var latestReference: String?
-    var apiKey: String? { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
+    var apiKey: String? { Self.apiKey(from: profileData) ?? legacyAPIKey }
 
-    func loadAPIKey() -> String? { legacyAPIKey }
-    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+    func loadProfile() -> Data? { profileData }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String) -> Bool {
+    func saveProfile(_ profile: Data) -> Bool {
+        profileData = profile
+        return true
+    }
+
+    @discardableResult
+    func clearProfile() -> Bool {
+        profileData = nil
+        return true
+    }
+
+    func loadLegacyAPIKey() -> String? { legacyAPIKey }
+    func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+
+    @discardableResult
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool {
         legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return true
     }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
-        referencedAPIKeys[reference] = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        latestReference = reference
-        return true
-    }
-
-    @discardableResult
-    func clearAPIKey() -> Bool {
+    func clearLegacyAPIKey() -> Bool {
         legacyAPIKey = nil
         return true
     }
 
     @discardableResult
-    func clearAPIKey(reference: String) -> Bool {
+    func clearLegacyAPIKey(reference: String) -> Bool {
         referencedAPIKeys.removeValue(forKey: reference)
-        if latestReference == reference { latestReference = referencedAPIKeys.keys.first }
         return true
+    }
+
+    private static func apiKey(from data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["apiKey"] as? String
     }
 }

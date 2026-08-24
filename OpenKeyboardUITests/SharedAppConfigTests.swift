@@ -7,47 +7,66 @@ private enum RejectedGatewayFixture {
     static let selectedModel = ["test", "placeholder", "model"].joined(separator: "-")
 }
 
-private final class InMemoryAppConfigSecretStore: AppConfigSecretStore {
+private final class InMemoryAppConfigSecureStore: AppConfigSecureStore {
+    private var profileData: Data?
     private var legacyAPIKey: String?
     private var referencedAPIKeys: [String: String] = [:]
-    private var latestReference: String?
+    var beforeProfileReplacement: (() -> Void)?
     var apiKey: String? {
-        get { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
+        get { Self.apiKey(from: profileData) ?? legacyAPIKey }
         set { legacyAPIKey = newValue }
     }
 
-    func loadAPIKey() -> String? { legacyAPIKey }
-    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
     var shouldFailSave = false
 
+    func loadProfile() -> Data? { profileData }
+
     @discardableResult
-    func saveAPIKey(_ apiKey: String) -> Bool {
+    func saveProfile(_ profile: Data) -> Bool {
+        guard !shouldFailSave else { return false }
+        if profileData != nil {
+            beforeProfileReplacement?()
+        }
+        profileData = profile
+        return true
+    }
+
+    @discardableResult
+    func clearProfile() -> Bool {
+        profileData = nil
+        return true
+    }
+
+    func loadLegacyAPIKey() -> String? { legacyAPIKey }
+    func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+
+    @discardableResult
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool {
         guard !shouldFailSave else { return false }
         legacyAPIKey = apiKey
         return true
     }
 
-    @discardableResult
-    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
-        guard !shouldFailSave else { return false }
+    func saveLegacyAPIKey(_ apiKey: String, reference: String) {
         referencedAPIKeys[reference] = apiKey
-        latestReference = reference
-        return true
     }
 
     @discardableResult
-    func clearAPIKey() -> Bool {
+    func clearLegacyAPIKey() -> Bool {
         legacyAPIKey = nil
         return true
     }
 
     @discardableResult
-    func clearAPIKey(reference: String) -> Bool {
+    func clearLegacyAPIKey(reference: String) -> Bool {
         referencedAPIKeys.removeValue(forKey: reference)
-        if latestReference == reference {
-            latestReference = referencedAPIKeys.keys.first
-        }
         return true
+    }
+
+    private static func apiKey(from data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["apiKey"] as? String
     }
 }
 
@@ -57,15 +76,15 @@ final class SharedAppConfigTests: XCTestCase {
 
     private var suiteName: String!
     private var defaults: UserDefaults!
-    private var secretStore: InMemoryAppConfigSecretStore!
+    private var secretStore: InMemoryAppConfigSecureStore!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         suiteName = "group.com.maneesh.openkeyboard.tests.\(UUID().uuidString)"
         defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
-        secretStore = InMemoryAppConfigSecretStore()
-        AppConfig.secretStore = secretStore
+        secretStore = InMemoryAppConfigSecureStore()
+        AppConfig.secureStore = secretStore
         AppConfig.resetKeyboardUITestConfigProcessAuthorizationForTesting()
     }
 
@@ -74,12 +93,12 @@ final class SharedAppConfigTests: XCTestCase {
         defaults = nil
         suiteName = nil
         secretStore = nil
-        AppConfig.secretStore = KeychainAppConfigSecretStore()
+        AppConfig.secureStore = KeychainAppConfigSecureStore()
         AppConfig.resetKeyboardUITestConfigProcessAuthorizationForTesting()
         try super.tearDownWithError()
     }
 
-    func testMainAppSaveSharesNonSensitiveConfigAndStoresAPIKeyInSecretStore() throws {
+    func testMainAppSaveStoresCompleteProfileInOneSecureItemForBothTargets() throws {
         let mainAppConfig = AppConfig(
             apiKey: "fake-shared-test-token",
             gatewayURL: fixtureGatewayURL,
@@ -92,6 +111,11 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(mainAppConfig.save(to: defaults))
 
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
         XCTAssertEqual(secretStore.apiKey, "fake-shared-test-token")
 
         let extensionLoadedConfig = AppConfig.load(from: defaults)
@@ -159,7 +183,7 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertFalse(extensionLoadedConfig.supportsStructuredCorrections)
     }
 
-    func testFailedReplacementSavePreservesCompletePreviousAppGroupProfile() throws {
+    func testFailedReplacementSavePreservesCompletePreviousSecureProfile() throws {
         let previous = AppConfig(
             apiKey: "previous-secret",
             gatewayURL: "https://previous.example",
@@ -169,6 +193,7 @@ final class SharedAppConfigTests: XCTestCase {
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         XCTAssertTrue(previous.save(to: defaults))
+        let previousRevisionHint = defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey)
         secretStore.shouldFailSave = true
 
         let replacement = AppConfig(
@@ -189,9 +214,10 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertTrue(loaded.isConfigured)
         XCTAssertTrue(loaded.grammarCorrectionVerified)
         XCTAssertEqual(loaded.grammarCorrectionContractVersion, previous.grammarCorrectionContractVersion)
+        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey), previousRevisionHint)
     }
 
-    func testStagedReplacementSecretCannotTearPublishedProfileAndCommitIncludesTimestamp() throws {
+    func testAtomicSecureProfileReplacementExposesOnlyCompleteOldOrNewRevision() throws {
         let previousDate = Date(timeIntervalSince1970: 1_700_000_000)
         let previous = AppConfig(
             apiKey: "previous-secret",
@@ -203,13 +229,6 @@ final class SharedAppConfigTests: XCTestCase {
         )
         XCTAssertTrue(previous.save(to: defaults, validatedAt: previousDate))
 
-        XCTAssertTrue(secretStore.saveAPIKey("staged-secret", reference: "interrupted-replacement"))
-        let duringInterruptedReplacement = AppConfig.load(from: defaults)
-        XCTAssertEqual(duringInterruptedReplacement.apiKey, previous.apiKey)
-        XCTAssertEqual(duringInterruptedReplacement.gatewayURL, previous.gatewayURL)
-        XCTAssertEqual(duringInterruptedReplacement.selectedModel, previous.selectedModel)
-        XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), previousDate)
-
         let replacementDate = Date(timeIntervalSince1970: 1_700_000_123)
         let replacement = AppConfig(
             apiKey: "replacement-secret",
@@ -219,7 +238,13 @@ final class SharedAppConfigTests: XCTestCase {
             grammarCorrectionVerified: true,
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
+        var observedDuringReplacement: AppConfig?
+        secretStore.beforeProfileReplacement = {
+            observedDuringReplacement = AppConfig.load(from: self.defaults)
+        }
         XCTAssertTrue(replacement.save(to: defaults, validatedAt: replacementDate))
+
+        XCTAssertEqual(observedDuringReplacement, previous)
 
         let committed = AppConfig.load(from: defaults)
         XCTAssertEqual(committed.apiKey, replacement.apiKey)
@@ -229,7 +254,7 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), replacementDate)
     }
 
-    func testLegacyDefaultsAPIKeyMigratesToSecretStoreAndIsRemovedFromDefaults() throws {
+    func testLegacyDefaultsProfileMigratesToAtomicSecureProfileAndIsRemovedFromDefaults() throws {
         defaults.set("fake-legacy-test-token", forKey: AppConfig.apiKeyKey)
         defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
         defaults.set(fixtureModel, forKey: AppConfig.selectedModelKey)
@@ -247,16 +272,53 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(migratedConfig.structuredCorrectionSchemaVersion, "")
     }
 
-    func testLegacyDefaultsAPIKeyIsPreservedWhenSecretStoreMigrationFails() throws {
+    func testVersionedSplitProfileMigratesToOneSecureEnvelopeWithoutLosingValidationState() throws {
+        let reference = "legacy-profile-reference"
+        let validatedAt = Date(timeIntervalSince1970: 1_700_000_456)
+        secretStore.saveLegacyAPIKey("legacy-referenced-key", reference: reference)
+        let legacyProfile = try JSONSerialization.data(withJSONObject: [
+            "schemaVersion": 1,
+            "secretReference": reference,
+            "gatewayURL": fixtureGatewayURL,
+            "selectedModel": fixtureModel,
+            "isConfigured": true,
+            "grammarCorrectionVerified": true,
+            "grammarCorrectionContractVersion": AppConfig.grammarCorrectionCapabilityVersion,
+            "lastValidatedAt": validatedAt.timeIntervalSince1970
+        ])
+        defaults.set(legacyProfile, forKey: AppConfig.gatewayProfileKey)
+
+        let migratedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(migratedConfig.apiKey, "legacy-referenced-key")
+        XCTAssertEqual(migratedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(migratedConfig.selectedModel, fixtureModel)
+        XCTAssertTrue(migratedConfig.grammarCorrectionVerified)
+        XCTAssertEqual(AppConfig.gatewayConnectionLastTestedAt(from: defaults), validatedAt)
+        XCTAssertNil(defaults.data(forKey: AppConfig.gatewayProfileKey))
+        XCTAssertNil(secretStore.loadLegacyAPIKey(reference: reference))
+        XCTAssertEqual(secretStore.apiKey, "legacy-referenced-key")
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+    }
+
+    func testLegacyDefaultsProfileIsPreservedWhenSecureMigrationFails() throws {
         secretStore.shouldFailSave = true
         defaults.set("fake-legacy-test-token", forKey: AppConfig.apiKeyKey)
         defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)
+        defaults.set(fixtureModel, forKey: AppConfig.selectedModelKey)
+        defaults.set(true, forKey: AppConfig.isConfiguredKey)
 
         let loadedConfig = AppConfig.load(from: defaults)
 
         XCTAssertEqual(loadedConfig.apiKey, "fake-legacy-test-token")
+        XCTAssertEqual(loadedConfig.gatewayURL, fixtureGatewayURL)
+        XCTAssertEqual(loadedConfig.selectedModel, fixtureModel)
+        XCTAssertTrue(loadedConfig.isConfigured)
         XCTAssertNil(secretStore.apiKey)
         XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), "fake-legacy-test-token")
+        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), fixtureGatewayURL)
+        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), fixtureModel)
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
     }
 
 
@@ -443,7 +505,7 @@ final class SharedAppConfigTests: XCTestCase {
         )
 
         XCTAssertTrue(dummyConfig.saveTestSeed(to: defaults, mirrorAPIKeyToDefaultsForUITest: true))
-        XCTAssertEqual(defaults.string(forKey: AppConfig.apiKeyKey), RejectedGatewayFixture.apiKey)
+        XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
 
         seedFreshKeyboardExtensionUITestState()
         let loadedConfig = AppConfig.load(from: defaults)
@@ -503,10 +565,11 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(loadedConfig.selectedModel, RejectedGatewayFixture.selectedModel)
     }
 
-    func testKeychainSecretStoreUsesSharedAccessGroup() throws {
-        let query = KeychainAppConfigSecretStore(accessGroup: "ABCDE12345.com.maneesh.openkeyboard.shared").baseQueryForTesting()
+    func testKeychainSecureStoreUsesSharedAccessGroup() throws {
+        let query = KeychainAppConfigSecureStore(accessGroup: "ABCDE12345.com.maneesh.openkeyboard.shared").baseQueryForTesting()
 
         XCTAssertEqual(query[kSecAttrAccessGroup as String] as? String, "ABCDE12345.com.maneesh.openkeyboard.shared")
+        XCTAssertEqual(query[kSecAttrAccount as String] as? String, "gateway-profile-v2")
     }
 
     func testConfigWrittenToStandardDefaultsIsNotVisibleToAppGroupSuite() throws {
@@ -616,12 +679,15 @@ final class SharedAppConfigTests: XCTestCase {
     }
 
     func testClearingKeyboardUITestStatePreservesRealGatewayConfiguration() {
-        secretStore.apiKey = "real-keychain-token"
-        defaults.set("https://gateway.example.com", forKey: AppConfig.gatewayURLKey)
-        defaults.set("gemma2:2b", forKey: AppConfig.selectedModelKey)
-        defaults.set(true, forKey: AppConfig.isConfiguredKey)
-        defaults.set(true, forKey: AppConfig.grammarCorrectionVerifiedKey)
-        defaults.set(AppConfig.grammarCorrectionCapabilityVersion, forKey: AppConfig.grammarCorrectionContractVersionKey)
+        let realConfig = AppConfig(
+            apiKey: "real-keychain-token",
+            gatewayURL: "https://gateway.example.com",
+            selectedModel: "gemma2:2b",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(realConfig.save(to: defaults))
         defaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
         defaults.set("stale test text", forKey: "keyboardExtension.composingBuffer")
         defaults.set("modelCapabilityError", forKey: "keyboardExtension.suggestionState")
@@ -629,11 +695,9 @@ final class SharedAppConfigTests: XCTestCase {
         AppConfig.clearKeyboardUITestState(from: defaults)
 
         XCTAssertEqual(secretStore.apiKey, "real-keychain-token")
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example.com")
-        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), "gemma2:2b")
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.grammarCorrectionVerifiedKey))
-        XCTAssertEqual(defaults.string(forKey: AppConfig.grammarCorrectionContractVersionKey), AppConfig.grammarCorrectionCapabilityVersion)
+        XCTAssertEqual(AppConfig.load(from: defaults), realConfig)
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
         XCTAssertFalse(defaults.bool(forKey: "keyboardExtension.uiTestDebugStateEnabled"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.composingBuffer"))
         XCTAssertNil(defaults.string(forKey: "keyboardExtension.suggestionState"))

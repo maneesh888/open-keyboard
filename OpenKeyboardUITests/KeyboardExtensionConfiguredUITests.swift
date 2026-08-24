@@ -1019,12 +1019,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             throw XCTSkip("App Group defaults are unavailable for existing simulator gateway verification.")
         }
 
-        let gatewayURL = defaults.string(forKey: AppConfig.gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let selectedModel = defaults.string(forKey: AppConfig.selectedModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let connectionError = AppConfig.gatewayConnectionError(from: defaults)
-        guard defaults.bool(forKey: AppConfig.isConfiguredKey),
-              !gatewayURL.isEmpty,
-              !selectedModel.isEmpty,
+        guard defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey),
+              !(defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty,
               connectionError == nil else {
             throw XCTSkip("Existing simulator gateway config is not present or has a saved gateway error.")
         }

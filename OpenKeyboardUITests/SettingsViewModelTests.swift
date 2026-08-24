@@ -8,17 +8,17 @@ private enum RejectedGatewayFixture {
 
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
-    private var previousSecretStore: AppConfigSecretStore!
+    private var previousSecureStore: AppConfigSecureStore!
 
     override func setUp() {
         super.setUp()
-        previousSecretStore = AppConfig.secretStore
-        AppConfig.secretStore = SettingsInMemorySecretStore()
+        previousSecureStore = AppConfig.secureStore
+        AppConfig.secureStore = SettingsInMemorySecureStore()
     }
 
     override func tearDown() {
-        AppConfig.secretStore = previousSecretStore
-        previousSecretStore = nil
+        AppConfig.secureStore = previousSecureStore
+        previousSecureStore = nil
         super.tearDown()
     }
 
@@ -740,7 +740,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.apiKey, "test-key")
     }
 
-    func testUnusableCorrectionDoesNotPublishNewProfileOrReplacePersistedAppGroupState() async {
+    func testUnusableCorrectionDoesNotReplacePersistedAtomicSecureProfile() async {
         let suiteName = "SettingsViewModelTests.model-capability.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -977,13 +977,13 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
-    func testSuccessfulRetryClearsGlobalErrorAndSavesToInjectedSharedDefaultsAndSecretStore() async {
+    func testSuccessfulRetryClearsGlobalErrorAndSavesAtomicKeychainProfile() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.success.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = SettingsInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
         AppConfig.saveGatewayConnectionError("Previous keyboard error", to: defaults)
         let tester = FakeGatewayTester(healthSucceeds: true, models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
@@ -994,21 +994,24 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example")
-        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), "gpt-oss:120b-cloud")
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
-        XCTAssertEqual(secretStore.apiKey, "test-key")
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
+        XCTAssertEqual(secureStore.apiKey, "test-key")
+        XCTAssertEqual(AppConfig.load(from: defaults), viewModel.config)
     }
 
     func testSuccessfulGatewayValidationFailsIfSharedConfigCannotBePersisted() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.save-failure.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = SettingsInMemorySecretStore()
-        secretStore.shouldFailSave = true
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        secureStore.shouldFailSave = true
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
         let tester = FakeGatewayTester(healthSucceeds: true, models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.updateGatewayURLInput("gateway.example")
@@ -1022,7 +1025,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
-        XCTAssertNil(secretStore.apiKey)
+        XCTAssertNil(secureStore.apiKey)
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
@@ -1117,42 +1120,56 @@ private func defaultsSuiteName(_ defaults: UserDefaults) -> String {
     ""
 }
 
-private final class SettingsInMemorySecretStore: AppConfigSecretStore {
+private final class SettingsInMemorySecureStore: AppConfigSecureStore {
+    private var profileData: Data?
     private var legacyAPIKey: String?
     private var referencedAPIKeys: [String: String] = [:]
-    private var latestReference: String?
-    var apiKey: String? { latestReference.flatMap { referencedAPIKeys[$0] } ?? legacyAPIKey }
+    var apiKey: String? {
+        Self.apiKey(from: profileData) ?? legacyAPIKey
+    }
     var shouldFailSave = false
 
-    func loadAPIKey() -> String? { legacyAPIKey }
-    func loadAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+    func loadProfile() -> Data? { profileData }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String) -> Bool {
+    func saveProfile(_ profile: Data) -> Bool {
+        guard !shouldFailSave else { return false }
+        profileData = profile
+        return true
+    }
+
+    @discardableResult
+    func clearProfile() -> Bool {
+        profileData = nil
+        return true
+    }
+
+    func loadLegacyAPIKey() -> String? { legacyAPIKey }
+    func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+
+    @discardableResult
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool {
         guard !shouldFailSave else { return false }
         legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         return true
     }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String, reference: String) -> Bool {
-        guard !shouldFailSave else { return false }
-        referencedAPIKeys[reference] = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        latestReference = reference
-        return true
-    }
-
-    @discardableResult
-    func clearAPIKey() -> Bool {
+    func clearLegacyAPIKey() -> Bool {
         legacyAPIKey = nil
         return true
     }
 
     @discardableResult
-    func clearAPIKey(reference: String) -> Bool {
+    func clearLegacyAPIKey(reference: String) -> Bool {
         referencedAPIKeys.removeValue(forKey: reference)
-        if latestReference == reference { latestReference = referencedAPIKeys.keys.first }
         return true
+    }
+
+    private static func apiKey(from data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["apiKey"] as? String
     }
 }
 

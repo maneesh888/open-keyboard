@@ -41,8 +41,8 @@ Open Keyboard is built for people who want AI writing help while keeping control
 - Connects to a user-controlled LLM Gateway using a gateway URL and API key.
 - Loads the selected model from the configured gateway.
 - Separates grammar and typo correction from the visible AI writing tools Improve, Rephrase, and Translate; Summarize support remains implemented but is hidden from the keyboard carousel.
-- Stores the gateway API key in a shared Keychain access group.
-- Shares non-sensitive gateway settings with the keyboard extension through App Group storage.
+- Stores the complete versioned gateway profile (URL, exact model, API key, and validation metadata) as one item in a shared Keychain access group.
+- Uses App Group storage only for non-authoritative configured/revision hints and transient connection or UI-test metadata; both production targets load the runtime profile from Keychain.
 - Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
 - Keeps normal CI deterministic with offline mocks; live model tests are opt-in.
 
@@ -76,8 +76,8 @@ The host app currently includes:
 - model discovery through the gateway
 - visible Full Access and privacy copy
 - link-out to the gateway admin UI when a gateway URL is configured
-- shared Keychain storage for the API key
-- App Group storage for gateway URL, selected model, and configured state
+- atomic shared Keychain storage for the complete gateway profile used by both the app and keyboard extension
+- migration from earlier split App Group/Keychain profiles without publishing a partially replaced runtime configuration
 
 ### Keyboard Extension
 
