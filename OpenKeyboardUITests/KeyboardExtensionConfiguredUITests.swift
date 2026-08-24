@@ -165,26 +165,28 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertFalse(keyboardApp.staticTexts["Gateway not configured"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Pair gateway in app"].exists)
         XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
-        XCTAssertTrue(
-            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 2),
-            "Left correction/status lane should stay enabled while the sparkle action is available"
-        )
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
         keyboardApp.buttons["ai_sparkle_action"].tap()
         XCTAssertTrue(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 2))
-        XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 2))
+        XCTAssertFalse(keyboardApp.staticTexts["ai_action_loading_text"].exists)
+        let emptyPrompt = keyboardApp.staticTexts["ai_action_empty_text"]
+        XCTAssertTrue(emptyPrompt.waitForExistence(timeout: 2))
+        XCTAssertEqual(emptyPrompt.label, "Choose a style or action")
         XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 2))
         XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
+        for identifier in ["ai_action_improve", "ai_action_rewrite", "ai_action_translate"] {
+            XCTAssertNotEqual(keyboardApp.buttons[identifier].value as? String, "Selected")
+        }
 
         let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
         XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))
         backToKeyboard.tap()
-        XCTAssertTrue(
-            waitForEnabledLeftStatusLane(keyboardApp: keyboardApp, timeout: 5),
-            "Left correction/status lane was not enabled after returning from the sparkle action panel"
-        )
+        XCTAssertFalse(keyboardApp.otherElements["ai_action_panel"].waitForExistence(timeout: 1))
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
+        XCTAssertEqual(input.value as? String, sourceText)
     }
 
     func testRealKeyboardEmptyInputShowsNoStaleCorrectionsScreenshotWhenExplicitlyRequested() throws {
