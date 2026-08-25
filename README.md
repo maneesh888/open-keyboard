@@ -93,7 +93,7 @@ The keyboard extension currently includes:
 - automatic grammar-analysis failures stay as nonblocking toolbar warnings: the key grid and typed text remain available, and analysis retries after the next edit; manual AI-action failures remain scoped to the action that failed.
 - interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; the Settings model check uses at most two 20-second attempts.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
-- completed writing actions show the clean replacement with corrected or inserted text underlined before Apply; removed source text and explanatory diff legends stay out of the result
+- completed writing actions show the clean replacement with only corrected or inserted words underlined before Apply; whitespace, removed source text, and explanatory diff legends stay out of the highlight treatment
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
 - rewrite/improvement options that are shown before replacement, with selected option state

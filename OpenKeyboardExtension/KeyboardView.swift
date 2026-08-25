@@ -603,7 +603,7 @@ private struct AIActionPanel: View {
 
     private func inlineDiffText(_ replacementDiff: KeyboardReplacementDiff) -> Text {
         var output = Text("")
-        for segment in replacementDiff.segments where segment.kind != .removed {
+        for segment in replacementDiff.highlightedReplacementSegments {
             output = output + styledDiffSegment(segment)
         }
         return output

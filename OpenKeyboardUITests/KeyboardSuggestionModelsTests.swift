@@ -23,6 +23,22 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(diff.replacementText, replacement)
     }
 
+    func testReplacementHighlightSegmentsNeverUnderlineWhitespace() {
+        let replacement = "Hello clearer new world.\nNext line."
+        let diff = KeyboardReplacementDiff(
+            original: "Hello world.",
+            replacement: replacement
+        )
+
+        XCTAssertEqual(diff.highlightedReplacementSegments.map(\.text).joined(), replacement)
+        XCTAssertTrue(diff.highlightedReplacementSegments.contains(where: { segment in
+            segment.kind == .unchanged && segment.text.contains(where: \.isWhitespace)
+        }))
+        XCTAssertFalse(diff.highlightedReplacementSegments.contains(where: { segment in
+            segment.kind == .inserted && segment.text.contains(where: \.isWhitespace)
+        }))
+    }
+
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
 

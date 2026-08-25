@@ -424,6 +424,48 @@ struct KeyboardReplacementDiff: Equatable {
             .map(\.text)
             .joined()
     }
+
+    var highlightedReplacementSegments: [KeyboardReplacementDiffSegment] {
+        var output: [KeyboardReplacementDiffSegment] = []
+
+        func append(_ text: String, kind: KeyboardReplacementDiffKind) {
+            guard !text.isEmpty else { return }
+            if let last = output.last, last.kind == kind {
+                output[output.count - 1] = KeyboardReplacementDiffSegment(
+                    text: last.text + text,
+                    kind: kind
+                )
+            } else {
+                output.append(KeyboardReplacementDiffSegment(text: text, kind: kind))
+            }
+        }
+
+        for segment in segments where segment.kind != .removed {
+            guard segment.kind == .inserted else {
+                append(segment.text, kind: segment.kind)
+                continue
+            }
+
+            var run = ""
+            var runKind: KeyboardReplacementDiffKind?
+            for character in segment.text {
+                let characterKind: KeyboardReplacementDiffKind = character.isWhitespace
+                    ? .unchanged
+                    : .inserted
+                if let runKind, runKind != characterKind {
+                    append(run, kind: runKind)
+                    run = ""
+                }
+                runKind = characterKind
+                run.append(character)
+            }
+            if let runKind {
+                append(run, kind: runKind)
+            }
+        }
+
+        return output
+    }
 }
 
 struct GrammarCorrectionSession: Equatable {
