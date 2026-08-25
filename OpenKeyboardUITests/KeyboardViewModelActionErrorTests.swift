@@ -855,6 +855,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
         XCTAssertTrue(viewModel.actionPanelState?.isLoading ?? false)
         XCTAssertNil(viewModel.actionPanelState?.selectedOption)
+        XCTAssertEqual(viewModel.aiStatus, "Rephrase…")
         await waitUntil {
             service.requestedActions.count == 2
                 && viewModel.actionPanelState?.selectedOption != nil
@@ -863,6 +864,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(service.requestedActions, [.improve, .rewrite])
         XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
+        XCTAssertEqual(viewModel.aiStatus, "Rephrase ready")
         XCTAssertEqual(
             viewModel.actionPanelState?.actionResultViewportHeight,
             KeyboardPanelLayout.actionPanelScrollableResultHeight
@@ -1491,6 +1493,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNotNil(rendering.plainTextValidationPolicy)
         XCTAssertEqual(KeyboardAIAction.rewriteStyle(.professional).operationName, "rewrite")
         XCTAssertEqual(KeyboardAIAction.rewriteStyle(.professional).rawValue, "rewrite_professional")
+        XCTAssertEqual(KeyboardAIAction.rewrite.title, "Rephrase")
         XCTAssertFalse(KeyboardAIAction.rewrite.representsSameMode(as: .rewriteStyle(.professional)))
         XCTAssertEqual(
             Set(KeyboardActionPanelState.availableActions.map(\.id)).count,

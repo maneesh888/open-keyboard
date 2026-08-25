@@ -317,7 +317,7 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         switch self {
         case .improve: return "Improve"
         case .fixGrammar: return "Fix Grammar"
-        case .rewrite: return "Rewrite"
+        case .rewrite: return "Rephrase"
         case .rewriteStyle(let style): return style.displayName
         case .summarize: return "Summarize"
         case .translate: return "Translate"

@@ -1283,7 +1283,7 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
             state: "actionLoadingPanel",
             panel: "actions",
             expectedIdentifier: "ai_action_loading_text",
-            attachmentName: "plain-text-02-default-improve-loading"
+            attachmentName: "plain-text-02-rephrase-loading"
         )
         capture(
             state: "actionDiffPanel",
@@ -1345,6 +1345,13 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         XCTAssertTrue(expected.exists, "Expected seeded state \(state)")
+        if state == "actionLoadingPanel" {
+            XCTAssertEqual(expected.label, "Rephrase…")
+            XCTAssertEqual(
+                keyboardApp.buttons["ai_action_rewrite"].value as? String,
+                "Selected"
+            )
+        }
         if state == "actionDiffPanel" {
             XCTAssertEqual(input.value as? String, hostSource)
             XCTAssertEqual(expected.label, "Are you saying the car is fine as it is?")

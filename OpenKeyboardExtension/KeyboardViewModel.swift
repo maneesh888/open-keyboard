@@ -2083,7 +2083,7 @@ final class KeyboardViewModel: ObservableObject {
                 suggestionState = nil
                 actionPanelState = Self.actionLoadingPanelState
                 actionError = nil
-                aiStatus = "Professional…"
+                aiStatus = "Rephrase…"
                 isPerformingAIAction = true
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -2333,7 +2333,7 @@ final class KeyboardViewModel: ObservableObject {
                     leadingWhitespace: "",
                     trailingWhitespace: ""
                 ),
-                selectedAction: .improve,
+                selectedAction: .rewrite,
                 isCarouselVisible: true,
                 isLoading: true
             )
