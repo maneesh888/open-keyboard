@@ -1289,7 +1289,7 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
             state: "actionDiffPanel",
             panel: "actions",
             expectedIdentifier: "ai_action_result_text",
-            attachmentName: "plain-text-03-inline-original-replacement-diff"
+            attachmentName: "plain-text-03-clean-replacement-with-underlined-corrections"
         )
         capture(
             state: "modelCapabilityError",
@@ -1348,9 +1348,9 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
         if state == "actionDiffPanel" {
             XCTAssertEqual(input.value as? String, hostSource)
             XCTAssertEqual(expected.label, "Are you saying the car is fine as it is?")
-            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_legend"].waitForExistence(timeout: 5))
-            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_removed_legend"].exists)
-            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_added_legend"].exists)
+            XCTAssertFalse(keyboardApp.descendants(matching: .any)["ai_action_diff_legend"].exists)
+            XCTAssertFalse(keyboardApp.descendants(matching: .any)["ai_action_diff_removed_legend"].exists)
+            XCTAssertFalse(keyboardApp.descendants(matching: .any)["ai_action_diff_added_legend"].exists)
             XCTAssertEqual(
                 keyboardApp.buttons["ai_action_rewrite"].value as? String,
                 "Selected"

@@ -570,10 +570,7 @@ private struct AIActionPanel: View {
     private func actionResultText(_ text: String, replacementDiff: KeyboardReplacementDiff) -> some View {
         if usesScrollableActionResult {
             ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 8) {
-                    actionDiffLegend
-                    actionResultLabel(text, replacementDiff: replacementDiff, lineLimit: nil)
-                }
+                actionResultLabel(text, replacementDiff: replacementDiff, lineLimit: nil)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -588,20 +585,6 @@ private struct AIActionPanel: View {
         }
     }
 
-    private var actionDiffLegend: some View {
-        HStack(spacing: 14) {
-            Label("Removed", systemImage: "minus")
-                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                .accessibilityIdentifier("ai_action_diff_removed_legend")
-            Label("Added", systemImage: "plus")
-                .foregroundColor(OpenKeyboardTheme.Semantic.success)
-                .accessibilityIdentifier("ai_action_diff_added_legend")
-        }
-        .font(.system(size: 10, weight: .semibold))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("ai_action_diff_legend")
-    }
-
     private func actionResultLabel(
         _ text: String,
         replacementDiff: KeyboardReplacementDiff,
@@ -614,43 +597,16 @@ private struct AIActionPanel: View {
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(text)
-            .accessibilityHint("Removed source text is struck through. Added replacement text is underlined.")
+            .accessibilityHint("Corrected replacement text is underlined.")
             .accessibilityIdentifier("ai_action_result_text")
     }
 
     private func inlineDiffText(_ replacementDiff: KeyboardReplacementDiff) -> Text {
         var output = Text("")
-        for (index, segment) in replacementDiff.segments.enumerated() {
-            if index > 0,
-               needsVisualSeparator(
-                   between: replacementDiff.segments[index - 1],
-                   and: segment
-               ) {
-                output = output + Text(" ")
-            }
+        for segment in replacementDiff.segments where segment.kind != .removed {
             output = output + styledDiffSegment(segment)
         }
         return output
-    }
-
-    private func needsVisualSeparator(
-        between previous: KeyboardReplacementDiffSegment,
-        and current: KeyboardReplacementDiffSegment
-    ) -> Bool {
-        let isChangePair = (previous.kind == .removed && current.kind == .inserted)
-            || (previous.kind == .inserted && current.kind == .removed)
-        guard isChangePair,
-              let previousCharacter = previous.text.last,
-              let currentCharacter = current.text.first else {
-            return false
-        }
-        return isWordCharacter(previousCharacter) && isWordCharacter(currentCharacter)
-    }
-
-    private func isWordCharacter(_ character: Character) -> Bool {
-        character.unicodeScalars.contains {
-            CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
-        }
     }
 
     private func styledDiffSegment(_ segment: KeyboardReplacementDiffSegment) -> Text {
@@ -659,13 +615,10 @@ private struct AIActionPanel: View {
         case .unchanged:
             return text.foregroundColor(OpenKeyboardTheme.Text.primary)
         case .removed:
-            return text
-                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                .strikethrough(true, color: OpenKeyboardTheme.Text.secondaryStrong)
+            return Text("")
         case .inserted:
             return text
                 .foregroundColor(OpenKeyboardTheme.Text.primary)
-                .fontWeight(.semibold)
                 .underline(true, color: OpenKeyboardTheme.Semantic.success)
         }
     }
