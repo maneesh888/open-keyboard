@@ -352,6 +352,80 @@ struct GrammarDiffService {
     }
 }
 
+enum KeyboardReplacementDiffKind: Equatable {
+    case unchanged
+    case removed
+    case inserted
+}
+
+struct KeyboardReplacementDiffSegment: Equatable {
+    let text: String
+    let kind: KeyboardReplacementDiffKind
+}
+
+struct KeyboardReplacementDiff: Equatable {
+    let segments: [KeyboardReplacementDiffSegment]
+
+    init(original: String, replacement: String) {
+        let originalCharacters = Array(original)
+        let edits = GrammarDiffService.edits(from: original, to: replacement)
+
+        guard !edits.isEmpty else {
+            if original == replacement {
+                segments = original.isEmpty
+                    ? []
+                    : [KeyboardReplacementDiffSegment(text: original, kind: .unchanged)]
+            } else {
+                segments = [
+                    KeyboardReplacementDiffSegment(text: original, kind: .removed),
+                    KeyboardReplacementDiffSegment(text: replacement, kind: .inserted)
+                ].filter { !$0.text.isEmpty }
+            }
+            return
+        }
+
+        var output: [KeyboardReplacementDiffSegment] = []
+        var cursor = 0
+
+        func append(_ text: String, kind: KeyboardReplacementDiffKind) {
+            guard !text.isEmpty else { return }
+            if let last = output.last, last.kind == kind {
+                output[output.count - 1] = KeyboardReplacementDiffSegment(
+                    text: last.text + text,
+                    kind: kind
+                )
+            } else {
+                output.append(KeyboardReplacementDiffSegment(text: text, kind: kind))
+            }
+        }
+
+        for edit in edits.sorted(by: { $0.range.start < $1.range.start }) {
+            let start = min(max(edit.range.start, cursor), originalCharacters.count)
+            let end = min(max(edit.range.end, start), originalCharacters.count)
+            append(String(originalCharacters[cursor..<start]), kind: .unchanged)
+            append(String(originalCharacters[start..<end]), kind: .removed)
+            append(edit.replacementText, kind: .inserted)
+            cursor = end
+        }
+        append(String(originalCharacters[cursor..<originalCharacters.count]), kind: .unchanged)
+        segments = output
+    }
+
+    var originalText: String {
+        segments
+            .filter { $0.kind != .inserted }
+            .map(\.text)
+            .joined()
+    }
+
+    var replacementText: String {
+        segments
+            .filter { $0.kind != .removed }
+            .map(\.text)
+            .joined()
+    }
+}
+
 struct GrammarCorrectionSession: Equatable {
     let originalText: String
     let documentRevision: Int

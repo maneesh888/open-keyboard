@@ -1286,10 +1286,10 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
             attachmentName: "plain-text-02-default-improve-loading"
         )
         capture(
-            state: "improvePanel",
+            state: "actionDiffPanel",
             panel: "actions",
             expectedIdentifier: "ai_action_result_text",
-            attachmentName: "plain-text-03-single-improve-result"
+            attachmentName: "plain-text-03-inline-original-replacement-diff"
         )
         capture(
             state: "modelCapabilityError",
@@ -1305,7 +1305,10 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
         expectedIdentifier: String,
         attachmentName: String
     ) {
-        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let hostSource = state == "actionDiffPanel"
+            ? "so you are saying car is good as it is?"
+            : sourceText
+        let encodedSource = hostSource.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? hostSource
         let app = XCUIApplication()
         app.launchArguments = [
             "--uitesting",
@@ -1342,6 +1345,17 @@ final class PlainTextActionScreenshotUITests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         }
         XCTAssertTrue(expected.exists, "Expected seeded state \(state)")
+        if state == "actionDiffPanel" {
+            XCTAssertEqual(input.value as? String, hostSource)
+            XCTAssertEqual(expected.label, "Are you saying the car is fine as it is?")
+            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_legend"].waitForExistence(timeout: 5))
+            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_removed_legend"].exists)
+            XCTAssertTrue(keyboardApp.descendants(matching: .any)["ai_action_diff_added_legend"].exists)
+            XCTAssertEqual(
+                keyboardApp.buttons["ai_action_rewrite"].value as? String,
+                "Selected"
+            )
+        }
         app.staticTexts["Keyboard Extension Host"]
             .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
             .tap()

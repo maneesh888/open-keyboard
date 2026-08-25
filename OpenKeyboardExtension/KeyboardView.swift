@@ -513,8 +513,9 @@ private struct AIActionPanel: View {
                 )
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("ai_translation_warning")
-            } else if let selectedOption = state.selectedOption {
-                actionResultText(selectedOption.text)
+            } else if let selectedOption = state.selectedOption,
+                      let replacementDiff = state.selectedReplacementDiff {
+                actionResultText(selectedOption.text, replacementDiff: replacementDiff)
             } else {
                 Text(state.contextSelectionPrompt ?? "No suggestion yet")
                     .font(.system(size: 18, weight: .regular))
@@ -566,28 +567,107 @@ private struct AIActionPanel: View {
     }
 
     @ViewBuilder
-    private func actionResultText(_ text: String) -> some View {
+    private func actionResultText(_ text: String, replacementDiff: KeyboardReplacementDiff) -> some View {
         if usesScrollableActionResult {
             ScrollView(.vertical, showsIndicators: true) {
-                actionResultLabel(text, lineLimit: nil)
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                VStack(alignment: .leading, spacing: 8) {
+                    actionDiffLegend
+                    actionResultLabel(text, replacementDiff: replacementDiff, lineLimit: nil)
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .clipped()
             .accessibilityIdentifier("ai_action_result_scroll")
         } else {
-            actionResultLabel(text, lineLimit: state.isCarouselVisible ? 4 : 6)
+            actionResultLabel(
+                text,
+                replacementDiff: replacementDiff,
+                lineLimit: state.isCarouselVisible ? 4 : 6
+            )
         }
     }
 
-    private func actionResultLabel(_ text: String, lineLimit: Int?) -> some View {
-        Text(text)
+    private var actionDiffLegend: some View {
+        HStack(spacing: 14) {
+            Label("Removed", systemImage: "minus")
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .accessibilityIdentifier("ai_action_diff_removed_legend")
+            Label("Added", systemImage: "plus")
+                .foregroundColor(OpenKeyboardTheme.Semantic.success)
+                .accessibilityIdentifier("ai_action_diff_added_legend")
+        }
+        .font(.system(size: 10, weight: .semibold))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_action_diff_legend")
+    }
+
+    private func actionResultLabel(
+        _ text: String,
+        replacementDiff: KeyboardReplacementDiff,
+        lineLimit: Int?
+    ) -> some View {
+        inlineDiffText(replacementDiff)
             .font(.system(size: actionResultFontSize, weight: .regular))
-            .foregroundColor(OpenKeyboardTheme.Text.primary)
             .lineLimit(lineLimit)
             .minimumScaleFactor(0.72)
             .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(text)
+            .accessibilityHint("Removed source text is struck through. Added replacement text is underlined.")
             .accessibilityIdentifier("ai_action_result_text")
+    }
+
+    private func inlineDiffText(_ replacementDiff: KeyboardReplacementDiff) -> Text {
+        var output = Text("")
+        for (index, segment) in replacementDiff.segments.enumerated() {
+            if index > 0,
+               needsVisualSeparator(
+                   between: replacementDiff.segments[index - 1],
+                   and: segment
+               ) {
+                output = output + Text(" ")
+            }
+            output = output + styledDiffSegment(segment)
+        }
+        return output
+    }
+
+    private func needsVisualSeparator(
+        between previous: KeyboardReplacementDiffSegment,
+        and current: KeyboardReplacementDiffSegment
+    ) -> Bool {
+        let isChangePair = (previous.kind == .removed && current.kind == .inserted)
+            || (previous.kind == .inserted && current.kind == .removed)
+        guard isChangePair,
+              let previousCharacter = previous.text.last,
+              let currentCharacter = current.text.first else {
+            return false
+        }
+        return isWordCharacter(previousCharacter) && isWordCharacter(currentCharacter)
+    }
+
+    private func isWordCharacter(_ character: Character) -> Bool {
+        character.unicodeScalars.contains {
+            CharacterSet.letters.contains($0) || CharacterSet.decimalDigits.contains($0)
+        }
+    }
+
+    private func styledDiffSegment(_ segment: KeyboardReplacementDiffSegment) -> Text {
+        let text = Text(segment.text)
+        switch segment.kind {
+        case .unchanged:
+            return text.foregroundColor(OpenKeyboardTheme.Text.primary)
+        case .removed:
+            return text
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .strikethrough(true, color: OpenKeyboardTheme.Text.secondaryStrong)
+        case .inserted:
+            return text
+                .foregroundColor(OpenKeyboardTheme.Text.primary)
+                .fontWeight(.semibold)
+                .underline(true, color: OpenKeyboardTheme.Semantic.success)
+        }
     }
 
     private var actionCarousel: some View {

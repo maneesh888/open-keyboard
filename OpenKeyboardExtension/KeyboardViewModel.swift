@@ -67,6 +67,11 @@ struct KeyboardActionPanelState: Equatable {
         return options.first { $0.id == selectedOptionID } ?? options.first
     }
 
+    var selectedReplacementDiff: KeyboardReplacementDiff? {
+        guard let selectedOption else { return nil }
+        return KeyboardReplacementDiff(original: sourceText, replacement: selectedOption.text)
+    }
+
     var usesScrollableActionResult: Bool {
         selectedOption != nil && !isLoading
     }
@@ -2055,6 +2060,15 @@ final class KeyboardViewModel: ObservableObject {
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
+            case "actionDiffPanel":
+                panelMode = .actions
+                suggestionState = nil
+                actionPanelState = Self.actionDiffPanelState
+                actionError = nil
+                aiStatus = "Rephrase ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "actionCarouselPanel":
                 panelMode = .actions
                 suggestionState = nil
@@ -2246,6 +2260,29 @@ final class KeyboardViewModel: ObservableObject {
                         id: "translate-result-1",
                         title: "Arabic translation",
                         text: "صباح الخير، أتمنى أن تكون بخير."
+                    )
+                ],
+                isCarouselVisible: true,
+                isLoading: false
+            )
+        }
+
+        private static var actionDiffPanelState: KeyboardActionPanelState {
+            let sourceText = "so you are saying car is good as it is?"
+            return KeyboardActionPanelState(
+                sourceText: sourceText,
+                replacementPlan: KeyboardReplacementPlan(
+                    textToDelete: sourceText,
+                    textForAI: sourceText,
+                    leadingWhitespace: "",
+                    trailingWhitespace: ""
+                ),
+                selectedAction: .rewrite,
+                options: [
+                    KeyboardRewriteOption(
+                        id: "rewrite-diff-result-1",
+                        title: "Rephrased",
+                        text: "Are you saying the car is fine as it is?"
                     )
                 ],
                 isCarouselVisible: true,

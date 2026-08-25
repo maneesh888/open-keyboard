@@ -2,6 +2,27 @@ import XCTest
 
 @MainActor
 final class KeyboardSuggestionModelsTests: XCTestCase {
+    func testReplacementDiffReconstructsOriginalAndReplacementWithInlineChangeKinds() {
+        let original = "so you are saying car is good as it is?"
+        let replacement = "Are you saying the car is fine as it is?"
+        let diff = KeyboardReplacementDiff(original: original, replacement: replacement)
+
+        XCTAssertEqual(diff.originalText, original)
+        XCTAssertEqual(diff.replacementText, replacement)
+        XCTAssertTrue(diff.segments.contains(where: { $0.kind == .removed }))
+        XCTAssertTrue(diff.segments.contains(where: { $0.kind == .inserted }))
+        XCTAssertTrue(diff.segments.contains(where: { $0.kind == .unchanged }))
+    }
+
+    func testReplacementDiffPreservesParagraphsRelevantWhitespaceAndUnicode() {
+        let original = "  Hello 👋\n\nOld paragraph.  "
+        let replacement = "  Hello 👋\n\nClear paragraph.  "
+        let diff = KeyboardReplacementDiff(original: original, replacement: replacement)
+
+        XCTAssertEqual(diff.originalText, original)
+        XCTAssertEqual(diff.replacementText, replacement)
+    }
+
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
 
