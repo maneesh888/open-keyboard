@@ -595,9 +595,12 @@ private struct AIActionPanel: View {
             .lineLimit(lineLimit)
             .minimumScaleFactor(0.72)
             .fixedSize(horizontal: false, vertical: true)
-            .accessibilityElement(children: .ignore)
             .accessibilityLabel(text)
-            .accessibilityHint("Corrected replacement text is underlined.")
+            .accessibilityHint(
+                replacementDiff.usesInlineHighlights
+                    ? "Corrected replacement text is underlined."
+                    : "Replacement text."
+            )
             .accessibilityIdentifier("ai_action_result_text")
     }
 

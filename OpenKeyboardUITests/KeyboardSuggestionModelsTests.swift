@@ -39,6 +39,20 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         }))
     }
 
+    func testReplacementDiffFallsBackToPlainCompleteTextWhenInputIsTooLargeForKeyboardHighlighting() {
+        let original = String(repeating: "original wording ", count: 100)
+        let replacement = String(repeating: "replacement wording ", count: 100)
+        let diff = KeyboardReplacementDiff(original: original, replacement: replacement)
+
+        XCTAssertEqual(diff.originalText, original)
+        XCTAssertEqual(diff.replacementText, replacement)
+        XCTAssertEqual(
+            diff.highlightedReplacementSegments,
+            [KeyboardReplacementDiffSegment(text: replacement, kind: .unchanged)]
+        )
+        XCTAssertFalse(diff.usesInlineHighlights)
+    }
+
     func testKeyboardActionErrorSanitizesRawJSONAndSecrets() {
         let error = KeyboardActionErrorState(message: "Gateway failed {\"api_key\":\"secret-token\",\"stack\":[1,2,3]}")
 

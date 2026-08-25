@@ -336,6 +336,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(loadedSummarizeState.usesScrollableActionResult)
         XCTAssertEqual(loadedImproveState.selectedReplacementDiff?.originalText, sourceText)
         XCTAssertEqual(loadedImproveState.selectedReplacementDiff?.replacementText, option.text)
+        XCTAssertEqual(loadedImproveState.replacementDiff, loadedImproveState.selectedReplacementDiff)
         XCTAssertEqual(
             KeyboardPanelLayout.keyboardHeight(for: .actions, actionPanelState: loadingImproveState),
             KeyboardPanelLayout.actionPanelHeight

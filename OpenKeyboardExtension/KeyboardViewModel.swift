@@ -18,6 +18,7 @@ struct KeyboardActionPanelState: Equatable {
     var warningMessage: String?
     var styleRevision: Int
     var resultStyleRevision: Int?
+    private(set) var replacementDiff: KeyboardReplacementDiff?
 
     static let availableActions: [KeyboardAIAction] = [
         .improve,
@@ -47,6 +48,9 @@ struct KeyboardActionPanelState: Equatable {
         self.warningMessage = warningMessage
         self.styleRevision = 0
         self.resultStyleRevision = options.isEmpty ? nil : 0
+        self.replacementDiff = self.options.first.map {
+            KeyboardReplacementDiff(original: sourceText, replacement: $0.text)
+        }
     }
 
     init(sourceText: String, selectedAction: KeyboardAIAction = .improve) {
@@ -68,8 +72,9 @@ struct KeyboardActionPanelState: Equatable {
     }
 
     var selectedReplacementDiff: KeyboardReplacementDiff? {
-        guard let selectedOption else { return nil }
-        return KeyboardReplacementDiff(original: sourceText, replacement: selectedOption.text)
+        guard let selectedOption,
+              replacementDiff?.replacementText == selectedOption.text else { return nil }
+        return replacementDiff
     }
 
     var usesScrollableActionResult: Bool {
@@ -107,6 +112,7 @@ struct KeyboardActionPanelState: Equatable {
         selectedOptionID = ""
         warningMessage = nil
         resultStyleRevision = nil
+        replacementDiff = nil
         isLoading = action.isReadyForActionPanelRequest
     }
 
@@ -122,6 +128,7 @@ struct KeyboardActionPanelState: Equatable {
         selectedOptionID = ""
         warningMessage = nil
         resultStyleRevision = nil
+        replacementDiff = nil
         isLoading = true
     }
 
@@ -131,6 +138,9 @@ struct KeyboardActionPanelState: Equatable {
         isLoading = false
         warningMessage = nil
         resultStyleRevision = styleRevision
+        replacementDiff = self.options.first.map {
+            KeyboardReplacementDiff(original: sourceText, replacement: $0.text)
+        }
     }
 
     mutating func finishLoading(warningMessage: String) {
@@ -139,6 +149,7 @@ struct KeyboardActionPanelState: Equatable {
         isLoading = false
         self.warningMessage = warningMessage
         resultStyleRevision = nil
+        replacementDiff = nil
     }
 
     mutating func selectOption(id: String) {

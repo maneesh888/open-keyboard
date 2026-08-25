@@ -364,9 +364,27 @@ struct KeyboardReplacementDiffSegment: Equatable {
 }
 
 struct KeyboardReplacementDiff: Equatable {
+    private static let maximumInlineDiffCharactersPerText = 1_200
+    private static let maximumHighlightedSegments = 120
+
     let segments: [KeyboardReplacementDiffSegment]
+    let originalText: String
+    let replacementText: String
+    let highlightedReplacementSegments: [KeyboardReplacementDiffSegment]
+    let usesInlineHighlights: Bool
 
     init(original: String, replacement: String) {
+        originalText = original
+        replacementText = replacement
+
+        guard original.count <= Self.maximumInlineDiffCharactersPerText,
+              replacement.count <= Self.maximumInlineDiffCharactersPerText else {
+            segments = Self.completeReplacementSegments(original: original, replacement: replacement)
+            highlightedReplacementSegments = Self.plainReplacementSegments(replacement)
+            usesInlineHighlights = false
+            return
+        }
+
         let originalCharacters = Array(original)
         let edits = GrammarDiffService.edits(from: original, to: replacement)
 
@@ -381,6 +399,8 @@ struct KeyboardReplacementDiff: Equatable {
                     KeyboardReplacementDiffSegment(text: replacement, kind: .inserted)
                 ].filter { !$0.text.isEmpty }
             }
+            highlightedReplacementSegments = Self.highlightedSegments(from: segments)
+            usesInlineHighlights = highlightedReplacementSegments.contains { $0.kind == .inserted }
             return
         }
 
@@ -409,23 +429,19 @@ struct KeyboardReplacementDiff: Equatable {
         }
         append(String(originalCharacters[cursor..<originalCharacters.count]), kind: .unchanged)
         segments = output
+        let highlighted = Self.highlightedSegments(from: output)
+        if highlighted.count <= Self.maximumHighlightedSegments {
+            highlightedReplacementSegments = highlighted
+            usesInlineHighlights = highlighted.contains { $0.kind == .inserted }
+        } else {
+            highlightedReplacementSegments = Self.plainReplacementSegments(replacement)
+            usesInlineHighlights = false
+        }
     }
 
-    var originalText: String {
-        segments
-            .filter { $0.kind != .inserted }
-            .map(\.text)
-            .joined()
-    }
-
-    var replacementText: String {
-        segments
-            .filter { $0.kind != .removed }
-            .map(\.text)
-            .joined()
-    }
-
-    var highlightedReplacementSegments: [KeyboardReplacementDiffSegment] {
+    private static func highlightedSegments(
+        from segments: [KeyboardReplacementDiffSegment]
+    ) -> [KeyboardReplacementDiffSegment] {
         var output: [KeyboardReplacementDiffSegment] = []
 
         func append(_ text: String, kind: KeyboardReplacementDiffKind) {
@@ -465,6 +481,22 @@ struct KeyboardReplacementDiff: Equatable {
         }
 
         return output
+    }
+
+    private static func completeReplacementSegments(
+        original: String,
+        replacement: String
+    ) -> [KeyboardReplacementDiffSegment] {
+        [
+            KeyboardReplacementDiffSegment(text: original, kind: .removed),
+            KeyboardReplacementDiffSegment(text: replacement, kind: .inserted)
+        ].filter { !$0.text.isEmpty }
+    }
+
+    private static func plainReplacementSegments(_ replacement: String) -> [KeyboardReplacementDiffSegment] {
+        replacement.isEmpty
+            ? []
+            : [KeyboardReplacementDiffSegment(text: replacement, kind: .unchanged)]
     }
 }
 
