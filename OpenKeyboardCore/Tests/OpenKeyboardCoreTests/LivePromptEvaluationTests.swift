@@ -34,9 +34,9 @@ final class LivePromptEvaluationTests: XCTestCase {
 
             XCTAssertEqual(result.operation, expectedOperation)
             XCTAssertFalse(result.displayText.isEmpty, "\(expectedOperation) must contain usable result content.")
-            if action == .fixGrammar {
+            if action == .fixGrammar || action == .rewrite {
                 XCTAssertFalse(result.isStructuredResponse)
-                XCTAssertTrue(result.items.isEmpty)
+                XCTAssertTrue(result.items.isEmpty, "\(expectedOperation) must not require a structured result array.")
             } else {
                 XCTAssertTrue(result.isStructuredResponse, "\(expectedOperation) must return parseable structured JSON.")
                 XCTAssertFalse(result.items.isEmpty, "\(expectedOperation) must return at least one structured result item.")

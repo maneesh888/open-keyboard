@@ -1889,7 +1889,8 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
-        guard operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "fix_grammar" else {
+        let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalizedOperation != "fix_grammar", normalizedOperation != "rewrite" else {
             throw KeyboardActionOperationResultError.invalidResponse
         }
         let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)

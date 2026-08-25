@@ -140,9 +140,27 @@ struct LiveAITestHarnessView: View {
             throw LiveAITestHarnessError.invalidResponse
         }
 
-        let result = action == "fix_grammar"
-            ? try KeyboardActionOperationResult.plainTextGrammarResponse(choice.message.content, original: text)
-            : try KeyboardActionOperationResult.parse(choice.message.content, operation: action, fallbackText: text)
+        let result: KeyboardActionOperationResult
+        if action == "fix_grammar" {
+            result = try KeyboardActionOperationResult.plainTextGrammarResponse(
+                choice.message.content,
+                original: text
+            )
+        } else if rendering.plainTextValidationPolicy != nil {
+            result = try KeyboardActionOperationResult.plainTextReplacement(
+                choice.message.content,
+                contractOperationID: rendering.operationID,
+                wireOperation: rendering.wireOperationID ?? action,
+                title: action == "rewrite" ? "Improve" : "Writing result",
+                source: text
+            )
+        } else {
+            result = try KeyboardActionOperationResult.parse(
+                choice.message.content,
+                operation: action,
+                fallbackText: text
+            )
+        }
         let output = result.displayText
         guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LiveAITestHarnessError.invalidResponse

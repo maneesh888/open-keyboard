@@ -131,8 +131,12 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "--keyboard-host-test",
             "--keyboard-host-autofocus",
             "--keyboard-host-prefer-openkeyboard",
-            "--keyboard-host-text=\(encodedSource)"
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=automaticModelCapabilityWarning"
         ])
+        // Keep the default Improve request in loading state long enough for the real
+        // extension assertion, without relying on a live gateway or storing secrets.
+        app.launchEnvironment["OPEN_KEYBOARD_TEST_GATEWAY_URL"] = "https://192.0.2.1"
         app.launch()
         XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
 
@@ -183,6 +187,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertTrue(keyboardApp.buttons["ai_action_translate"].waitForExistence(timeout: 2))
         XCTAssertFalse(keyboardApp.buttons["ai_action_summarize"].exists)
         XCTAssertEqual(keyboardApp.buttons["ai_action_improve"].value as? String, "Selected")
+
+        keyboardApp.staticTexts["ai_action_loading_text"].tap()
+        try captureRealKeyboardStep("real-keyboard-sparkle-default-improve-loading")
 
         let backToKeyboard = keyboardApp.buttons["back_to_keyboard"]
         XCTAssertTrue(backToKeyboard.waitForExistence(timeout: 2))

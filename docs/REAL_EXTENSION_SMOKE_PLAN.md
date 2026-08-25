@@ -20,7 +20,7 @@ This is not a broad screenshot suite. It is the release-readiness guardrail for 
 The keyboard toolbar has two independent workflows:
 
 - Left status/logo lane: grammar and typo correction review. The OpenKeyboard logo, issue count badge, and correction status belong to this lane. When correction results exist, tapping it opens the correction review/details flow.
-- Right sparkle lane: generative writing actions. Improve, Rephrase, and Translate belong here. Summarize remains implemented but is intentionally omitted from the visible carousel. Opening the lane makes no request and selects no default. Rewrite and Improve require an explicit style/action choice; Translate requires an explicit target-language choice. A result never replaces text without an explicit user Apply step.
+- Right sparkle lane: generative writing actions. Improve, Rephrase, and Translate belong here. Summarize remains implemented but is intentionally omitted from the visible carousel. Opening the lane selects Improve and immediately makes one Improve request, matching the established keyboard UX. Tapping Rephrase immediately makes one generic rewrite request; tapping a named rewrite style invalidates that request/result and makes one request for the selected style. Translate waits for an explicit target-language choice. A result never replaces text without an explicit user Apply step.
 
 Real-extension proof should keep these lanes separate: a sparkle workflow pass does not prove correction review, and a correction badge pass does not prove Improve/Rephrase actions.
 
@@ -95,7 +95,7 @@ This separate focused route directly seeds the action panel with disposable UI-t
 )
 ```
 
-This route proves only that the real extension renders Improve, simple Rephrase, Translate, and the 15 independent rewrite actions in one 44-point horizontal carousel with no default selection while keeping the bottom controls fixed, Summarize hidden, and contextual sub-carousels absent. Because it directly seeds the action panel, it does not prove sparkle navigation, gateway availability, a live rewrite response, or Apply behavior.
+This route proves only that the real extension renders Improve, simple Rephrase, Translate, and the 15 independent rewrite actions in one 44-point horizontal carousel while keeping the bottom controls fixed, Summarize hidden, and contextual sub-carousels absent. Because it directly seeds the action panel, it does not prove the default Improve selection/request, sparkle navigation, gateway availability, a live rewrite response, or Apply behavior. Use `testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded` to verify that tapping the real sparkle button opens the panel and immediately enters Improve loading state. That test seeds only a nonblocking background-analysis warning and a nonresponsive reserved test endpoint to prevent unrelated automatic grammar work or a fast transport failure from replacing the observable loading state; it does not seed the action panel, action selection, request, or result.
 
 ## Focused Translate screenshot scope
 

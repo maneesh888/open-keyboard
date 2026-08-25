@@ -37,7 +37,7 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
     }
 
-    func testImproveWithRealGatewayUsesStructuredResultContract() throws {
+    func testImproveWithRealGatewayUsesPlainTextReplacementContract() throws {
         let editor = app.textViews["live_ai_text_editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.tap()
