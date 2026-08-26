@@ -76,7 +76,7 @@ Current live harness coverage:
 
 - Grammar correction sanity check.
 - Gemma-specific complete plain-text multi-error grammar correction checks.
-- Gemma-specific valid structured JSON checks for rewrite, summarize, translate, and continue writing.
+- Gemma-specific valid complete plain-text checks for rewrite and Improve, plus structured checks for summarize, translate, and continue writing.
 - Rewrite clarity sanity check.
 - Prompt-injection-as-input summarization check.
 - Broad latency budget tracking per scenario.

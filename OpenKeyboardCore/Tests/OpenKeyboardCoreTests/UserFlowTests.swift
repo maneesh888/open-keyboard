@@ -21,7 +21,7 @@ final class UserFlowTests: XCTestCase {
             action: .rewrite,
             typedText: "this sounds bad",
             modelResponse: "This could sound better.",
-            expectedPromptFragments: ["Rewrite", "clarity", "this sounds bad"],
+            expectedPromptFragments: ["Rephrase", "broadly restructure", "this sounds bad"],
             replacementStrategy: .replaceAll
         )
 

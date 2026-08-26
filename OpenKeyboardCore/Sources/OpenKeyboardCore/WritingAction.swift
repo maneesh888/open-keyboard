@@ -31,7 +31,7 @@ public enum WritingAction: Equatable, Sendable {
         case .continueWriting:
             return "Continue Writing"
         case .rewrite:
-            return "Rewrite"
+            return "Rephrase"
         case .fixGrammar:
             return "Fix Grammar & Spelling"
         case .summarize:
@@ -45,7 +45,7 @@ public enum WritingAction: Equatable, Sendable {
 
     public var requiresStructuredJSON: Bool {
         switch self {
-        case .fixGrammar, .custom:
+        case .fixGrammar, .rewrite, .custom:
             return false
         default:
             return true

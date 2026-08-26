@@ -50,7 +50,7 @@ public struct WritingActionResult: Equatable, Sendable {
     }
 
     public var displayText: String {
-        if operation == "fix_grammar", let correctedText {
+        if ["fix_grammar", "rewrite"].contains(operation), let correctedText {
             return correctedText
         }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -185,10 +185,19 @@ public final class GatewayClient: Sendable {
             throw GatewayClientError.invalidResponse
         }
 
-        return try await Self.parseWritingActionResult(choice.message.content, operation: action.operationName, fallbackText: text)
+        return try await Self.parseWritingActionResult(
+            choice.message.content,
+            action: action,
+            fallbackText: text
+        )
     }
 
-    private static func parseWritingActionResult(_ content: String, operation: String, fallbackText: String) async throws -> WritingActionResult {
+    private static func parseWritingActionResult(
+        _ content: String,
+        action: WritingAction,
+        fallbackText: String
+    ) async throws -> WritingActionResult {
+        let operation = action.operationName
         if operation == "fix_grammar" {
             let corrected = try await validatedPlainTextGrammarResponse(content, original: fallbackText)
             return WritingActionResult(
@@ -196,6 +205,30 @@ public final class GatewayClient: Sendable {
                 items: [],
                 correctedText: corrected,
                 isNoChangeResult: corrected == fallbackText
+            )
+        }
+        if action == .rewrite {
+            let replacement: String
+            do {
+                replacement = try SemanticPromptContract.validatePlainTextResponse(
+                    content,
+                    operationID: "rewrite_core",
+                    source: fallbackText
+                )
+            } catch {
+                throw GatewayClientError.invalidResponse
+            }
+            return WritingActionResult(
+                operation: operation,
+                items: [WritingActionResultItem(
+                    id: "plain-text-result",
+                    type: "suggestion",
+                    title: "Rephrase",
+                    text: replacement,
+                    original: fallbackText,
+                    replacement: replacement
+                )],
+                correctedText: replacement
             )
         }
         let trimmed = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
