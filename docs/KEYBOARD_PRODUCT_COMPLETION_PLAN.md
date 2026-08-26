@@ -139,7 +139,8 @@ M2 acceptance criteria:
 - Fix Grammar remains available but less visually dominant.
 - Delete repeat, shift state, return key, and numbers/symbols mode are handled well enough for normal typing.
 - Screenshots on iPhone 17 Pro and a smaller simulator are visually acceptable.
-- Real keyboard Fix Grammar functional test still passes after redesign.
+- Automated real-extension Fix Grammar regression still passes after redesign, and normal simulator
+  runtime proof separately confirms the visible production workflow before push.
 
 Feature fine-tuning candidates:
 - Better connection/setup state in the keyboard when gateway is missing.

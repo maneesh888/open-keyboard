@@ -30,6 +30,7 @@ LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
 LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
+RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
@@ -62,6 +63,7 @@ for required_file in \
   "$LIVE_TEST_SAFETY_POLICY_TEST" \
   "$LIVE_POLICY_BOOTSTRAP" \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
+  "$RUNTIME_PROOF_POLICY_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -69,6 +71,8 @@ for required_file in \
     exit 1
   fi
 done
+
+"$RUNTIME_PROOF_POLICY_TEST"
 
 if rg --quiet 'pull_request_target|secrets\.' "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
   echo "Ordinary and live-policy CI must remain read-only and secretless." >&2

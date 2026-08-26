@@ -531,7 +531,8 @@ case "${1:-}" in
     ;;
 
   real-keyboard-live)
-    echo -e "${YELLOW}Running seeded real keyboard extension live test...${NC}"
+    echo -e "${YELLOW}Running automated real-extension regression test with seeded live gateway configuration...${NC}"
+    echo "Evidence boundary: XCTest/XCUITest regression only; not normal simulator or device proof."
     require_xcodebuild
     live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
     case "$live_test_identifier" in
@@ -540,7 +541,7 @@ case "${1:-}" in
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested)
         ;;
       *)
-        echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"
+        echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved automated real-extension regression test.${NC}"
         exit 2
         ;;
     esac
@@ -602,7 +603,8 @@ case "${1:-}" in
       -only-testing:"$live_test_identifier" \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
-    echo -e "${GREEN}✓ Seeded real keyboard extension live test complete${NC}"
+    echo -e "${GREEN}✓ Automated real-extension regression test complete${NC}"
+    echo "This result does not replace normal simulator runtime or physical-device proof."
     echo "Sensitive live-test artifacts will be removed before exit."
     ;;
 
@@ -645,7 +647,7 @@ case "${1:-}" in
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"
     echo "  live-model-differential - Build once and run the targeted low/high live-model matrix"
-    echo "  real-keyboard-live - Seed ignored local gateway credentials, then run real keyboard extension live test"
+    echo "  real-keyboard-live - Run credentialed automated real-extension regression (not final runtime proof)"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"
     echo "  coverage    - Run core package tests with coverage"

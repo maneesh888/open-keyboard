@@ -3,7 +3,9 @@
 Last updated: 2026-06-19 12:55 Asia/Dubai
 
 ## Goal
-Make Open Keyboard feel closer to a polished iOS keyboard plus high-quality writing-assistant UX while preserving the verified M1 gateway Fix Grammar path.
+Make Open Keyboard feel closer to a polished iOS keyboard plus high-quality writing-assistant UX
+while preserving the M1 automated Fix Grammar regression path. Normal runtime acceptance is tracked
+separately under the current evidence policy.
 
 ## Current status
 
@@ -13,9 +15,9 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
 
 ## Completed
 
-- M1 real keyboard Fix Grammar path verified and committed.
+- M1 automated real-extension Fix Grammar XCUITest path passed and was committed.
   - Commit: `764c6e6 Add real keyboard AI functional path`
-  - Latest real keyboard verifier request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
+  - Latest automated XCUITest request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
 - Release hardening docs committed.
   - Commit: `7a3438d Document Open Keyboard release hardening`
 - iPhone 17 Pro simulator App Group entitlement issue diagnosed and fixed by reinstall.
@@ -47,8 +49,10 @@ Current working tree has broad dirty changes across product, proof routes, CI/do
 
 ## Active blockers / issues
 
-- Real keyboard switcher helper is narrowed: host proof can activate the real OpenKeyboard extension and QWERTY keys are visible.
-- Real logo/action-menu acceptance is still blocked because the real extension reports `Gateway not configured`, so `ai_sparkle_action` is absent.
+- Automated switcher regression can activate the installed OpenKeyboard extension and show QWERTY
+  keys; this is not normal simulator runtime proof.
+- Automated logo/action-menu regression is blocked because the extension reports `Gateway not
+  configured`, so `ai_sparkle_action` is absent. Normal runtime acceptance remains separate.
 - Next diagnostic is extension-side config-state instrumentation; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 - Dirty default worktree is broad; use scoped branches/commits only after lane split.
 
@@ -84,8 +88,9 @@ Tests required:
 Verification required:
 - `git diff --check`
 - targeted Xcode tests
-- iPhone 17 Pro screenshot
-- real Fix Grammar functional test still passes or documented blocker
+- automated iPhone 17 Pro screenshot regression
+- automated real-extension Fix Grammar test still passes or has a documented blocker
+- normal simulator runtime proof succeeds before a proof-sensitive push
 
 ## Next after M2.1
 
@@ -109,6 +114,6 @@ Planned:
 - Do not commit until:
   - build passes;
   - tests pass;
-  - screenshot reviewed;
-  - real keyboard behavior is verified or blocker documented;
+  - automated screenshot reviewed;
+  - required normal simulator runtime proof is verified or the change remains unpushed;
   - security/privacy regressions checked.

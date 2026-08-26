@@ -17,7 +17,9 @@ Latest verified CI request ID: 2026-05-22T023906-openkeyboard-onboarding-ui-four
 
 Status: Done
 
-Goal: stop relying on ad-hoc manual simulator screenshots for onboarding/UI quality. Build a repeatable UI-test harness using the portable patterns listed below; no external reference checkout is required.
+Goal: add repeatable automated screenshot regression coverage for onboarding/UI quality. This
+harness complements, but never replaces, direct screenshots from a normally launched app when
+normal simulator runtime proof is required.
 
 Useful patterns to copy/adapt:
 
@@ -62,7 +64,7 @@ Open Keyboard tasks:
 Acceptance:
 
 - Normal quick CI remains available.
-- UI test command produces deterministic screenshot artifacts under `.ci-results/ui/`.
+- UI test command produces deterministic `XCTAttachment` automated regression artifacts under `.ci-results/ui/`.
 - Onboarding page screenshots are easy to compare tomorrow.
 - UI tests catch truncation/overlap regressions; design quality still needs human screenshot review or approved snapshot baseline.
 
@@ -212,7 +214,8 @@ Acceptance:
 
 - Existing core tests remain green.
 - iOS build passes.
-- Manual simulator smoke can type and run at least one mocked/real action.
+- Automated UI regression can type and run at least one mocked/real action; final user-visible
+  acceptance still requires the normal simulator runtime route.
 
 ## Execution order
 
@@ -231,6 +234,6 @@ Recommended next order:
 
 - Priority: high
 - Status: blocked/follow-up needed
-- Context: real keyboard extension smoke reaches the actual OpenKeyboard QWERTY UI, but the toolbar remains `Gateway not configured` and `ai_sparkle_action` is absent.
+- Context: automated real-extension XCUITest reaches the actual OpenKeyboard QWERTY UI, but the toolbar remains `Gateway not configured` and `ai_sparkle_action` is absent.
 - Next action: add DEBUG-only extension-side config-state attachment/probe for App Group and Keychain presence, then rerun the focused smoke once.
 - Reference: `docs/REAL_EXTENSION_SMOKE_PLAN.md`; historical verifier artifact ID `20260619T1212-real-extension-gateway-config-seed` is informational only.
