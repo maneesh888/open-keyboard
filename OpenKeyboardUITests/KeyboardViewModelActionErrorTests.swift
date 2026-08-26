@@ -973,6 +973,72 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
     }
 
+    func testChangedDocumentCallbackInvalidatesPendingActionAndIgnoresLateResult() async {
+        let sourceText = "Please provide a concise status update."
+        let changedText = "The host text changed while Improve was loading."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = UncancellableSequencedKeyboardAIService(
+            outcomes: [.success(Self.plainRewriteResult("A late stale result."))],
+            delays: [100_000_000]
+        )
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil { service.requestedActions == [.improve] && viewModel.isPerformingAIAction }
+
+        proxy.replaceTextForTest(changedText)
+        viewModel.documentDidChange()
+
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(proxy.text, changedText)
+    }
+
+    func testChangedDocumentCallbackInvalidatesCompletedActionResult() async {
+        let sourceText = "Please provide a concise status update."
+        let changedText = "The host text changed after Improve completed."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [
+            Self.plainRewriteResult("A concise status update, please.")
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.showActionPanel()
+        await waitUntil {
+            viewModel.actionPanelState?.selectedOption?.text == "A concise status update, please."
+                && !viewModel.isPerformingAIAction
+        }
+
+        proxy.replaceTextForTest(changedText)
+        viewModel.documentDidChange()
+
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(proxy.text, changedText)
+    }
+
     func testBackCancelsPendingActionAndLateResultCannotRestoreIt() async {
         let sourceText = "Please provide a concise status update."
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -1494,6 +1560,36 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
         XCTAssertNil(viewModel.actionPanelState)
         XCTAssertEqual(viewModel.completionPanelState, .improvementApplied)
+    }
+
+    func testActionPanelCopyRejectsResultAfterHostTextChanges() async {
+        let sourceText = "please make this better"
+        let changedText = "The host text changed before Copy."
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [Self.plainRewriteResult()])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+        let previousPasteboardText = UIPasteboard.general.string
+        defer { UIPasteboard.general.string = previousPasteboardText }
+
+        viewModel.showActionPanel()
+        await waitUntil {
+            viewModel.actionPanelState?.selectedOption?.text == "Please make this clearer."
+                && !viewModel.isPerformingAIAction
+        }
+
+        proxy.replaceTextForTest(changedText)
+        UIPasteboard.general.string = "sentinel"
+        viewModel.copySelectedActionPanelSuggestion()
+
+        XCTAssertEqual(UIPasteboard.general.string, "sentinel")
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertEqual(proxy.text, changedText)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
     }
 
     func testImproveUsesCurrentLineAcrossCursor() async {
