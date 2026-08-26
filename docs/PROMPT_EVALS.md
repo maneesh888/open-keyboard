@@ -31,7 +31,11 @@ Acceptance:
 - No network calls.
 - No real private user text.
 - Stable pass/fail behavior in normal CI.
-- Proves every built-in prompt requests exactly one JSON object with the canonical result contract.
+- Proves each operation covered by this Core fixture suite requests its canonical package-owned
+  response format: one complete plain-text replacement for Grammar and Core Rewrite, or one JSON
+  object for Summarize, Translate, and Continue Writing.
+- Contract and app/extension suites separately prove the same complete plain-text response contract
+  for Improve and every rewrite style.
 - Checks operation-specific rules, including granular grammar items, meaning preservation,
   facts-only summaries, translation fidelity, and continuation-only output.
 
