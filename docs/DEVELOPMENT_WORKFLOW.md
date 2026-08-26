@@ -15,9 +15,9 @@ derive from canonical JSON; do not edit them or add fallback prompt copies in th
 
 ## Purpose
 
-OpenKeyboard uses proportional local checks and exact-head release evidence. This file owns
-verification selection and proof boundaries. `AGENTS.md` owns repository behavior and
-`.github/BRANCH_PROTECTION_GUIDE.md` owns the GitHub merge settings.
+OpenKeyboard uses proportional local checks and exact-head release evidence. `AGENTS.md` is the
+canonical straight-line workflow. This file is the detailed verification reference loaded only
+when a task needs route selection, hooks, CI, signing, deployment, or proof details.
 
 Repository automation is split across `$develop-openkeyboard`, the read-only
 `$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
@@ -183,10 +183,12 @@ Normal simulator runtime proof must:
 - record exact Git SHA, build configuration, simulator model, OS version, action, source text, and
   observed result without exposing credentials or private configuration.
 
-If Codex can interact with the normal simulator confidently, it collects this proof directly. If
-the interaction is unavailable, unreliable, or ambiguous, stop before push/readiness, state the
-unverified behavior, and request manual verification using the checklist and expected screenshots
-in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. Running more XCTest does not resolve the blocker.
+If Codex can interact with the normal simulator confidently, it collects this proof directly. Use
+the first reliable route: a purpose-built, generically named Simulator-control integration;
+Computer Use or equivalent host UI automation that can inspect and operate the normal Simulator;
+or the manual checklist in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. If interaction is unavailable,
+unreliable, or ambiguous, stop before push/readiness and state the unverified behavior. Running
+more XCTest does not resolve the blocker.
 
 Physical-device proof requires the exact signed build installed on the configured device. A
 Simulator or XCTest run cannot satisfy it. When the configured device is unavailable, report the

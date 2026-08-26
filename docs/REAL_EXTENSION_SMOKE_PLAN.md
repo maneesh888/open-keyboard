@@ -170,6 +170,11 @@ Live transport/model checks remain separate automated evidence through
 
 Use a clean simulator appropriate to the change and the exact commit intended for push.
 
+For interaction, prefer a purpose-built, generically named Simulator-control integration. If it is
+unavailable, use Computer Use or equivalent host UI automation only when it can reliably inspect
+and operate the normal Simulator. Otherwise use the manual handoff below. The interaction tool
+does not change the evidence requirements.
+
 1. Build and install the app normally from Xcode using the required build configuration. Do not
    pass `--uitesting` or any debug-state/result-seeding arguments.
 2. Launch OpenKeyboard normally. Configure the gateway through the production settings UI when
