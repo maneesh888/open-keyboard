@@ -10,8 +10,16 @@ POLICY_FILES=(
   "$ROOT/.codex/agents/pr-reviewer.toml"
   "$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
   "$ROOT/.github/pull_request_template.md"
+  "$ROOT/README.md"
+  "$ROOT/docs/AI_KEYBOARD_TODO.md"
   "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
+  "$ROOT/docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md"
+  "$ROOT/docs/M2_PROGRESS.md"
+  "$ROOT/docs/PR_PROOF_AUDIT_2026-08-14.md"
   "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md"
+  "$ROOT/docs/RELEASE_HARDENING.md"
+  "$ROOT/docs/TDD_STATUS.md"
+  "$ROOT/docs/WORK_QUEUE.md"
 )
 
 for policy_file in "${POLICY_FILES[@]}"; do
@@ -85,30 +93,59 @@ require_phrase 'automated real-extension regression (not final runtime proof)' "
 require_phrase 'automated real-extension regression (not final runtime proof)' "$ROOT/scripts/local-ci.sh" \
   "The local CI help text must label the route as automated regression."
 
-if rg --ignore-case --quiet \
-  'XCTAttachments? (are|count as|provide) (final|manual|normal) simulator proof' \
-  "${POLICY_FILES[@]}"; then
-  echo "Workflow policy incorrectly treats XCTAttachments as final simulator proof." >&2
+reject_forbidden_implications() {
+  local files=("$@")
+
+  if rg --ignore-case \
+    'XCTAttachments?[^.\n]*(are|is|count(s)? as|satisf(y|ies)|provide(s)?)[^.\n]*(final|manual|normal)[^.\n]*simulator (runtime )?proof' \
+    "${files[@]}" | rg --invert-match --ignore-case --quiet '(not|cannot|never|do not)'; then
+    return 1
+  fi
+  if rg --ignore-case \
+    '(test[- ]seeded|seeded (UI|result|loading|success|warning|failure) state)[^.\n]*(prove(s)?|count(s)? as|establish(es)?|verif(y|ies))[^.\n]*(production|normal runtime|live request)' \
+    "${files[@]}" | rg --invert-match --ignore-case --quiet '(not|cannot|never|do not)'; then
+    return 1
+  fi
+  if rg --ignore-case \
+    '(passing )?(XCTest|XCUITest)[^.\n]*(alone|by itself)[^.\n]*(is enough|is sufficient|authoriz(es|e)|permits?)[^.\n]*(push|readiness|release)' \
+    "${files[@]}" | rg --invert-match --ignore-case --quiet '(not|cannot|never|do not)'; then
+    return 1
+  fi
+  if rg --ignore-case \
+    '(Simulator|XCTest|XCUITest) evidence (replaces|satisfies|counts as|is equivalent to) physical[- ]device proof' \
+    "${files[@]}" | rg --invert-match --ignore-case --quiet '(not|cannot|never|do not)'; then
+    return 1
+  fi
+}
+
+if ! reject_forbidden_implications "${POLICY_FILES[@]}"; then
+  echo "Workflow sources contain a forbidden automated/runtime/device proof implication." >&2
   exit 1
 fi
-if rg --ignore-case --quiet \
-  'test-seeded[^.\n]*(proves|is proof of)[^.\n]*production (behavior|request|result)' \
-  "${POLICY_FILES[@]}"; then
-  echo "Workflow policy incorrectly treats test-seeded UI state as production proof." >&2
-  exit 1
-fi
-if rg --ignore-case --quiet \
-  'passing XCUITest alone (is sufficient|authorizes|proves readiness)' \
-  "${POLICY_FILES[@]}"; then
-  echo "Workflow policy incorrectly allows XCUITest alone to authorize push/readiness." >&2
-  exit 1
-fi
-if rg --ignore-case --quiet \
-  '(Simulator|XCTest) (satisfies|replaces|is equivalent to) physical-device proof' \
-  "${POLICY_FILES[@]}"; then
-  echo "Workflow policy incorrectly substitutes Simulator evidence for physical-device proof." >&2
-  exit 1
-fi
+
+FIXTURE_DIR="$(mktemp -d)"
+trap 'rm -rf -- "$FIXTURE_DIR"' EXIT
+
+assert_rejected_fixture() {
+  local name="$1"
+  local wording="$2"
+  local fixture="$FIXTURE_DIR/$name.md"
+
+  printf '%s\n' "$wording" > "$fixture"
+  if reject_forbidden_implications "$fixture"; then
+    echo "Runtime-proof policy accepted forbidden fixture: $name" >&2
+    exit 1
+  fi
+}
+
+assert_rejected_fixture xctattachment \
+  'XCTAttachment satisfies final simulator proof for this change.'
+assert_rejected_fixture seeded-state \
+  'A test-seeded UI state counts as production behavior proof.'
+assert_rejected_fixture xcuitest-readiness \
+  'Passing XCUITest alone is enough to authorize push readiness.'
+assert_rejected_fixture simulator-device \
+  'Simulator evidence replaces physical-device proof.'
 
 if rg --fixed-strings --quiet 'real keyboard extension live test' \
   "$ROOT/scripts/ios/test.sh" "$ROOT/scripts/local-ci.sh"; then

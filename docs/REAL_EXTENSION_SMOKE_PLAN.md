@@ -65,6 +65,72 @@ route injects configuration, it is not final runtime proof.
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
+### Focused Translate screenshot regression command
+
+This preserved XCUITest recipe directly seeds the Translate action panel. Its screenshots are
+automated regression artifacts, not normal simulator runtime proof.
+
+```bash
+(
+  set -euo pipefail
+  SIMULATOR_ID="$(xcrun simctl list devices available | sed -n 's/^[[:space:]]*iPhone 17 Pro (\([0-9A-F-]*\)) (.*$/\1/p' | head -n 1)"
+  test -n "$SIMULATOR_ID"
+  SCREENSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openkeyboard-translate-smoke.XXXXXX")"
+  cleanup_translate_smoke() {
+    xcrun simctl spawn "$SIMULATOR_ID" launchctl unsetenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR >/dev/null 2>&1 || true
+  }
+  trap cleanup_translate_smoke EXIT
+
+  xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
+  xcrun simctl spawn "$SIMULATOR_ID" launchctl setenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR "$SCREENSHOT_DIR"
+  xcodebuild test \
+    -project OpenKeyboard.xcodeproj \
+    -scheme OpenKeyboard \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+    -configuration Debug \
+    -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateModeScreenshotWhenExplicitlyRequested \
+    CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+  test -f "$SCREENSHOT_DIR/04-real-keyboard-translate-arabic-malayalam.png"
+  test -f "$SCREENSHOT_DIR/05-real-keyboard-translate-indian-languages.png"
+  echo "Automated regression artifact: $SCREENSHOT_DIR/04-real-keyboard-translate-arabic-malayalam.png"
+  echo "Automated regression artifact: $SCREENSHOT_DIR/05-real-keyboard-translate-indian-languages.png"
+)
+```
+
+### Focused action-carousel screenshot regression command
+
+This preserved XCUITest recipe directly seeds the action panel and makes no gateway request. It is
+automated layout regression evidence only.
+
+```bash
+(
+  set -euo pipefail
+  SIMULATOR_ID="$(xcrun simctl list devices available | sed -n 's/^[[:space:]]*iPhone 17 Pro (\([0-9A-F-]*\)) (.*$/\1/p' | head -n 1)"
+  test -n "$SIMULATOR_ID"
+  SCREENSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/openkeyboard-action-carousel-smoke.XXXXXX")"
+  cleanup_action_carousel_smoke() {
+    xcrun simctl spawn "$SIMULATOR_ID" launchctl unsetenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR >/dev/null 2>&1 || true
+  }
+  trap cleanup_action_carousel_smoke EXIT
+
+  xcrun simctl boot "$SIMULATOR_ID" >/dev/null 2>&1 || true
+  xcrun simctl bootstatus "$SIMULATOR_ID" -b >/dev/null
+  xcrun simctl spawn "$SIMULATOR_ID" launchctl setenv OPEN_KEYBOARD_REAL_SCREENSHOT_DIR "$SCREENSHOT_DIR"
+  xcodebuild test \
+    -project OpenKeyboard.xcodeproj \
+    -scheme OpenKeyboard \
+    -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+    -configuration Debug \
+    -only-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardActionCarouselScreenshotWhenExplicitlyRequested \
+    CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
+  test -f "$SCREENSHOT_DIR/06-real-keyboard-actions-start.png"
+  test -f "$SCREENSHOT_DIR/07-real-keyboard-actions-styles.png"
+  echo "Automated regression artifact: $SCREENSHOT_DIR/06-real-keyboard-actions-start.png"
+  echo "Automated regression artifact: $SCREENSHOT_DIR/07-real-keyboard-actions-styles.png"
+)
+```
+
 The focused installed-extension screenshot command is also automated regression evidence:
 
 ```bash
