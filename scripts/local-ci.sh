@@ -60,7 +60,7 @@ case "$MODE" in
     ;;
 
   --real-keyboard-live)
-    run_step "OpenKeyboard real keyboard live test" "$SCRIPT_DIR/ios/test.sh" real-keyboard-live
+    run_step "OpenKeyboard automated real-extension regression" "$SCRIPT_DIR/ios/test.sh" real-keyboard-live
     ;;
 
   --screenshots)
@@ -76,7 +76,7 @@ case "$MODE" in
     echo "  --ui          Run OpenKeyboardUITests on iPhone 16"
     echo "  --live-ui     Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  --live-gateway-smoke Run opt-in live gateway service smoke"
-    echo "  --real-keyboard-live Run opt-in configured real keyboard extension test"
+    echo "  --real-keyboard-live Run credentialed automated real-extension regression (not final runtime proof)"
     echo "  --screenshots Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     ;;
 

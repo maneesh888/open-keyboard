@@ -52,16 +52,23 @@ private user text, generated artifacts, and raw logs out of the packet.
 4. Treat correctness, security, data-loss, extension-contract, signing, missing-material-test, and false-evidence findings as blockers.
 5. Produce a requirement-coverage table with `VERIFIED` or `UNVERIFIED` for every in-scope row. A row is verified only by the proof type its acceptance criterion requires.
 6. Treat skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. An exact-model requirement must execute that exact model without substitution.
-7. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
-8. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
-9. Follow the exact classifier result on the same head: `gateway` requires
+7. Classify unit tests, XCTest/XCUITest, mocks, debug or seeded UI states, component hosts, and
+   `XCTAttachment` screenshots as automated regression evidence. An XCUITest that activates the
+   installed extension is not normal simulator runtime proof. For proof-sensitive UI, extension
+   lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes, require an
+   exact-head normal runtime record from a normally launched app, ordinary host-app text field,
+   visible production UI, and direct Simulator/Xcode screenshots. Require exact signed-build device
+   evidence for physical-device rows; Simulator/XCTest cannot satisfy them.
+8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
+9. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
+10. Follow the exact classifier result on the same head: `gateway` requires
    `./scripts/check-live.sh gateway`; `gateway-differential` requires
    `./scripts/check-live.sh gateway-differential`. Exact single-model work sets
    `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL`; differential work sets the canonical
    `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<id>, high=<id>'` mapping. Missing, substituted,
    reversed, malformed, stale, or diagnostic-only profile evidence is `UNVERIFIED`. A low success
    at the candidate boundary or intermittent low outcome cannot be promoted to a passing gate.
-10. Before the report, confirm the exact-head technical jobs that do not depend on retaining that
+11. Before the report, confirm the exact-head technical jobs that do not depend on retaining that
     report are successful. Inspect the trusted requirement validators, but do not require the
     report-dependent `Required checks` status to be green
     before the report exists. After the root posts and links the report, require exact-head
@@ -98,12 +105,14 @@ Before marking a PR ready or merging it, always require:
 2. independently reviewed SHA equal to GitHub's current head;
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
-5. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
-6. no undisclosed finding, current-head requested change, or unresolved review thread;
-7. an in-scope diff with no secret or generated-artifact violation;
-8. no conflict and compliance with the base-update policy;
-9. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
-10. effective base protection requiring pull requests, strict checks, and conversation resolution.
+5. successful exact-head normal simulator runtime proof for every proof-sensitive changed surface,
+   and successful exact signed-build device proof for every physical-device requirement;
+6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
+7. no undisclosed finding, current-head requested change, or unresolved review thread;
+8. an in-scope diff with no secret or generated-artifact violation;
+9. no conflict and compliance with the base-update policy;
+10. successful exact-head `Required technical checks`, `Required checks`, and `Required live verification`; and
+11. effective base protection requiring pull requests, strict checks, and conversation resolution.
 
 Inspect every exact-head run, including pending, canceled, skipped, failed, and rerun attempts.
 GitHub retains the latest check suite separately for `pull_request` and `pull_request_review`
@@ -145,14 +154,16 @@ Then require exactly one authorization route:
 
 Human authorization accepts the disclosed evidence risk; it does not relabel an unverified row as
 verified and never bypasses failed mandatory checks, live evidence, conflicts, requested changes,
-unresolved threads, secret controls, or branch protection. The root must not infer approval from
+unresolved threads, secret controls, branch protection, or missing required normal simulator/device
+proof. The root must not infer approval from
 the implementation request, PR authorship, prior approval of another SHA, silence, or a general
 statement about policy. If confidence is below 100% and current-head human approval is absent, keep
 the PR draft, present the exact SHA and every blocker to the user, ask for their decision, and stop.
 
 Pending, skipped, missing, cancelled, timed-out, stale, or failed mandatory technical gates block
 readiness and merge in both routes. A missing requirement-specific proof prevents automatic
-authorization and remains disclosed if the owner chooses the human route.
+authorization and remains disclosed if the owner chooses the human route. Missing required normal
+simulator or physical-device proof blocks readiness and merge in both routes.
 
 The root agent must post the independent review result as a durable GitHub `COMMENTED` review
 submission without secrets or raw gateway output, link that review from the PR brief, and run the

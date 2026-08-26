@@ -25,7 +25,8 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [x] QWERTY-style key grid exists with shift, delete, return, space, globe/next-keyboard behavior, and toolbar state.
 - [x] Basic typing reducer/context logic exists in `OpenKeyboardCore` with tests for character input, shift, delete, grapheme-safe context, and replacement strategies.
 - [x] AI toolbar/action panel exists with compact sparkle entry and Improve/Rephrase/Summarize actions.
-- [x] Real keyboard Fix Grammar path was previously verified end-to-end through host UI proof.
+- [x] Real keyboard Fix Grammar has automated XCUITest end-to-end regression coverage; current
+  normal simulator runtime proof still needs verification before a proof-sensitive push/release.
 - [ ] Rewrite and Summarize end-to-end in the actual keyboard — needs verification.
 - [ ] Suggestions while typing / suggestion chips — not implemented as a verified product feature.
 - [ ] Polished correction preview / accept-dismiss UX — pending.
@@ -48,10 +49,11 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [x] Swift package core tests exist under `OpenKeyboardCore/Tests/OpenKeyboardCoreTests`.
 - [x] Xcode UI test target exists under `OpenKeyboardUITests`.
 - [x] Onboarding screenshot/UI harness exists.
-- [x] Real keyboard extension smoke plan exists.
+- [x] Keyboard extension evidence plan separates automated regression, normal simulator runtime,
+  and physical-device proof.
 - [x] Local CI/test scripts are documented in repo docs.
 - [ ] Current full quick CI/build status — needs fresh verification before release or code work; this doc refresh intentionally ran static inspection only.
-- [ ] Real extension logo/action-menu smoke is currently blocked by extension config visibility (`Gateway not configured`), per `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+- [ ] Automated real-extension logo/action-menu regression is currently blocked by extension config visibility (`Gateway not configured`); normal runtime proof remains separate.
 
 ### Documentation
 
@@ -66,14 +68,18 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 ## Current next recommended slice
 
-**Next slice: add DEBUG-only real-extension config-state instrumentation, then rerun the focused real-extension smoke once.**
+**Next slice: add DEBUG-only config-state instrumentation, rerun the automated real-extension
+regression once, then collect separate normal simulator runtime proof.**
 
 Why this is the smallest safe next step:
 
-- The current product blocker is narrow: the real extension can activate and show QWERTY keys, but the AI action menu proof is blocked because the extension reports `Gateway not configured`.
+- The current automated-regression blocker is narrow: XCUITest can activate the installed extension
+  and show QWERTY keys, but cannot reach the AI action menu because the extension reports
+  `Gateway not configured`. This does not establish or replace normal runtime acceptance.
 - Product code already has the app/extension config pipeline, shared Keychain/App Group pieces, and UI tests; another broad UI redesign or blind smoke retry would not isolate the failure.
 - A redacted DEBUG-only config probe can distinguish wrong App Group suite, seed cleanup, Keychain access failure, legacy fallback failure, or stale in-memory config without exposing secrets.
-- This directly unblocks the next meaningful product proof: real extension lifecycle + configured AI action menu, not a preview/component route.
+- This unblocks automated lifecycle diagnosis; final product acceptance still requires the normal
+  host-app runtime route without debug injection or test control.
 
 Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 

@@ -241,6 +241,12 @@ These commands use the canonical seed and are credential-gated:
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
+All `test.sh` routes are automated regression evidence, including `real-keyboard-live` when it
+installs and activates the real extension. Their `.xcresult` files and `XCTAttachment` screenshots
+are not normal simulator runtime proof. UI, extension-lifecycle, Apply/Copy/Back/Rerun, live
+gateway, and result-presentation changes additionally require the ordinary host-app runtime route
+in `docs/REAL_EXTENSION_SMOKE_PLAN.md` before push.
+
 The seed may contain complete `LOW` and `HIGH` URL/API-key/model triples for targeted model
 comparison. Every configured role must be complete, model IDs must pass the strict safety grammar,
 and the parser rejects duplicate or unknown variables. Ordinary gateway verification selects the
@@ -289,9 +295,12 @@ Recent local verification:
 - `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath "${TMPDIR:-/tmp}/openkeyboard-derived" build-for-testing`: passed
 - `KeyboardSuggestionModelsTests`: passed
 - `KeyboardViewModelActionErrorTests`: passed
-- real extension configured smoke test for AI controls: passed
+- automated configured real-extension XCUITest regression for AI controls: passed
 
-The project still needs broader real-device, live-gateway, prompt-quality, release-signing, and App Store readiness verification before release. See `docs/REAL_EXTENSION_SMOKE_PLAN.md` for the focused simulator smoke route.
+This result does not establish normal simulator or physical-device proof. The project still needs
+normal simulator runtime proof, broader physical-device and live-gateway acceptance, prompt-quality
+evaluation, release signing, and App Store readiness verification before release. See
+`docs/REAL_EXTENSION_SMOKE_PLAN.md` for the separated automated, normal-simulator, and device routes.
 
 ## Roadmap
 
@@ -312,7 +321,7 @@ The project still needs broader real-device, live-gateway, prompt-quality, relea
 - [x] Model discovery
 - [x] Shared App Group config for non-sensitive settings
 - [x] Shared Keychain storage for gateway API key
-- [x] Simulator smoke coverage for configured gateway state inside the keyboard extension
+- [x] Automated simulator regression coverage for configured gateway state inside the keyboard extension
 - [ ] Broader real-device verification for shared Keychain/App Group behavior
 
 ### AI Writing

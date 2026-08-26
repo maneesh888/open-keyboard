@@ -23,20 +23,27 @@ Repository automation is split across `$develop-openkeyboard`, the read-only
 `$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
 work but do not weaken the proof requirements below.
 
-## Proof levels
+## Evidence classes and claims
 
-Keep these claims separate:
+Every verification artifact belongs to one of three runtime evidence classes:
 
-1. **Behavior proof:** focused tests validate deterministic Swift and keyboard behavior.
-2. **Build proof:** the host app and keyboard extension compile for the simulator.
-3. **Deterministic UI-target proof:** non-live UI-target tests pass on the documented simulator.
-4. **Real extension proof:** the installed keyboard extension completes its real lifecycle.
-5. **Live gateway proof:** an exact committed head completes the local gateway smoke.
-6. **Independent review proof:** the read-only reviewer finds no blocker on the same exact head.
-7. **Deployment proof:** a signed archive exports, validates, and uploads through App Store Connect.
+1. **Automated regression evidence:** unit tests, XCTest, XCUITest, mocked gateway tests, debug
+   launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. An
+   XCUITest that installs and activates the real keyboard extension remains automated evidence.
+2. **Normal simulator runtime proof:** a normally installed and launched app, without
+   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. The actual
+   extension is exercised through an ordinary host-app text field and visible production UI, with
+   screenshots captured directly from Simulator/Xcode outside XCTest.
+3. **Physical-device proof:** the exact signed build is installed on the configured device and
+   exercised through the normal extension lifecycle, with screenshots captured directly from the
+   device.
 
-Never infer a stronger proof level from a weaker one. Normal GitHub CI proves behavior and build,
-not UI quality, real keyboard lifecycle, live gateway behavior, signing, or deployment.
+These classes support separate claims: build success, automated regression coverage, transport
+success, semantic acceptance, visual/runtime acceptance, physical-device acceptance, independent
+review, signing, deployment, and App Review. Never infer a stronger claim from a weaker class.
+Normal GitHub CI proves deterministic behavior/build only. Automated tests—including real-extension
+XCUITest—cannot alone authorize a proof-sensitive push, PR readiness, release readiness, or a claim
+that the user-visible workflow works.
 
 ## Modes and cumulative gates
 
@@ -58,8 +65,9 @@ Release readiness additionally requires exact-head GitHub checks and an independ
 - `--quick`: hygiene, OpenKeyboardCore tests, and app plus keyboard-extension build.
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
 
-Screenshots, real extension testing, and live gateway verification remain separate because they
-require simulator state, human inspection, or local credentials.
+Automated screenshots, automated real-extension tests, normal simulator runtime proof, and live
+gateway verification remain separate. The runtime proof does not replace XCTest coverage, and an
+`XCTAttachment` does not become normal simulator proof because the installed extension was active.
 
 The explicit `./scripts/ios/test.sh ui` route remains broader than `--full`. It includes
 credential- and simulator-state-dependent classes, so it is diagnostic rather than a mandatory
@@ -71,10 +79,10 @@ credential-free push gate.
 |---|---|
 | Model, parser, or core service | `./scripts/ios/test.sh core` |
 | Host app or extension compilation | `./scripts/ios/test.sh build` |
-| Host app user flow | `./scripts/ios/test.sh ui` |
-| Visual layout | `./scripts/ios/test.sh screenshots` plus image inspection |
-| Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` when configured |
-| Gateway runtime or contract | `./scripts/check-live.sh gateway` on committed exact `HEAD` |
+| Host app user flow | `./scripts/ios/test.sh ui` for automated regression; normal simulator runtime proof before push |
+| Visual layout | `./scripts/ios/test.sh screenshots` for automated regression; direct Simulator screenshots from a normal launch before push |
+| Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` for automated real-extension regression; normal host-app runtime route before push |
+| Gateway runtime or contract | `./scripts/check-live.sh gateway` for automated transport/contract evidence; normal runtime proof when user-visible semantic behavior changes |
 | Model capability, long input, parser compatibility, retry, or operation-scoped warnings | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
@@ -111,7 +119,7 @@ unsafe model IDs, missing differential roles, identical role models, reversed ma
 substitution are rejected without printing values. Ordinary checks use the high profile when it is
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
-The targeted differential runner performs deterministic prerequisites and `build-for-testing`
+The targeted differential runner performs automated deterministic prerequisites and `build-for-testing`
 once, then reuses the compiled `.xctestrun` for isolated low and high simulator clones. It runs one
 small baseline/boundary/follow-up test per role and removes both clones, injected environment,
 DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
@@ -140,12 +148,13 @@ The path must be `.githooks`.
   `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
-- Ordinary and real-keyboard live routes parse `.xcresult` and require exactly one passing test with
+- Ordinary and real-keyboard live routes are automated regression evidence. They parse `.xcresult`
+  and require exactly one passing test with
   no failures, skips, or expected failures. The differential route separately requires its exact
   deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
   diagnostic skip that the exact-head validator refuses as passing matrix evidence. A successful
   `xcodebuild` process alone is never accepted as proof.
-- The real-keyboard route clones the selected simulator, immediately restores the source to its
+- The automated real-keyboard route clones the selected simulator, immediately restores the source to its
   prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
   and deletes the clone on every handled exit. Source gateway configuration is not modified.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
@@ -154,6 +163,38 @@ The path must be `.githooks`.
   automatic-analysis warnings, manual-action scope, Translate warning scope, or the matrix workflow
   itself. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
   explicitly. Unrelated pull requests do not run the two-profile matrix.
+
+## Normal simulator and device proof gate
+
+Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
+behavior, or result presentation require normal simulator runtime proof before push. Local
+implementation and commits may proceed after deterministic tests.
+
+Normal simulator runtime proof must:
+
+- install and normally launch the actual app and bundled keyboard extension;
+- avoid `--uitesting`, debug-state injection, seeded result panels, component/test hosts, and
+  XCTest-driven interaction;
+- focus an ordinary host-app text field and activate OpenKeyboard through the normal keyboard
+  lifecycle;
+- invoke the action through visible production UI and use the configured live gateway when
+  semantic behavior is being verified;
+- capture screenshots directly from Simulator/Xcode, never from `XCTAttachment`;
+- record exact Git SHA, build configuration, simulator model, OS version, action, source text, and
+  observed result without exposing credentials or private configuration.
+
+If Codex can interact with the normal simulator confidently, it collects this proof directly. If
+the interaction is unavailable, unreliable, or ambiguous, stop before push/readiness, state the
+unverified behavior, and request manual verification using the checklist and expected screenshots
+in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. Running more XCTest does not resolve the blocker.
+
+Physical-device proof requires the exact signed build installed on the configured device. A
+Simulator or XCTest run cannot satisfy it. When the configured device is unavailable, report the
+device requirement blocked and request manual verification.
+
+The user may explicitly authorize a proof-sensitive push with missing runtime proof disclosed, but
+that exception does not mark the evidence verified and cannot authorize PR readiness or merge.
+Never mark a PR ready or merge while required simulator/device proof is missing.
 
 ## GitHub checks
 

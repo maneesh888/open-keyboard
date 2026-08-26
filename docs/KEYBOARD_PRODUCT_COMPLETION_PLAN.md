@@ -121,12 +121,15 @@ Operating rule:
 
 ## M2 direction — iOS-like keyboard + compact AI writing UX
 
-Decision: after M1 proved the real Fix Grammar path end-to-end, the next product track is to fine-tune features and improve the keyboard experience.
+Decision: after M1 established automated real-extension Fix Grammar regression coverage, the next
+product track is to fine-tune features and improve the keyboard experience. Normal simulator
+runtime acceptance remains a separate requirement.
 
 Goals:
 - Keep base typing UX visually and behaviorally close to Apple's iOS keyboard.
 - Keep AI UX helpful, compact, and contextual rather than large app-style buttons.
-- Preserve the verified M1 path: app config → extension config → gateway POST → text replacement.
+- Preserve the automated M1 regression path: app config → extension config → gateway POST → text
+  replacement, without presenting it as normal runtime proof.
 
 M2 acceptance criteria:
 - Keyboard rows mimic iOS proportions and offsets:
@@ -139,7 +142,8 @@ M2 acceptance criteria:
 - Fix Grammar remains available but less visually dominant.
 - Delete repeat, shift state, return key, and numbers/symbols mode are handled well enough for normal typing.
 - Screenshots on iPhone 17 Pro and a smaller simulator are visually acceptable.
-- Real keyboard Fix Grammar functional test still passes after redesign.
+- Automated real-extension Fix Grammar regression still passes after redesign, and normal simulator
+  runtime proof separately confirms the visible production workflow before push.
 
 Feature fine-tuning candidates:
 - Better connection/setup state in the keyboard when gateway is missing.

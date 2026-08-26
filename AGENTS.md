@@ -35,7 +35,7 @@ Use this workflow for OpenKeyboard coding, testing, screenshots, gateway, keyboa
    - likely files/modules
    - out-of-scope areas
    - verification required
-   - whether screenshots or real simulator proof are needed
+   - whether automated screenshots, normal simulator runtime proof, or physical-device proof are needed
    - whether commit/push is allowed
 8. Ask only when scope, destructive action, credentials, external deployment, base branch, dirty-checkout ownership, or commit/push permission is ambiguous.
 
@@ -75,7 +75,7 @@ Use the repo scripts before hand-written commands unless a targeted command is c
 - Targeted low/high live-model matrix: `./scripts/ios/test.sh live-model-differential`
 - Exact-head live gateway gate: `./scripts/check-live.sh gateway`
 - Exact-head differential/pre-release gate: `./scripts/check-live.sh gateway-differential`
-- Opt-in real keyboard extension live test: `./scripts/ios/test.sh real-keyboard-live`
+- Opt-in automated real-extension regression test with a live gateway: `./scripts/ios/test.sh real-keyboard-live`
 - Opt-in live AI harness tests: `./scripts/ios/test.sh live-ui`
 - Independent exact-head PR review: project `pr-reviewer` via `$review-verify-merge-pr`
 
@@ -99,34 +99,77 @@ Remote GitHub CI runs hygiene, `core`, semantic-contract validation, and `build`
 - Treat `.gitmodules`, the contract gitlink, generated-adapter wiring, and semantic prompt request changes as gateway-impacting. They require the same exact-head live gateway evidence and proof boundaries as other production prompt changes.
 - The gateway may consume package-owned diagnostic fixtures, but it must preserve exact client messages and must not regain production OpenKeyboard prompt construction.
 
+## Evidence Classes
+
+Keep these three evidence classes explicit in plans, requirement ledgers, PRs, and reports:
+
+1. **Automated regression evidence:** unit tests, XCTest, XCUITest, mocked gateway tests, debug
+   launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. This
+   includes XCUITest routes that install and activate the real keyboard extension.
+2. **Normal simulator runtime proof:** a normally installed and launched app, without
+   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. Exercise the
+   actual keyboard extension through an ordinary host-app text field, invoke the action through the
+   visible production UI, and capture screenshots directly from Simulator or Xcode outside XCTest.
+3. **Physical-device proof:** the exact signed build installed on the configured device, exercised
+   through the normal keyboard-extension lifecycle, with screenshots captured directly from that
+   device.
+
+Automated evidence is required for development and regression coverage, but XCTest/XCUITest cannot
+by itself authorize a proof-sensitive push, PR readiness, release readiness, or a claim that a
+user-visible workflow works. Test-seeded loading, success, warning, and failure states are
+diagnostics only; they do not prove that a production request produced that state. Simulator
+evidence never satisfies a physical-device requirement.
+
 ## Verification Rules
 
 Run verification proportional to the change:
 
 - Always run `git diff --check` before claiming done.
 - Run targeted Swift/Xcode tests for changed ViewModel, service, parser, gateway, keyboard, or UI behavior. Prefer `./scripts/ios/test.sh ...` modes where they match the task.
-- For keyboard extension, App Group, Keychain, or config sharing changes, run or request the real simulator path, not only host app tests.
-- For UI changes, collect real screenshots from Xcode/simulator or ask the active MCP/ClawMaster verifier route for screenshots before claiming visual quality.
-- For gateway behavior, distinguish mock tests from real gateway proof. If the user asks for real behavior, do not use mock results as proof.
-- For live model/gateway work, report latency honestly and separate "transport works", "tests pass", and "the user-visible flow works".
+- XCTest/XCUITest may be used freely while implementing and diagnosing changes; label its results as
+  automated regression evidence even when the installed extension process was active.
+- Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
+  behavior, or result presentation require normal simulator runtime proof before push.
+- Normal simulator runtime proof must use the actual app and extension, an ordinary host-app text
+  input, visible production UI, and the configured live gateway when semantic behavior is being
+  verified. It must not use test-only launch arguments, debug-state injection, seeded result
+  panels, component/test hosts, or `XCTAttachment` screenshots.
+- Record the exact Git SHA, build configuration, simulator model, OS version, action, source text,
+  and observed result. Capture screenshots directly from Simulator/Xcode and keep credentials and
+  private configuration out of screenshots and logs.
+- If Codex can operate the normal simulator confidently, collect the runtime proof directly. If
+  normal interaction is unavailable, unreliable, or ambiguous, stop before push or readiness,
+  identify the unverified behavior, and ask for manual testing with a short exact checklist and
+  expected screenshots. Additional XCTest runs do not replace missing runtime proof.
+- Physical-device requirements require the exact signed build on the configured device. When that
+  device is unavailable, report device proof as blocked and request manual verification; Simulator
+  and XCTest are not substitutes.
+- Report automated test results, transport success, semantic acceptance, and visual/runtime
+  acceptance separately.
 
-## Screenshot And MCP/ClawMaster Rules
+## Screenshot And Simulator Interaction Rules
 
-- If MCP/ClawMaster simulator tools are available, use them for host-side screenshots and visual acceptance when the task is UI, keyboard extension, or release-readiness related.
-- If MCP/ClawMaster is not available in the current Codex surface, use the repo Xcode routes and say proof was collected directly through Xcode.
+- If MCP/ClawMaster simulator tools are available, use them to operate the normally launched app and
+  capture direct Simulator screenshots for runtime acceptance when the task is proof-sensitive.
+- If MCP/ClawMaster is unavailable, interact through Simulator/Xcode directly when reliable. Repo
+  XCUITest routes remain automated regression evidence and do not become normal runtime proof.
 - If Xcode or the required simulator runtime is also unavailable, run the applicable platform-independent checks, report the missing UI/build verification as a blocker, and do not claim visual or simulator proof.
-- For screenshot suites, prefer `./scripts/ios/test.sh screenshots`.
-- For `.xcresult` bundles, export attachments with `xcrun xcresulttool export attachments --path <bundle> --output-path <dir>` and inspect the images before sharing paths.
+- For automated screenshot regression suites, prefer `./scripts/ios/test.sh screenshots`.
+- For `.xcresult` bundles, export attachments with `xcrun xcresulttool export attachments --path <bundle> --output-path <dir>` and inspect the images before sharing paths. Label them
+  `XCTAttachment` automated regression artifacts, never manual or normal simulator proof.
 - Screenshot proof must be delivered back into the chat. Do not stop at "captured screenshots" or an `.xcresult` path.
 - If the chat surface supports image/file attachments, attach the relevant screenshots directly. If it only supports links, export selected PNGs beneath `OPEN_KEYBOARD_ARTIFACT_DIR` when set, or beneath `${TMPDIR:-/tmp}` as a temporary fallback, and include clickable links in the final response.
 - Before sending screenshots, inspect them and confirm they do not expose API keys, Authorization headers, seed values, private env values, or unrelated private content.
 - If screenshots cannot be exported or attached, say that explicitly and include the failing export command/output summary.
 - Never commit screenshots, `.xcresult`, `.ci-results`, DerivedData, or raw logs.
-- Do not use Preview Lab as proof for real keyboard extension behavior. Preview/component screenshots are diagnostics only.
+- Do not use Preview Lab, component hosts, debug launch states, or test-seeded panels as normal
+  runtime proof. Those screenshots are diagnostics only.
 
-## Real Keyboard Extension Proof
+## Keyboard Extension Evidence Routes
 
-Use `docs/REAL_EXTENSION_SMOKE_PLAN.md` for release-readiness or extension lifecycle proof. Acceptance requires the real extension lifecycle:
+Use `docs/REAL_EXTENSION_SMOKE_PLAN.md` for both evidence routes. The focused command below is
+automated real-extension regression evidence because XCUITest launches and controls the flow. It is
+not manual or normal simulator runtime proof, even when the real extension process is active:
 
 - host app text input focused
 - OpenKeyboard extension active
@@ -146,14 +189,16 @@ xcodebuild test \
   CODE_SIGN_IDENTITY= CODE_SIGNING_REQUIRED=NO
 ```
 
-For live configured keyboard behavior, prefer:
+For credentialed automated real-extension regression coverage, use:
 
 ```bash
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
 This reads `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env` directly, including
-when invoked from a linked worktree; values must never be printed.
+when invoked from a linked worktree; values must never be printed. Before a proof-sensitive push,
+also complete the normal simulator runtime route in the plan through an ordinary host-app text
+field and retain direct Simulator screenshots plus the required run record.
 
 ## Mock And Real Gateway Boundary
 
@@ -177,12 +222,20 @@ when invoked from a linked worktree; values must never be printed.
 
 - Pure model/parser/service logic: targeted XCTest or `./scripts/ios/test.sh core`, plus `git diff --check`.
 - Host settings or gateway connection UI: relevant ViewModel/service tests, then `./scripts/ios/test.sh ui` if behavior is user-facing.
-- Visual/UI layout: targeted tests plus `./scripts/ios/test.sh screenshots` or MCP/ClawMaster screenshot proof.
-- Keyboard extension config/action path: targeted tests plus `./scripts/ios/test.sh real-keyboard-live` or the focused smoke from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
-- Live gateway contract/performance: `./scripts/ios/test.sh live-gateway-smoke`, app diagnostics, or explicit live Xcode proof. Report timing separately from correctness.
+- Visual/UI layout: targeted tests plus automated screenshot regression, then normal simulator
+  runtime proof before push.
+- Keyboard extension config/action path: targeted tests plus
+  `./scripts/ios/test.sh real-keyboard-live` as automated real-extension regression evidence, then the normal simulator
+  runtime route from `docs/REAL_EXTENSION_SMOKE_PLAN.md` before push.
+- Live gateway contract/performance: automated live gateway checks plus normal simulator runtime
+  proof when user-visible semantic behavior is affected. Report transport, semantic acceptance, and
+  visual/runtime acceptance separately.
 - Model-capability classification, long-input handling, parser compatibility, retry behavior, automatic-analysis warnings, manual action error scope, or Translate warning scope: run `./scripts/ios/test.sh live-model-differential` after deterministic prerequisites. The runner builds once and reuses safe artifacts; it must not run the full suite per model.
-- Pre-commit broad check: `./scripts/check.sh --quick`, then any task-specific UI/live/screenshot route.
-- Pre-push/release check: `./scripts/check.sh --full`; ordinary gateway impact requires `./scripts/check-live.sh gateway`, while differential-classified changes and pre-release verification require `./scripts/check-live.sh gateway-differential`.
+- Pre-commit broad check: `./scripts/check.sh --quick`, then any task-specific automated route.
+- Local commits may proceed after deterministic tests. Before push, run `./scripts/check.sh --full`
+  and the applicable exact-head live gate; proof-sensitive changes also require successful normal
+  simulator runtime proof. Missing runtime proof stops push unless the user explicitly authorizes
+  proceeding with the gap disclosed.
 
 ## Pull Request Review
 
@@ -197,6 +250,9 @@ when invoked from a linked worktree; values must never be printed.
 - A bounded implementation request starts the normal autonomous lifecycle through commit, push, PR publication, in-scope review fixes, readiness, and guarded merge. Do not request separate confirmations between those stages while the exact-head independent reviewer reports operational confidence of exactly `100%`.
 - Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`.
 - Planning, review-only work, readiness assessment, and blocker requests remain read-only and do not authorize state changes.
+- Never mark a PR ready or merge while required normal simulator or physical-device proof is
+  missing. Explicit authorization to push with a disclosed proof gap does not convert that gap into
+  verified evidence and does not authorize readiness or merge.
 - Before a guarded merge, always re-fetch and validate the current body, linked review, head, threads, and current check rollup; require a durable linked independent-review report, the exact reviewed head to pass `./scripts/check.sh --full`, and the exact-head `Required technical checks`, `Required checks`, and `Required live verification` results to be successful with no pending, canceled, skipped, or failing required entry. Re-run the validators locally against current GitHub metadata and require `gh pr checks <number> --required` to exit successfully immediately before merge; checking only the newest result by name can miss a failed `pull_request_review` event family. Automatic authorization additionally requires every in-scope requirement `VERIFIED`, no material uncertainty, and exact reviewer confidence of `100%`. Otherwise keep the PR draft and require explicit repository-owner approval for that exact SHA after all unverified requirements and blockers are disclosed; never infer or carry that approval across a new head.
 - Never claim that unknown defects are impossible. A clean review means all stated requirements are verified within the named evidence boundary and no material uncertainty remains.
 - Deployment remains a separate external state change and requires explicit authorization plus protected-environment approval.
@@ -220,6 +276,9 @@ when invoked from a linked worktree; values must never be printed.
   - run `git diff --cached --name-only` and confirm every staged file belongs to the session
   - scan the staged diff for obvious secrets or generated artifacts
 - Use a concise commit message that describes the functional change.
+- Local implementation and commits may proceed after deterministic tests. For proof-sensitive
+  user-facing changes, do not push or create/update a readiness PR until normal simulator runtime
+  proof succeeds unless the user explicitly authorizes the push with the missing proof disclosed.
 - If the branch is ahead by earlier unrelated commits, say that pushing will publish them and stop when their ownership or scope is ambiguous.
 - Do not batch-commit dirty files from the integration checkout. If existing dirty files need to be included, they must be explicitly assigned to the current session or moved into the session worktree intentionally.
 

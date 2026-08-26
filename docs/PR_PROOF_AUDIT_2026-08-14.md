@@ -4,6 +4,8 @@
 
 Read-only audit of the 12 most recent merged OpenKeyboard pull requests: #9–#20. The audit
 evaluates retained proof quality, not whether every merged implementation is known to be defective.
+Historical XCTest/XCUITest screenshots in this audit are automated regression evidence, even when
+the installed keyboard extension was active; they are not normal simulator runtime proof.
 
 ## Systemic findings
 

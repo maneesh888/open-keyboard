@@ -17,8 +17,10 @@ Current verified host result:
 - iOS app/extension build: passed on iPhone 16
 - Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation) in the previous foundation slice
 - Latest full quick-CI verifier request ID: `2026-05-28T124406-openkeyboard-context-regression-verify`
-- Latest real keyboard functional verifier request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
-- Real keyboard Fix Grammar UI test: passed against temp LLM Gateway; final host text `I have an apple.`; gateway POST observed; injected URL/key debug assertions passed without printing secrets
+- Latest automated real-extension XCUITest request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
+- Automated real-extension Fix Grammar regression: passed against a temporary gateway; final host
+  text `I have an apple.`; gateway POST observed; injected URL/key debug assertions passed without
+  printing secrets. This is not normal simulator runtime proof.
 
 ## Completed TDD slices
 
@@ -41,9 +43,9 @@ Current verified host result:
 - [x] Prompt edge cases: translate, continue-writing, custom template without placeholder
 - [x] Offline prompt evaluation fixture tests
 - [x] Opt-in `LivePromptEvaluationTests` scaffold for grammar/rewrite/prompt-injection live quality checks
-- [x] Onboarding first-page layout fix verified by simulator screenshot
-- [x] Xcode UI test target and screenshot harness for iPhone 16 + iPhone SE
-- [x] Real keyboard-extension Fix Grammar functional UI test path with injected gateway credentials
+- [x] Onboarding first-page layout covered by an automated simulator `XCTAttachment`
+- [x] Xcode UI-test automated screenshot harness for iPhone 16 + iPhone SE
+- [x] Automated real-extension Fix Grammar XCUITest path with injected gateway credentials
 
 ## Live smoke scaffold
 
