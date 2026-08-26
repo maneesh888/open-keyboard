@@ -93,6 +93,7 @@ LINKED_WORKTREE="$FIXTURE/temporary linked worktree"
 VALID_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/openkeyboard-gateway.env"
 initialize_repository "$PRIMARY_CHECKOUT"
 write_valid_seed "$VALID_SEED"
+git -C "$PRIMARY_CHECKOUT" worktree add -q -b linked-worktree-test "$LINKED_WORKTREE"
 
 LOCK_PROBE="$FIXTURE/simulator-lock-probe.sh"
 LOCK_OUTPUT="$FIXTURE/simulator-lock-order.log"
@@ -124,13 +125,13 @@ if [[ ! -s "$LOCK_OUTPUT" ]]; then
   echo "The first Simulator lock probe did not start." >&2
   exit 1
 fi
-"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$PRIMARY_CHECKOUT" "$LOCK_OUTPUT" second 0 \
+"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$LINKED_WORKTREE" "$LOCK_OUTPUT" second 0 \
   2> "$LOCK_WAIT_OUTPUT" &
 second_lock_probe=$!
 wait "$first_lock_probe"
 wait "$second_lock_probe"
 if [[ "$(<"$LOCK_OUTPUT")" != $'first-start\nfirst-end\nsecond-start\nsecond-end' ]]; then
-  echo "Simulator-backed routes were not serialized by the repository lock." >&2
+  echo "Simulator-backed routes from separate worktrees were not serialized by the repository lock." >&2
   exit 1
 fi
 if ! grep -Fq 'Another OpenKeyboard Simulator route is active; waiting for it to finish.' "$LOCK_WAIT_OUTPUT"; then
@@ -158,7 +159,6 @@ if [[ "$resolved_seed" != "$(realpath "$VALID_SEED")" ]]; then
   exit 1
 fi
 
-git -C "$PRIMARY_CHECKOUT" worktree add -q -b linked-worktree-test "$LINKED_WORKTREE"
 resolved_linked_primary="$(openkeyboard_primary_checkout_root "$LINKED_WORKTREE")"
 if [[ "$resolved_linked_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
   echo "Linked worktree did not resolve the primary checkout through Git metadata." >&2

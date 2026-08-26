@@ -404,6 +404,14 @@ if rg --quiet 'simctl erase' "$ROOT/scripts/ios/test.sh"; then
 fi
 rg --quiet 'openkeyboard_relaunch_with_simulator_lock' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
 rg --quiet 'File::LOCK_EX' "$LIVE_TEST_SAFETY"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  worktree_creation = source.index(%q{git -C "$PRIMARY_CHECKOUT" worktree add})
+  linked_waiter = source.index(%q{"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$LINKED_WORKTREE" "$LOCK_OUTPUT" second 0})
+  unless worktree_creation && linked_waiter && worktree_creation < linked_waiter
+    abort "The Simulator lock regression must run its waiting contender from a linked worktree."
+  end
+' "$ROOT/scripts/tests/live-test-safety-test.sh"
 if rg --quiet 'SENSITIVE_LIVE_SOURCE|restore_sensitive_live_source_simulator|simctl clone|openkeyboard_restore_booted_simulator' \
     "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"; then
   echo "Live routes must not clone, stop, or restore an existing source simulator." >&2
