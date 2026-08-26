@@ -124,32 +124,12 @@ inject_xctestrun_live_smoke_env() {
 
 SENSITIVE_LIVE_WORKSPACE=""
 SENSITIVE_LIVE_SIMULATOR=""
-SENSITIVE_LIVE_SOURCE_SIMULATOR=""
-SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
-
-restore_sensitive_live_source_simulator() {
-  if [[ "$SENSITIVE_LIVE_SOURCE_WAS_BOOTED" != "true" || -z "$SENSITIVE_LIVE_SOURCE_SIMULATOR" ]]; then
-    return 0
-  fi
-
-  if ! openkeyboard_restore_booted_simulator "$SENSITIVE_LIVE_SOURCE_SIMULATOR"; then
-    return 1
-  fi
-  SENSITIVE_LIVE_SOURCE_SIMULATOR=""
-  SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
-  return 0
-}
 
 cleanup_sensitive_live_artifacts() {
   local original_status=$?
   local cleanup_status=0
 
   if ! delete_sensitive_live_simulator; then
-    cleanup_status=1
-  fi
-
-  if ! restore_sensitive_live_source_simulator; then
-    echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
     cleanup_status=1
   fi
 
@@ -233,7 +213,7 @@ begin_sensitive_live_workspace() {
 
 create_sensitive_live_simulator() {
   local selector="$1"
-  local descriptor source_simulator source_state simulator_name
+  local descriptor device_type runtime simulator_name
 
   descriptor="$(
     xcrun simctl list devices available -j |
@@ -243,41 +223,40 @@ create_sensitive_live_simulator() {
         matches = devices.flat_map do |runtime, entries|
           entries.map do |device|
             next unless device["udid"] == selector || device["name"] == selector
-            [device.fetch("udid"), device.fetch("state")]
+            [device.fetch("deviceTypeIdentifier"), runtime]
           end.compact
         end
         abort "Simulator selector must resolve to exactly one available device." unless matches.one?
         puts matches.first.join("\t")
       ' "$selector"
   )"
-  source_simulator="${descriptor%%$'\t'*}"
-  source_state="${descriptor#*$'\t'}"
-  case "$source_state" in
-    Booted)
-      SENSITIVE_LIVE_SOURCE_SIMULATOR="$source_simulator"
-      SENSITIVE_LIVE_SOURCE_WAS_BOOTED="true"
-      xcrun simctl shutdown "$source_simulator"
-      ;;
-    Shutdown) ;;
-    *)
-      echo -e "${RED}✗ Source simulator must be booted or shut down before cloning.${NC}" >&2
-      exit 1
-      ;;
-  esac
+  device_type="${descriptor%%$'\t'*}"
+  runtime="${descriptor#*$'\t'}"
 
   simulator_name="OpenKeyboard Live Test $$ $(date +%s)"
   SENSITIVE_LIVE_SIMULATOR="$(
-    xcrun simctl clone "$source_simulator" "$simulator_name"
+    xcrun simctl create "$simulator_name" "$device_type" "$runtime"
   )"
   if [[ ! "$SENSITIVE_LIVE_SIMULATOR" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
     echo -e "${RED}✗ Failed to create a disposable live-test simulator.${NC}" >&2
     exit 1
   fi
-  if ! restore_sensitive_live_source_simulator; then
-    echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
-    exit 1
-  fi
 }
+
+simulator_mode_requires_lock() {
+  case "${1:-}" in
+    ui|deterministic-ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+if simulator_mode_requires_lock "${1:-}"; then
+  openkeyboard_relaunch_with_simulator_lock "$REPO_ROOT" "$0" "$@"
+fi
 
 case "${1:-}" in
   core)
@@ -328,16 +307,6 @@ case "${1:-}" in
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests \
       -skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests \
-      -skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests \
-      CODE_SIGN_IDENTITY="" \
-      CODE_SIGNING_REQUIRED=NO
-    run_xcodebuild xcodebuild test \
-      -project "$PROJECT" \
-      -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
-      -configuration Debug \
-      -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
-      -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
     echo -e "${GREEN}✓ Deterministic UI-target tests complete${NC}"

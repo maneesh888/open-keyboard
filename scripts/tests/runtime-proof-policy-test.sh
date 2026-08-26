@@ -7,6 +7,7 @@ POLICY_FILES=(
   "$ROOT/AGENTS.md"
   "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
   "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
+  "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
   "$ROOT/.codex/agents/pr-reviewer.toml"
   "$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
   "$ROOT/.github/pull_request_template.md"
@@ -20,6 +21,13 @@ POLICY_FILES=(
   "$ROOT/docs/RELEASE_HARDENING.md"
   "$ROOT/docs/TDD_STATUS.md"
   "$ROOT/docs/WORK_QUEUE.md"
+)
+
+ACTIVE_INTERACTION_POLICY_FILES=(
+  "$ROOT/AGENTS.md"
+  "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
+  "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
+  "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md"
 )
 
 for policy_file in "${POLICY_FILES[@]}"; do
@@ -56,6 +64,10 @@ require_phrase 'and XCTest are not substitutes.' "$ROOT/AGENTS.md" \
   "AGENTS.md must keep physical-device proof distinct."
 require_phrase 'Report automated test results, transport success, semantic acceptance, and visual/runtime' "$ROOT/AGENTS.md" \
   "AGENTS.md must separate transport, semantic, and runtime acceptance."
+require_phrase 'a purpose-built, generically named Simulator-control integration;' "$ROOT/AGENTS.md" \
+  "AGENTS.md must prefer a vendor-neutral Simulator-control integration."
+require_phrase 'Computer Use or equivalent host UI automation' "$ROOT/AGENTS.md" \
+  "AGENTS.md must retain the generic host-UI automation fallback."
 
 require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must classify real-extension XCUITest accurately."
@@ -78,6 +90,11 @@ require_phrase '## Physical-device procedure' "$ROOT/docs/REAL_EXTENSION_SMOKE_P
   "The extension plan must provide a physical-device procedure."
 require_phrase 'Do not run more XCTest as a substitute for the missing runtime proof.' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The extension plan must provide a fail-closed manual handoff."
+
+if rg --ignore-case --quiet 'ClawMaster' "${ACTIVE_INTERACTION_POLICY_FILES[@]}"; then
+  echo "Active interaction policy must use capability names, not a vendor-specific tool name." >&2
+  exit 1
+fi
 
 require_phrase 'Normal simulator runtime proof:' "$ROOT/.github/pull_request_template.md" \
   "The PR template must retain the normal runtime proof classification."
