@@ -38,6 +38,9 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 6. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
    plus content before committing.
 
+Use repository Simulator routes so their shared lock and disposable-device ownership apply.
+Never clear, stop, erase, or delete an existing or user-open Simulator to prepare a test.
+
 XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
 diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
 lifecycle, Apply/Copy/Back/Rerun, live gateway, and result-presentation changes require the normal

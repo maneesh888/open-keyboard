@@ -160,6 +160,11 @@ XCTest/XCUITest routes may be used freely while implementing and diagnosing. Alw
 automated regression evidence, even when the real extension process was active. Automated runtime
 proof does not replace regression coverage.
 
+Simulator-backed repository test routes are serialized across the repository's worktrees on a
+host. Live routes may restart and delete only disposable simulators they created; never shut down,
+erase, delete, or reset a pre-existing or user-open Simulator. Do not bypass the repository lock
+with parallel hand-written `xcodebuild` or `simctl` commands against the same device.
+
 The canonical per-machine live seed is
 `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`. Live scripts resolve it through
 Git's common directory. Keep it ignored, untracked, mode `600`, current-user-owned, free of extended

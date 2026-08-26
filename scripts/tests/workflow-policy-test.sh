@@ -304,15 +304,16 @@ rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITe
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests' "$ROOT/scripts/ios/test.sh"
-rg --quiet -- '-skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests' "$ROOT/scripts/ios/test.sh"
-rg --quiet -- '-only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   deterministic_case = source.match(/^  deterministic-ui\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The iOS test runner is missing deterministic-ui mode." unless deterministic_case
   expected = %q{-derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA"}
-  unless deterministic_case.scan(expected).length == 2
-    abort "Both deterministic UI invocations must use worktree-scoped DerivedData."
+  unless deterministic_case.scan(expected).length == 1
+    abort "The deterministic UI gate must use one worktree-scoped Xcode test session."
+  end
+  if deterministic_case.include?("OnboardingScreenshotUITests")
+    abort "The deterministic UI gate must include the onboarding assertion in its single test session."
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
@@ -389,13 +390,46 @@ if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts
   exit 1
 fi
 rg --quiet 'SENSITIVE_LIVE_SIMULATOR' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'SENSITIVE_LIVE_SOURCE_WAS_BOOTED' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'restore_sensitive_live_source_simulator' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl clone' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl create' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl shutdown' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'openkeyboard_restore_booted_simulator' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl bootstatus' "$LIVE_TEST_SAFETY"
+if [[ "$(rg --count 'simctl shutdown' "$ROOT/scripts/ios/test.sh")" -ne 2 ]]; then
+  echo "Only disposable live-test simulators may be shut down by the test runner." >&2
+  exit 1
+fi
+rg --fixed-strings --quiet 'xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'xcrun simctl shutdown "$simulator"' "$ROOT/scripts/ios/test.sh"
+if rg --quiet 'simctl erase' "$ROOT/scripts/ios/test.sh"; then
+  echo "The test runner must not erase Simulator state." >&2
+  exit 1
+fi
+rg --quiet 'openkeyboard_relaunch_with_simulator_lock' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
+rg --quiet 'File::LOCK_EX' "$LIVE_TEST_SAFETY"
+if rg --quiet 'SENSITIVE_LIVE_SOURCE|restore_sensitive_live_source_simulator|simctl clone|openkeyboard_restore_booted_simulator' \
+    "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"; then
+  echo "Live routes must not clone, stop, or restore an existing source simulator." >&2
+  exit 1
+fi
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  create_method = source.match(/^create_sensitive_live_simulator\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The iOS test runner is missing its disposable simulator creator." unless create_method
+  unless create_method.include?(%q{device.fetch("deviceTypeIdentifier")}) &&
+      create_method.include?(%q{xcrun simctl create "$simulator_name" "$device_type" "$runtime"})
+    abort "Disposable live simulators must be freshly created with the selected type and runtime."
+  end
+  if create_method.match?(/simctl (?:shutdown|erase|delete)/)
+    abort "Disposable simulator creation must not mutate the selected existing simulator."
+  end
+
+  lock_method = source.match(/^simulator_mode_requires_lock\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The iOS test runner is missing its Simulator exclusivity policy." unless lock_method
+  required_modes = %w[
+    ui deterministic-ui live-ui live-gateway-smoke live-model-differential
+    real-keyboard-live screenshots
+  ]
+  missing_modes = required_modes.reject { |mode| lock_method.include?(mode) }
+  abort "Simulator-backed routes are missing from the exclusivity policy: #{missing_modes.join(", ")}" unless missing_modes.empty?
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
   echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2

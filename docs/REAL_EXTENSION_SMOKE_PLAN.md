@@ -59,7 +59,9 @@ prove Improve/Rephrase/Translate behavior.
 The preserved command `./scripts/ios/test.sh real-keyboard-live` runs credentialed XCUITest against
 an installed real extension on a disposable simulator. It provides automated lifecycle,
 request/response, and replacement regression evidence. Because XCTest controls the run and the
-route injects configuration, it is not final runtime proof.
+route injects configuration, it is not final runtime proof. The route creates its own disposable
+simulator with the selected device type and runtime; it does not stop, reset, or modify an existing
+Simulator session.
 
 ```bash
 ./scripts/ios/test.sh real-keyboard-live

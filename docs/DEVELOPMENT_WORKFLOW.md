@@ -120,8 +120,8 @@ substitution are rejected without printing values. Ordinary checks use the high 
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
 The targeted differential runner performs automated deterministic prerequisites and `build-for-testing`
-once, then reuses the compiled `.xctestrun` for isolated low and high simulator clones. It runs one
-small baseline/boundary/follow-up test per role and removes both clones, injected environment,
+once, then reuses the compiled `.xctestrun` for isolated low and high disposable simulators. It runs one
+small baseline/boundary/follow-up test per role and removes both simulators, injected environment,
 DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
 candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
 evidence.
@@ -154,9 +154,11 @@ The path must be `.githooks`.
   deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
   diagnostic skip that the exact-head validator refuses as passing matrix evidence. A successful
   `xcodebuild` process alone is never accepted as proof.
-- The automated real-keyboard route clones the selected simulator, immediately restores the source to its
-  prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
-  and deletes the clone on every handled exit. Source gateway configuration is not modified.
+- Simulator-backed test modes use one repository-wide host lock so concurrent worktrees or agents
+  cannot drive the same Simulator service at once.
+- Live routes create a fresh disposable simulator with the selected device type and runtime. They
+  never shut down, erase, delete, or modify the selected existing simulator. The automated
+  real-keyboard route seeds and restarts only its disposable simulator, then deletes it on exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 - The exact-head impact classifier selects `gateway-differential` only for changes touching
   model-capability classification, long-input handling, parser compatibility, retry behavior,
