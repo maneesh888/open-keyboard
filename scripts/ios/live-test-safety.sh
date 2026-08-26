@@ -13,11 +13,31 @@ openkeyboard_repository_git() (
   command git "$@"
 )
 
-openkeyboard_restore_booted_simulator() {
-  local simulator="$1"
+openkeyboard_relaunch_with_simulator_lock() {
+  local repository_root="$1"
+  shift
+  local common_directory lock_file
 
-  xcrun simctl boot "$simulator" >/dev/null 2>&1 || true
-  xcrun simctl bootstatus "$simulator" -b >/dev/null
+  if [[ "${OPEN_KEYBOARD_SIMULATOR_LOCK_HELD:-}" == "1" ]]; then
+    return 0
+  fi
+
+  common_directory="$(
+    openkeyboard_repository_git -C "$repository_root" \
+      rev-parse --path-format=absolute --git-common-dir
+  )" || return 1
+  lock_file="$common_directory/openkeyboard-simulator-test.lock"
+
+  OPEN_KEYBOARD_SIMULATOR_LOCK_HELD=1 exec ruby -e '
+    lock_path = ARGV.shift
+    lock = File.open(lock_path, File::RDWR | File::CREAT, 0600)
+    unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+      warn "Another OpenKeyboard Simulator route is active; waiting for it to finish."
+      lock.flock(File::LOCK_EX)
+    end
+    lock.close_on_exec = false
+    exec("/bin/bash", *ARGV)
+  ' "$lock_file" "$@"
 }
 
 openkeyboard_cleanup_live_evidence_file() {

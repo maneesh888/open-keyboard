@@ -15,9 +15,9 @@ derive from canonical JSON; do not edit them or add fallback prompt copies in th
 
 ## Purpose
 
-OpenKeyboard uses proportional local checks and exact-head release evidence. This file owns
-verification selection and proof boundaries. `AGENTS.md` owns repository behavior and
-`.github/BRANCH_PROTECTION_GUIDE.md` owns the GitHub merge settings.
+OpenKeyboard uses proportional local checks and exact-head release evidence. `AGENTS.md` is the
+canonical straight-line workflow. This file is the detailed verification reference loaded only
+when a task needs route selection, hooks, CI, signing, deployment, or proof details.
 
 Repository automation is split across `$develop-openkeyboard`, the read-only
 `$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
@@ -120,8 +120,8 @@ substitution are rejected without printing values. Ordinary checks use the high 
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
 The targeted differential runner performs automated deterministic prerequisites and `build-for-testing`
-once, then reuses the compiled `.xctestrun` for isolated low and high simulator clones. It runs one
-small baseline/boundary/follow-up test per role and removes both clones, injected environment,
+once, then reuses the compiled `.xctestrun` for isolated low and high disposable simulators. It runs one
+small baseline/boundary/follow-up test per role and removes both simulators, injected environment,
 DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
 candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
 evidence.
@@ -154,9 +154,11 @@ The path must be `.githooks`.
   deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
   diagnostic skip that the exact-head validator refuses as passing matrix evidence. A successful
   `xcodebuild` process alone is never accepted as proof.
-- The automated real-keyboard route clones the selected simulator, immediately restores the source to its
-  prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
-  and deletes the clone on every handled exit. Source gateway configuration is not modified.
+- Simulator-backed test modes use one repository-wide host lock so concurrent worktrees or agents
+  cannot drive the same Simulator service at once.
+- Live routes create a fresh disposable simulator with the selected device type and runtime. They
+  never shut down, erase, delete, or modify the selected existing simulator. The automated
+  real-keyboard route seeds and restarts only its disposable simulator, then deletes it on exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 - The exact-head impact classifier selects `gateway-differential` only for changes touching
   model-capability classification, long-input handling, parser compatibility, retry behavior,
@@ -183,10 +185,12 @@ Normal simulator runtime proof must:
 - record exact Git SHA, build configuration, simulator model, OS version, action, source text, and
   observed result without exposing credentials or private configuration.
 
-If Codex can interact with the normal simulator confidently, it collects this proof directly. If
-the interaction is unavailable, unreliable, or ambiguous, stop before push/readiness, state the
-unverified behavior, and request manual verification using the checklist and expected screenshots
-in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. Running more XCTest does not resolve the blocker.
+If Codex can interact with the normal simulator confidently, it collects this proof directly. Use
+the first reliable route: a purpose-built, generically named Simulator-control integration;
+Computer Use or equivalent host UI automation that can inspect and operate the normal Simulator;
+or the manual checklist in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. If interaction is unavailable,
+unreliable, or ambiguous, stop before push/readiness and state the unverified behavior. Running
+more XCTest does not resolve the blocker.
 
 Physical-device proof requires the exact signed build installed on the configured device. A
 Simulator or XCTest run cannot satisfy it. When the configured device is unavailable, report the

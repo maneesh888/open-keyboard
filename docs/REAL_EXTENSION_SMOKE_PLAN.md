@@ -59,7 +59,9 @@ prove Improve/Rephrase/Translate behavior.
 The preserved command `./scripts/ios/test.sh real-keyboard-live` runs credentialed XCUITest against
 an installed real extension on a disposable simulator. It provides automated lifecycle,
 request/response, and replacement regression evidence. Because XCTest controls the run and the
-route injects configuration, it is not final runtime proof.
+route injects configuration, it is not final runtime proof. The route creates its own disposable
+simulator with the selected device type and runtime; it does not stop, reset, or modify an existing
+Simulator session.
 
 ```bash
 ./scripts/ios/test.sh real-keyboard-live
@@ -169,6 +171,11 @@ Live transport/model checks remain separate automated evidence through
 ## Normal simulator runtime procedure
 
 Use a clean simulator appropriate to the change and the exact commit intended for push.
+
+For interaction, prefer a purpose-built, generically named Simulator-control integration. If it is
+unavailable, use Computer Use or equivalent host UI automation only when it can reliably inspect
+and operate the normal Simulator. Otherwise use the manual handoff below. The interaction tool
+does not change the evidence requirements.
 
 1. Build and install the app normally from Xcode using the required build configuration. Do not
    pass `--uitesting` or any debug-state/result-seeding arguments.
