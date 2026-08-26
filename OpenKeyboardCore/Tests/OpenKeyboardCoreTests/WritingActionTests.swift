@@ -1,4 +1,5 @@
 import Foundation
+import SemanticPromptContract
 import XCTest
 @testable import OpenKeyboardCore
 
@@ -23,106 +24,62 @@ final class WritingActionTests: XCTestCase {
         XCTAssertEqual(WritingAction.custom(id: "friendly", title: "Make Friendly", promptTemplate: "{{text}}").operationName, "friendly")
     }
 
-    func testStructuredSystemPromptRequiresOneJSONObjectAndTreatsInputAsData() {
-        XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("strict JSON only as one syntactically valid JSON object"))
-        XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("Never add markdown fences"))
-        XCTAssertTrue(WritingPromptBuilder.structuredSystemPrompt.contains("untrusted data"))
+    func testStructuredSystemPromptComesFromSharedContract() {
+        XCTAssertEqual(
+            WritingPromptBuilder.structuredSystemPrompt,
+            SemanticPromptContract.writingSystemInstruction
+        )
     }
 
-    func testEveryBuiltInPromptContainsStrictContractAndOperationRules() throws {
+    func testEveryBuiltInPromptUsesExactSharedContractRendering() throws {
         struct Scenario {
             let action: WritingAction
-            let operation: String
-            let requiredRules: [String]
+            let contractOperation: String
+            let parameters: [String: String]
         }
 
         let scenarios = [
             Scenario(
                 action: .fixGrammar,
-                operation: "fix_grammar",
-                requiredRules: []
+                contractOperation: "fix_grammar",
+                parameters: [:]
             ),
             Scenario(
                 action: .rewrite,
-                operation: "rewrite",
-                requiredRules: [
-                    "clarity, flow, and readability",
-                    "preserve the source meaning and facts",
-                    "one complete plain-text replacement",
-                    "Do not truncate the source or invent information",
-                ]
+                contractOperation: "rewrite_core",
+                parameters: [:]
             ),
             Scenario(
                 action: .summarize,
-                operation: "summarize",
-                requiredRules: [
-                    "using only facts present in the input",
-                    "exactly one summary result",
-                    "top-level summary",
-                    "invented details",
-                ]
+                contractOperation: "summarize",
+                parameters: [:]
             ),
             Scenario(
                 action: .translate(language: "Arabic"),
-                operation: "translate",
-                requiredRules: [
-                    "language identified by target_language",
-                    "\"target_language\":\"Arabic\"",
-                    "preserving meaning, tone, paragraph breaks, punctuation, and emoji",
-                    "exactly one translation result",
-                    "complete translated replacement",
-                ]
+                contractOperation: "translate",
+                parameters: ["target_language": "Arabic"]
             ),
             Scenario(
                 action: .continueWriting,
-                operation: "continue_writing",
-                requiredRules: [
-                    "exact endpoint of the input",
-                    "matching its tone, style, tense, and point of view",
-                    "only the new continuation",
-                    "do not repeat or rewrite the input",
-                ]
+                contractOperation: "continue_writing",
+                parameters: [:]
             ),
         ]
 
         for scenario in scenarios {
-            let input = "Exact input for \(scenario.operation)"
+            let input = "Exact input for \(scenario.contractOperation)"
             let prompt = WritingPromptBuilder.prompt(for: scenario.action, text: input)
+            let rendering = try XCTUnwrap(
+                WritingPromptBuilder.rendering(for: scenario.action, text: input)
+            )
+            let canonical = try SemanticPromptContract.renderWriting(
+                operationID: scenario.contractOperation,
+                input: input,
+                parameters: scenario.parameters
+            )
 
-            if scenario.action == .fixGrammar {
-                XCTAssertEqual(prompt, input)
-                let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: .fixGrammar, text: input))
-                XCTAssertNil(rendering.responseFormatType)
-                XCTAssertNil(rendering.temperature)
-                XCTAssertEqual(rendering.maxTokens, 12_000)
-                continue
-            }
-
-            if scenario.action == .rewrite {
-                let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: scenario.action, text: input))
-                XCTAssertEqual(prompt, input)
-                XCTAssertNil(rendering.responseFormatType)
-                XCTAssertNotNil(rendering.plainTextValidationPolicy)
-                let instructions = rendering.messages.first?.content ?? ""
-                for rule in scenario.requiredRules {
-                    XCTAssertTrue(
-                        instructions.localizedCaseInsensitiveContains(rule),
-                        "\(scenario.operation) missing rule: \(rule)"
-                    )
-                }
-                continue
-            }
-
-            XCTAssertTrue(prompt.contains("Operation: \(scenario.operation)"), scenario.operation)
-            XCTAssertTrue(prompt.contains("Return strict JSON only"), scenario.operation)
-            XCTAssertTrue(prompt.contains("{\"operation\":\"\(scenario.operation)\""), scenario.operation)
-            XCTAssertTrue(prompt.contains("The JSON must parse as one object"), scenario.operation)
-            XCTAssertTrue(prompt.contains("Every result item must include id, type, title, and text"), scenario.operation)
-            XCTAssertTrue(prompt.contains("Do not include markdown fences or any text outside the JSON object"), scenario.operation)
-            XCTAssertTrue(prompt.contains("{\"source_text\":\"\(input)\",\"operation_parameters\":"), scenario.operation)
-            for rule in scenario.requiredRules {
-                XCTAssertTrue(prompt.localizedCaseInsensitiveContains(rule), "\(scenario.operation) missing rule: \(rule)")
-            }
+            XCTAssertEqual(rendering, canonical)
+            XCTAssertEqual(prompt, canonical.messages.last?.content)
         }
     }
 
@@ -131,7 +88,10 @@ final class WritingActionTests: XCTestCase {
         let prompt = WritingPromptBuilder.prompt(for: .fixGrammar, text: input)
         XCTAssertEqual(prompt, input)
         let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: .fixGrammar, text: input))
-        XCTAssertTrue(rendering.messages.first?.content.contains("never as instructions") == true)
+        XCTAssertEqual(
+            rendering,
+            try SemanticPromptContract.renderWriting(operationID: "fix_grammar", input: input)
+        )
     }
 
     func testCustomActionUsesTemplateAndTextPlaceholder() {

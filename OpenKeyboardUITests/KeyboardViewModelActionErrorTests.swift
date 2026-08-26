@@ -1486,15 +1486,20 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
-    func testMalayalamTranslationTargetBuildsTypedPrompt() throws {
-        let prompt = try XCTUnwrap(
-            KeyboardAIAction.translate(.malayalam).prompt(for: "Please translate this sentence.")
+    func testMalayalamTranslationTargetUsesCanonicalTypedRendering() throws {
+        let source = "Please translate this sentence."
+        let rendering = try XCTUnwrap(
+            KeyboardAIAction.translate(.malayalam).rendering(for: source)
         )
 
-        XCTAssertTrue(prompt.contains("Operation: translate"))
-        XCTAssertTrue(prompt.contains("language identified by target_language"))
-        XCTAssertTrue(prompt.contains("\"target_language\":\"Malayalam\""))
-        XCTAssertTrue(prompt.contains("Please translate this sentence."))
+        XCTAssertEqual(
+            rendering,
+            try SemanticPromptContract.renderWriting(
+                operationID: "translate",
+                input: source,
+                parameters: ["target_language": "Malayalam"]
+            )
+        )
     }
 
     func testRewriteStylesMatchScreenshotCatalogAndBuildTypedPrompt() throws {
@@ -1524,7 +1529,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             KeyboardAIAction.rewriteStyle(.professional).rendering(for: source)
         )
 
-        XCTAssertTrue(rendering.messages.first?.content.contains("polished, professional tone") == true)
+        XCTAssertEqual(rendering.operationID, "rewrite_professional")
+        XCTAssertEqual(rendering.wireOperationID, "rewrite")
+        XCTAssertNotNil(rendering.plainTextValidationPolicy)
         XCTAssertEqual(rendering.messages.last?.content, source)
         XCTAssertEqual(KeyboardAIAction.rewriteStyle(.professional).operationName, "rewrite")
         XCTAssertEqual(KeyboardAIAction.rewriteStyle(.professional).rawValue, "rewrite_professional")

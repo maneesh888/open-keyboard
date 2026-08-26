@@ -313,11 +313,17 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertTrue(KeyboardSuggestionState(response: KeyboardSuggestionResponse(corrections: [], predictions: [])).isComplete)
     }
 
-    func testPromptRequestsStrictJSONAndBoundedContext() {
-        let prompt = KeyboardSuggestionParser.prompt(for: String(repeating: "a", count: 700))
-        XCTAssertTrue(prompt.contains("strict JSON only"))
-        XCTAssertTrue(prompt.contains("corrections and predictions separately"))
-        XCTAssertTrue(prompt.contains("Do not include markdown"))
+    func testPromptUsesExactSharedContractRenderingAndBoundedContext() {
+        let input = String(repeating: "a", count: 700)
+        let prompt = KeyboardSuggestionParser.prompt(for: input)
+        let rendering = SemanticPromptContract.renderKeyboardSuggestions(input: input)
+        let boundedRendering = SemanticPromptContract.renderKeyboardSuggestions(
+            input: String(repeating: "a", count: 500)
+        )
+
+        XCTAssertEqual(prompt, rendering.messages.last?.content)
+        XCTAssertEqual(rendering.operationID, "keyboard_suggestions")
+        XCTAssertEqual(rendering, boundedRendering)
         XCTAssertLessThan(prompt.count, 2_000)
     }
 

@@ -7,7 +7,6 @@ final class UserFlowTests: XCTestCase {
             action: .fixGrammar,
             typedText: "i has a apple",
             modelResponse: "I have an apple.",
-            expectedPromptFragments: ["i has a apple"],
             replacementStrategy: .replaceAll
         )
 
@@ -21,7 +20,6 @@ final class UserFlowTests: XCTestCase {
             action: .rewrite,
             typedText: "this sounds bad",
             modelResponse: "This could sound better.",
-            expectedPromptFragments: ["Rephrase", "broadly restructure", "this sounds bad"],
             replacementStrategy: .replaceAll
         )
 
@@ -35,7 +33,6 @@ final class UserFlowTests: XCTestCase {
             action: .summarize,
             typedText: original,
             modelResponse: "Open Keyboard improves text through a configured gateway.",
-            expectedPromptFragments: ["Summarize", original],
             replacementStrategy: .replaceAll
         )
 
@@ -47,7 +44,6 @@ final class UserFlowTests: XCTestCase {
             action: .continueWriting,
             typedText: "Once the keyboard connects",
             modelResponse: ", it can suggest the next sentence.",
-            expectedPromptFragments: ["Operation: continue_writing", "only the new continuation", "Once the keyboard connects"],
             replacementStrategy: .appendToCursor
         )
 
@@ -58,7 +54,6 @@ final class UserFlowTests: XCTestCase {
         action: WritingAction,
         typedText: String,
         modelResponse: String,
-        expectedPromptFragments: [String],
         replacementStrategy: AITextReplacementStrategy,
         file: StaticString = #filePath,
         line: UInt = #line
@@ -95,9 +90,19 @@ final class UserFlowTests: XCTestCase {
         let bodyString = String(decoding: body, as: UTF8.self)
         XCTAssertTrue(bodyString.contains(#""model":"local-llm""#), file: file, line: line)
         XCTAssertTrue(bodyString.contains(#""stream":false"#), file: file, line: line)
-        for fragment in expectedPromptFragments {
-            XCTAssertTrue(bodyString.contains(fragment), "Missing prompt fragment: \(fragment)", file: file, line: line)
-        }
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: body) as? [String: Any],
+            file: file,
+            line: line
+        )
+        let messages = try XCTUnwrap(json["messages"] as? [[String: String]], file: file, line: line)
+        let rendering = try XCTUnwrap(
+            WritingPromptBuilder.rendering(for: action, text: typedText),
+            file: file,
+            line: line
+        )
+        XCTAssertEqual(messages.map { $0["role"] }, rendering.messages.map(\.role), file: file, line: line)
+        XCTAssertEqual(messages.map { $0["content"] }, rendering.messages.map(\.content), file: file, line: line)
 
         return WritingFlowResult(models: models, selectedModel: selectedModel, finalText: finalText)
     }

@@ -24,10 +24,11 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertNil(json["temperature"])
         XCTAssertEqual(json["max_tokens"] as? Int, 12_000)
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
-        XCTAssertEqual(messages.first?["role"], "system")
-        XCTAssertTrue(messages.first?["content"]?.contains("grammar correction engine") == true)
-        XCTAssertEqual(messages.last?["role"], "user")
-        XCTAssertEqual(messages.last?["content"], WritingPromptBuilder.prompt(for: .fixGrammar, text: "i has a apple"))
+        let rendering = try XCTUnwrap(
+            WritingPromptBuilder.rendering(for: .fixGrammar, text: "i has a apple")
+        )
+        XCTAssertEqual(messages.map { $0["role"] }, rendering.messages.map(\.role))
+        XCTAssertEqual(messages.map { $0["content"] }, rendering.messages.map(\.content))
     }
 
     func testCustomWritingActionKeepsPlainTextContractWithoutResponseFormat() async throws {
@@ -68,7 +69,11 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertNil(json["response_format"])
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]])
         XCTAssertEqual(messages.last?["content"], source)
-        XCTAssertTrue(messages.first?["content"]?.contains("one complete plain-text replacement") == true)
+        let rendering = try XCTUnwrap(WritingPromptBuilder.rendering(for: .rewrite, text: source))
+        XCTAssertEqual(rendering.operationID, "rewrite_core")
+        XCTAssertEqual(rendering.wireOperationID, "rewrite")
+        XCTAssertNotNil(rendering.plainTextValidationPolicy)
+        XCTAssertEqual(messages.first?["content"], rendering.messages.first?.content)
     }
 
     func testPerformWritingActionResultParsesMultipleStructuredItems() async throws {
