@@ -1,6 +1,24 @@
 import XCTest
 
 final class GatewayClientArchitectureTests: XCTestCase {
+    func testLiveImproveHarnessUsesCanonicalImprovePlainTextPath() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let harnessURL = repositoryRoot
+            .appendingPathComponent("OpenKeyboard")
+            .appendingPathComponent("Views")
+            .appendingPathComponent("LiveAITestHarnessView.swift")
+        let source = try String(contentsOf: harnessURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains(#"run(action: "improve")"#))
+        XCTAssertFalse(source.contains(#"run(action: "rewrite")"#))
+        XCTAssertTrue(source.contains(#"else if action == "improve""#))
+        XCTAssertTrue(source.contains("KeyboardActionOperationResult.plainTextReplacement"))
+        XCTAssertTrue(source.contains("contractOperationID: action"))
+        XCTAssertTrue(source.contains("wireOperation: rendering.wireOperationID ?? action"))
+    }
+
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
         XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.0.1")
         let renderings = try KeyboardRewriteStyle.allCases.map { style in
