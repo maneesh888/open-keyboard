@@ -31,7 +31,11 @@ Acceptance:
 - No network calls.
 - No real private user text.
 - Stable pass/fail behavior in normal CI.
-- Proves every built-in prompt requests exactly one JSON object with the canonical result contract.
+- Proves each operation covered by this Core fixture suite requests its canonical package-owned
+  response format: one complete plain-text replacement for Grammar and Core Rewrite, or one JSON
+  object for Summarize, Translate, and Continue Writing.
+- Contract and app/extension suites separately prove the same complete plain-text response contract
+  for Improve and every rewrite style.
 - Checks operation-specific rules, including granular grammar items, meaning preservation,
   facts-only summaries, translation fidelity, and continuation-only output.
 
@@ -76,7 +80,7 @@ Current live harness coverage:
 
 - Grammar correction sanity check.
 - Gemma-specific complete plain-text multi-error grammar correction checks.
-- Gemma-specific valid structured JSON checks for rewrite, summarize, translate, and continue writing.
+- Gemma-specific valid complete plain-text checks for rewrite and Improve, plus structured checks for summarize, translate, and continue writing.
 - Rewrite clarity sanity check.
 - Prompt-injection-as-input summarization check.
 - Broad latency budget tracking per scenario.

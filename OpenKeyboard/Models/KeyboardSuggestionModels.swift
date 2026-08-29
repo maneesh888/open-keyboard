@@ -352,6 +352,120 @@ struct GrammarDiffService {
     }
 }
 
+enum KeyboardReplacementDiffKind: Equatable {
+    case unchanged
+    case removed
+    case inserted
+}
+
+struct KeyboardReplacementDiffSegment: Equatable {
+    let text: String
+    let kind: KeyboardReplacementDiffKind
+}
+
+struct KeyboardReplacementDiff: Equatable {
+    private static let maximumInlineDiffCharactersPerText = 1_200
+    private static let maximumHighlightedSegments = 120
+
+    let highlightedReplacementSegments: [KeyboardReplacementDiffSegment]
+    let usesInlineHighlights: Bool
+
+    init(original: String, replacement: String) {
+        guard original.count <= Self.maximumInlineDiffCharactersPerText,
+              replacement.count <= Self.maximumInlineDiffCharactersPerText else {
+            highlightedReplacementSegments = Self.plainReplacementSegments(replacement)
+            usesInlineHighlights = false
+            return
+        }
+
+        let originalCharacters = Array(original)
+        let edits = GrammarDiffService.edits(from: original, to: replacement)
+        guard !edits.isEmpty else {
+            highlightedReplacementSegments = Self.plainReplacementSegments(replacement)
+            usesInlineHighlights = false
+            return
+        }
+
+        var segments: [KeyboardReplacementDiffSegment] = []
+        var cursor = 0
+
+        func append(_ text: String, kind: KeyboardReplacementDiffKind) {
+            guard !text.isEmpty else { return }
+            if let last = segments.last, last.kind == kind {
+                segments[segments.count - 1] = KeyboardReplacementDiffSegment(
+                    text: last.text + text,
+                    kind: kind
+                )
+            } else {
+                segments.append(KeyboardReplacementDiffSegment(text: text, kind: kind))
+            }
+        }
+
+        for edit in edits.sorted(by: { $0.range.start < $1.range.start }) {
+            let start = min(max(edit.range.start, cursor), originalCharacters.count)
+            let end = min(max(edit.range.end, start), originalCharacters.count)
+            append(String(originalCharacters[cursor..<start]), kind: .unchanged)
+            append(String(originalCharacters[start..<end]), kind: .removed)
+            append(edit.replacementText, kind: .inserted)
+            cursor = end
+        }
+        append(String(originalCharacters[cursor..<originalCharacters.count]), kind: .unchanged)
+
+        let highlighted = Self.replacementOnlySegments(from: segments)
+        guard highlighted.count <= Self.maximumHighlightedSegments else {
+            highlightedReplacementSegments = Self.plainReplacementSegments(replacement)
+            usesInlineHighlights = false
+            return
+        }
+        highlightedReplacementSegments = highlighted
+        usesInlineHighlights = highlighted.contains { $0.kind == .inserted }
+    }
+
+    private static func replacementOnlySegments(
+        from segments: [KeyboardReplacementDiffSegment]
+    ) -> [KeyboardReplacementDiffSegment] {
+        var output: [KeyboardReplacementDiffSegment] = []
+
+        func append(_ text: String, kind: KeyboardReplacementDiffKind) {
+            guard !text.isEmpty else { return }
+            if let last = output.last, last.kind == kind {
+                output[output.count - 1] = KeyboardReplacementDiffSegment(
+                    text: last.text + text,
+                    kind: kind
+                )
+            } else {
+                output.append(KeyboardReplacementDiffSegment(text: text, kind: kind))
+            }
+        }
+
+        for segment in segments where segment.kind != .removed {
+            guard segment.kind == .inserted else {
+                append(segment.text, kind: .unchanged)
+                continue
+            }
+            var run = ""
+            var runKind: KeyboardReplacementDiffKind?
+            for character in segment.text {
+                let characterKind: KeyboardReplacementDiffKind = character.isWhitespace ? .unchanged : .inserted
+                if let runKind, runKind != characterKind {
+                    append(run, kind: runKind)
+                    run = ""
+                }
+                runKind = characterKind
+                run.append(character)
+            }
+            if let runKind {
+                append(run, kind: runKind)
+            }
+        }
+        return output
+    }
+
+    private static func plainReplacementSegments(_ replacement: String) -> [KeyboardReplacementDiffSegment] {
+        replacement.isEmpty ? [] : [KeyboardReplacementDiffSegment(text: replacement, kind: .unchanged)]
+    }
+}
+
 struct GrammarCorrectionSession: Equatable {
     let originalText: String
     let documentRevision: Int
@@ -1681,7 +1795,7 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     var displayText: String {
-        if operation == "fix_grammar", let correctedText {
+        if ["fix_grammar", "rewrite"].contains(operation), let correctedText {
             return correctedText
         }
         if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1696,39 +1810,6 @@ struct KeyboardActionOperationResult: Equatable {
         return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    func rewriteOptions(sourceText: String, maxOptions: Int = 5) -> [KeyboardRewriteOption] {
-        let normalizedSource = Self.normalizedCandidateKey(sourceText)
-        var seen = Set<String>()
-        var options: [KeyboardRewriteOption] = []
-
-        func append(_ candidate: String?, title: String?) {
-            guard options.count < maxOptions else { return }
-            let text = candidate?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            guard !text.isEmpty else { return }
-            guard KeyboardReplacementTextSafety.isSafeReplacementText(text) else { return }
-            let key = Self.normalizedCandidateKey(text)
-            guard !key.isEmpty, key != normalizedSource, !seen.contains(key) else { return }
-            seen.insert(key)
-
-            let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let optionTitle = cleanTitle?.isEmpty == false ? cleanTitle ?? "" : "Option \(options.count + 1)"
-            options.append(KeyboardRewriteOption(
-                id: "rewrite-option-\(options.count + 1)",
-                title: optionTitle,
-                text: text
-            ))
-        }
-
-        for item in items where !item.isWarning {
-            append(item.replacement, title: item.title)
-            append(item.text, title: item.title)
-        }
-        append(correctedText, title: "Suggested rewrite")
-        append(displayText, title: "Suggested rewrite")
-
-        return options
-    }
-
     @MainActor
     static func plainTextGrammarResponse(_ content: String, original: String) throws -> KeyboardActionOperationResult {
         let corrected = try GrammarCorrectionResponseValidator.validated(content, original: original)
@@ -1740,8 +1821,42 @@ struct KeyboardActionOperationResult: Equatable {
         )
     }
 
+    static func plainTextReplacement(
+        _ content: String,
+        contractOperationID: String,
+        wireOperation: String,
+        title: String,
+        source: String
+    ) throws -> KeyboardActionOperationResult {
+        let replacement: String
+        do {
+            replacement = try SemanticPromptContract.validatePlainTextResponse(
+                content,
+                operationID: contractOperationID,
+                source: source
+            )
+        } catch {
+            throw KeyboardActionOperationResultError.invalidResponse
+        }
+        return KeyboardActionOperationResult(
+            operation: wireOperation,
+            items: [
+                Item(
+                    id: "plain-text-result",
+                    type: "suggestion",
+                    title: title,
+                    text: replacement,
+                    original: source,
+                    replacement: replacement
+                )
+            ],
+            correctedText: replacement
+        )
+    }
+
     static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
-        guard operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() != "fix_grammar" else {
+        let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalizedOperation != "fix_grammar", normalizedOperation != "rewrite" else {
             throw KeyboardActionOperationResultError.invalidResponse
         }
         let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1823,15 +1938,6 @@ struct KeyboardActionOperationResult: Equatable {
     private static func clean(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func normalizedCandidateKey(_ value: String) -> String {
-        value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-            .joined(separator: " ")
-            .lowercased()
     }
 
     private static func isNestedJSONLike(_ value: String) -> Bool {
@@ -2039,9 +2145,19 @@ enum KeyboardActionResultHandler {
             ))
         }
         if normalizedOperation == "rewrite" {
-            let options = result.rewriteOptions(sourceText: sourceText)
-            guard !options.isEmpty else { return .noUsableResult }
-            return .showRewriteOptions(options)
+            guard let replacement = result.correctedText,
+                  !replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  KeyboardReplacementTextSafety.isSafeReplacementText(replacement),
+                  replacement != sourceText else {
+                return .noUsableResult
+            }
+            return .showRewriteOptions([
+                KeyboardRewriteOption(
+                    id: "plain-text-result",
+                    title: result.items.first?.title ?? "Rephrased",
+                    text: replacement
+                )
+            ])
         }
 
         let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)

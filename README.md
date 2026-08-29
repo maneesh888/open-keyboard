@@ -95,7 +95,7 @@ The keyboard extension currently includes:
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
-- rewrite/improvement options that are shown before replacement, with selected option state
+- one validated plain-text Rewrite/Rephrase, style, or Improve replacement shown for comparison before Apply
 - replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
 
@@ -128,17 +128,17 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 
 The pinned semantic prompt package owns the operation-specific instructions, response contract
 metadata, and deterministic message rendering. Open Keyboard owns request transport, local grammar
-diffing, response parsing, and UI behavior. Grammar correction returns one complete plain-text
-correction with no explicit temperature or response format; the client derives selectable edits
-locally. Other structured actions send the package-rendered messages with
-`response_format: {"type":"json_object"}` where the selected backend supports it. The gateway is
+diffing, response parsing, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
+style, and Improve return one complete validated plain-text replacement with no structured response
+format; the client derives grammar edits and writing-action comparison highlights locally.
+Summarize, Translate, and Continue Writing retain their package-owned structured contracts. The gateway is
 the trust boundary for model access, API keys, rate limits, logs, and upstream model routing; it
 does not inject Open Keyboard prompts or rebuild the message conversation.
 
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `3.0.0`. This path is a checkout
+`Vendor/semantic-prompt-contract` Git submodule at contract version `4.0.1`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
 and UI tests compile the same generated Swift adapter. UI, request transport, gateway

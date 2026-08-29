@@ -35,7 +35,7 @@ struct LiveAITestHarnessView: View {
                     .accessibilityIdentifier("live_ai_fix_grammar_button")
 
                     Button {
-                        run(action: "rewrite")
+                        run(action: "improve")
                     } label: {
                         Label("Improve", systemImage: "sparkles")
                             .frame(maxWidth: .infinity)
@@ -140,9 +140,27 @@ struct LiveAITestHarnessView: View {
             throw LiveAITestHarnessError.invalidResponse
         }
 
-        let result = action == "fix_grammar"
-            ? try KeyboardActionOperationResult.plainTextGrammarResponse(choice.message.content, original: text)
-            : try KeyboardActionOperationResult.parse(choice.message.content, operation: action, fallbackText: text)
+        let result: KeyboardActionOperationResult
+        if action == "fix_grammar" {
+            result = try KeyboardActionOperationResult.plainTextGrammarResponse(
+                choice.message.content,
+                original: text
+            )
+        } else if action == "improve" {
+            result = try KeyboardActionOperationResult.plainTextReplacement(
+                choice.message.content,
+                contractOperationID: action,
+                wireOperation: rendering.wireOperationID ?? action,
+                title: "Improve",
+                source: text
+            )
+        } else {
+            result = try KeyboardActionOperationResult.parse(
+                choice.message.content,
+                operation: action,
+                fallbackText: text
+            )
+        }
         let output = result.displayText
         guard !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw LiveAITestHarnessError.invalidResponse

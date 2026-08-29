@@ -37,7 +37,7 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
     }
 
-    func testImproveWithRealGatewayUsesStructuredResultContract() throws {
+    func testImproveWithRealGatewayUsesPlainTextReplacementContract() throws {
         let editor = app.textViews["live_ai_text_editor"]
         XCTAssertTrue(editor.waitForExistence(timeout: 10))
         editor.tap()
@@ -51,7 +51,7 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         XCTAssertNotEqual(value, "this message sound rough and unclear")
-        XCTAssertFalse(value.contains("{\"operation\""), "Output should not display raw structured JSON: \(value)")
+        XCTAssertFalse(value.contains("{\"operation\""), "Output should be one plain-text replacement, not structured JSON: \(value)")
         XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
     }
 

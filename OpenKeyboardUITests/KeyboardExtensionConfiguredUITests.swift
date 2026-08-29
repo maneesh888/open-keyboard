@@ -907,67 +907,39 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         add(attachment)
     }
 
-    func testRealKeyboardRewriteOptionsWorkflowScreenshotsWhenExplicitlyRequested() throws {
-        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !screenshotDirectory.isEmpty else {
-            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard rewrite screenshots.")
-        }
-
-        let sourceText = "All of these are no bulb in the universe."
-        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
-        let hostArguments = [
-            "--keyboard-host-test",
-            "--keyboard-host-autofocus",
-            "--keyboard-host-prefer-openkeyboard",
-            "--keyboard-host-text=\(encodedSource)"
-        ]
-
-        let app = configuredContainingApp(extraArguments: hostArguments)
-        app.launch()
-        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
-
-        let input = app.textViews["keyboard_host_text_editor"]
-        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was not available for keyboard rewrite screenshots")
-        tapCenter(of: input)
-
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let keyboardApp = XCUIApplication()
-        XCTAssertTrue(
-            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
-            "Open Keyboard extension did not appear"
+    func testRealKeyboardPlainTextLoadingScreenshotWhenExplicitlyRequested() throws {
+        let keyboardApp = try launchSeededRealKeyboardState(
+            suggestionState: "actionLoadingPanel",
+            initialPanel: "actions"
         )
-
-        try captureRealKeyboardStep("01-real-keyboard-normal-keyboard")
-
-        XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].waitForExistence(timeout: 5))
-        XCTAssertTrue(waitForEnabledAITrigger(keyboardApp: keyboardApp, timeout: 10))
-        keyboardApp.buttons["ai_sparkle_action"].tap()
-        XCTAssertTrue(keyboardApp.buttons["ai_action_rewrite"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.buttons["ai_action_improve"].waitForExistence(timeout: 5))
         XCTAssertTrue(keyboardApp.staticTexts["ai_action_loading_text"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("02-real-keyboard-ai-action-screen")
+        try captureRealKeyboardStep("01-real-keyboard-plain-text-loading")
+    }
 
-        seedKeyboardExtensionDebugState(suggestionState: "rewriteOptions", initialPanel: "rewriteOptions")
-        reopenHostInput(input)
-        XCTAssertTrue(
-            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
-            "Open Keyboard extension did not appear for seeded rewrite options"
+    func testRealKeyboardPlainTextComparisonScreenshotWhenExplicitlyRequested() throws {
+        let keyboardApp = try launchSeededRealKeyboardState(
+            suggestionState: "rephraseComparisonPanel",
+            initialPanel: "actions"
         )
-        XCTAssertTrue(keyboardApp.buttons["ai_rewrite_option_1"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("03-real-keyboard-rewrite-options-carousel")
+        let result = keyboardApp.staticTexts["ai_action_result_text"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.label, "Send the customer an update tomorrow.")
+        XCTAssertTrue(keyboardApp.buttons["ai_action_apply"].isEnabled)
+        try captureRealKeyboardStep("02-real-keyboard-plain-text-comparison")
+    }
 
-        let secondOption = keyboardApp.buttons["ai_rewrite_option_1"]
-        XCTAssertTrue(secondOption.waitForExistence(timeout: 5))
-        secondOption.tap()
-
-        let apply = keyboardApp.buttons["ai_rewrite_apply"]
-        XCTAssertTrue(apply.waitForExistence(timeout: 5))
-        apply.tap()
-
-        let rewritten = NSPredicate(format: "value CONTAINS[c] %@", "There are no bulbs anywhere in the universe.")
-        expectation(for: rewritten, evaluatedWith: input)
-        waitForExpectations(timeout: 10)
-        XCTAssertTrue(keyboardApp.staticTexts["Rewrite applied"].waitForExistence(timeout: 5))
-        try captureRealKeyboardStep("04-real-keyboard-rewrite-applied")
+    func testRealKeyboardPlainTextFailureScreenshotWhenExplicitlyRequested() throws {
+        let keyboardApp = try launchSeededRealKeyboardState(
+            suggestionState: "modelCapabilityError",
+            initialPanel: "keyboard"
+        )
+        XCTAssertTrue(
+            keyboardApp.staticTexts["ai_error_message"].waitForExistence(timeout: 5),
+            "Stable model-capability failure was not visible in the real keyboard extension"
+        )
+        XCTAssertFalse(keyboardApp.staticTexts["ai_action_loading_text"].exists)
+        try captureRealKeyboardStep("03-real-keyboard-stable-failure")
     }
 
     func testRealKeyboardImproveReplacesTextWithExistingSimulatorGatewayConfig() throws {
@@ -1076,12 +1048,39 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         defaults.synchronize()
     }
 
-    private func reopenHostInput(_ input: XCUIElement) {
-        XCUIDevice.shared.press(.home)
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
-        XCUIApplication().activate()
-        XCTAssertTrue(input.waitForExistence(timeout: 5), "Host input was not available after reactivating the containing app")
-        tapCenter(of: input)
+    private func launchSeededRealKeyboardState(
+        suggestionState: String,
+        initialPanel: String
+    ) throws -> XCUIApplication {
+        let screenshotDirectory = ProcessInfo.processInfo.environment["OPEN_KEYBOARD_REAL_SCREENSHOT_DIR"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !screenshotDirectory.isEmpty else {
+            throw XCTSkip("Set OPEN_KEYBOARD_REAL_SCREENSHOT_DIR to opt into real keyboard plain-text screenshots.")
+        }
+
+        let sourceText = "send the customer a update tomorrow"
+        let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
+        let hostApp = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-host-text=\(encodedSource)",
+            "--keyboard-suggestion-state=\(suggestionState)",
+            "--keyboard-initial-panel=\(initialPanel)"
+        ])
+        hostApp.launch()
+        XCTAssertTrue(hostApp.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = hostApp.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10), "Host app text editor was unavailable for seeded keyboard proof")
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let keyboardApp = XCUIApplication()
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear for seeded \(suggestionState) proof"
+        )
+        return keyboardApp
     }
 
     private func tapCenter(of element: XCUIElement) {
