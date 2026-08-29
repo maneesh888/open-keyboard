@@ -1,0 +1,6 @@
+interface:
+  display_name: "Plan OpenKeyboard Major Milestone"
+  short_description: "Create phased source-bound OpenKeyboard roadmaps"
+  default_prompt: "Use $plan-openkeyboard-major-milestone to create a phased, source-bound roadmap for this OpenKeyboard milestone."
+policy:
+  allow_implicit_invocation: false

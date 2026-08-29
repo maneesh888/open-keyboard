@@ -24,6 +24,9 @@ Read complete source files only when targeted sections are materially ambiguous 
 ## Keep planning non-blocking
 
 - Do not edit files, install hooks, run tests, access GitHub, or spawn another agent.
+- Preserve every sticky user constraint independently. Ambiguous follow-ups such as `try`,
+  `investigate`, `find a solution`, or `try chunks` do not authorize implementation or clear an
+  edit/commit/push/PR prohibition.
 - Do not repeat source prose; cite paths and headings.
 - Do not ask for information already available in the repository.
 - If implementation is already requested and clearly bounded, return control immediately instead of creating another planning gate.
@@ -50,6 +53,16 @@ Targeted verification:
 Release-only deferred gates:
 Proof limits:
 
+Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION
+Read-only activity authorized: YES/NO
+Edits authorized: YES/NO
+Production-code edits authorized: YES/NO
+Commit authorized: YES/NO
+Push authorized: YES/NO
+PR authorized: YES/NO
+Merge authorized: YES/NO
+Current blockers:
+
 Lifecycle: planning only | implementation requested | narrowed by explicit opt-out
 Blocking decision: none | concise decision
 Next action:
@@ -57,7 +70,8 @@ Next action:
 
 Choose Release only for PR readiness, merge, release hardening, explicit release verification, or a
 surface whose focused plan requires exact-head Release proof. Record explicit opt-outs instead of
-turning routine implementation details into additional approvals.
+turning routine implementation details into additional approvals. A later instruction changes an
+authority field only when it explicitly authorizes that action; otherwise retain the earlier value.
 
 When current status sources conflict, report the smallest material conflict and select no work that
 depends on resolving it. When one source is clearly historical and the current queue is explicit,
