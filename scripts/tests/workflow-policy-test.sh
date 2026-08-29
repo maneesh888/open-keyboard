@@ -261,7 +261,8 @@ if rg --quiet 'at least one approving GitHub review' "$REVIEW_SKILL"; then
   exit 1
 fi
 rg --quiet 'bounded implementation request.*normal autonomous.*guarded merge' "$REVIEW_SKILL"
-rg --quiet 'keep draft.*do not merge' "$REVIEW_SKILL"
+rg --quiet 'active sticky constraint says `keep draft`' "$REVIEW_SKILL"
+rg --quiet 'constraint says `do not merge`' "$REVIEW_SKILL"
 rg --quiet 'gh pr merge <number> --auto --squash --match-head-commit <reviewed-head-sha>' "$REVIEW_SKILL"
 rg --quiet 'Never leave queued auto-merge active' "$REVIEW_SKILL"
 rg --quiet '^name: develop-openkeyboard$' "$DEVELOP_SKILL"

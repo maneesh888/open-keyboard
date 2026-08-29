@@ -35,11 +35,13 @@ require_phrase() {
 for ledger_field in \
   'Objective:' \
   'Requested activity:' \
+  'Read-only activity authorized: YES/NO' \
   'Edits authorized: YES/NO' \
   'Production-code edits authorized: YES/NO' \
   'Commit authorized: YES/NO' \
   'Push authorized: YES/NO' \
   'PR authorized: YES/NO' \
+  'Merge authorized: YES/NO' \
   'Required evidence:' \
   'Current blockers:'; do
   require_phrase "$ledger_field" "$AGENTS" "The canonical authority ledger is missing: $ledger_field"
@@ -51,10 +53,12 @@ require_phrase 'Ambiguous or exploratory wording never revokes a sticky constrai
   'AGENTS.md must reject ambiguous revocation of sticky constraints.'
 require_phrase 'Activate proof-first mode' "$AGENTS" \
   'AGENTS.md must define proof-first mode.'
-require_phrase 'Recheck it before the first tracked edit, staging, commit, push, or PR mutation.' "$AGENTS" \
+require_phrase 'Recheck it before the first tracked edit, staging, commit, push, PR mutation, readiness change, or' "$AGENTS" \
   'AGENTS.md must recheck authority before every material mutation stage.'
-require_phrase 'AUTHORITY: <mode> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO>' "$AGENTS" \
+require_phrase 'AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>' "$AGENTS" \
   'AGENTS.md must define the visible constrained-task authority checkpoint.'
+require_phrase 'tracked repository mutation—including production, test, documentation, staging, and commit' "$AGENTS" \
+  'Proof-first mode must prohibit every tracked repository mutation, not only production changes.'
 
 # Scenario A: results-first remains read-only after "Try chunks."
 require_phrase '`Test this and report before implementing` followed by `Try chunks` remains read-only: no tracked' "$AGENTS" \
@@ -96,10 +100,18 @@ require_phrase 'Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION' "$PLAN
   'The planner must retain the authority mode in its work order.'
 require_phrase 'Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION' "$MILESTONE_PLAN_SKILL" \
   'The milestone planner must retain the authority mode in its roadmap.'
+for planner in "$PLAN_SKILL" "$MILESTONE_PLAN_SKILL"; do
+  require_phrase 'Read-only activity authorized: YES/NO' "$planner" \
+    'Every planner output must track read-only authority independently.'
+  require_phrase 'Merge authorized: YES/NO' "$planner" \
+    'Every planner output must track merge authority independently.'
+done
 require_phrase 'Planning is read-only:' "$MILESTONE_PLAN_SKILL" \
   'The milestone planner must not turn roadmap creation into repository mutation.'
 require_phrase 'Apply the sticky authority ledger from `AGENTS.md`.' "$REVIEW_SKILL" \
   'The review lifecycle must apply the sticky authority ledger.'
+require_phrase 'If any active sticky constraint says `keep draft`' "$REVIEW_SKILL" \
+  'The guarded merge must honor active sticky constraints, not only the latest instruction.'
 require_phrase 'truthful documentation, commit subjects, or proof claims' "$REVIEWER_AGENT" \
   'The independent reviewer must inspect commit-message truthfulness.'
 require_phrase 'Evidence boundary: this hook can establish DETERMINISTIC_VERIFIED only;' "$PRE_COMMIT" \

@@ -178,15 +178,24 @@ boundary.
 
 ## Guarded merge
 
-If the latest instruction says `keep draft`, leave the PR draft. If it says `do not merge`, a clean
-head may become ready but must remain unmerged.
+If any active sticky constraint says `keep draft`, leave the PR draft. If any active sticky
+constraint says `do not merge`, a clean head may become ready but must remain unmerged. A later
+ambiguous or unrelated instruction does not supersede either constraint.
 
 Otherwise:
 
-1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction. Require `gh pr checks <number> --required` to exit successfully so no failed event-family result is hidden by a newer check with the same name.
+1. Refresh the head, required checks, independent review result, reviews, threads, protection,
+   mergeability, scope, and every active sticky authority constraint. Require
+   `gh pr checks <number> --required` to exit successfully so no failed event-family result is
+   hidden by a newer check with the same name.
 2. Confirm all evidence and the selected automatic or human authorization route remain bound to the same full reviewed and locally verified SHA. If the reviewer is below 100% and explicit current-head owner approval is absent, keep the PR draft, ask the owner to review the named gaps, and stop.
 3. Mark the draft ready.
-4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, or review mismatch, disable any queued auto-merge, return the PR to draft when applicable, and restart the exact-head cycle or report the blocker. On a late `keep draft`, disable auto-merge, return the PR to draft, verify it remains unmerged, and stop. On a late `do not merge`, disable auto-merge, verify the PR remains unmerged, and stop.
+4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, review, or
+   active-authority mismatch, disable any queued auto-merge, return the PR to draft when applicable,
+   and restart the exact-head cycle or report the blocker. When `keep draft` becomes or remains an
+   active sticky constraint, disable auto-merge, return the PR to draft, verify it remains unmerged,
+   and stop. When `do not merge` becomes or remains an active sticky constraint, disable
+   auto-merge, verify the PR remains unmerged, and stop.
 5. Run GitHub's native guarded squash merge with exact-head matching:
 
    ```bash

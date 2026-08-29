@@ -55,18 +55,21 @@ Before the first mutation, internally record and retain this ledger:
 ```text
 Objective:
 Requested activity:
+Read-only activity authorized: YES/NO
 Edits authorized: YES/NO
 Production-code edits authorized: YES/NO
 Commit authorized: YES/NO
 Push authorized: YES/NO
 PR authorized: YES/NO
+Merge authorized: YES/NO
 Required evidence:
 Current blockers:
 ```
 
-Recheck it before the first tracked edit, staging, commit, push, or PR mutation. A `NO` is a hard
-gate for that action. When a constrained task needs user visibility, report one compact checkpoint:
-`AUTHORITY: <mode> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO>`.
+Recheck it before the first tracked edit, staging, commit, push, PR mutation, readiness change, or
+merge. A `NO` is a hard gate for that action. When a constrained task needs user visibility, report
+one compact checkpoint:
+`AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>`.
 
 - User constraints are sticky and independently scoped. `Do not edit`, `do not implement`,
   `results first`, `report first`, `test only`, `no changes`, `do not commit`, and `do not push`
@@ -76,11 +79,11 @@ gate for that action. When a constrained task needs user visibility, report one 
   `evaluate`, `diagnose`, `measure`, `see whether it works`, `find out`, `give it a test`, `report
   the results`, and `try chunks` request read-only experimentation unless the user explicitly
   authorizes implementation. Use existing test routes or temporary non-repository harnesses; do
-  not modify tracked production or documentation files.
+  not modify any tracked file.
 - Activate proof-first mode when the user requests results before implementation, asks to test
-  before changes, or requests model comparison before changing anything. While it is active,
-  production edits, documentation edits, staging, and commits are prohibited. Report the result,
-  then wait for explicit implementation authorization.
+  before changes, or requests model comparison before changing anything. While it is active, all
+  tracked repository mutation—including production, test, documentation, staging, and commit
+  changes—is prohibited. Report the result, then wait for explicit implementation authorization.
 - In proof-first mode, an HTTP `503` or other required-gateway availability failure leaves the task
   `LIVE_UNVERIFIED`. Report the gateway unavailable and stop without inferring model capability,
   implementing a speculative solution, or substituting deterministic tests.

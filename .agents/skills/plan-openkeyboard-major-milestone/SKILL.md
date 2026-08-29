@@ -96,11 +96,13 @@ Risk register:
 Milestone completion criteria:
 
 Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION
+Read-only activity authorized: YES/NO
 Edits authorized: YES/NO
 Production-code edits authorized: YES/NO
 Commit authorized: YES/NO
 Push authorized: YES/NO
 PR authorized: YES/NO
+Merge authorized: YES/NO
 Current blockers:
 
 First bounded work package:

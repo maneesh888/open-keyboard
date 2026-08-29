@@ -46,10 +46,11 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
    plus content before committing.
 
 In proof-first mode, use existing routes or temporary non-repository harnesses and report results
-before implementation. Do not edit production or documentation, stage, or commit. A required live
-outage is `LIVE_UNVERIFIED` and stops the task without speculative production changes or extra
-deterministic tests presented as replacement proof. Recheck the authority ledger before the first
-tracked edit, staging, commit, push, and PR mutation.
+before implementation. Do not mutate any tracked production, test, documentation, configuration,
+or workflow file, and do not stage or commit. A required live outage is `LIVE_UNVERIFIED` and stops
+the task without speculative production changes or extra deterministic tests presented as
+replacement proof. Recheck the authority ledger before the first tracked edit, staging, commit,
+push, PR mutation, readiness change, and merge.
 
 Use repository Simulator routes so their shared lock and disposable-device ownership apply.
 Never clear, stop, erase, or delete an existing or user-open Simulator to prepare a test.

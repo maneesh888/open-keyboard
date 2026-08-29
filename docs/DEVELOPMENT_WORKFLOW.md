@@ -32,10 +32,11 @@ changing a PR. Exploratory language does not authorize tracked edits. Planning a
 experiments use existing routes or temporary non-repository harnesses.
 
 Proof-first mode is active when the user requests results, testing, or model comparison before
-implementation. Production and documentation edits, staging, and commits remain prohibited until
-the requested evidence is reported and the user explicitly authorizes implementation. An HTTP
-`503` or other gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do
-not infer model capability, and stop without speculative production changes.
+implementation. Every tracked repository mutation—including production, test, documentation,
+configuration, workflow, staging, and commit changes—remains prohibited until the requested
+evidence is reported and the user explicitly authorizes implementation. An HTTP `503` or other
+gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do not infer model
+capability, and stop without speculative production changes.
 
 Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
 `LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
@@ -337,9 +338,9 @@ that unknown defects are impossible.
 A bounded implementation request continues through branch preparation, implementation, checks,
 commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
 confirmation at every stage only when the reviewer reports `100%`. Below 100%, the root reports the
-exact head and every gap, then waits for explicit owner approval of that SHA. The latest `local
-only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
-instruction stops the corresponding state change.
+exact head and every gap, then waits for explicit owner approval of that SHA. Any active sticky
+`local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
+constraint stops the corresponding state change until the user explicitly revokes that constraint.
 
 After every exact-head gate and the selected authorization route pass, the root agent may invoke
 GitHub's native squash auto-merge with head-SHA matching. Human authorization never relabels an
