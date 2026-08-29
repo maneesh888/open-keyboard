@@ -9,12 +9,15 @@ DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
 PLANNER_AGENT="$ROOT/.codex/agents/work-package-planner.toml"
+MILESTONE_PLANNER_AGENT="$ROOT/.codex/agents/major-milestone-planner.toml"
 REVIEW_SKILL="$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
 REVIEW_INTERFACE="$ROOT/.agents/skills/review-verify-merge-pr/agents/openai.yaml"
 DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
+MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
+MILESTONE_PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 BRANCH_PROTECTION_GUIDE="$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
@@ -31,6 +34,7 @@ LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
 LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
 RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
+WORKFLOW_AUTHORIZATION_POLICY_TEST="$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
@@ -42,12 +46,15 @@ for required_file in \
   "$DEPENDABOT" \
   "$REVIEWER_AGENT" \
   "$PLANNER_AGENT" \
+  "$MILESTONE_PLANNER_AGENT" \
   "$REVIEW_SKILL" \
   "$REVIEW_INTERFACE" \
   "$DEVELOP_SKILL" \
   "$DEVELOP_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
+  "$MILESTONE_PLAN_SKILL" \
+  "$MILESTONE_PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
   "$BRANCH_PROTECTION_GUIDE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
@@ -64,6 +71,7 @@ for required_file in \
   "$LIVE_POLICY_BOOTSTRAP" \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$RUNTIME_PROOF_POLICY_TEST" \
+  "$WORKFLOW_AUTHORIZATION_POLICY_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -228,6 +236,9 @@ rg --fixed-strings --quiet 'across both `pull_request` and `pull_request_review`
 rg --fixed-strings --quiet 'gh pr checks <number> --required' "$REVIEWER_AGENT"
 rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
 rg --quiet 'Do not edit files.*access GitHub' "$PLANNER_AGENT"
+rg --quiet '^sandbox_mode = "read-only"$' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'Do not edit files, fetch, create a worktree' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'GitHub, spawn agents' "$MILESTONE_PLANNER_AGENT"
 rg --quiet 'project `pr-reviewer`' "$REVIEW_SKILL"
 rg --quiet 'scripts/check\.sh --full' "$REVIEW_SKILL"
 rg --fixed-strings --quiet 'Required technical checks' "$REVIEW_SKILL"
@@ -250,17 +261,28 @@ if rg --quiet 'at least one approving GitHub review' "$REVIEW_SKILL"; then
   exit 1
 fi
 rg --quiet 'bounded implementation request.*normal autonomous.*guarded merge' "$REVIEW_SKILL"
-rg --quiet 'keep draft.*do not merge' "$REVIEW_SKILL"
+rg --quiet 'active sticky constraint says `keep draft`' "$REVIEW_SKILL"
+rg --quiet 'constraint says `do not merge`' "$REVIEW_SKILL"
 rg --quiet 'gh pr merge <number> --auto --squash --match-head-commit <reviewed-head-sha>' "$REVIEW_SKILL"
 rg --quiet 'Never leave queued auto-merge active' "$REVIEW_SKILL"
 rg --quiet '^name: develop-openkeyboard$' "$DEVELOP_SKILL"
 rg --fixed-strings --quiet 'Use `AGENTS.md` as the canonical execution policy.' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-work-package' "$DEVELOP_SKILL"
+rg --quiet '\$plan-openkeyboard-major-milestone' "$DEVELOP_SKILL"
 rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
 rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
+rg --quiet '^name: plan-openkeyboard-major-milestone$' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'git hash-object' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Prefer 3–8 phases' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Each phase must be' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
+rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
 rg --quiet '^## Merge authorization$' "$PR_TEMPLATE"
@@ -318,6 +340,18 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-model-differential' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'live-model-differential [--diagnostic]' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'openkeyboard_finish_live_differential_run \' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile live-model differential verification failed; required outcomes were unverified.' "$LIVE_TEST_SAFETY"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification.' "$LIVE_TEST_SAFETY"
+if rg --fixed-strings --quiet 'Targeted two-profile live-model differential verification complete' "$ROOT/scripts/ios/test.sh"; then
+  echo "The differential runner retained the misleading green verification-complete message." >&2
+  exit 1
+fi
+if rg --fixed-strings --quiet 'live-model-differential --diagnostic' "$ROOT/scripts/check-live.sh"; then
+  echo "The exact-head live gate must never use diagnostic differential mode." >&2
+  exit 1
+fi
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
@@ -353,6 +387,10 @@ ruby -e '
   unless differential_case.include?(%q{openkeyboard_classify_low_differential_xcresult "$profile_result_bundle"}) &&
       differential_case.include?(%q{openkeyboard_assert_single_passing_xcresult "$profile_result_bundle"})
     abort "The differential runner must classify low diagnostic success and require high-profile success."
+  end
+  unless differential_case.include?("openkeyboard_finish_live_differential_run") &&
+      differential_case.include?(%q{"$LIVE_DIFFERENTIAL_EXECUTION_MODE"})
+    abort "The differential runner must apply strict-versus-diagnostic completion semantics."
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"

@@ -19,9 +19,29 @@ OpenKeyboard uses proportional local checks and exact-head release evidence. `AG
 canonical straight-line workflow. This file is the detailed verification reference loaded only
 when a task needs route selection, hooks, CI, signing, deployment, or proof details.
 
-Repository automation is split across `$develop-openkeyboard`, the read-only
-`$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
-work but do not weaken the proof requirements below.
+Repository automation is split across `$develop-openkeyboard`, the read-only compact
+`$plan-openkeyboard-work-package` route, the read-only phased
+`$plan-openkeyboard-major-milestone` route, and `$review-verify-merge-pr`. These skills route work
+but do not weaken the proof requirements below.
+
+## Authority and proof-first mode
+
+`AGENTS.md` owns the authority ledger and sticky constraints. Resolve them before fetching,
+creating a branch/worktree, initializing submodules, editing, staging, committing, pushing, or
+changing a PR. Exploratory language does not authorize tracked edits. Planning and proof-first
+experiments use existing routes or temporary non-repository harnesses.
+
+Proof-first mode is active when the user requests results, testing, or model comparison before
+implementation. Every tracked repository mutation—including production, test, documentation,
+configuration, workflow, staging, and commit changes—remains prohibited until the requested
+evidence is reported and the user explicitly authorizes implementation. An HTTP `503` or other
+gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do not infer model
+capability, and stop without speculative production changes.
+
+Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
+`LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
+the PR requirement ledger's `VERIFIED`/`UNVERIFIED` values. Required unverified live/runtime status
+prohibits a claim that the behavior is fixed or working.
 
 ## Evidence classes and claims
 
@@ -119,12 +139,15 @@ unsafe model IDs, missing differential roles, identical role models, reversed ma
 substitution are rejected without printing values. Ordinary checks use the high profile when it is
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
-The targeted differential runner performs automated deterministic prerequisites and `build-for-testing`
-once, then reuses the compiled `.xctestrun` for isolated low and high disposable simulators. It runs one
-small baseline/boundary/follow-up test per role and removes both simulators, injected environment,
-DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
-candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
-evidence.
+The targeted differential runner performs automated deterministic prerequisites and
+`build-for-testing` once, then reuses the compiled `.xctestrun` for isolated low and high disposable
+simulators. It runs one small baseline/boundary/follow-up test per role and removes both simulators,
+injected environment, DerivedData, result bundles, summaries, and temporary evidence on exit. The
+default command is verification and exits nonzero unless the exact required low/high outcomes are
+verified. `--diagnostic` is the only permissive exploratory mode; an unverified diagnostic may exit
+zero but must report `LIVE_UNVERIFIED` and `diagnostic run complete`, never green verification
+success. A low-model success at the candidate boundary is retained as
+`diagnostic-boundary-not-established`, not promoted to passing evidence.
 
 ## Hooks
 
@@ -138,7 +161,9 @@ git config --local --get core.hooksPath
 
 The path must be `.githooks`.
 
-- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`.
+- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`. It can
+  establish `DETERMINISTIC_VERIFIED` only; it cannot grant commit authority or establish
+  `LIVE_VERIFIED`/`RUNTIME_VERIFIED`.
 - Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
   classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
@@ -170,7 +195,10 @@ The path must be `.githooks`.
 
 Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
 behavior, or result presentation require normal simulator runtime proof before push. Local
-implementation and commits may proceed after deterministic tests.
+implementation and commits may proceed after deterministic tests only when explicitly authorized
+and no proof-first constraint remains. Proof-first model-capability, long-input, parser, retry, or
+semantic-behavior work requires the requested live result and later implementation authority before
+production edits or commit.
 
 Normal simulator runtime proof must:
 
@@ -310,9 +338,9 @@ that unknown defects are impossible.
 A bounded implementation request continues through branch preparation, implementation, checks,
 commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
 confirmation at every stage only when the reviewer reports `100%`. Below 100%, the root reports the
-exact head and every gap, then waits for explicit owner approval of that SHA. The latest `local
-only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
-instruction stops the corresponding state change.
+exact head and every gap, then waits for explicit owner approval of that SHA. Any active sticky
+`local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
+constraint stops the corresponding state change until the user explicitly revokes that constraint.
 
 After every exact-head gate and the selected authorization route pass, the root agent may invoke
 GitHub's native squash auto-merge with head-SHA matching. Human authorization never relabels an
@@ -331,10 +359,19 @@ the protected `app-store-connect` environment.
 mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
 change to the repository scripts above.
 
-When planning is explicitly requested, the read-only `work-package-planner` invokes
-`$plan-openkeyboard-work-package`. It reads only current status, work-queue, completion-plan, and
-directly relevant focused-plan sections, then returns a compact work order with source-object
-digests. A clear implementation request bypasses this planning route.
+For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
+`$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
+
+For an explicitly requested major milestone, roadmap, long-horizon plan, or multi-phase
+cross-cutting effort, the read-only `major-milestone-planner` invokes
+`$plan-openkeyboard-major-milestone`. It builds a dependency-aware sequence of bounded phases with
+entry criteria, exit criteria, proportional evidence, decision gates, risks, and the first
+executable work package. It does not make ordinary tasks adopt proof-first mode, and it does not
+require physical-device proof unless the requirement is device-specific or a material device-only
+uncertainty remains.
+
+A clear implementation request bypasses both planning routes. Neither planner edits, tests,
+publishes, or grants authority for a later lifecycle stage.
 
 ## Deployment
 

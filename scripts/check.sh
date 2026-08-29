@@ -77,6 +77,7 @@ run_script_policy_tests() {
   "$ROOT/scripts/tests/pr-review-record-policy-test.sh"
   "$ROOT/scripts/tests/review-workflow-snapshot-test.sh"
   "$ROOT/scripts/tests/deploy-source-policy-test.sh"
+  "$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
   "$ROOT/scripts/tests/workflow-policy-test.sh"
 }
 

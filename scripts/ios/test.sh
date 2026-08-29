@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential [--diagnostic]|real-keyboard-live|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -21,6 +21,28 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+MODE="${1:-}"
+LIVE_DIFFERENTIAL_EXECUTION_MODE="verification"
+if [[ "$MODE" == "live-model-differential" ]]; then
+  case "$#" in
+    1) ;;
+    2)
+      if [[ "$2" != "--diagnostic" ]]; then
+        echo "live-model-differential accepts only the optional --diagnostic flag." >&2
+        exit 2
+      fi
+      LIVE_DIFFERENTIAL_EXECUTION_MODE="diagnostic"
+      ;;
+    *)
+      echo "live-model-differential accepts only the optional --diagnostic flag." >&2
+      exit 2
+      ;;
+  esac
+elif [[ "$#" -gt 1 ]]; then
+  echo "$MODE does not accept additional arguments." >&2
+  exit 2
+fi
 
 run_xcodebuild() {
   if command -v xcpretty >/dev/null 2>&1; then
@@ -254,11 +276,11 @@ simulator_mode_requires_lock() {
   esac
 }
 
-if simulator_mode_requires_lock "${1:-}"; then
+if simulator_mode_requires_lock "$MODE"; then
   openkeyboard_relaunch_with_simulator_lock "$REPO_ROOT" "$0" "$@"
 fi
 
-case "${1:-}" in
+case "$MODE" in
   core)
     echo -e "${YELLOW}Running OpenKeyboardCore package tests...${NC}"
     require_swift
@@ -376,7 +398,7 @@ case "${1:-}" in
     ;;
 
   live-model-differential)
-    echo -e "${YELLOW}Running targeted two-profile live-model differential verification...${NC}"
+    echo -e "${YELLOW}Running targeted two-profile live-model differential ${LIVE_DIFFERENTIAL_EXECUTION_MODE}...${NC}"
     require_xcodebuild
     begin_sensitive_live_workspace live-model-differential
     seed_file="$(
@@ -495,8 +517,20 @@ case "${1:-}" in
       printf '%s\n' "$evidence_lines" > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
       chmod 600 "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
     fi
-    echo -e "${GREEN}✓ Targeted two-profile live-model differential verification complete${NC}"
+    completion_status=0
+    openkeyboard_finish_live_differential_run \
+      "$LIVE_DIFFERENTIAL_EXECUTION_MODE" \
+      "$low_baseline_outcome" \
+      "$high_baseline_outcome" \
+      "$low_differential_outcome" \
+      "$high_differential_outcome" \
+      "$low_follow_up_outcome" \
+      "$high_follow_up_outcome" \
+      verified || completion_status=$?
     echo "Sensitive per-profile test state and artifacts will be removed before exit."
+    if [[ "$completion_status" -ne 0 ]]; then
+      exit "$completion_status"
+    fi
     ;;
 
   real-keyboard-live)
@@ -608,14 +642,14 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential [--diagnostic]|real-keyboard-live|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  deterministic-ui - Run UI-target tests without credential/state-dependent suites"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"
-    echo "  live-model-differential - Build once and run the targeted low/high live-model matrix"
+    echo "  live-model-differential - Strict targeted low/high verification; add --diagnostic for exploratory collection"
     echo "  real-keyboard-live - Run credentialed automated real-extension regression (not final runtime proof)"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"

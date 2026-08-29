@@ -256,10 +256,14 @@ containing real endpoints, keys, or model IDs.
 
 `live-model-differential` builds the test artifacts once, runs the deterministic operation-scoped
 warning prerequisites once, then executes only the baseline, fixed long-text boundary, and
-post-boundary follow-up on isolated low and high profiles. Low success on the boundary is recorded
-as diagnostic—not converted into a flaky pass—and exact-head policy rejects it as verified matrix
-evidence. High-profile structural success remains independently required. Per-profile wall-clock
-latency is retained without response bodies.
+post-boundary follow-up on isolated low and high profiles. The default command is strict
+verification and exits nonzero when any required outcome is unverified. Use
+`./scripts/ios/test.sh live-model-differential --diagnostic` only for exploratory collection; an
+unverified diagnostic may complete but is labeled `LIVE_UNVERIFIED` and never prints green
+verification success. Low success on the boundary is recorded as diagnostic—not converted into a
+flaky pass—and exact-head policy rejects it as verified matrix evidence. High-profile structural
+success remains independently required. Per-profile wall-clock latency is retained without
+response bodies.
 
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set

@@ -13,7 +13,9 @@ Bind every review conclusion and state change to one exact pull-request head.
 - A bounded implementation request starts the normal autonomous repository lifecycle through guarded merge.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
-- Honor the latest explicit `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge` instruction.
+- Apply the sticky authority ledger from `AGENTS.md`. Earlier edit, implementation, commit, push,
+  PR, readiness, or merge constraints remain active until explicitly revoked for that action;
+  ambiguous later wording does not revoke them.
 - Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
@@ -49,6 +51,8 @@ private user text, generated artifacts, and raw logs out of the packet.
 1. Spawn the project `pr-reviewer` with no inherited conversation when available. Pass only the PR identity, exact SHA, neutral packet, diff, and source paths.
 2. Run independent review and GitHub checks concurrently where practical.
 3. Inspect correctness, error behavior, concurrency, cancellation, MVVM ownership, persistence, App Group and Keychain boundaries, gateway behavior, extension lifecycle, accessibility, tests, CI and deployment security, documentation claims, generated artifacts, and unrelated changes.
+   Flag a fix-style commit subject for live/runtime-sensitive behavior when its required evidence is
+   missing; an authorized unverified commit must be clearly experimental or diagnostic.
 4. Treat correctness, security, data-loss, extension-contract, signing, missing-material-test, and false-evidence findings as blockers.
 5. Produce a requirement-coverage table with `VERIFIED` or `UNVERIFIED` for every in-scope row. A row is verified only by the proof type its acceptance criterion requires.
 6. Treat skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. An exact-model requirement must execute that exact model without substitution.
@@ -174,15 +178,24 @@ boundary.
 
 ## Guarded merge
 
-If the latest instruction says `keep draft`, leave the PR draft. If it says `do not merge`, a clean
-head may become ready but must remain unmerged.
+If any active sticky constraint says `keep draft`, leave the PR draft. If any active sticky
+constraint says `do not merge`, a clean head may become ready but must remain unmerged. A later
+ambiguous or unrelated instruction does not supersede either constraint.
 
 Otherwise:
 
-1. Refresh the head, required checks, independent review result, reviews, threads, protection, mergeability, scope, and latest user instruction. Require `gh pr checks <number> --required` to exit successfully so no failed event-family result is hidden by a newer check with the same name.
+1. Refresh the head, required checks, independent review result, reviews, threads, protection,
+   mergeability, scope, and every active sticky authority constraint. Require
+   `gh pr checks <number> --required` to exit successfully so no failed event-family result is
+   hidden by a newer check with the same name.
 2. Confirm all evidence and the selected automatic or human authorization route remain bound to the same full reviewed and locally verified SHA. If the reviewer is below 100% and explicit current-head owner approval is absent, keep the PR draft, ask the owner to review the named gaps, and stop.
 3. Mark the draft ready.
-4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, or review mismatch, disable any queued auto-merge, return the PR to draft when applicable, and restart the exact-head cycle or report the blocker. On a late `keep draft`, disable auto-merge, return the PR to draft, verify it remains unmerged, and stop. On a late `do not merge`, disable auto-merge, verify the PR remains unmerged, and stop.
+4. Refresh the same state once more. On any head, gate, protection, mergeability, scope, review, or
+   active-authority mismatch, disable any queued auto-merge, return the PR to draft when applicable,
+   and restart the exact-head cycle or report the blocker. When `keep draft` becomes or remains an
+   active sticky constraint, disable auto-merge, return the PR to draft, verify it remains unmerged,
+   and stop. When `do not merge` becomes or remains an active sticky constraint, disable
+   auto-merge, verify the PR remains unmerged, and stop.
 5. Run GitHub's native guarded squash merge with exact-head matching:
 
    ```bash
