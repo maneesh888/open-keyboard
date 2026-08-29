@@ -34,9 +34,10 @@ it.
    before committing. Install hooks with `./scripts/install-hooks.sh`; never use `--no-verify`.
    Stage only intended files and inspect `git diff --cached --name-only` plus the staged diff for
    secrets or generated artifacts.
-7. **Collect runtime proof when required.** Proof-sensitive user-facing changes require normal
-   simulator runtime proof before push. Device-specific requirements also require physical-device
-   proof. Follow the evidence and interaction rules below.
+7. **Collect runtime proof when required and authorized.** Proof-sensitive user-facing changes
+   require normal simulator runtime proof before push. Physical-device interaction remains
+   prohibited until the user explicitly requests it; a device-specific requirement creates a
+   blocker, not permission to connect to a device. Follow the evidence and interaction rules below.
 8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
    authorized push, run `./scripts/check.sh --full` and the
    classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
@@ -58,6 +59,7 @@ Requested activity:
 Read-only activity authorized: YES/NO
 Edits authorized: YES/NO
 Production-code edits authorized: YES/NO
+Physical-device interaction authorized: YES/NO
 Commit authorized: YES/NO
 Push authorized: YES/NO
 PR authorized: YES/NO
@@ -69,12 +71,17 @@ Current blockers:
 Recheck it before the first tracked edit, staging, commit, push, PR mutation, readiness change, or
 merge. A `NO` is a hard gate for that action. When a constrained task needs user visibility, report
 one compact checkpoint:
-`AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>`.
+`AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | physical device <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>`.
 
 - User constraints are sticky and independently scoped. `Do not edit`, `do not implement`,
   `results first`, `report first`, `test only`, `no changes`, `do not commit`, and `do not push`
   remain active until the user explicitly revokes the applicable constraint. Authorization for one
   action does not authorize another action.
+- Physical-device interaction defaults to `NO` and is independently sticky. Do not enumerate,
+  inspect, connect to, install on, launch on, sign for, run tests on, capture from, or otherwise
+  operate a physical device until the user explicitly requests physical-device work. Simulator
+  authorization, a required device evidence row, normal lifecycle autonomy, and merge permission
+  do not grant physical-device authority.
 - Ambiguous or exploratory wording never revokes a sticky constraint. `Try`, `investigate`,
   `evaluate`, `diagnose`, `measure`, `see whether it works`, `find out`, `give it a test`, `report
   the results`, and `try chunks` request read-only experimentation unless the user explicitly
@@ -175,8 +182,9 @@ or ambiguous, stop before push/readiness, state exactly what remains unverified,
 short checklist and expected screenshots from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 Additional XCTest runs do not replace missing runtime proof.
 
-Physical-device proof requires the exact signed build on the configured device. If that device is
-unavailable, report device proof blocked and request manual verification; Simulator and XCTest are not substitutes.
+Physical-device proof requires both explicit physical-device interaction authority and the exact
+signed build on the configured device. Without that authority, do not query or touch connected
+devices; report device proof blocked and request direction. Simulator and XCTest are not substitutes.
 
 Deliver required screenshots in the chat or through clickable non-repository artifact links after
 inspecting them for private content. An `.xcresult` path alone is not delivery. Exported
@@ -225,9 +233,20 @@ automated regression evidence, even when the real extension process was active. 
 proof does not replace regression coverage.
 
 Simulator-backed repository test routes are serialized across the repository's worktrees on a
-host. Live routes may restart and delete only disposable simulators they created; never shut down,
-erase, delete, or reset a pre-existing or user-open Simulator. Do not bypass the repository lock
-with parallel hand-written `xcodebuild` or `simctl` commands against the same device.
+host. Each live workflow may restart, shut down, and delete only the exact disposable simulator
+UDID it created and recorded as its own; never mutate a pre-existing or user-open Simulator. Never
+terminate Simulator.app or CoreSimulator processes globally, and never use broad `simctl` cleanup
+such as `shutdown all`, `delete all`, or `erase all`. Do not bypass the repository lock with
+parallel hand-written `xcodebuild` or `simctl` commands against the same device.
+
+Repository test and local-validation automation must remain Simulator-only. Repository automation
+must not invoke `devicectl`, `ios-deploy`, target a concrete physical device through an iOS
+destination with a device name or identifier, or use any equivalent physical-device discovery,
+install, launch, or test route. A separately authorized release/deployment workflow may compile,
+sign, and archive against `generic/platform=iOS`; that generic SDK destination does not enumerate,
+connect to, install on, launch on, or test a physical device and does not grant physical-device
+authority. Physical-device commands are manual, per-request actions executed only after the
+authority ledger records an explicit user request.
 
 The canonical per-machine live seed is
 `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`. Live scripts resolve it through

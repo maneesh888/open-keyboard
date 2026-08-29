@@ -5,7 +5,37 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/scripts/ios/live-test-safety.sh"
 
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/openkeyboard-live-safety.XXXXXX")"
-trap 'rm -rf -- "$FIXTURE"' EXIT
+TEST_CHILD_PIDS=()
+
+cleanup_fixture() {
+  local child_pid
+
+  if [[ "${#TEST_CHILD_PIDS[@]}" -gt 0 ]]; then
+    for child_pid in "${TEST_CHILD_PIDS[@]}"; do
+      kill -TERM "$child_pid" >/dev/null 2>&1 || true
+      wait "$child_pid" >/dev/null 2>&1 || true
+    done
+  fi
+  rm -rf -- "$FIXTURE"
+}
+trap cleanup_fixture EXIT
+
+forget_test_child_pid() {
+  local completed_pid="$1"
+  local child_pid
+  local remaining_pids=()
+
+  for child_pid in "${TEST_CHILD_PIDS[@]}"; do
+    if [[ "$child_pid" != "$completed_pid" ]]; then
+      remaining_pids+=("$child_pid")
+    fi
+  done
+  if [[ "${#remaining_pids[@]}" -eq 0 ]]; then
+    TEST_CHILD_PIDS=()
+  else
+    TEST_CHILD_PIDS=("${remaining_pids[@]}")
+  fi
+}
 
 # Git exports repository-local variables to hooks. Clear them before operating on fixture repos.
 while IFS= read -r git_environment_name; do
@@ -93,6 +123,11 @@ LINKED_WORKTREE="$FIXTURE/temporary linked worktree"
 VALID_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/openkeyboard-gateway.env"
 initialize_repository "$PRIMARY_CHECKOUT"
 write_valid_seed "$VALID_SEED"
+mkdir -p "$PRIMARY_CHECKOUT/scripts/ios"
+cp "$ROOT/scripts/ios/live-test-safety.sh" "$PRIMARY_CHECKOUT/scripts/ios/live-test-safety.sh"
+chmod 700 "$PRIMARY_CHECKOUT/scripts/ios/live-test-safety.sh"
+git -C "$PRIMARY_CHECKOUT" add scripts/ios/live-test-safety.sh
+git -C "$PRIMARY_CHECKOUT" commit -q -m workflow-cleanup-fixture
 git -C "$PRIMARY_CHECKOUT" worktree add -q -b linked-worktree-test "$LINKED_WORKTREE"
 
 LOCK_PROBE="$FIXTURE/simulator-lock-probe.sh"
@@ -136,6 +171,211 @@ if [[ "$(<"$LOCK_OUTPUT")" != $'first-start\nfirst-end\nsecond-start\nsecond-end
 fi
 if ! grep -Fq 'Another OpenKeyboard Simulator route is active; waiting for it to finish.' "$LOCK_WAIT_OUTPUT"; then
   echo "The serialized Simulator route did not report that it was waiting." >&2
+  exit 1
+fi
+
+CLEANUP_MOCK_BIN="$FIXTURE/owned-cleanup-mock-bin"
+mkdir -p "$CLEANUP_MOCK_BIN"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'if [[ "$#" -ne 3 || "$1" != "simctl" ]]; then' \
+  '  echo "Owned cleanup used an unexpected xcrun command." >&2' \
+  '  exit 64' \
+  'fi' \
+  'action="$2"' \
+  'simulator="$3"' \
+  'case "$action" in' \
+  '  shutdown|delete) ;;' \
+  '  *)' \
+  '    echo "Owned cleanup used a broad or unexpected simctl action." >&2' \
+  '    exit 64' \
+  '    ;;' \
+  'esac' \
+  'if [[ ! "$simulator" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]] ||' \
+  '    ! grep -Fxq "$simulator" "$OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE"; then' \
+  '  echo "Owned cleanup targeted a simulator absent from its bounded fixture." >&2' \
+  '  exit 64' \
+  'fi' \
+  'printf "%s %s %s\n" "$OPEN_KEYBOARD_POLICY_TEST_LABEL" "$action" "$simulator" >> "$OPEN_KEYBOARD_POLICY_TEST_LOG"' \
+  'if [[ "$action" == "delete" ]]; then' \
+  '  temporary_state="$OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE.$$"' \
+  '  grep -Fvx "$simulator" "$OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE" > "$temporary_state" || true' \
+  '  mv "$temporary_state" "$OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE"' \
+  'fi' \
+  > "$CLEANUP_MOCK_BIN/xcrun"
+chmod 700 "$CLEANUP_MOCK_BIN/xcrun"
+
+OWNED_CLEANUP_PROBE="$FIXTURE/owned-cleanup-probe.sh"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'source "$1"' \
+  'simulator="$2"' \
+  'scenario="$3"' \
+  'scenario_root="$4"' \
+  'label="$5"' \
+  'mock_xcrun="$6"' \
+  'xcrun() {' \
+  '  "$mock_xcrun" "$@"' \
+  '}' \
+  'SENSITIVE_LIVE_SIMULATOR="$simulator"' \
+  'if [[ "$scenario" == "unowned" ]]; then' \
+  '  SENSITIVE_LIVE_SIMULATOR_OWNED="false"' \
+  'else' \
+  '  SENSITIVE_LIVE_SIMULATOR_OWNED="true"' \
+  'fi' \
+  'cleanup_owned_simulator() {' \
+  '  local original_status=$?' \
+  '  local cleanup_status=0' \
+  '  trap - EXIT HUP INT TERM' \
+  '  openkeyboard_delete_sensitive_live_simulator || cleanup_status=$?' \
+  '  if [[ "$original_status" -ne 0 ]]; then' \
+  '    exit "$original_status"' \
+  '  fi' \
+  '  exit "$cleanup_status"' \
+  '}' \
+  'trap cleanup_owned_simulator EXIT' \
+  'trap '\''exit 143'\'' TERM' \
+  ': > "$scenario_root/$label.ready"' \
+  'for _ in {1..500}; do' \
+  '  [[ -f "$scenario_root/$label.release" ]] && break' \
+  '  sleep 0.01' \
+  'done' \
+  'if [[ ! -f "$scenario_root/$label.release" ]]; then' \
+  '  exit 124' \
+  'fi' \
+  'case "$scenario" in' \
+  '  normal|unowned) exit 0 ;;' \
+  '  term) kill -TERM "$$" ;;' \
+  '  *) exit 64 ;;' \
+  'esac' \
+  > "$OWNED_CLEANUP_PROBE"
+chmod 700 "$OWNED_CLEANUP_PROBE"
+
+wait_for_cleanup_marker() {
+  local marker="$1"
+  local description="$2"
+
+  for _ in {1..500}; do
+    [[ -f "$marker" ]] && return 0
+    sleep 0.01
+  done
+  echo "Timed out waiting for $description." >&2
+  return 1
+}
+
+assert_concurrent_worktree_cleanup_isolated() {
+  local first_scenario="$1"
+  local expected_first_status="$2"
+  local scenario_root="$FIXTURE/owned-cleanup-$first_scenario"
+  local simulator_state="$scenario_root/simulators"
+  local command_log="$scenario_root/commands.log"
+  local first_simulator="11111111-1111-1111-1111-111111111111"
+  local second_simulator="22222222-2222-2222-2222-222222222222"
+  local first_cleanup_pid first_status second_cleanup_pid second_status
+
+  mkdir -p "$scenario_root"
+  printf '%s\n' "$first_simulator" "$second_simulator" > "$simulator_state"
+  : > "$command_log"
+
+  OPEN_KEYBOARD_POLICY_TEST_LABEL=primary \
+    OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE="$simulator_state" \
+    OPEN_KEYBOARD_POLICY_TEST_LOG="$command_log" \
+    "$OWNED_CLEANUP_PROBE" \
+      "$PRIMARY_CHECKOUT/scripts/ios/live-test-safety.sh" \
+      "$first_simulator" "$first_scenario" "$scenario_root" primary \
+      "$CLEANUP_MOCK_BIN/xcrun" \
+    > "$scenario_root/primary-output.log" 2>&1 &
+  first_cleanup_pid=$!
+  TEST_CHILD_PIDS+=("$first_cleanup_pid")
+
+  OPEN_KEYBOARD_POLICY_TEST_LABEL=linked \
+    OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE="$simulator_state" \
+    OPEN_KEYBOARD_POLICY_TEST_LOG="$command_log" \
+    "$OWNED_CLEANUP_PROBE" \
+      "$LINKED_WORKTREE/scripts/ios/live-test-safety.sh" \
+      "$second_simulator" normal "$scenario_root" linked \
+      "$CLEANUP_MOCK_BIN/xcrun" \
+    > "$scenario_root/linked-output.log" 2>&1 &
+  second_cleanup_pid=$!
+  TEST_CHILD_PIDS+=("$second_cleanup_pid")
+
+  wait_for_cleanup_marker "$scenario_root/primary.ready" "the primary-worktree cleanup harness"
+  wait_for_cleanup_marker "$scenario_root/linked.ready" "the linked-worktree cleanup harness"
+
+  : > "$scenario_root/primary.release"
+  set +e
+  wait "$first_cleanup_pid"
+  first_status=$?
+  set -e
+  forget_test_child_pid "$first_cleanup_pid"
+  if [[ "$first_status" -ne "$expected_first_status" ]]; then
+    echo "The $first_scenario primary cleanup exited $first_status instead of $expected_first_status." >&2
+    exit 1
+  fi
+  if grep -Fxq "$first_simulator" "$simulator_state" || \
+      ! grep -Fxq "$second_simulator" "$simulator_state"; then
+    echo "The primary-worktree cleanup did not preserve the linked worktree's simulator." >&2
+    exit 1
+  fi
+
+  : > "$scenario_root/linked.release"
+  set +e
+  wait "$second_cleanup_pid"
+  second_status=$?
+  set -e
+  forget_test_child_pid "$second_cleanup_pid"
+  if [[ "$second_status" -ne 0 ]]; then
+    echo "The linked-worktree cleanup exited $second_status instead of 0." >&2
+    exit 1
+  fi
+  if [[ -s "$simulator_state" ]]; then
+    echo "The linked-worktree cleanup did not delete its own simulator." >&2
+    exit 1
+  fi
+
+  printf '%s\n' \
+    "primary shutdown $first_simulator" \
+    "primary delete $first_simulator" \
+    "linked shutdown $second_simulator" \
+    "linked delete $second_simulator" \
+    > "$scenario_root/expected-commands.log"
+  if ! diff -u "$scenario_root/expected-commands.log" "$command_log"; then
+    echo "Concurrent worktree cleanup targeted an unowned simulator or used an unexpected command." >&2
+    exit 1
+  fi
+}
+
+assert_concurrent_worktree_cleanup_isolated normal 0
+assert_concurrent_worktree_cleanup_isolated term 143
+
+UNOWNED_SCENARIO_ROOT="$FIXTURE/unowned-cleanup"
+UNOWNED_SIMULATOR="33333333-3333-3333-3333-333333333333"
+mkdir -p "$UNOWNED_SCENARIO_ROOT"
+printf '%s\n' "$UNOWNED_SIMULATOR" > "$UNOWNED_SCENARIO_ROOT/simulators"
+: > "$UNOWNED_SCENARIO_ROOT/commands.log"
+OPEN_KEYBOARD_POLICY_TEST_LABEL=unowned \
+  OPEN_KEYBOARD_POLICY_TEST_SIMULATOR_STATE="$UNOWNED_SCENARIO_ROOT/simulators" \
+  OPEN_KEYBOARD_POLICY_TEST_LOG="$UNOWNED_SCENARIO_ROOT/commands.log" \
+  "$OWNED_CLEANUP_PROBE" \
+    "$PRIMARY_CHECKOUT/scripts/ios/live-test-safety.sh" \
+    "$UNOWNED_SIMULATOR" unowned "$UNOWNED_SCENARIO_ROOT" unowned \
+    "$CLEANUP_MOCK_BIN/xcrun" \
+  > "$UNOWNED_SCENARIO_ROOT/output.log" 2>&1 &
+unowned_cleanup_pid=$!
+TEST_CHILD_PIDS+=("$unowned_cleanup_pid")
+wait_for_cleanup_marker "$UNOWNED_SCENARIO_ROOT/unowned.ready" "the unowned cleanup harness"
+: > "$UNOWNED_SCENARIO_ROOT/unowned.release"
+set +e
+wait "$unowned_cleanup_pid"
+unowned_cleanup_status=$?
+set -e
+forget_test_child_pid "$unowned_cleanup_pid"
+if [[ "$unowned_cleanup_status" -ne 1 || \
+      ! -s "$UNOWNED_SCENARIO_ROOT/simulators" || \
+      -s "$UNOWNED_SCENARIO_ROOT/commands.log" ]]; then
+  echo "Cleanup did not refuse an unowned simulator without issuing simctl commands." >&2
   exit 1
 fi
 

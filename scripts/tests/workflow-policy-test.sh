@@ -334,6 +334,9 @@ ruby -e '
   unless deterministic_case.scan(expected).length == 1
     abort "The deterministic UI gate must use one worktree-scoped Xcode test session."
   end
+  unless deterministic_case.scan(/-parallel-testing-enabled NO/).length == 1
+    abort "The deterministic UI gate must keep its fixed simulator session serial."
+  end
   if deterministic_case.include?("OnboardingScreenshotUITests")
     abort "The deterministic UI gate must include the onboarding assertion in its single test session."
   end
@@ -428,20 +431,53 @@ if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts
   exit 1
 fi
 rg --quiet 'SENSITIVE_LIVE_SIMULATOR' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'SENSITIVE_LIVE_SIMULATOR_OWNED' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl create' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
-if [[ "$(rg --count 'simctl shutdown' "$ROOT/scripts/ios/test.sh")" -ne 2 ]]; then
+rg --quiet 'simctl delete' "$LIVE_TEST_SAFETY"
+if [[ "$(rg -n 'simctl shutdown' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY" | wc -l | tr -d '[:space:]')" -ne 2 ]]; then
   echo "Only disposable live-test simulators may be shut down by the test runner." >&2
   exit 1
 fi
-rg --fixed-strings --quiet 'xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'xcrun simctl shutdown "$owned_simulator"' "$LIVE_TEST_SAFETY"
 rg --fixed-strings --quiet 'xcrun simctl shutdown "$simulator"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'openkeyboard_delete_sensitive_live_simulator' \
+  "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
 if rg --quiet 'simctl erase' "$ROOT/scripts/ios/test.sh"; then
   echo "The test runner must not erase Simulator state." >&2
   exit 1
 fi
+if rg --pcre2 --quiet '(?:pkill|killall)[^\n]*(?:Simulator|CoreSimulator)|openkeyboard_stop_simulator_app' \
+    "$ROOT/scripts/ios" "$ROOT/.github" "$ROOT/.githooks"; then
+  echo "Workflows must never terminate Simulator.app or CoreSimulator processes globally." >&2
+  exit 1
+fi
+if rg --pcre2 --quiet '(?:^|[^A-Za-z0-9_-])(?:devicectl|ios-deploy)(?:[^A-Za-z0-9_-]|$)' \
+    "$ROOT/scripts/ios" "$ROOT/.github" "$ROOT/.githooks"; then
+  echo "Repository automation must never discover, install, launch, or test on physical devices." >&2
+  exit 1
+fi
+if rg --pcre2 --quiet 'platform=iOS,[^"'\''\n]*(?:id|name)=' \
+    "$ROOT/scripts/ios" "$ROOT/.github" "$ROOT/.githooks"; then
+  echo "Repository automation must never select a concrete physical-device destination." >&2
+  exit 1
+fi
+rg --fixed-strings --quiet 'BUILD_DESTINATION="generic/platform=iOS Simulator"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'DESTINATION="platform=iOS Simulator,name=iPhone 16"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet -- '-destination "generic/platform=iOS"' "$ROOT/.github/workflows/deploy-ios.yml"
+if rg --pcre2 --quiet 'simctl\s+(?:shutdown|delete|erase)\s+(?:all|booted)(?:\s|$)' \
+    "$ROOT/scripts/ios" "$ROOT/.github" "$ROOT/.githooks"; then
+  echo "Workflows must never use broad simctl cleanup." >&2
+  exit 1
+fi
 rg --quiet 'openkeyboard_relaunch_with_simulator_lock' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
 rg --quiet 'File::LOCK_EX' "$LIVE_TEST_SAFETY"
+if rg --quiet '__test-sensitive-live-cleanup|OPEN_KEYBOARD_WORKFLOW_POLICY_TEST' "$ROOT/scripts/ios/test.sh"; then
+  echo "The production iOS test runner must not expose a cleanup test harness." >&2
+  exit 1
+fi
+rg --fixed-strings --quiet 'OWNED_CLEANUP_PROBE=' "$LIVE_TEST_SAFETY_POLICY_TEST"
+rg --fixed-strings --quiet 'assert_concurrent_worktree_cleanup_isolated normal 0' "$LIVE_TEST_SAFETY_POLICY_TEST"
+rg --fixed-strings --quiet 'assert_concurrent_worktree_cleanup_isolated term 143' "$LIVE_TEST_SAFETY_POLICY_TEST"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   worktree_creation = source.index(%q{git -C "$PRIMARY_CHECKOUT" worktree add})
@@ -457,6 +493,7 @@ if rg --quiet 'SENSITIVE_LIVE_SOURCE|restore_sensitive_live_source_simulator|sim
 fi
 ruby -e '
   source = File.read(ARGV.fetch(0))
+  safety_source = File.read(ARGV.fetch(1))
   create_method = source.match(/^create_sensitive_live_simulator\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
   abort "The iOS test runner is missing its disposable simulator creator." unless create_method
   unless create_method.include?(%q{device.fetch("deviceTypeIdentifier")}) &&
@@ -465,6 +502,29 @@ ruby -e '
   end
   if create_method.match?(/simctl (?:shutdown|erase|delete)/)
     abort "Disposable simulator creation must not mutate the selected existing simulator."
+  end
+  unless create_method.include?(%q{SENSITIVE_LIVE_SIMULATOR="$created_simulator"}) &&
+      create_method.include?(%q{SENSITIVE_LIVE_SIMULATOR_OWNED="true"})
+    abort "Disposable simulator ownership must be recorded only after creation returns a valid UDID."
+  end
+
+  ownership_method = safety_source.match(/^openkeyboard_require_sensitive_live_simulator_ownership\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The live-test safety library is missing its simulator ownership guard." unless ownership_method
+  unless ownership_method.include?(%q{SENSITIVE_LIVE_SIMULATOR_OWNED:-false}) &&
+      ownership_method.include?(%q{"$simulator" != "${SENSITIVE_LIVE_SIMULATOR:-}"}) &&
+      ownership_method.include?(%q{[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}})
+    abort "Simulator ownership must require the exact recorded canonical UDID."
+  end
+
+  delete_method = safety_source.match(/^openkeyboard_delete_sensitive_live_simulator\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The live-test safety library is missing its owned simulator cleanup." unless delete_method
+  unless delete_method.include?(%q{openkeyboard_require_sensitive_live_simulator_ownership "${SENSITIVE_LIVE_SIMULATOR:-}"}) &&
+      delete_method.include?(%q{xcrun simctl shutdown "$owned_simulator"}) &&
+      delete_method.include?(%q{xcrun simctl delete "$owned_simulator"})
+    abort "Live cleanup must shut down and delete only the workflow-owned simulator UDID."
+  end
+  if delete_method.match?(/(?:pkill|killall)|simctl (?:shutdown|delete|erase) (?:all|booted)/)
+    abort "Live cleanup must not terminate Simulator.app or use broad simctl cleanup."
   end
 
   lock_method = source.match(/^simulator_mode_requires_lock\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
@@ -475,7 +535,7 @@ ruby -e '
   ]
   missing_modes = required_modes.reject { |mode| lock_method.include?(mode) }
   abort "Simulator-backed routes are missing from the exclusivity policy: #{missing_modes.join(", ")}" unless missing_modes.empty?
-' "$ROOT/scripts/ios/test.sh"
+' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
   echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2
