@@ -650,6 +650,55 @@ openkeyboard_classify_low_differential_test_summary() {
   '
 }
 
+openkeyboard_live_differential_outcomes_verified() {
+  local low_baseline="$1"
+  local high_baseline="$2"
+  local low_differential="$3"
+  local high_differential="$4"
+  local low_follow_up="$5"
+  local high_follow_up="$6"
+  local warning_contracts="$7"
+
+  [[ "$low_baseline" == "passed" ]] &&
+    [[ "$high_baseline" == "passed" ]] &&
+    [[ "$low_differential" == "expected-model-capability" ]] &&
+    [[ "$high_differential" == "passed" ]] &&
+    [[ "$low_follow_up" == "passed" ]] &&
+    [[ "$high_follow_up" == "passed" ]] &&
+    [[ "$warning_contracts" == "verified" ]]
+}
+
+openkeyboard_finish_live_differential_run() {
+  local execution_mode="$1"
+  shift
+
+  if [[ "$execution_mode" != "verification" && "$execution_mode" != "diagnostic" ]]; then
+    echo "Live differential execution mode must be verification or diagnostic." >&2
+    return 2
+  fi
+  if [[ "$#" -ne 7 ]]; then
+    echo "Live differential completion requires seven outcome values." >&2
+    return 2
+  fi
+
+  if openkeyboard_live_differential_outcomes_verified "$@"; then
+    if [[ "$execution_mode" == "diagnostic" ]]; then
+      echo "LIVE_VERIFIED: targeted two-profile diagnostic run complete; required outcomes were verified."
+    else
+      echo "LIVE_VERIFIED: targeted two-profile live-model differential verification passed."
+    fi
+    return 0
+  fi
+
+  if [[ "$execution_mode" == "diagnostic" ]]; then
+    echo "LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification."
+    return 0
+  fi
+
+  echo "LIVE_UNVERIFIED: targeted two-profile live-model differential verification failed; required outcomes were unverified." >&2
+  return 1
+}
+
 openkeyboard_assert_single_passing_xcresult() {
   local result_bundle="$1"
   local summary_file

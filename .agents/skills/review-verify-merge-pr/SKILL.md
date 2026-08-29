@@ -13,7 +13,9 @@ Bind every review conclusion and state change to one exact pull-request head.
 - A bounded implementation request starts the normal autonomous repository lifecycle through guarded merge.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
-- Honor the latest explicit `local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge` instruction.
+- Apply the sticky authority ledger from `AGENTS.md`. Earlier edit, implementation, commit, push,
+  PR, readiness, or merge constraints remain active until explicitly revoked for that action;
+  ambiguous later wording does not revoke them.
 - Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
@@ -49,6 +51,8 @@ private user text, generated artifacts, and raw logs out of the packet.
 1. Spawn the project `pr-reviewer` with no inherited conversation when available. Pass only the PR identity, exact SHA, neutral packet, diff, and source paths.
 2. Run independent review and GitHub checks concurrently where practical.
 3. Inspect correctness, error behavior, concurrency, cancellation, MVVM ownership, persistence, App Group and Keychain boundaries, gateway behavior, extension lifecycle, accessibility, tests, CI and deployment security, documentation claims, generated artifacts, and unrelated changes.
+   Flag a fix-style commit subject for live/runtime-sensitive behavior when its required evidence is
+   missing; an authorized unverified commit must be clearly experimental or diagnostic.
 4. Treat correctness, security, data-loss, extension-contract, signing, missing-material-test, and false-evidence findings as blockers.
 5. Produce a requirement-coverage table with `VERIFIED` or `UNVERIFIED` for every in-scope row. A row is verified only by the proof type its acceptance criterion requires.
 6. Treat skipped, missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material evidence as `UNVERIFIED`. An exact-model requirement must execute that exact model without substitution.

@@ -94,12 +94,18 @@ The exact-head workflow has a separate targeted route for a known low/high model
 
 ```bash
 ./scripts/ios/test.sh live-model-differential
+./scripts/ios/test.sh live-model-differential --diagnostic
 ./scripts/check-live.sh gateway-differential
 ```
 
-It is not a second full prompt-evaluation run. Deterministic warning/state prerequisites and the
-Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate case,
-and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
+The first command is strict verification and exits nonzero when a required outcome is unverified.
+The `--diagnostic` form is the explicit exploratory route: it may complete with unverified outcomes
+but reports `LIVE_UNVERIFIED` and cannot claim verification success. The exact-head command always
+uses strict mode.
+
+This route is not a second full prompt-evaluation run. Deterministic warning/state prerequisites
+and the Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate
+case, and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
 target-specific translation-capability classification or structurally usable Malayalam output,
 operation-scoped UI/ViewModel contracts, and latency—not generated wording.
 

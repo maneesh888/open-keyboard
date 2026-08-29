@@ -17,5 +17,6 @@ if [[ -n "$(git -C "$ROOT" ls-files --others --exclude-standard)" ]]; then
   exit 1
 fi
 
-echo "Running OpenKeyboard pre-commit checks..."
+echo "Running OpenKeyboard deterministic pre-commit checks..."
+echo "Evidence boundary: this hook can establish DETERMINISTIC_VERIFIED only; it does not grant commit authority or establish LIVE_VERIFIED or RUNTIME_VERIFIED."
 "$ROOT/scripts/check.sh" --quick

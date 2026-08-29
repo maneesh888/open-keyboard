@@ -23,6 +23,24 @@ Repository automation is split across `$develop-openkeyboard`, the read-only
 `$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
 work but do not weaken the proof requirements below.
 
+## Authority and proof-first mode
+
+`AGENTS.md` owns the authority ledger and sticky constraints. Resolve them before fetching,
+creating a branch/worktree, initializing submodules, editing, staging, committing, pushing, or
+changing a PR. Exploratory language does not authorize tracked edits. Planning and proof-first
+experiments use existing routes or temporary non-repository harnesses.
+
+Proof-first mode is active when the user requests results, testing, or model comparison before
+implementation. Production and documentation edits, staging, and commits remain prohibited until
+the requested evidence is reported and the user explicitly authorizes implementation. An HTTP
+`503` or other gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do
+not infer model capability, and stop without speculative production changes.
+
+Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
+`LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
+the PR requirement ledger's `VERIFIED`/`UNVERIFIED` values. Required unverified live/runtime status
+prohibits a claim that the behavior is fixed or working.
+
 ## Evidence classes and claims
 
 Every verification artifact belongs to one of three runtime evidence classes:
@@ -119,12 +137,15 @@ unsafe model IDs, missing differential roles, identical role models, reversed ma
 substitution are rejected without printing values. Ordinary checks use the high profile when it is
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
-The targeted differential runner performs automated deterministic prerequisites and `build-for-testing`
-once, then reuses the compiled `.xctestrun` for isolated low and high disposable simulators. It runs one
-small baseline/boundary/follow-up test per role and removes both simulators, injected environment,
-DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
-candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
-evidence.
+The targeted differential runner performs automated deterministic prerequisites and
+`build-for-testing` once, then reuses the compiled `.xctestrun` for isolated low and high disposable
+simulators. It runs one small baseline/boundary/follow-up test per role and removes both simulators,
+injected environment, DerivedData, result bundles, summaries, and temporary evidence on exit. The
+default command is verification and exits nonzero unless the exact required low/high outcomes are
+verified. `--diagnostic` is the only permissive exploratory mode; an unverified diagnostic may exit
+zero but must report `LIVE_UNVERIFIED` and `diagnostic run complete`, never green verification
+success. A low-model success at the candidate boundary is retained as
+`diagnostic-boundary-not-established`, not promoted to passing evidence.
 
 ## Hooks
 
@@ -138,7 +159,9 @@ git config --local --get core.hooksPath
 
 The path must be `.githooks`.
 
-- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`.
+- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`. It can
+  establish `DETERMINISTIC_VERIFIED` only; it cannot grant commit authority or establish
+  `LIVE_VERIFIED`/`RUNTIME_VERIFIED`.
 - Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
   classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
@@ -170,7 +193,10 @@ The path must be `.githooks`.
 
 Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
 behavior, or result presentation require normal simulator runtime proof before push. Local
-implementation and commits may proceed after deterministic tests.
+implementation and commits may proceed after deterministic tests only when explicitly authorized
+and no proof-first constraint remains. Proof-first model-capability, long-input, parser, retry, or
+semantic-behavior work requires the requested live result and later implementation authority before
+production edits or commit.
 
 Normal simulator runtime proof must:
 

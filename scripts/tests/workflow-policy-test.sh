@@ -31,6 +31,7 @@ LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
 LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
 RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
+WORKFLOW_AUTHORIZATION_POLICY_TEST="$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
@@ -64,6 +65,7 @@ for required_file in \
   "$LIVE_POLICY_BOOTSTRAP" \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$RUNTIME_PROOF_POLICY_TEST" \
+  "$WORKFLOW_AUTHORIZATION_POLICY_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -318,6 +320,18 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-model-differential' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'live-model-differential [--diagnostic]' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'openkeyboard_finish_live_differential_run \' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile live-model differential verification failed; required outcomes were unverified.' "$LIVE_TEST_SAFETY"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification.' "$LIVE_TEST_SAFETY"
+if rg --fixed-strings --quiet 'Targeted two-profile live-model differential verification complete' "$ROOT/scripts/ios/test.sh"; then
+  echo "The differential runner retained the misleading green verification-complete message." >&2
+  exit 1
+fi
+if rg --fixed-strings --quiet 'live-model-differential --diagnostic' "$ROOT/scripts/check-live.sh"; then
+  echo "The exact-head live gate must never use diagnostic differential mode." >&2
+  exit 1
+fi
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
@@ -353,6 +367,10 @@ ruby -e '
   unless differential_case.include?(%q{openkeyboard_classify_low_differential_xcresult "$profile_result_bundle"}) &&
       differential_case.include?(%q{openkeyboard_assert_single_passing_xcresult "$profile_result_bundle"})
     abort "The differential runner must classify low diagnostic success and require high-profile success."
+  end
+  unless differential_case.include?("openkeyboard_finish_live_differential_run") &&
+      differential_case.include?(%q{"$LIVE_DIFFERENTIAL_EXECUTION_MODE"})
+    abort "The differential runner must apply strict-versus-diagnostic completion semantics."
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'trap cleanup_sensitive_live_artifacts EXIT' "$ROOT/scripts/ios/test.sh"

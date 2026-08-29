@@ -616,6 +616,56 @@ if printf '%s' '{"result":"Failed","totalTestCount":1,"passedTests":0,"failedTes
   exit 1
 fi
 
+verified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    verification \
+    passed passed expected-model-capability passed passed passed verified
+)"
+if [[ "$verified_completion" != "LIVE_VERIFIED: targeted two-profile live-model differential verification passed." ]]; then
+  echo "Verified differential completion used an unexpected status or message." >&2
+  exit 1
+fi
+
+if strict_unverified_completion="$(
+    openkeyboard_finish_live_differential_run \
+      verification \
+      passed unverified expected-model-capability unverified passed unverified verified 2>&1
+  )"; then
+  echo "Strict differential verification accepted unverified required outcomes." >&2
+  exit 1
+fi
+if [[ "$strict_unverified_completion" != *"LIVE_UNVERIFIED:"* ]] ||
+    [[ "$strict_unverified_completion" != *"verification failed"* ]]; then
+  echo "Strict unverified differential output was not labeled truthfully." >&2
+  exit 1
+fi
+
+diagnostic_unverified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    diagnostic \
+    passed unverified diagnostic-boundary-not-established unverified passed unverified verified
+)"
+if [[ "$diagnostic_unverified_completion" != "LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification." ]]; then
+  echo "Diagnostic unverified completion used an unexpected status or message." >&2
+  exit 1
+fi
+if [[ "$diagnostic_unverified_completion" == *"✓"* ]] ||
+    [[ "$diagnostic_unverified_completion" == *"verification complete"* ]] ||
+    [[ "$diagnostic_unverified_completion" == *"verification passed"* ]]; then
+  echo "Diagnostic unverified completion printed a success-style verification claim." >&2
+  exit 1
+fi
+
+diagnostic_verified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    diagnostic \
+    passed passed expected-model-capability passed passed passed verified
+)"
+if [[ "$diagnostic_verified_completion" != "LIVE_VERIFIED: targeted two-profile diagnostic run complete; required outcomes were verified." ]]; then
+  echo "Diagnostic verified completion used an unexpected status or message." >&2
+  exit 1
+fi
+
 assert_summary_rejected() {
   local summary="$1"
 

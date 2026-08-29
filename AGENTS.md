@@ -5,46 +5,91 @@
 Follow this order. Load a detailed document or specialized skill only when the matching step needs
 it.
 
-1. **Set up.** Resolve the integration checkout with `git rev-parse --show-toplevel`, inspect
-   `git status --short --branch`, and initialize submodules. Preserve unrelated changes.
-2. **Isolate coding work.** For a feature, fix, or UI change, fetch the configured remote and create
-   a session worktree unless the user explicitly requests the current checkout. Use
+1. **Inspect without mutation.** Resolve the integration checkout with
+   `git rev-parse --show-toplevel`, inspect `git status --short --branch` and submodule status, and
+   preserve unrelated changes. Do not fetch, create a branch/worktree, initialize a submodule, edit,
+   stage, or commit until authority is resolved.
+2. **Resolve authority.** Build the authority ledger below from the complete conversation. Apply
+   every sticky constraint before deciding whether the task is planning, proof-first
+   experimentation, implementation, or publication. Ask when a later instruction is ambiguous
+   rather than treating it as permission.
+3. **Isolate authorized coding work.** Only when repository edits are authorized, fetch the
+   configured remote, create a session worktree, and initialize its submodules unless the user
+   explicitly requests the current checkout. Use
    `OPEN_KEYBOARD_REMOTE` and `OPEN_KEYBOARD_BASE_REF` when set; otherwise base
    `codex/<session-slug>` on fresh `origin/main`. Put worktrees under
    `OPEN_KEYBOARD_WORKTREE_ROOT`, or a sibling `open-keyboard-worktrees` directory when unset. Do
    not fall back to a stale or different base without asking.
-3. **Bound the task.** Record the objective, affected surfaces, exclusions, verification level,
-   required evidence class, and the latest commit/push/PR/merge opt-outs. If the user explicitly
+4. **Bound the task.** Record the objective, affected surfaces, exclusions, verification level,
+   required evidence class, and authority ledger. If the user explicitly
    asks for a plan or what to do next, use the read-only `work-package-planner` through
    `$plan-openkeyboard-work-package`. For a clear implementation request, use
    `$develop-openkeyboard` without adding a planning gate.
-4. **Implement narrowly.** Read only the sources and focused plans needed for the task. Reuse local
+5. **Implement narrowly.** Read only the sources and focused plans needed for the task. Reuse local
    patterns, add focused regression coverage for changed behavior, and preserve files outside the
    work order.
-5. **Verify and commit.** Run affected tests, `git diff --check`, and the proportional repository
-   gate below. Local commits may proceed after deterministic checks. Install hooks with
-   `./scripts/install-hooks.sh`; never use `--no-verify`. Stage only intended files and inspect
-   `git diff --cached --name-only` plus the staged diff for secrets or generated artifacts.
-6. **Collect runtime proof when required.** Proof-sensitive user-facing changes require normal
+6. **Verify and commit only when authorized.** Run affected tests, `git diff --check`, and the
+   proportional repository gate below. Recheck the authority ledger before staging and again
+   before committing. Install hooks with `./scripts/install-hooks.sh`; never use `--no-verify`.
+   Stage only intended files and inspect `git diff --cached --name-only` plus the staged diff for
+   secrets or generated artifacts.
+7. **Collect runtime proof when required.** Proof-sensitive user-facing changes require normal
    simulator runtime proof before push. Device-specific requirements also require physical-device
    proof. Follow the evidence and interaction rules below.
-7. **Publish and review.** Before an authorized push, run `./scripts/check.sh --full` and the
+8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
+   authorized push, run `./scripts/check.sh --full` and the
    classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
    `$review-verify-merge-pr` for exact-head review, readiness, and guarded merge.
-8. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
+9. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
    Remove a session worktree and delete its merged branch only after confirming it is clean and no
    longer needed; never destructively clean uncommitted or unmerged work without explicit approval.
 
 Ask only when progress needs a material choice about scope, destructive action, credentials,
 external deployment, base branch, dirty-work ownership, or state-change authority.
 
-## Authority and stopping rules
+## User authority and proof-first mode
 
-- A bounded implementation request normally includes worktree preparation, edits, tests, commit,
-  push, draft PR, in-scope review fixes, readiness, and guarded merge.
-- Honor the latest explicit opt-out: `local only`, `do not commit`, `do not push`, `do not create a
-  PR`, `keep draft`/`do not mark ready`, or `do not merge`.
-- Planning, diagnosis, review-only work, readiness assessment, and blocker requests are read-only.
+Before the first mutation, internally record and retain this ledger:
+
+```text
+Objective:
+Requested activity:
+Edits authorized: YES/NO
+Production-code edits authorized: YES/NO
+Commit authorized: YES/NO
+Push authorized: YES/NO
+PR authorized: YES/NO
+Required evidence:
+Current blockers:
+```
+
+Recheck it before the first tracked edit, staging, commit, push, or PR mutation. A `NO` is a hard
+gate for that action. When a constrained task needs user visibility, report one compact checkpoint:
+`AUTHORITY: <mode> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO>`.
+
+- User constraints are sticky and independently scoped. `Do not edit`, `do not implement`,
+  `results first`, `report first`, `test only`, `no changes`, `do not commit`, and `do not push`
+  remain active until the user explicitly revokes the applicable constraint. Authorization for one
+  action does not authorize another action.
+- Ambiguous or exploratory wording never revokes a sticky constraint. `Try`, `investigate`,
+  `evaluate`, `diagnose`, `measure`, `see whether it works`, `find out`, `give it a test`, `report
+  the results`, and `try chunks` request read-only experimentation unless the user explicitly
+  authorizes implementation. Use existing test routes or temporary non-repository harnesses; do
+  not modify tracked production or documentation files.
+- Activate proof-first mode when the user requests results before implementation, asks to test
+  before changes, or requests model comparison before changing anything. While it is active,
+  production edits, documentation edits, staging, and commits are prohibited. Report the result,
+  then wait for explicit implementation authorization.
+- In proof-first mode, an HTTP `503` or other required-gateway availability failure leaves the task
+  `LIVE_UNVERIFIED`. Report the gateway unavailable and stop without inferring model capability,
+  implementing a speculative solution, or substituting deterministic tests.
+- `Test this and report before implementing` followed by `Try chunks` remains read-only: no tracked
+  edits and no commit. `Do not commit` followed by a clear `Fix the issue` may authorize scoped
+  edits, but staging and commit remain blocked. `Implement the proposed change now` can authorize
+  production edits, but it does not silently authorize commit, push, or a PR.
+- A bounded implementation request starts the normal lifecycle only when the ledger authorizes the
+  applicable actions and no proof-first constraint remains. Planning, diagnosis, review-only work,
+  readiness assessment, and blocker requests are read-only.
 - Deployment and destructive cleanup are separate external actions and require explicit authority.
 - Below exact-head independent-review confidence of `100%`, keep the PR draft and require explicit
   repository-owner approval for that exact SHA. Approval accepts disclosed risk; it cannot bypass a
@@ -133,6 +178,18 @@ inspecting them for private content. An `.xcresult` path alone is not delivery. 
 Report automated test results, transport success, semantic acceptance, and visual/runtime
 acceptance separately.
 
+### Task evidence status
+
+Use every applicable task-status label exactly:
+
+- `EXPERIMENTAL`
+- `DETERMINISTIC_VERIFIED`
+- `LIVE_UNVERIFIED` or `LIVE_VERIFIED`
+- `RUNTIME_UNVERIFIED` or `RUNTIME_VERIFIED`
+
+These task labels do not replace PR requirement-row `VERIFIED`/`UNVERIFIED`. Never describe a task
+as fixed or working while a required live or runtime status remains unverified.
+
 ## Verification routes
 
 Prefer repository scripts to equivalent hand-written commands:
@@ -187,12 +244,22 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
 
 - Before commit, verify the active worktree status, run `git diff --check`, stage only task files,
   inspect `git diff --cached --name-only`, and scan the staged diff for secrets/artifacts.
+- Recheck `Commit authorized` before staging and committing. `Commit authorized: NO` blocks both
+  unless the user explicitly requests staging without a commit.
 - Before push, stop if the branch would publish earlier unrelated commits whose ownership or scope
   is ambiguous.
-- Local implementation and commits may proceed after deterministic tests. For proof-sensitive
+- Local implementation and commits may proceed after deterministic tests only for explicitly
+  authorized implementation with `Commit authorized: YES` and no active proof-first constraint.
+  Proof-first model-capability, long-input, parser, retry, or semantic-behavior work requires the
+  explicitly requested live evaluation and later implementation authority before production edits
+  or commit. For other proof-sensitive
   user-facing changes, do not push or create/update a readiness PR until normal simulator runtime
   proof succeeds unless the user explicitly authorizes the push with the missing proof disclosed.
   That exception never authorizes readiness or merge.
+- Do not use a fix-style subject such as `Fix`, `Handle`, or `Make ... work` for behavior whose
+  required live/runtime evidence is missing. If the user explicitly authorizes an experimental
+  commit, begin its subject with `Experimental:` or `Diagnostic:`. This naming rule never grants
+  commit authority.
 - Draft PRs must list every in-scope requirement separately with a stable ID, observable acceptance
   criterion, required proof, exact evidence, and `VERIFIED`/`UNVERIFIED`. Ambiguous, skipped,
   missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material
