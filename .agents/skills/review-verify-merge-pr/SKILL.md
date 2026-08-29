@@ -16,6 +16,9 @@ Bind every review conclusion and state change to one exact pull-request head.
 - Apply the sticky authority ledger from `AGENTS.md`. Earlier edit, implementation, commit, push,
   PR, readiness, or merge constraints remain active until explicitly revoked for that action;
   ambiguous later wording does not revoke them.
+- Physical-device interaction remains separately denied until the user explicitly requests it.
+  Review, release, readiness, or merge work and a physical-device evidence requirement never
+  authorize device discovery, connection, installation, launch, testing, signing, or capture.
 - Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
@@ -61,8 +64,9 @@ private user text, generated artifacts, and raw logs out of the packet.
    installed extension is not normal simulator runtime proof. For proof-sensitive UI, extension
    lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes, require an
    exact-head normal runtime record from a normally launched app, ordinary host-app text field,
-   visible production UI, and direct Simulator/Xcode screenshots. Require exact signed-build device
-   evidence for physical-device rows; Simulator/XCTest cannot satisfy them.
+   visible production UI, and direct Simulator/Xcode screenshots. Require explicit physical-device
+   interaction authority plus exact signed-build device evidence for physical-device rows;
+   Simulator/XCTest cannot satisfy them. Without that authority, do not inspect connected devices.
 8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 9. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
 10. Follow the exact classifier result on the same head: `gateway` requires
@@ -110,7 +114,8 @@ Before marking a PR ready or merging it, always require:
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
 5. successful exact-head normal simulator runtime proof for every proof-sensitive changed surface,
-   and successful exact signed-build device proof for every physical-device requirement;
+   and successful exact signed-build device proof collected under explicit physical-device
+   interaction authority for every physical-device requirement;
 6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
 7. no undisclosed finding, current-head requested change, or unresolved review thread;
 8. an in-scope diff with no secret or generated-artifact violation;

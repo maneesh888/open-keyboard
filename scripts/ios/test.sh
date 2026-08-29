@@ -146,12 +146,13 @@ inject_xctestrun_live_smoke_env() {
 
 SENSITIVE_LIVE_WORKSPACE=""
 SENSITIVE_LIVE_SIMULATOR=""
+SENSITIVE_LIVE_SIMULATOR_OWNED="false"
 
 cleanup_sensitive_live_artifacts() {
   local original_status=$?
   local cleanup_status=0
 
-  if ! delete_sensitive_live_simulator; then
+  if ! openkeyboard_delete_sensitive_live_simulator; then
     cleanup_status=1
   fi
 
@@ -180,19 +181,6 @@ cleanup_sensitive_live_artifacts() {
     exit "$cleanup_status"
   fi
   return "$cleanup_status"
-}
-
-delete_sensitive_live_simulator() {
-  if [[ -z "$SENSITIVE_LIVE_SIMULATOR" ]]; then
-    return 0
-  fi
-
-  xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1 || true
-  if ! xcrun simctl delete "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1; then
-    echo -e "${RED}✗ Failed to delete the disposable live-test simulator.${NC}" >&2
-    return 1
-  fi
-  SENSITIVE_LIVE_SIMULATOR=""
 }
 
 select_loaded_live_profile() {
@@ -235,7 +223,12 @@ begin_sensitive_live_workspace() {
 
 create_sensitive_live_simulator() {
   local selector="$1"
-  local descriptor device_type runtime simulator_name
+  local created_simulator descriptor device_type runtime simulator_name
+
+  if [[ -n "$SENSITIVE_LIVE_SIMULATOR" || "$SENSITIVE_LIVE_SIMULATOR_OWNED" != "false" ]]; then
+    echo -e "${RED}✗ Refusing to replace a disposable simulator still owned by this live workflow.${NC}" >&2
+    exit 1
+  fi
 
   descriptor="$(
     xcrun simctl list devices available -j |
@@ -256,13 +249,15 @@ create_sensitive_live_simulator() {
   runtime="${descriptor#*$'\t'}"
 
   simulator_name="OpenKeyboard Live Test $$ $(date +%s)"
-  SENSITIVE_LIVE_SIMULATOR="$(
+  created_simulator="$(
     xcrun simctl create "$simulator_name" "$device_type" "$runtime"
   )"
-  if [[ ! "$SENSITIVE_LIVE_SIMULATOR" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
+  if [[ ! "$created_simulator" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
     echo -e "${RED}✗ Failed to create a disposable live-test simulator.${NC}" >&2
     exit 1
   fi
+  SENSITIVE_LIVE_SIMULATOR="$created_simulator"
+  SENSITIVE_LIVE_SIMULATOR_OWNED="true"
 }
 
 simulator_mode_requires_lock() {
@@ -324,6 +319,7 @@ case "$MODE" in
       -destination "$DESTINATION" \
       -configuration Debug \
       -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
+      -parallel-testing-enabled NO \
       -only-testing:OpenKeyboardUITests \
       -skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
@@ -454,7 +450,7 @@ case "$MODE" in
     high_follow_up_outcome="unverified"
     for profile_role in low high; do
       if [[ "$profile_role" == "high" ]]; then
-        delete_sensitive_live_simulator
+        openkeyboard_delete_sensitive_live_simulator
         create_sensitive_live_simulator "iPhone 16"
         destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
       fi
@@ -557,6 +553,7 @@ case "$MODE" in
     simulator_template="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-$DEFAULT_REAL_KEYBOARD_SIMULATOR}"
     create_sensitive_live_simulator "$simulator_template"
     simulator="$SENSITIVE_LIVE_SIMULATOR"
+    openkeyboard_require_sensitive_live_simulator_ownership "$simulator"
     destination="$(simulator_destination "$simulator")"
     derived_data="$SENSITIVE_LIVE_WORKSPACE/DerivedData"
     result_bundle="$SENSITIVE_LIVE_WORKSPACE/real-keyboard-live.xcresult"
