@@ -191,7 +191,7 @@ class NetworkManager {
         var models: [String] = []
         var checks: [GatewayDiagnosticCheck] = []
 
-        checks.append(await diagnosticCheck(
+        let modelsOutcome = await diagnosticCheck(
             id: "models",
             title: "Models",
             endpoint: "GET /v1/models"
@@ -199,7 +199,11 @@ class NetworkManager {
             models = try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)
             guard !models.isEmpty else { throw NetworkError.modelUnavailable }
             return "Loaded \(models.count) model\(models.count == 1 ? "" : "s")."
-        })
+        }
+        checks.append(modelsOutcome.check)
+        guard !modelsOutcome.wasCancelled else {
+            return GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks)
+        }
 
         let selectedModel = trimmedPreferredModel
 
@@ -224,7 +228,8 @@ class NetworkManager {
             )
         ]
         for capability in capabilities {
-            checks.append(await diagnosticCheck(
+            guard !Task.isCancelled else { break }
+            let outcome = await diagnosticCheck(
                 id: capability.id,
                 title: capability.title,
                 endpoint: "POST /v1/chat/completions"
@@ -241,7 +246,9 @@ class NetworkManager {
                     presetID: capability.presetID
                 )
                 return capability.success
-            })
+            }
+            checks.append(outcome.check)
+            if outcome.wasCancelled { break }
         }
 
         return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
@@ -451,28 +458,35 @@ class NetworkManager {
         title: String,
         endpoint: String,
         operation: () async throws -> String
-    ) async -> GatewayDiagnosticCheck {
+    ) async -> (check: GatewayDiagnosticCheck, wasCancelled: Bool) {
         let started = Date()
         do {
             let message = try await operation()
-            return GatewayDiagnosticCheck(
+            return (GatewayDiagnosticCheck(
                 id: id,
                 title: title,
                 endpoint: endpoint,
                 status: .passed,
                 durationMilliseconds: Self.durationMilliseconds(since: started),
                 message: message
-            )
+            ), false)
         } catch {
-            return GatewayDiagnosticCheck(
+            return (GatewayDiagnosticCheck(
                 id: id,
                 title: title,
                 endpoint: endpoint,
                 status: .failed,
                 durationMilliseconds: Self.durationMilliseconds(since: started),
                 message: Self.diagnosticMessage(for: error)
-            )
+            ), Self.isDiagnosticCancellation(error))
         }
+    }
+
+    private static func isDiagnosticCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        if let networkError = error as? NetworkError, case .cancelled = networkError { return true }
+        return false
     }
 
     @MainActor

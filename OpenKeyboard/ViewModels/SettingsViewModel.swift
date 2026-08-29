@@ -46,6 +46,7 @@ class SettingsViewModel: ObservableObject {
     private let defaults: UserDefaults?
     private var hasValidatedSavedGatewayThisLaunch = false
     private var modelDiscoveryIdentity: GatewayDraftIdentity?
+    private var gatewayOperationGeneration: UInt = 0
 
     private struct GatewayDraftIdentity: Equatable {
         let gatewayURL: String
@@ -83,6 +84,7 @@ class SettingsViewModel: ObservableObject {
     }
 
     func applyConfig(_ newConfig: AppConfig) {
+        cancelInFlightGatewayOperations()
         let displayConfig = Self.settingsDisplayConfig(from: newConfig, defaults: defaults)
         config = displayConfig
         gatewayURLInput = displayConfig.gatewayURL.isEmpty ? "https://" : displayConfig.gatewayURL
@@ -185,30 +187,59 @@ class SettingsViewModel: ObservableObject {
     }
     
     func updateGatewayURLInput(_ value: String) {
+        guard gatewayURLInput != value else { return }
+        invalidateGatewayOperationsForDraftChange()
         gatewayURLInput = value
         resetValidatedDisplayIfDraftChanged()
     }
 
     func updateAPIKeyInput(_ value: String) {
+        guard apiKeyInput != value else { return }
+        invalidateGatewayOperationsForDraftChange()
         apiKeyInput = value
         resetValidatedDisplayIfDraftChanged()
     }
 
     func updateSelectedModelInput(_ value: String) {
-        guard let exactModel = availableModels.first(where: {
+        let exactModel = availableModels.first(where: {
             $0.caseInsensitiveCompare(value.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
-        }) else {
-            selectedModelInput = ""
-            return
-        }
-        selectedModelInput = exactModel
+        })
+        let replacement = exactModel ?? ""
+        guard selectedModelInput != replacement else { return }
+        invalidateGatewayOperationsForDraftChange()
+        selectedModelInput = replacement
+        guard exactModel != nil else { return }
         modelSelectionMessage = nil
     }
 
     func normalizeGatewayURLInputForEditing() {
         guard let normalized = normalizedGatewayURLInputOrNil else { return }
+        guard gatewayURLInput != normalized else { return }
+        invalidateGatewayOperationsForDraftChange()
         gatewayURLInput = normalized
         resetValidatedDisplayIfDraftChanged()
+    }
+
+    func cancelInFlightGatewayOperations() {
+        gatewayOperationGeneration &+= 1
+        isTestingConnection = false
+        isRunningDiagnostics = false
+    }
+
+    private func invalidateGatewayOperationsForDraftChange() {
+        cancelInFlightGatewayOperations()
+        diagnosticReport = nil
+    }
+
+    private func beginGatewayOperation() -> UInt {
+        gatewayOperationGeneration &+= 1
+        return gatewayOperationGeneration
+    }
+
+    private func isCurrentGatewayOperation(_ generation: UInt, draftIdentity: GatewayDraftIdentity) -> Bool {
+        generation == gatewayOperationGeneration
+            && !Task.isCancelled
+            && currentDraftIdentity == draftIdentity
     }
 
     private var normalizedGatewayURLInputOrNil: String? {
@@ -271,11 +302,17 @@ class SettingsViewModel: ObservableObject {
     }
 
     func testConnection() async {
-        guard !isTestingConnection else { return }
+        guard !isTestingConnection, !isRunningDiagnostics else { return }
+        let operationGeneration = beginGatewayOperation()
+        var operationIdentity: GatewayDraftIdentity?
         showsValidatedGatewayDetails = false
         diagnosticReport = nil
         isTestingConnection = true
-        defer { isTestingConnection = false }
+        defer {
+            if operationGeneration == gatewayOperationGeneration {
+                isTestingConnection = false
+            }
+        }
         connectionStatus = .checking
         errorMessage = nil
         await Task.yield()
@@ -286,6 +323,8 @@ class SettingsViewModel: ObservableObject {
             gatewayURLInput = draftGatewayURL
             guard !draftAPIKey.isEmpty else { throw NetworkError.unauthorized }
             let draftIdentity = GatewayDraftIdentity(gatewayURL: draftGatewayURL, apiKey: draftAPIKey)
+            operationIdentity = draftIdentity
+            guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
             let isSavedGatewayIdentity = draftIdentity == savedGatewayIdentity
             let previousDiscoveryIdentity = modelDiscoveryIdentity
             let previousDraftModel = selectedModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -294,12 +333,14 @@ class SettingsViewModel: ObservableObject {
                 gatewayURL: draftGatewayURL,
                 apiKey: draftAPIKey
             )
+            guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
 
             if success {
                 let models = try await gatewayTester.fetchModels(
                     gatewayURL: draftGatewayURL,
                     apiKey: draftAPIKey
                 )
+                guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
                 availableModels = Self.normalizedModelChoices(models)
                 modelDiscoveryIdentity = draftIdentity
                 let gatewayModel: String
@@ -346,6 +387,7 @@ class SettingsViewModel: ObservableObject {
                         apiKey: draftAPIKey,
                         model: gatewayModel
                     )
+                    guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
                     let validatedConfig = AppConfig(
                         apiKey: draftAPIKey,
                         gatewayURL: draftGatewayURL,
@@ -377,6 +419,11 @@ class SettingsViewModel: ObservableObject {
                 failConnection(with: "Connection failed")
             }
         } catch {
+            guard operationGeneration == gatewayOperationGeneration,
+                  !Task.isCancelled,
+                  operationIdentity.map({ currentDraftIdentity == $0 }) ?? true else {
+                return
+            }
             if Self.isCancellation(error) {
                 connectionStatus = .unknown
                 errorMessage = nil
@@ -394,7 +441,13 @@ class SettingsViewModel: ObservableObject {
 
     func runDiagnostics() async {
         guard canRunDiagnostics else { return }
+        let operationGeneration = beginGatewayOperation()
         isRunningDiagnostics = true
+        defer {
+            if operationGeneration == gatewayOperationGeneration {
+                isRunningDiagnostics = false
+            }
+        }
         diagnosticReport = nil
         await Task.yield()
 
@@ -405,12 +458,17 @@ class SettingsViewModel: ObservableObject {
             guard !draftAPIKey.isEmpty else { throw NetworkError.unauthorized }
             let draftIdentity = GatewayDraftIdentity(gatewayURL: draftGatewayURL, apiKey: draftAPIKey)
             let preferredModel = diagnosticModel(for: draftIdentity)
-            diagnosticReport = await gatewayTester.runGatewayDiagnostics(
+            guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
+            let report = await gatewayTester.runGatewayDiagnostics(
                 gatewayURL: draftGatewayURL,
                 apiKey: draftAPIKey,
                 preferredModel: preferredModel
             )
+            guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity),
+                  diagnosticModel(for: draftIdentity) == preferredModel else { return }
+            diagnosticReport = report
         } catch {
+            guard operationGeneration == gatewayOperationGeneration, !Task.isCancelled else { return }
             diagnosticReport = GatewayDiagnosticReport(
                 selectedModel: config.selectedModel,
                 checks: [
@@ -425,12 +483,13 @@ class SettingsViewModel: ObservableObject {
                 ]
             )
         }
-
-        isRunningDiagnostics = false
     }
 
     var canRunDiagnostics: Bool {
-        guard hasCompleteGatewayDraft, !isRunningDiagnostics, let draftIdentity = currentDraftIdentity else { return false }
+        guard hasCompleteGatewayDraft,
+              !isTestingConnection,
+              !isRunningDiagnostics,
+              let draftIdentity = currentDraftIdentity else { return false }
         return !diagnosticModel(for: draftIdentity).isEmpty
     }
 
@@ -498,6 +557,64 @@ class SettingsViewModel: ObservableObject {
         let elapsed = now.timeIntervalSince(lastTestedAt)
         return elapsed >= 0 && elapsed < AppConfig.gatewayConnectionRetestInterval
     }
+
+    #if DEBUG
+    func applyUITestSettingsStateIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting") else { return }
+
+        if arguments.contains("--seed-settings-model-selection") {
+            gatewayURLInput = "https://selection.local"
+            apiKeyInput = "ui-selection-key"
+            selectedModelInput = ""
+            availableModels = ["model-a", "model-b"]
+            modelDiscoveryIdentity = currentDraftIdentity
+            modelSelectionMessage = "Choose a model for these gateway credentials, then test again."
+            connectionStatus = .unknown
+            showsValidatedGatewayDetails = false
+        }
+
+        if arguments.contains("--seed-settings-partial-diagnostics") {
+            diagnosticReport = GatewayDiagnosticReport(
+                selectedModel: "diagnostic-model",
+                checks: [
+                    GatewayDiagnosticCheck(
+                        id: "models",
+                        title: "Models",
+                        endpoint: "GET /v1/models",
+                        status: .passed,
+                        durationMilliseconds: 12,
+                        message: "Loaded 2 models."
+                    ),
+                    GatewayDiagnosticCheck(
+                        id: "settings-correction-smoke",
+                        title: "Fast plain-text grammar",
+                        endpoint: "POST /v1/chat/completions",
+                        status: .failed,
+                        durationMilliseconds: 34,
+                        message: "The selected model did not return usable grammar text."
+                    ),
+                    GatewayDiagnosticCheck(
+                        id: "settings-rewrite-improve",
+                        title: "Rewrite and Improve",
+                        endpoint: "POST /v1/chat/completions",
+                        status: .passed,
+                        durationMilliseconds: 56,
+                        message: "Returned one complete validated plain-text replacement used by Rewrite and Improve."
+                    ),
+                    GatewayDiagnosticCheck(
+                        id: "settings-translation-dutch",
+                        title: "Translation to Dutch",
+                        endpoint: "POST /v1/chat/completions",
+                        status: .failed,
+                        durationMilliseconds: 78,
+                        message: "The selected model did not return a usable Dutch translation."
+                    )
+                ]
+            )
+        }
+    }
+    #endif
 
     var keyboardSettingsInstructions: String {
         "If Settings opens one level above, go to General → Keyboard → Keyboards → Add New Keyboard → Open Keyboard, then enable Allow Full Access."

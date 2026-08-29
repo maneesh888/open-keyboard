@@ -482,7 +482,10 @@ extension AppConfig {
               let profile = try? JSONDecoder().decode(StoredGatewayProfile.self, from: data),
               profile.schemaVersion == StoredGatewayProfile.schemaVersion,
               !profile.revision.isEmpty,
-              !profile.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              profile.isConfigured,
+              !profile.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !profile.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              !profile.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
         return profile

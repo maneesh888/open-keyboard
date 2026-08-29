@@ -871,7 +871,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canTestConnection)
     }
 
-    func testDiagnosticsCanRunForSavedExactModelWhileBasicConnectionTestIsBusy() {
+    func testDiagnosticsCannotOverlapConnectionValidation() {
         let config = AppConfig(
             apiKey: "test-key",
             gatewayURL: "https://gateway.example",
@@ -884,7 +884,7 @@ final class SettingsViewModelTests: XCTestCase {
         viewModel.isTestingConnection = true
 
         XCTAssertFalse(viewModel.canTestConnection)
-        XCTAssertTrue(viewModel.canRunDiagnostics)
+        XCTAssertFalse(viewModel.canRunDiagnostics)
     }
 
     func testBareGatewayURLNormalizesBeforeTestingAndSaving() async {
@@ -1066,6 +1066,93 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
     }
 
+    func testCredentialEditDuringConnectionPreservesPreviousCommittedProfile() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.stale-connection.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
+        let previous = AppConfig(
+            apiKey: "previous-key",
+            gatewayURL: "https://previous.example",
+            selectedModel: "previous-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(previous.save(to: defaults))
+        let tester = FakeGatewayTester(models: ["draft-a-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: previous, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://draft-a.example")
+        viewModel.updateAPIKeyInput("draft-a-key")
+
+        let connectionTask = Task { await viewModel.testConnection() }
+        for _ in 0..<100 where tester.healthChecks == 0 { await Task.yield() }
+        XCTAssertEqual(tester.healthChecks, 1)
+
+        viewModel.updateGatewayURLInput("https://draft-b.example")
+        viewModel.updateAPIKeyInput("draft-b-key")
+        await connectionTask.value
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://draft-b.example")
+        XCTAssertEqual(viewModel.apiKeyInput, "draft-b-key")
+        XCTAssertEqual(viewModel.config, previous)
+        XCTAssertEqual(AppConfig.load(from: defaults), previous)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+    }
+
+    func testCredentialEditDuringDiagnosticsDiscardsStaleReport() async {
+        let configured = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "selected-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester()
+        tester.diagnosticDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        let diagnosticTask = Task { await viewModel.runDiagnostics() }
+        for _ in 0..<100 where tester.diagnosticPreferredModel == nil { await Task.yield() }
+        XCTAssertEqual(tester.diagnosticPreferredModel, "selected-model")
+
+        viewModel.updateAPIKeyInput("replacement-key")
+        await diagnosticTask.value
+
+        XCTAssertNil(viewModel.diagnosticReport)
+        XCTAssertFalse(viewModel.isRunningDiagnostics)
+        XCTAssertEqual(viewModel.apiKeyInput, "replacement-key")
+    }
+
+    func testCancelledDiagnosticsDiscardReportAndClearLoadingState() async {
+        let configured = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "selected-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester()
+        tester.diagnosticDelayNanoseconds = 1_000_000_000
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        let diagnosticTask = Task { await viewModel.runDiagnostics() }
+        for _ in 0..<100 where tester.diagnosticPreferredModel == nil { await Task.yield() }
+        XCTAssertEqual(tester.diagnosticPreferredModel, "selected-model")
+
+        diagnosticTask.cancel()
+        await diagnosticTask.value
+
+        XCTAssertNil(viewModel.diagnosticReport)
+        XCTAssertFalse(viewModel.isRunningDiagnostics)
+    }
+
     func testExplicitModelValidationDoesNotFallbackWhenSelectedModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
@@ -1181,6 +1268,8 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var connectionFailure: Error?
     var modelFetchFailure: Error?
     var smokeFailure: Error
+    var connectionDelayNanoseconds: UInt64 = 0
+    var diagnosticDelayNanoseconds: UInt64 = 0
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
@@ -1213,6 +1302,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
         healthChecks += 1
         testedGatewayURLs.append(gatewayURL)
+        if connectionDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: connectionDelayNanoseconds)
+        }
         if let connectionFailure { throw connectionFailure }
         return healthSucceeds
     }
@@ -1234,6 +1326,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         diagnosticGatewayURL = gatewayURL
         diagnosticAPIKey = apiKey
         diagnosticPreferredModel = preferredModel
+        if diagnosticDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: diagnosticDelayNanoseconds)
+        }
         return diagnosticReport
     }
 }

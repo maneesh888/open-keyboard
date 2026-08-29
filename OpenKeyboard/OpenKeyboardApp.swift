@@ -60,6 +60,14 @@ struct OpenKeyboardApp: App {
         #endif
     }
 
+    private var shouldShowSettingsDirectly: Bool {
+        #if DEBUG
+        return isUITesting && launchArguments.contains("--settings-direct")
+        #else
+        return false
+        #endif
+    }
+
     private var productionKeyboardState: String? {
         #if DEBUG
         guard isUITesting,
@@ -284,6 +292,9 @@ struct OpenKeyboardApp: App {
                         PlaygroundView()
                     }
                     .environmentObject(settingsViewModel)
+                } else if shouldShowSettingsDirectly {
+                    SettingsView()
+                        .environmentObject(settingsViewModel)
                 } else if shouldShowOnboarding {
                     OnboardingView(
                         hasCompletedOnboarding: $hasCompletedOnboarding,

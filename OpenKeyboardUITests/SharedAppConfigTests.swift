@@ -144,6 +144,33 @@ final class SharedAppConfigTests: XCTestCase {
         XCTAssertEqual(extensionLoadedConfig.structuredCorrectionSchemaVersion, "")
     }
 
+    func testSchemaCurrentSecureProfileWithoutSelectedModelFailsClosedForBothTargets() throws {
+        let incompleteProfile: [String: Any] = [
+            "schemaVersion": 2,
+            "revision": "incomplete-current-profile",
+            "apiKey": "fake-shared-test-token",
+            "gatewayURL": fixtureGatewayURL,
+            "selectedModel": "",
+            "isConfigured": true,
+            "grammarCorrectionVerified": true,
+            "grammarCorrectionContractVersion": AppConfig.grammarCorrectionCapabilityVersion,
+            "lastValidatedAt": Date().timeIntervalSince1970
+        ]
+        XCTAssertTrue(secretStore.saveProfile(try JSONSerialization.data(withJSONObject: incompleteProfile)))
+        defaults.set(true, forKey: AppConfig.gatewayProfileConfiguredHintKey)
+        defaults.set("incomplete-current-profile", forKey: AppConfig.gatewayProfileRevisionHintKey)
+
+        let hostLoadedConfig = AppConfig.load(from: defaults)
+        let extensionLoadedConfig = AppConfig.load(from: defaults)
+
+        XCTAssertEqual(hostLoadedConfig, .default)
+        XCTAssertEqual(extensionLoadedConfig, .default)
+        XCTAssertFalse(hostLoadedConfig.isConfigured)
+        XCTAssertFalse(extensionLoadedConfig.isConfigured)
+        XCTAssertFalse(hostLoadedConfig.hasGatewayRuntimeConfig)
+        XCTAssertFalse(extensionLoadedConfig.hasGatewayRuntimeConfig)
+    }
+
     func testConfiguredGatewayPreservesMissingModelAsDistinctRuntimeState() {
         secretStore.apiKey = "fake-shared-test-token"
         defaults.set(fixtureGatewayURL, forKey: AppConfig.gatewayURLKey)

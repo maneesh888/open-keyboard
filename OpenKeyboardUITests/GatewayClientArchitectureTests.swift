@@ -1051,7 +1051,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 4, "Each completion capability must run exactly once.")
     }
 
-    func testGatewayDiagnosticsContinuesAfterCancellationAndAttemptsEveryCapabilityOnce() async throws {
+    func testGatewayDiagnosticsStopsAfterCancellationWithoutStartingLaterCapabilities() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
             .throwing(CancellationError()),
@@ -1066,9 +1066,9 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .failed)
-        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
-        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
-        XCTAssertEqual(transport.requests.count, 4)
+        XCTAssertNil(report.checks.first { $0.id == "settings-rewrite-improve" })
+        XCTAssertNil(report.checks.first { $0.id == "settings-translation-dutch" })
+        XCTAssertEqual(transport.requests.count, 2)
     }
 
     func testGatewayDiagnosticsSanitizesSensitiveFailureAndContinues() async throws {
