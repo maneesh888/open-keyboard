@@ -18,8 +18,10 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 3. Keep a compact work order: objective, affected surfaces, exclusions, final state, verification
    level, required evidence class, and authority ledger.
 4. Work in the isolated session worktree selected by `AGENTS.md` only when edits are authorized.
-5. If the user asks for planning or what to do next, use the read-only planner through
-   `$plan-openkeyboard-work-package`. Otherwise proceed directly.
+5. If the user explicitly asks for a major milestone, roadmap, long-horizon plan, or multi-phase
+   plan, use the read-only `$plan-openkeyboard-major-milestone`. Use the read-only
+   `$plan-openkeyboard-work-package` for one bounded plan or a concise "what next" request.
+   Otherwise proceed directly; never add either planning route before a clear implementation.
 6. Read only relevant source, acceptance, and focused-plan sections. Read
    `docs/DEVELOPMENT_WORKFLOW.md` for workflow/CI/signing/deployment changes and initialize the
    pinned semantic-contract submodule for prompt/schema/adapter work only after the needed

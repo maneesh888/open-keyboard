@@ -19,9 +19,10 @@ OpenKeyboard uses proportional local checks and exact-head release evidence. `AG
 canonical straight-line workflow. This file is the detailed verification reference loaded only
 when a task needs route selection, hooks, CI, signing, deployment, or proof details.
 
-Repository automation is split across `$develop-openkeyboard`, the read-only
-`$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
-work but do not weaken the proof requirements below.
+Repository automation is split across `$develop-openkeyboard`, the read-only compact
+`$plan-openkeyboard-work-package` route, the read-only phased
+`$plan-openkeyboard-major-milestone` route, and `$review-verify-merge-pr`. These skills route work
+but do not weaken the proof requirements below.
 
 ## Authority and proof-first mode
 
@@ -357,10 +358,19 @@ the protected `app-store-connect` environment.
 mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
 change to the repository scripts above.
 
-When planning is explicitly requested, the read-only `work-package-planner` invokes
-`$plan-openkeyboard-work-package`. It reads only current status, work-queue, completion-plan, and
-directly relevant focused-plan sections, then returns a compact work order with source-object
-digests. A clear implementation request bypasses this planning route.
+For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
+`$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
+
+For an explicitly requested major milestone, roadmap, long-horizon plan, or multi-phase
+cross-cutting effort, the read-only `major-milestone-planner` invokes
+`$plan-openkeyboard-major-milestone`. It builds a dependency-aware sequence of bounded phases with
+entry criteria, exit criteria, proportional evidence, decision gates, risks, and the first
+executable work package. It does not make ordinary tasks adopt proof-first mode, and it does not
+require physical-device proof unless the requirement is device-specific or a material device-only
+uncertainty remains.
+
+A clear implementation request bypasses both planning routes. Neither planner edits, tests,
+publishes, or grants authority for a later lifecycle stage.
 
 ## Deployment
 

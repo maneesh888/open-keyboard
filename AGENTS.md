@@ -20,11 +20,12 @@ it.
    `codex/<session-slug>` on fresh `origin/main`. Put worktrees under
    `OPEN_KEYBOARD_WORKTREE_ROOT`, or a sibling `open-keyboard-worktrees` directory when unset. Do
    not fall back to a stale or different base without asking.
-4. **Bound the task.** Record the objective, affected surfaces, exclusions, verification level,
-   required evidence class, and authority ledger. If the user explicitly
-   asks for a plan or what to do next, use the read-only `work-package-planner` through
-   `$plan-openkeyboard-work-package`. For a clear implementation request, use
-   `$develop-openkeyboard` without adding a planning gate.
+4. **Bound or phase the task.** Record the objective, affected surfaces, exclusions, verification
+   level, required evidence class, and authority ledger. Route explicit major-milestone, roadmap,
+   long-horizon, or multi-phase planning to the read-only `major-milestone-planner` through
+   `$plan-openkeyboard-major-milestone`. Route one bounded plan or a concise "what next" request to
+   the read-only `work-package-planner` through `$plan-openkeyboard-work-package`. For a clear
+   implementation request, use `$develop-openkeyboard` without adding either planning gate.
 5. **Implement narrowly.** Read only the sources and focused plans needed for the task. Reuse local
    patterns, add focused regression coverage for changed behavior, and preserve files outside the
    work order.
@@ -87,6 +88,9 @@ gate for that action. When a constrained task needs user visibility, report one 
   edits and no commit. `Do not commit` followed by a clear `Fix the issue` may authorize scoped
   edits, but staging and commit remain blocked. `Implement the proposed change now` can authorize
   production edits, but it does not silently authorize commit, push, or a PR.
+- A clear `Implement this feature` request enters normal implementation mode and authorizes scoped
+  production edits when no sticky no-edit, no-implementation, or proof-first constraint remains.
+  It does not by itself authorize staging, commit, push, a PR, readiness, merge, or deployment.
 - A bounded implementation request starts the normal lifecycle only when the ledger authorizes the
   applicable actions and no proof-first constraint remains. Planning, diagnosis, review-only work,
   readiness assessment, and blocker requests are read-only.

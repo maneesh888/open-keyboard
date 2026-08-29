@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 AGENTS="$ROOT/AGENTS.md"
 DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
+MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
 REVIEW_SKILL="$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
 DEVELOPMENT_WORKFLOW="$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
@@ -14,6 +15,7 @@ POLICY_FILES=(
   "$AGENTS"
   "$DEVELOP_SKILL"
   "$PLAN_SKILL"
+  "$MILESTONE_PLAN_SKILL"
   "$REVIEW_SKILL"
   "$REVIEWER_AGENT"
   "$DEVELOPMENT_WORKFLOW"
@@ -64,6 +66,12 @@ require_phrase '`Do not commit` followed by a clear `Fix the issue` may authoriz
 require_phrase 'edits, but staging and commit remain blocked.' "$AGENTS" \
   'Scenario B must keep staging and commit blocked.'
 
+# Positive control: ordinary implementation must not be forced into proof-first planning.
+require_phrase 'A clear `Implement this feature` request enters normal implementation mode and authorizes scoped' "$AGENTS" \
+  'Clear implementation must enter the normal edit-authorized path when no sticky constraint remains.'
+require_phrase 'It does not by itself authorize staging, commit, push, a PR, readiness, merge, or deployment.' "$AGENTS" \
+  'Normal edit authorization must not silently grant later lifecycle authority.'
+
 # Scenario E: an external live outage blocks proof-first production work.
 require_phrase 'an HTTP `503` or other required-gateway availability failure leaves the task' "$AGENTS" \
   'Scenario E is missing its external gateway failure rule.'
@@ -86,6 +94,10 @@ require_phrase 'A later ambiguous request cannot' "$DEVELOP_SKILL" \
   'The development skill must preserve sticky constraints across follow-ups.'
 require_phrase 'Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION' "$PLAN_SKILL" \
   'The planner must retain the authority mode in its work order.'
+require_phrase 'Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION' "$MILESTONE_PLAN_SKILL" \
+  'The milestone planner must retain the authority mode in its roadmap.'
+require_phrase 'Planning is read-only:' "$MILESTONE_PLAN_SKILL" \
+  'The milestone planner must not turn roadmap creation into repository mutation.'
 require_phrase 'Apply the sticky authority ledger from `AGENTS.md`.' "$REVIEW_SKILL" \
   'The review lifecycle must apply the sticky authority ledger.'
 require_phrase 'truthful documentation, commit subjects, or proof claims' "$REVIEWER_AGENT" \

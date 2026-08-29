@@ -9,12 +9,15 @@ DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
 PLANNER_AGENT="$ROOT/.codex/agents/work-package-planner.toml"
+MILESTONE_PLANNER_AGENT="$ROOT/.codex/agents/major-milestone-planner.toml"
 REVIEW_SKILL="$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
 REVIEW_INTERFACE="$ROOT/.agents/skills/review-verify-merge-pr/agents/openai.yaml"
 DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
+MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
+MILESTONE_PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 BRANCH_PROTECTION_GUIDE="$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
@@ -43,12 +46,15 @@ for required_file in \
   "$DEPENDABOT" \
   "$REVIEWER_AGENT" \
   "$PLANNER_AGENT" \
+  "$MILESTONE_PLANNER_AGENT" \
   "$REVIEW_SKILL" \
   "$REVIEW_INTERFACE" \
   "$DEVELOP_SKILL" \
   "$DEVELOP_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
+  "$MILESTONE_PLAN_SKILL" \
+  "$MILESTONE_PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
   "$BRANCH_PROTECTION_GUIDE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
@@ -230,6 +236,9 @@ rg --fixed-strings --quiet 'across both `pull_request` and `pull_request_review`
 rg --fixed-strings --quiet 'gh pr checks <number> --required' "$REVIEWER_AGENT"
 rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
 rg --quiet 'Do not edit files.*access GitHub' "$PLANNER_AGENT"
+rg --quiet '^sandbox_mode = "read-only"$' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'Do not edit files, fetch, create a worktree' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'GitHub, spawn agents' "$MILESTONE_PLANNER_AGENT"
 rg --quiet 'project `pr-reviewer`' "$REVIEW_SKILL"
 rg --quiet 'scripts/check\.sh --full' "$REVIEW_SKILL"
 rg --fixed-strings --quiet 'Required technical checks' "$REVIEW_SKILL"
@@ -258,11 +267,21 @@ rg --quiet 'Never leave queued auto-merge active' "$REVIEW_SKILL"
 rg --quiet '^name: develop-openkeyboard$' "$DEVELOP_SKILL"
 rg --fixed-strings --quiet 'Use `AGENTS.md` as the canonical execution policy.' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-work-package' "$DEVELOP_SKILL"
+rg --quiet '\$plan-openkeyboard-major-milestone' "$DEVELOP_SKILL"
 rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
 rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
+rg --quiet '^name: plan-openkeyboard-major-milestone$' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'git hash-object' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Prefer 3–8 phases' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Each phase must be' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
+rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
 rg --quiet '^## Merge authorization$' "$PR_TEMPLATE"
