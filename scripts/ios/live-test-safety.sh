@@ -13,11 +13,31 @@ openkeyboard_repository_git() (
   command git "$@"
 )
 
-openkeyboard_restore_booted_simulator() {
-  local simulator="$1"
+openkeyboard_relaunch_with_simulator_lock() {
+  local repository_root="$1"
+  shift
+  local common_directory lock_file
 
-  xcrun simctl boot "$simulator" >/dev/null 2>&1 || true
-  xcrun simctl bootstatus "$simulator" -b >/dev/null
+  if [[ "${OPEN_KEYBOARD_SIMULATOR_LOCK_HELD:-}" == "1" ]]; then
+    return 0
+  fi
+
+  common_directory="$(
+    openkeyboard_repository_git -C "$repository_root" \
+      rev-parse --path-format=absolute --git-common-dir
+  )" || return 1
+  lock_file="$common_directory/openkeyboard-simulator-test.lock"
+
+  OPEN_KEYBOARD_SIMULATOR_LOCK_HELD=1 exec ruby -e '
+    lock_path = ARGV.shift
+    lock = File.open(lock_path, File::RDWR | File::CREAT, 0600)
+    unless lock.flock(File::LOCK_EX | File::LOCK_NB)
+      warn "Another OpenKeyboard Simulator route is active; waiting for it to finish."
+      lock.flock(File::LOCK_EX)
+    end
+    lock.close_on_exec = false
+    exec("/bin/bash", *ARGV)
+  ' "$lock_file" "$@"
 }
 
 openkeyboard_cleanup_live_evidence_file() {
@@ -628,6 +648,55 @@ openkeyboard_classify_low_differential_test_summary() {
       exit 1
     end
   '
+}
+
+openkeyboard_live_differential_outcomes_verified() {
+  local low_baseline="$1"
+  local high_baseline="$2"
+  local low_differential="$3"
+  local high_differential="$4"
+  local low_follow_up="$5"
+  local high_follow_up="$6"
+  local warning_contracts="$7"
+
+  [[ "$low_baseline" == "passed" ]] &&
+    [[ "$high_baseline" == "passed" ]] &&
+    [[ "$low_differential" == "expected-model-capability" ]] &&
+    [[ "$high_differential" == "passed" ]] &&
+    [[ "$low_follow_up" == "passed" ]] &&
+    [[ "$high_follow_up" == "passed" ]] &&
+    [[ "$warning_contracts" == "verified" ]]
+}
+
+openkeyboard_finish_live_differential_run() {
+  local execution_mode="$1"
+  shift
+
+  if [[ "$execution_mode" != "verification" && "$execution_mode" != "diagnostic" ]]; then
+    echo "Live differential execution mode must be verification or diagnostic." >&2
+    return 2
+  fi
+  if [[ "$#" -ne 7 ]]; then
+    echo "Live differential completion requires seven outcome values." >&2
+    return 2
+  fi
+
+  if openkeyboard_live_differential_outcomes_verified "$@"; then
+    if [[ "$execution_mode" == "diagnostic" ]]; then
+      echo "LIVE_VERIFIED: targeted two-profile diagnostic run complete; required outcomes were verified."
+    else
+      echo "LIVE_VERIFIED: targeted two-profile live-model differential verification passed."
+    fi
+    return 0
+  fi
+
+  if [[ "$execution_mode" == "diagnostic" ]]; then
+    echo "LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification."
+    return 0
+  fi
+
+  echo "LIVE_UNVERIFIED: targeted two-profile live-model differential verification failed; required outcomes were unverified." >&2
+  return 1
 }
 
 openkeyboard_assert_single_passing_xcresult() {

@@ -214,7 +214,7 @@ class NetworkManager {
                 "settings-rewrite-improve",
                 "Rewrite and Improve",
                 Self.rewriteDiagnosticPresetID,
-                "Returned a schema-valid structured rewrite used by Rewrite and Improve."
+                "Returned one complete validated plain-text replacement used by Rewrite and Improve."
             ),
             (
                 "settings-translation-dutch",
@@ -283,6 +283,9 @@ class NetworkManager {
         } catch let error as NetworkError {
             throw error
         } catch {
+            if presetID == Self.rewriteDiagnosticPresetID {
+                throw NetworkError.unusableCapability("Rewrite and Improve")
+            }
             let capability = preset.label.replacingOccurrences(of: "Structured operation · ", with: "")
             throw NetworkError.unusableCapability(capability.lowercased())
         }

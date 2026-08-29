@@ -528,7 +528,10 @@ private struct AIActionPanel: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("ai_translation_warning")
             } else if let selectedOption = state.selectedOption {
-                actionResultText(selectedOption.text)
+                actionResultText(
+                    selectedOption.text,
+                    replacementDiff: state.selectedReplacementDiff
+                )
             } else {
                 Text(state.contextSelectionPrompt ?? "No suggestion yet")
                     .font(.system(size: 18, weight: .regular))
@@ -580,28 +583,59 @@ private struct AIActionPanel: View {
     }
 
     @ViewBuilder
-    private func actionResultText(_ text: String) -> some View {
+    private func actionResultText(
+        _ text: String,
+        replacementDiff: KeyboardReplacementDiff?
+    ) -> some View {
         if usesScrollableActionResult {
             ScrollView(.vertical, showsIndicators: true) {
-                actionResultLabel(text, lineLimit: nil)
+                actionResultLabel(text, replacementDiff: replacementDiff, lineLimit: nil)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .clipped()
             .accessibilityIdentifier("ai_action_result_scroll")
         } else {
-            actionResultLabel(text, lineLimit: state.isCarouselVisible ? 4 : 6)
+            actionResultLabel(
+                text,
+                replacementDiff: replacementDiff,
+                lineLimit: state.isCarouselVisible ? 4 : 6
+            )
         }
     }
 
-    private func actionResultLabel(_ text: String, lineLimit: Int?) -> some View {
-        Text(text)
+    private func actionResultLabel(
+        _ text: String,
+        replacementDiff: KeyboardReplacementDiff?,
+        lineLimit: Int?
+    ) -> some View {
+        resultText(text, replacementDiff: replacementDiff)
             .font(.system(size: actionResultFontSize, weight: .regular))
-            .foregroundColor(OpenKeyboardTheme.Text.primary)
             .lineLimit(lineLimit)
             .minimumScaleFactor(0.72)
             .fixedSize(horizontal: false, vertical: true)
+            .accessibilityLabel(text)
             .accessibilityIdentifier("ai_action_result_text")
+    }
+
+    private func resultText(
+        _ text: String,
+        replacementDiff: KeyboardReplacementDiff?
+    ) -> Text {
+        guard let replacementDiff else {
+            return Text(text).foregroundColor(OpenKeyboardTheme.Text.primary)
+        }
+        return replacementDiff.highlightedReplacementSegments.reduce(Text("")) { output, segment in
+            let next = Text(segment.text).foregroundColor(OpenKeyboardTheme.Text.primary)
+            switch segment.kind {
+            case .unchanged:
+                return output + next
+            case .inserted:
+                return output + next.underline(true, color: OpenKeyboardTheme.Semantic.success)
+            case .removed:
+                return output
+            }
+        }
     }
 
     private var actionCarousel: some View {
@@ -640,7 +674,7 @@ private struct AIActionPanel: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(!actionsEnabled || state.isLoading)
+        .disabled((!actionsEnabled && !state.isLoading) || (state.isLoading && isSelected))
         .accessibilityIdentifier("ai_action_\(action.rawValue)")
         .accessibilityValue(isSelected ? "Selected" : "")
     }

@@ -185,9 +185,10 @@ struct CanonicalGatewayClient {
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-        let isPlainTextGrammar = operation?.trimmingCharacters(in: .whitespacesAndNewlines) == "fix_grammar"
-            && expectsStructuredResponse == false
-        let prompt = isPlainTextGrammar ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedOperation = operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let usesCanonicalPlainTextInput = expectsStructuredResponse == false
+            && ["fix_grammar", "rewrite"].contains(normalizedOperation)
+        let prompt = usesCanonicalPlainTextInput ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.isConfigured, !apiKey.isEmpty else { throw CanonicalGatewayClientError.notConfigured }
         guard !model.isEmpty else { throw CanonicalGatewayClientError.modelUnavailable }
         guard !prompt.isEmpty else { throw CanonicalGatewayClientError.missingInput }
@@ -197,11 +198,10 @@ struct CanonicalGatewayClient {
         request.timeoutInterval = timeoutInterval
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        let normalizedOperation = operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
             operation: normalizedOperation,
-            inputText: (isPlainTextGrammar ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
+            inputText: (usesCanonicalPlainTextInput ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
                 CanonicalChatMessage(role: "user", content: prompt)

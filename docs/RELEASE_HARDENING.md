@@ -61,5 +61,8 @@ Release copy direction:
 - [x] Wire the privacy copy into onboarding/settings/error states.
 - [x] Make UI-test typed/composing debug persistence production-impossible with a DEBUG-build gate.
 - [x] Keep local/remote CI entry points documented for deterministic core tests and app/extension build.
-- [ ] Run host-side Xcode verification for shared Keychain/app group behavior on simulator before release. Current real-extension smoke still shows `Gateway not configured`; see `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
-- [ ] Add DEBUG-only extension-side config probe before retrying logo/action-menu proof, so failures report exact App Group/Keychain/defaults state without exposing secrets.
+- [ ] Complete normal simulator runtime proof for shared Keychain/App Group behavior before release.
+  The automated real-extension regression still shows `Gateway not configured`; see
+  `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+- [ ] Add a DEBUG-only extension-side config probe for automated diagnosis, then separately rerun
+  the normal production-UI simulator route without debug injection.

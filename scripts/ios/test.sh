@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # OpenKeyboard iOS/Core Test Runner
-# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}
+# Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential [--diagnostic]|real-keyboard-live|screenshots|all|coverage}
 
 set -euo pipefail
 
@@ -21,6 +21,28 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+MODE="${1:-}"
+LIVE_DIFFERENTIAL_EXECUTION_MODE="verification"
+if [[ "$MODE" == "live-model-differential" ]]; then
+  case "$#" in
+    1) ;;
+    2)
+      if [[ "$2" != "--diagnostic" ]]; then
+        echo "live-model-differential accepts only the optional --diagnostic flag." >&2
+        exit 2
+      fi
+      LIVE_DIFFERENTIAL_EXECUTION_MODE="diagnostic"
+      ;;
+    *)
+      echo "live-model-differential accepts only the optional --diagnostic flag." >&2
+      exit 2
+      ;;
+  esac
+elif [[ "$#" -gt 1 ]]; then
+  echo "$MODE does not accept additional arguments." >&2
+  exit 2
+fi
 
 run_xcodebuild() {
   if command -v xcpretty >/dev/null 2>&1; then
@@ -124,32 +146,12 @@ inject_xctestrun_live_smoke_env() {
 
 SENSITIVE_LIVE_WORKSPACE=""
 SENSITIVE_LIVE_SIMULATOR=""
-SENSITIVE_LIVE_SOURCE_SIMULATOR=""
-SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
-
-restore_sensitive_live_source_simulator() {
-  if [[ "$SENSITIVE_LIVE_SOURCE_WAS_BOOTED" != "true" || -z "$SENSITIVE_LIVE_SOURCE_SIMULATOR" ]]; then
-    return 0
-  fi
-
-  if ! openkeyboard_restore_booted_simulator "$SENSITIVE_LIVE_SOURCE_SIMULATOR"; then
-    return 1
-  fi
-  SENSITIVE_LIVE_SOURCE_SIMULATOR=""
-  SENSITIVE_LIVE_SOURCE_WAS_BOOTED="false"
-  return 0
-}
 
 cleanup_sensitive_live_artifacts() {
   local original_status=$?
   local cleanup_status=0
 
   if ! delete_sensitive_live_simulator; then
-    cleanup_status=1
-  fi
-
-  if ! restore_sensitive_live_source_simulator; then
-    echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
     cleanup_status=1
   fi
 
@@ -233,7 +235,7 @@ begin_sensitive_live_workspace() {
 
 create_sensitive_live_simulator() {
   local selector="$1"
-  local descriptor source_simulator source_state simulator_name
+  local descriptor device_type runtime simulator_name
 
   descriptor="$(
     xcrun simctl list devices available -j |
@@ -243,43 +245,42 @@ create_sensitive_live_simulator() {
         matches = devices.flat_map do |runtime, entries|
           entries.map do |device|
             next unless device["udid"] == selector || device["name"] == selector
-            [device.fetch("udid"), device.fetch("state")]
+            [device.fetch("deviceTypeIdentifier"), runtime]
           end.compact
         end
         abort "Simulator selector must resolve to exactly one available device." unless matches.one?
         puts matches.first.join("\t")
       ' "$selector"
   )"
-  source_simulator="${descriptor%%$'\t'*}"
-  source_state="${descriptor#*$'\t'}"
-  case "$source_state" in
-    Booted)
-      SENSITIVE_LIVE_SOURCE_SIMULATOR="$source_simulator"
-      SENSITIVE_LIVE_SOURCE_WAS_BOOTED="true"
-      xcrun simctl shutdown "$source_simulator"
-      ;;
-    Shutdown) ;;
-    *)
-      echo -e "${RED}✗ Source simulator must be booted or shut down before cloning.${NC}" >&2
-      exit 1
-      ;;
-  esac
+  device_type="${descriptor%%$'\t'*}"
+  runtime="${descriptor#*$'\t'}"
 
   simulator_name="OpenKeyboard Live Test $$ $(date +%s)"
   SENSITIVE_LIVE_SIMULATOR="$(
-    xcrun simctl clone "$source_simulator" "$simulator_name"
+    xcrun simctl create "$simulator_name" "$device_type" "$runtime"
   )"
   if [[ ! "$SENSITIVE_LIVE_SIMULATOR" =~ ^[0-9A-Fa-f-]{36}$ ]]; then
     echo -e "${RED}✗ Failed to create a disposable live-test simulator.${NC}" >&2
     exit 1
   fi
-  if ! restore_sensitive_live_source_simulator; then
-    echo -e "${RED}✗ Failed to restore the source simulator after cloning.${NC}" >&2
-    exit 1
-  fi
 }
 
-case "${1:-}" in
+simulator_mode_requires_lock() {
+  case "${1:-}" in
+    ui|deterministic-ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+if simulator_mode_requires_lock "$MODE"; then
+  openkeyboard_relaunch_with_simulator_lock "$REPO_ROOT" "$0" "$@"
+fi
+
+case "$MODE" in
   core)
     echo -e "${YELLOW}Running OpenKeyboardCore package tests...${NC}"
     require_swift
@@ -328,16 +329,6 @@ case "${1:-}" in
       -skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       -skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests \
       -skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests \
-      -skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests \
-      CODE_SIGN_IDENTITY="" \
-      CODE_SIGNING_REQUIRED=NO
-    run_xcodebuild xcodebuild test \
-      -project "$PROJECT" \
-      -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
-      -configuration Debug \
-      -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
-      -only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
     echo -e "${GREEN}✓ Deterministic UI-target tests complete${NC}"
@@ -407,7 +398,7 @@ case "${1:-}" in
     ;;
 
   live-model-differential)
-    echo -e "${YELLOW}Running targeted two-profile live-model differential verification...${NC}"
+    echo -e "${YELLOW}Running targeted two-profile live-model differential ${LIVE_DIFFERENTIAL_EXECUTION_MODE}...${NC}"
     require_xcodebuild
     begin_sensitive_live_workspace live-model-differential
     seed_file="$(
@@ -547,12 +538,25 @@ case "${1:-}" in
       printf '%s\n' "$evidence_lines" > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
       chmod 600 "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
     fi
-    echo -e "${GREEN}✓ Targeted two-profile live-model differential verification complete${NC}"
+    completion_status=0
+    openkeyboard_finish_live_differential_run \
+      "$LIVE_DIFFERENTIAL_EXECUTION_MODE" \
+      "$low_baseline_outcome" \
+      "$high_baseline_outcome" \
+      "$low_differential_outcome" \
+      "$high_differential_outcome" \
+      "$low_follow_up_outcome" \
+      "$high_follow_up_outcome" \
+      verified || completion_status=$?
     echo "Sensitive per-profile test state and artifacts will be removed before exit."
+    if [[ "$completion_status" -ne 0 ]]; then
+      exit "$completion_status"
+    fi
     ;;
 
   real-keyboard-live)
-    echo -e "${YELLOW}Running seeded real keyboard extension live test...${NC}"
+    echo -e "${YELLOW}Running automated real-extension regression test with seeded live gateway configuration...${NC}"
+    echo "Evidence boundary: XCTest/XCUITest regression only; not normal simulator or device proof."
     require_xcodebuild
     live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
     case "$live_test_identifier" in
@@ -561,7 +565,7 @@ case "${1:-}" in
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested)
         ;;
       *)
-        echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved real keyboard live test.${NC}"
+        echo -e "${RED}✗ OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST must select an approved automated real-extension regression test.${NC}"
         exit 2
         ;;
     esac
@@ -623,7 +627,8 @@ case "${1:-}" in
       -only-testing:"$live_test_identifier" \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
-    echo -e "${GREEN}✓ Seeded real keyboard extension live test complete${NC}"
+    echo -e "${GREEN}✓ Automated real-extension regression test complete${NC}"
+    echo "This result does not replace normal simulator runtime or physical-device proof."
     echo "Sensitive live-test artifacts will be removed before exit."
     ;;
 
@@ -658,15 +663,15 @@ case "${1:-}" in
     ;;
 
   *)
-    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential|real-keyboard-live|screenshots|all|coverage}${NC}"
+    echo -e "${YELLOW}Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential [--diagnostic]|real-keyboard-live|screenshots|all|coverage}${NC}"
     echo "  core        - Run Swift package tests for OpenKeyboardCore"
     echo "  build       - Build the iOS app/keyboard extension"
     echo "  deterministic-ui - Run UI-target tests without credential/state-dependent suites"
     echo "  ui          - Run OpenKeyboardUITests on iPhone 16"
     echo "  live-ui     - Run opt-in live gateway AI UI tests on iPhone 16"
     echo "  live-gateway-smoke - Run opt-in Test Connection smoke using the ignored local gateway seed"
-    echo "  live-model-differential - Build once and run the targeted low/high live-model matrix"
-    echo "  real-keyboard-live - Seed ignored local gateway credentials, then run real keyboard extension live test"
+    echo "  live-model-differential - Strict targeted low/high verification; add --diagnostic for exploratory collection"
+    echo "  real-keyboard-live - Run credentialed automated real-extension regression (not final runtime proof)"
     echo "  screenshots - Run onboarding screenshot UI tests on iPhone 16 and iPhone SE"
     echo "  all         - Run core tests, iOS build, then UI tests"
     echo "  coverage    - Run core package tests with coverage"

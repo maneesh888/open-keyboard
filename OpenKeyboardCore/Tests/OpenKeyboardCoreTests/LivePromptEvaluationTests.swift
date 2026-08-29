@@ -19,7 +19,7 @@ final class LivePromptEvaluationTests: XCTestCase {
         XCTAssertTrue(result.displayText.contains("reply"), "Unrelated word 'reply' must remain unchanged.")
     }
 
-    func testLiveGemmaReturnsExpectedResponseFormatForEveryOperationWhenConfigured() async throws {
+    func testLiveGemmaReturnsExpectedContractForEveryOperationWhenConfigured() async throws {
         let (client, model) = try await configuredGemmaClient()
         let scenarios: [(WritingAction, String, String)] = [
             (.fixGrammar, "she dont recieve teh message", "fix_grammar"),
@@ -37,6 +37,10 @@ final class LivePromptEvaluationTests: XCTestCase {
             if action == .fixGrammar {
                 XCTAssertFalse(result.isStructuredResponse)
                 XCTAssertTrue(result.items.isEmpty)
+            } else if action == .rewrite {
+                XCTAssertFalse(result.isStructuredResponse)
+                XCTAssertEqual(result.items.count, 1, "Rewrite must expose one validated plain-text replacement.")
+                XCTAssertEqual(result.items.first?.replacement, result.displayText)
             } else {
                 XCTAssertTrue(result.isStructuredResponse, "\(expectedOperation) must return parseable structured JSON.")
                 XCTAssertFalse(result.items.isEmpty, "\(expectedOperation) must return at least one structured result item.")

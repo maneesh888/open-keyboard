@@ -9,12 +9,15 @@ DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
 REVIEWER_AGENT="$ROOT/.codex/agents/pr-reviewer.toml"
 PLANNER_AGENT="$ROOT/.codex/agents/work-package-planner.toml"
+MILESTONE_PLANNER_AGENT="$ROOT/.codex/agents/major-milestone-planner.toml"
 REVIEW_SKILL="$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
 REVIEW_INTERFACE="$ROOT/.agents/skills/review-verify-merge-pr/agents/openai.yaml"
 DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
+MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
+MILESTONE_PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/agents/openai.yaml"
 PR_TEMPLATE="$ROOT/.github/pull_request_template.md"
 BRANCH_PROTECTION_GUIDE="$ROOT/.github/BRANCH_PROTECTION_GUIDE.md"
 LIVE_EVIDENCE_POLICY_TEST="$ROOT/scripts/tests/live-evidence-policy-test.sh"
@@ -30,6 +33,8 @@ LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
 LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
 LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
+RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
+WORKFLOW_AUTHORIZATION_POLICY_TEST="$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
 
@@ -41,12 +46,15 @@ for required_file in \
   "$DEPENDABOT" \
   "$REVIEWER_AGENT" \
   "$PLANNER_AGENT" \
+  "$MILESTONE_PLANNER_AGENT" \
   "$REVIEW_SKILL" \
   "$REVIEW_INTERFACE" \
   "$DEVELOP_SKILL" \
   "$DEVELOP_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
+  "$MILESTONE_PLAN_SKILL" \
+  "$MILESTONE_PLAN_INTERFACE" \
   "$PR_TEMPLATE" \
   "$BRANCH_PROTECTION_GUIDE" \
   "$LIVE_EVIDENCE_POLICY_TEST" \
@@ -62,6 +70,8 @@ for required_file in \
   "$LIVE_TEST_SAFETY_POLICY_TEST" \
   "$LIVE_POLICY_BOOTSTRAP" \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
+  "$RUNTIME_PROOF_POLICY_TEST" \
+  "$WORKFLOW_AUTHORIZATION_POLICY_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -69,6 +79,8 @@ for required_file in \
     exit 1
   fi
 done
+
+"$RUNTIME_PROOF_POLICY_TEST"
 
 if rg --quiet 'pull_request_target|secrets\.' "$CI_WORKFLOW" "$LIVE_WORKFLOW"; then
   echo "Ordinary and live-policy CI must remain read-only and secretless." >&2
@@ -186,6 +198,8 @@ rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
 rg --quiet '^## Shared Semantic Prompt Contract$' "$ROOT/AGENTS.md"
 rg --quiet 'only canonical home' "$ROOT/AGENTS.md"
+rg --quiet '^## Straight-line task flow$' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet 'Follow this order. Load a detailed document or specialized skill only when the matching step needs' "$ROOT/AGENTS.md"
 git -C "$ROOT" ls-files --stage Vendor/semantic-prompt-contract | rg --quiet '^160000 '
 rg --quiet 'Required live verification' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*app-store-connect' "$DEPLOY_WORKFLOW"
@@ -222,6 +236,9 @@ rg --fixed-strings --quiet 'across both `pull_request` and `pull_request_review`
 rg --fixed-strings --quiet 'gh pr checks <number> --required' "$REVIEWER_AGENT"
 rg --quiet '^sandbox_mode = "read-only"$' "$PLANNER_AGENT"
 rg --quiet 'Do not edit files.*access GitHub' "$PLANNER_AGENT"
+rg --quiet '^sandbox_mode = "read-only"$' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'Do not edit files, fetch, create a worktree' "$MILESTONE_PLANNER_AGENT"
+rg --fixed-strings --quiet 'GitHub, spawn agents' "$MILESTONE_PLANNER_AGENT"
 rg --quiet 'project `pr-reviewer`' "$REVIEW_SKILL"
 rg --quiet 'scripts/check\.sh --full' "$REVIEW_SKILL"
 rg --fixed-strings --quiet 'Required technical checks' "$REVIEW_SKILL"
@@ -244,16 +261,28 @@ if rg --quiet 'at least one approving GitHub review' "$REVIEW_SKILL"; then
   exit 1
 fi
 rg --quiet 'bounded implementation request.*normal autonomous.*guarded merge' "$REVIEW_SKILL"
-rg --quiet 'keep draft.*do not merge' "$REVIEW_SKILL"
+rg --quiet 'active sticky constraint says `keep draft`' "$REVIEW_SKILL"
+rg --quiet 'constraint says `do not merge`' "$REVIEW_SKILL"
 rg --quiet 'gh pr merge <number> --auto --squash --match-head-commit <reviewed-head-sha>' "$REVIEW_SKILL"
 rg --quiet 'Never leave queued auto-merge active' "$REVIEW_SKILL"
 rg --quiet '^name: develop-openkeyboard$' "$DEVELOP_SKILL"
+rg --fixed-strings --quiet 'Use `AGENTS.md` as the canonical execution policy.' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-work-package' "$DEVELOP_SKILL"
+rg --quiet '\$plan-openkeyboard-major-milestone' "$DEVELOP_SKILL"
 rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
 rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
+rg --quiet '^name: plan-openkeyboard-major-milestone$' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'git hash-object' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Prefer 3–8 phases' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'Each phase must be' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
+rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
+rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
+rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
 rg --quiet '^## Merge authorization$' "$PR_TEMPLATE"
@@ -297,19 +326,32 @@ rg --quiet -- '-skip-testing:OpenKeyboardUITests/KeyboardExtensionConfiguredUITe
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewayAIUITests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveGatewaySmokeTests' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '-skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests' "$ROOT/scripts/ios/test.sh"
-rg --quiet -- '-skip-testing:OpenKeyboardUITests/OnboardingScreenshotUITests' "$ROOT/scripts/ios/test.sh"
-rg --quiet -- '-only-testing:OpenKeyboardUITests/OnboardingScreenshotUITests/testWelcomePageContentIsVisibleAndNonOverlapping' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   deterministic_case = source.match(/^  deterministic-ui\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The iOS test runner is missing deterministic-ui mode." unless deterministic_case
   expected = %q{-derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA"}
-  unless deterministic_case.scan(expected).length == 2
-    abort "Both deterministic UI invocations must use worktree-scoped DerivedData."
+  unless deterministic_case.scan(expected).length == 1
+    abort "The deterministic UI gate must use one worktree-scoped Xcode test session."
+  end
+  if deterministic_case.include?("OnboardingScreenshotUITests")
+    abort "The deterministic UI gate must include the onboarding assertion in its single test session."
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-gateway-smoke' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'begin_sensitive_live_workspace live-model-differential' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'live-model-differential [--diagnostic]' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'openkeyboard_finish_live_differential_run \' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile live-model differential verification failed; required outcomes were unverified.' "$LIVE_TEST_SAFETY"
+rg --fixed-strings --quiet 'LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification.' "$LIVE_TEST_SAFETY"
+if rg --fixed-strings --quiet 'Targeted two-profile live-model differential verification complete' "$ROOT/scripts/ios/test.sh"; then
+  echo "The differential runner retained the misleading green verification-complete message." >&2
+  exit 1
+fi
+if rg --fixed-strings --quiet 'live-model-differential --diagnostic' "$ROOT/scripts/check-live.sh"; then
+  echo "The exact-head live gate must never use diagnostic differential mode." >&2
+  exit 1
+fi
 rg --quiet 'begin_sensitive_live_workspace real-keyboard-live' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
@@ -348,6 +390,10 @@ ruby -e '
   end
   unless differential_case.include?(%q{openkeyboard_extract_live_diagnostic_evidence "$profile_result_bundle" "$profile_role"})
     abort "The differential runner must retain sanitized per-profile diagnostic capability evidence."
+  end
+  unless differential_case.include?("openkeyboard_finish_live_differential_run") &&
+      differential_case.include?(%q{"$LIVE_DIFFERENTIAL_EXECUTION_MODE"})
+    abort "The differential runner must apply strict-versus-diagnostic completion semantics."
   end
 ' "$ROOT/scripts/ios/test.sh"
 rg --fixed-strings --quiet 'live-gateway-diagnostics-\(role)' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
@@ -390,13 +436,54 @@ if [[ "$(rg --count 'openkeyboard_assert_single_passing_xcresult' "$ROOT/scripts
   exit 1
 fi
 rg --quiet 'SENSITIVE_LIVE_SIMULATOR' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'SENSITIVE_LIVE_SOURCE_WAS_BOOTED' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'restore_sensitive_live_source_simulator' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl clone' "$ROOT/scripts/ios/test.sh"
+rg --quiet 'simctl create' "$ROOT/scripts/ios/test.sh"
 rg --quiet 'simctl delete' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl shutdown' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'openkeyboard_restore_booted_simulator' "$ROOT/scripts/ios/test.sh"
-rg --quiet 'simctl bootstatus' "$LIVE_TEST_SAFETY"
+if [[ "$(rg --count 'simctl shutdown' "$ROOT/scripts/ios/test.sh")" -ne 2 ]]; then
+  echo "Only disposable live-test simulators may be shut down by the test runner." >&2
+  exit 1
+fi
+rg --fixed-strings --quiet 'xcrun simctl shutdown "$SENSITIVE_LIVE_SIMULATOR"' "$ROOT/scripts/ios/test.sh"
+rg --fixed-strings --quiet 'xcrun simctl shutdown "$simulator"' "$ROOT/scripts/ios/test.sh"
+if rg --quiet 'simctl erase' "$ROOT/scripts/ios/test.sh"; then
+  echo "The test runner must not erase Simulator state." >&2
+  exit 1
+fi
+rg --quiet 'openkeyboard_relaunch_with_simulator_lock' "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"
+rg --quiet 'File::LOCK_EX' "$LIVE_TEST_SAFETY"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  worktree_creation = source.index(%q{git -C "$PRIMARY_CHECKOUT" worktree add})
+  linked_waiter = source.index(%q{"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$LINKED_WORKTREE" "$LOCK_OUTPUT" second 0})
+  unless worktree_creation && linked_waiter && worktree_creation < linked_waiter
+    abort "The Simulator lock regression must run its waiting contender from a linked worktree."
+  end
+' "$ROOT/scripts/tests/live-test-safety-test.sh"
+if rg --quiet 'SENSITIVE_LIVE_SOURCE|restore_sensitive_live_source_simulator|simctl clone|openkeyboard_restore_booted_simulator' \
+    "$ROOT/scripts/ios/test.sh" "$LIVE_TEST_SAFETY"; then
+  echo "Live routes must not clone, stop, or restore an existing source simulator." >&2
+  exit 1
+fi
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  create_method = source.match(/^create_sensitive_live_simulator\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The iOS test runner is missing its disposable simulator creator." unless create_method
+  unless create_method.include?(%q{device.fetch("deviceTypeIdentifier")}) &&
+      create_method.include?(%q{xcrun simctl create "$simulator_name" "$device_type" "$runtime"})
+    abort "Disposable live simulators must be freshly created with the selected type and runtime."
+  end
+  if create_method.match?(/simctl (?:shutdown|erase|delete)/)
+    abort "Disposable simulator creation must not mutate the selected existing simulator."
+  end
+
+  lock_method = source.match(/^simulator_mode_requires_lock\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The iOS test runner is missing its Simulator exclusivity policy." unless lock_method
+  required_modes = %w[
+    ui deterministic-ui live-ui live-gateway-smoke live-model-differential
+    real-keyboard-live screenshots
+  ]
+  missing_modes = required_modes.reject { |mode| lock_method.include?(mode) }
+  abort "Simulator-backed routes are missing from the exclusivity policy: #{missing_modes.join(", ")}" unless missing_modes.empty?
+' "$ROOT/scripts/ios/test.sh"
 rg --quiet -- '--replace-existing-config' "$ROOT/scripts/ios/test.sh"
 if rg --quiet 'filter_map' "$ROOT/scripts/ios/test.sh"; then
   echo "Live-test helpers must remain compatible with the repository's supported host Ruby." >&2

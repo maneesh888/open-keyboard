@@ -12,19 +12,6 @@ while IFS= read -r git_environment_name; do
   unset "$git_environment_name"
 done < <(git -C "$ROOT" rev-parse --local-env-vars)
 
-xcrun() {
-  if [[ "${1:-}" == "simctl" && "${2:-}" == "bootstatus" ]]; then
-    return 1
-  fi
-  return 0
-}
-
-if openkeyboard_restore_booted_simulator fixture-simulator; then
-  echo "Simulator restoration accepted a failed bootstatus check." >&2
-  exit 1
-fi
-unset -f xcrun
-
 initialize_repository() {
   local repository="$1"
 
@@ -106,6 +93,51 @@ LINKED_WORKTREE="$FIXTURE/temporary linked worktree"
 VALID_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/openkeyboard-gateway.env"
 initialize_repository "$PRIMARY_CHECKOUT"
 write_valid_seed "$VALID_SEED"
+git -C "$PRIMARY_CHECKOUT" worktree add -q -b linked-worktree-test "$LINKED_WORKTREE"
+
+LOCK_PROBE="$FIXTURE/simulator-lock-probe.sh"
+LOCK_OUTPUT="$FIXTURE/simulator-lock-order.log"
+LOCK_WAIT_OUTPUT="$FIXTURE/simulator-lock-wait.log"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'source "$1"' \
+  'repository_root="$2"' \
+  'output_file="$3"' \
+  'label="$4"' \
+  'hold_seconds="$5"' \
+  'openkeyboard_relaunch_with_simulator_lock "$repository_root" "$0" "$@"' \
+  'printf "%s-start\n" "$label" >> "$output_file"' \
+  'sleep "$hold_seconds"' \
+  'printf "%s-end\n" "$label" >> "$output_file"' \
+  > "$LOCK_PROBE"
+chmod +x "$LOCK_PROBE"
+
+"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$PRIMARY_CHECKOUT" "$LOCK_OUTPUT" first 1 &
+first_lock_probe=$!
+for _ in {1..50}; do
+  if [[ -s "$LOCK_OUTPUT" ]]; then
+    break
+  fi
+  sleep 0.02
+done
+if [[ ! -s "$LOCK_OUTPUT" ]]; then
+  echo "The first Simulator lock probe did not start." >&2
+  exit 1
+fi
+"$LOCK_PROBE" "$ROOT/scripts/ios/live-test-safety.sh" "$LINKED_WORKTREE" "$LOCK_OUTPUT" second 0 \
+  2> "$LOCK_WAIT_OUTPUT" &
+second_lock_probe=$!
+wait "$first_lock_probe"
+wait "$second_lock_probe"
+if [[ "$(<"$LOCK_OUTPUT")" != $'first-start\nfirst-end\nsecond-start\nsecond-end' ]]; then
+  echo "Simulator-backed routes from separate worktrees were not serialized by the repository lock." >&2
+  exit 1
+fi
+if ! grep -Fq 'Another OpenKeyboard Simulator route is active; waiting for it to finish.' "$LOCK_WAIT_OUTPUT"; then
+  echo "The serialized Simulator route did not report that it was waiting." >&2
+  exit 1
+fi
 
 resolved_primary="$(openkeyboard_primary_checkout_root "$PRIMARY_CHECKOUT")"
 if [[ "$resolved_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
@@ -127,7 +159,6 @@ if [[ "$resolved_seed" != "$(realpath "$VALID_SEED")" ]]; then
   exit 1
 fi
 
-git -C "$PRIMARY_CHECKOUT" worktree add -q -b linked-worktree-test "$LINKED_WORKTREE"
 resolved_linked_primary="$(openkeyboard_primary_checkout_root "$LINKED_WORKTREE")"
 if [[ "$resolved_linked_primary" != "$(realpath "$PRIMARY_CHECKOUT")" ]]; then
   echo "Linked worktree did not resolve the primary checkout through Git metadata." >&2
@@ -582,6 +613,56 @@ fi
 if printf '%s' '{"result":"Failed","totalTestCount":1,"passedTests":0,"failedTests":1,"skippedTests":0,"expectedFailures":0}' |
     openkeyboard_classify_low_differential_test_summary >/dev/null 2>&1; then
   echo "A failing low-profile test was accepted as differential evidence." >&2
+  exit 1
+fi
+
+verified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    verification \
+    passed passed expected-model-capability passed passed passed verified
+)"
+if [[ "$verified_completion" != "LIVE_VERIFIED: targeted two-profile live-model differential verification passed." ]]; then
+  echo "Verified differential completion used an unexpected status or message." >&2
+  exit 1
+fi
+
+if strict_unverified_completion="$(
+    openkeyboard_finish_live_differential_run \
+      verification \
+      passed unverified expected-model-capability unverified passed unverified verified 2>&1
+  )"; then
+  echo "Strict differential verification accepted unverified required outcomes." >&2
+  exit 1
+fi
+if [[ "$strict_unverified_completion" != *"LIVE_UNVERIFIED:"* ]] ||
+    [[ "$strict_unverified_completion" != *"verification failed"* ]]; then
+  echo "Strict unverified differential output was not labeled truthfully." >&2
+  exit 1
+fi
+
+diagnostic_unverified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    diagnostic \
+    passed unverified diagnostic-boundary-not-established unverified passed unverified verified
+)"
+if [[ "$diagnostic_unverified_completion" != "LIVE_UNVERIFIED: targeted two-profile diagnostic run complete; this is not verification." ]]; then
+  echo "Diagnostic unverified completion used an unexpected status or message." >&2
+  exit 1
+fi
+if [[ "$diagnostic_unverified_completion" == *"✓"* ]] ||
+    [[ "$diagnostic_unverified_completion" == *"verification complete"* ]] ||
+    [[ "$diagnostic_unverified_completion" == *"verification passed"* ]]; then
+  echo "Diagnostic unverified completion printed a success-style verification claim." >&2
+  exit 1
+fi
+
+diagnostic_verified_completion="$(
+  openkeyboard_finish_live_differential_run \
+    diagnostic \
+    passed passed expected-model-capability passed passed passed verified
+)"
+if [[ "$diagnostic_verified_completion" != "LIVE_VERIFIED: targeted two-profile diagnostic run complete; required outcomes were verified." ]]; then
+  echo "Diagnostic verified completion used an unexpected status or message." >&2
   exit 1
 fi
 

@@ -25,6 +25,14 @@ the PR description. Skipped, missing, stale, fallback, wrong-target, or wrong-mo
 `UNVERIFIED`; it prevents automatic authorization and forces the explicit human route. Human
 authorization accepts the disclosed risk but never bypasses the required statuses above.
 
+The status checks do not themselves establish normal simulator or physical-device proof. For UI,
+keyboard-extension lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes,
+the PR ledger must retain exact-head normal runtime evidence from a normally launched app and
+direct Simulator/Xcode screenshots. XCTest/XCUITest, seeded states, and `XCTAttachment` screenshots
+remain automated regression evidence. Required physical-device proof must come from the exact
+signed build on the configured device. Missing required simulator/device proof blocks readiness and
+merge under both automatic and human authorization routes.
+
 Every review/body event creates the fixed `Required checks` root job, and every live-evidence body
 event creates the fixed `Required live verification` root job. The first project-review submission
 normally fails because its immutable PR body cannot yet link the newly created review. GitHub keeps

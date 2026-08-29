@@ -95,7 +95,7 @@ The keyboard extension currently includes:
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
-- rewrite/improvement options that are shown before replacement, with selected option state
+- one validated plain-text Rewrite/Rephrase, style, or Improve replacement shown for comparison before Apply
 - replacement of the current line/context before the cursor through the replacement planner after the user accepts a selected correction or rewrite
 - debug-only state persistence for UI tests
 
@@ -128,17 +128,17 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 
 The pinned semantic prompt package owns the operation-specific instructions, response contract
 metadata, and deterministic message rendering. Open Keyboard owns request transport, local grammar
-diffing, response parsing, and UI behavior. Grammar correction returns one complete plain-text
-correction with no explicit temperature or response format; the client derives selectable edits
-locally. Other structured actions send the package-rendered messages with
-`response_format: {"type":"json_object"}` where the selected backend supports it. The gateway is
+diffing, response parsing, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
+style, and Improve return one complete validated plain-text replacement with no structured response
+format; the client derives grammar edits and writing-action comparison highlights locally.
+Summarize, Translate, and Continue Writing retain their package-owned structured contracts. The gateway is
 the trust boundary for model access, API keys, rate limits, logs, and upstream model routing; it
 does not inject Open Keyboard prompts or rebuild the message conversation.
 
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `3.2.0`. This path is a checkout
+`Vendor/semantic-prompt-contract` Git submodule at contract version `4.1.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
 and UI tests compile the same generated Swift adapter. UI, request transport, gateway
@@ -241,6 +241,12 @@ These commands use the canonical seed and are credential-gated:
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
+All `test.sh` routes are automated regression evidence, including `real-keyboard-live` when it
+installs and activates the real extension. Their `.xcresult` files and `XCTAttachment` screenshots
+are not normal simulator runtime proof. UI, extension-lifecycle, Apply/Copy/Back/Rerun, live
+gateway, and result-presentation changes additionally require the ordinary host-app runtime route
+in `docs/REAL_EXTENSION_SMOKE_PLAN.md` before push.
+
 The seed may contain complete `LOW` and `HIGH` URL/API-key/model triples for targeted model
 comparison. Every configured role must be complete, model IDs must pass the strict safety grammar,
 and the parser rejects duplicate or unknown variables. Ordinary gateway verification selects the
@@ -250,13 +256,17 @@ containing real endpoints, keys, or model IDs.
 
 `live-model-differential` builds the test artifacts once, runs the deterministic operation-scoped
 warning prerequisites once, then executes only the baseline, fixed long-text boundary, and
-post-boundary follow-up on isolated low and high profiles. Low success on the boundary is recorded
-as diagnostic—not converted into a flaky pass—and exact-head policy rejects it as verified matrix
-evidence. High-profile structural success remains independently required. Per-profile wall-clock
-latency is retained without response bodies. The same private result bundles retain a sanitized
-attachment for each role with separate transport, grammar, rewrite, and translation pass/fail plus
-per-capability latency; the live runner validates and reports those fields before deleting the
-temporary attachments.
+post-boundary follow-up on isolated low and high profiles. The default command is strict
+verification and exits nonzero when any required outcome is unverified. Use
+`./scripts/ios/test.sh live-model-differential --diagnostic` only for exploratory collection; an
+unverified diagnostic may complete but is labeled `LIVE_UNVERIFIED` and never prints green
+verification success. Low success on the boundary is recorded as diagnostic—not converted into a
+flaky pass—and exact-head policy rejects it as verified matrix evidence. High-profile structural
+success remains independently required. Per-profile wall-clock latency is retained without
+response bodies.
+The same private result bundles retain a sanitized attachment for each role with separate
+transport, grammar, rewrite, and translation pass/fail plus per-capability latency; the live runner
+validates and reports those fields before deleting the temporary attachments.
 
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set
@@ -292,9 +302,12 @@ Recent local verification:
 - `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath "${TMPDIR:-/tmp}/openkeyboard-derived" build-for-testing`: passed
 - `KeyboardSuggestionModelsTests`: passed
 - `KeyboardViewModelActionErrorTests`: passed
-- real extension configured smoke test for AI controls: passed
+- automated configured real-extension XCUITest regression for AI controls: passed
 
-The project still needs broader real-device, live-gateway, prompt-quality, release-signing, and App Store readiness verification before release. See `docs/REAL_EXTENSION_SMOKE_PLAN.md` for the focused simulator smoke route.
+This result does not establish normal simulator or physical-device proof. The project still needs
+normal simulator runtime proof, broader physical-device and live-gateway acceptance, prompt-quality
+evaluation, release signing, and App Store readiness verification before release. See
+`docs/REAL_EXTENSION_SMOKE_PLAN.md` for the separated automated, normal-simulator, and device routes.
 
 ## Roadmap
 
@@ -315,7 +328,7 @@ The project still needs broader real-device, live-gateway, prompt-quality, relea
 - [x] Model discovery
 - [x] Shared App Group config for non-sensitive settings
 - [x] Shared Keychain storage for gateway API key
-- [x] Simulator smoke coverage for configured gateway state inside the keyboard extension
+- [x] Automated simulator regression coverage for configured gateway state inside the keyboard extension
 - [ ] Broader real-device verification for shared Keychain/App Group behavior
 
 ### AI Writing

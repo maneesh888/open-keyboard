@@ -1,103 +1,96 @@
 ---
 name: develop-openkeyboard
-description: Execute bounded OpenKeyboard analysis, planning, implementation, testing, documentation, CI, gateway, keyboard-extension, and release-hardening work while preserving iOS and secret boundaries.
+description: Execute bounded OpenKeyboard analysis, implementation, testing, documentation, CI, gateway, keyboard-extension, and release-hardening work through the repository's canonical workflow.
 ---
 
 # Develop OpenKeyboard
 
-Work on one bounded package while preserving the host app, keyboard extension, shared configuration,
-gateway, and proof boundaries.
+Use `AGENTS.md` as the canonical execution policy. This skill supplies the implementation loop; do
+not restate or weaken the repository's evidence, secret, git, or review gates.
 
-## Establish only needed context
+## Enter the task
 
-1. Resolve the repository root and inspect `git status --short --branch`.
-2. Read `AGENTS.md` completely.
-3. Read the current status and roadmap in `README.md` plus only the relevant status entries in `docs/WORK_QUEUE.md`.
-4. If the user requests planning or asks what is next, invoke the read-only `work-package-planner` without inherited conversation; it uses `$plan-openkeyboard-work-package`.
-5. Otherwise read only the requested work package, acceptance, verification, and proof-limit sections needed for the change.
-6. Read `docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md` and focused plans only when their surface is affected or status sources are ambiguous.
-7. Read `docs/DEVELOPMENT_WORKFLOW.md` when selecting checks or changing workflow, hooks, CI, signing, deployment, or external-tool behavior.
-8. For semantic prompts, schemas, generated adapters, or gateway diagnostic fixtures, initialize the pinned `Vendor/semantic-prompt-contract` submodule and treat its canonical JSON as the source of truth.
+1. Resolve the repository root and inspect status without mutation, then read `AGENTS.md`
+   completely.
+2. Build the canonical authority ledger before fetching, creating a branch/worktree, initializing
+   submodules, editing, or testing. Preserve sticky constraints independently; ambiguous later
+   wording such as `try`, `find out`, or `try chunks` does not revoke them.
+3. Keep a compact work order: objective, affected surfaces, exclusions, final state, verification
+   level, required evidence class, and authority ledger.
+4. Work in the isolated session worktree selected by `AGENTS.md` only when edits are authorized.
+5. If the user explicitly asks for a major milestone, roadmap, long-horizon plan, or multi-phase
+   plan, use the read-only `$plan-openkeyboard-major-milestone`. Use the read-only
+   `$plan-openkeyboard-work-package` for one bounded plan or a concise "what next" request.
+   Otherwise proceed directly; never add either planning route before a clear implementation.
+6. Read only relevant source, acceptance, and focused-plan sections. Read
+   `docs/DEVELOPMENT_WORKFLOW.md` for workflow/CI/signing/deployment changes and initialize the
+   pinned semantic-contract submodule for prompt/schema/adapter work only after the needed
+   repository mutation is authorized.
 
-Preserve unrelated work. Use an isolated worktree when exact-head operations would disturb a dirty
-checkout.
+## Implement and verify
 
-## Select the mode
+1. Preserve unrelated work and keep edits inside the work order.
+2. Follow the repository's MVVM, theme, App Group, Keychain, extension-lifecycle, gateway, semantic
+   contract, and secret boundaries.
+3. Add or update focused automated regression coverage for changed behavior.
+4. Run affected tests while iterating, then select the final gate:
+   - **Fast/local policy:** affected tests plus `./scripts/check.sh --hygiene`.
+   - **Standard completed work:** `./scripts/check.sh --quick`.
+   - **Release/publish:** exact-head `./scripts/check.sh --full`, classifier-selected live gate,
+     required runtime proof, GitHub checks, and independent review.
+5. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
+   changes. Use `gateway-differential` only for the classifier-selected low/high surfaces or
+   pre-release verification; preserve exact role/model identity and treat an unstable low boundary
+   as diagnostic/`UNVERIFIED`.
+6. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
+   plus content before committing.
 
-- **Fast:** focused local change, affected tests, and hygiene.
-- **Standard:** completed implementation plus the quick deterministic gate.
-- **Release:** exact-head full gate, applicable live proof, CI, independent review, and guarded readiness or merge.
+In proof-first mode, use existing routes or temporary non-repository harnesses and report results
+before implementation. Do not mutate any tracked production, test, documentation, configuration,
+or workflow file, and do not stage or commit. A required live outage is `LIVE_UNVERIFIED` and stops
+the task without speculative production changes or extra deterministic tests presented as
+replacement proof. Recheck the authority ledger before the first tracked edit, staging, commit,
+push, PR mutation, readiness change, and merge.
 
-Use the highest mode required by the requested outcome or changed surface. Mandatory hooks may run
-a higher cumulative gate without expanding the task's proof claim.
+Use repository Simulator routes so their shared lock and disposable-device ownership apply.
+Never clear, stop, erase, or delete an existing or user-open Simulator to prepare a test.
 
-## Execute
+XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
+diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
+lifecycle, Apply/Copy/Back/Rerun, live gateway, and result-presentation changes require the normal
+runtime route in `AGENTS.md` and `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 
-1. Keep a compact internal work order with objective, affected surfaces, out-of-scope behavior, mode, and proof boundaries.
-2. Add or update focused tests when behavior changes.
-3. Keep SwiftUI views presentation-focused; place UI state and actions in ViewModels and side effects in services or repositories.
-4. Preserve App Group, Keychain, signing, extension-lifecycle, and gateway trust boundaries.
-5. Use `OpenKeyboardTheme` tokens and existing local patterns in touched UI.
-6. Keep deterministic, screenshot, real-extension, live-gateway, signing, deployment, and App Review evidence distinct.
-7. Update affected documentation when a user-visible contract, proof route, workflow, or status source changes.
-8. Never claim evidence for an unexecuted simulator, extension lifecycle, device, gateway, signing, deployment, or release path.
-9. Never add fallback prompt copies. Make semantic changes in the shared package, classify version impact, regenerate adapters, inspect equivalence fixtures, and advance the consumer gitlink intentionally.
-10. For model-capability classification, long-input handling, parser compatibility, retry behavior,
-    automatic-analysis warnings, manual-action error scope, or Translate warning scope, use the
-    targeted two-profile matrix. Run deterministic prerequisites and the Xcode build once; never run
-    the full suite separately for both profiles.
+Use the first reliable normal-Simulator interaction route: a purpose-built Simulator-control
+integration, then Computer Use or equivalent reliable host UI automation, then the exact manual
+handoff. If interaction is unavailable or ambiguous, stop before publication and disclose the gap;
+do not substitute more XCTest.
+
+Local implementation and commits may proceed after deterministic checks only when the authority
+ledger permits implementation and commit and no proof-first constraint remains. For proof-sensitive
+user-facing changes, do not push or create/update a readiness PR until normal simulator runtime
+proof succeeds unless the user explicitly authorizes a push with the gap disclosed. Never mark a
+PR ready or merge while required simulator or physical-device proof is missing.
+
+Report automated regression, transport, semantic acceptance, visual/runtime acceptance, and device
+acceptance separately. Use the task-status labels from `AGENTS.md` and never call behavior fixed or
+working while required live/runtime evidence remains unverified.
 
 ## Lifecycle autonomy
 
-A bounded implementation request starts the normal repository lifecycle through guarded merge:
-branch/worktree preparation, edits, tests, commit, push, PR publication, in-scope review fixes,
-readiness, and merge. Continue without separate confirmation between those stages only when the
-exact-head independent reviewer reports operational confidence of exactly `100%`. If confidence is
-below 100%, keep the PR draft, disclose every unverified requirement and blocker, and require
-explicit repository-owner approval for that same exact head before readiness or merge.
+A bounded implementation request follows only the lifecycle stages individually authorized by the
+sticky ledger in `AGENTS.md`: worktree, implementation, verification, commit, push, draft PR,
+in-scope fixes, exact-head review, readiness, and guarded merge. A later ambiguous request cannot
+clear an earlier edit, implementation, commit, push, PR, readiness, or merge constraint. Deployment
+and destructive cleanup always require separate authority.
 
-Honor the latest explicit opt-out:
+Use `$review-verify-merge-pr` for the exact report schema, GitHub event-family validation,
+automatic-versus-human authorization, readiness, and merge mechanics. Below reviewer confidence of
+exactly `100%`, keep the PR draft and request repository-owner approval for that exact SHA after all
+unverified requirements are disclosed. A new commit expires prior exact-head evidence and
+authorization.
 
-- `local only`
-- `do not commit`
-- `do not push`
-- `do not create a PR`
-- `keep draft` or `do not mark ready`
-- `do not merge`
+## Handoff
 
-Planning, review-only work, readiness assessment, and blocker requests remain read-only. Deployment
-and destructive cleanup remain separate external actions requiring explicit authority. Stop for
-unavailable credentials, destructive actions, material scope expansion, ambiguous ownership of
-dirty work, or an external state change outside that authority.
-
-Use available GitHub tooling for repository operations. Never add a write-enabled or secret-bearing
-ordinary pull-request workflow.
-
-## Verify and publish
-
-- Run affected tests while iterating.
-- Run `./scripts/check.sh --hygiene` for a Fast handoff with file changes.
-- Run `./scripts/check.sh --quick` for Standard; mandatory hooks may supply it at commit.
-- Run `./scripts/check.sh --full` for Release and before an authorized push.
-- Run `./scripts/check-semantic-prompt-contract.sh` whenever the contract gitlink, canonical semantics, schemas, fixtures, or generated-adapter wiring changes.
-- Run `./scripts/check-live.sh gateway` only when the exact-head classifier selects gateway impact.
-- Run `./scripts/check-live.sh gateway-differential` when the classifier selects
-  `gateway-differential` and for pre-release verification. Required/tested evidence stays in
-  canonical `low=<id>, high=<id>` order. A low success or intermittent boundary is diagnostic,
-  remains `UNVERIFIED`, and blocks guarded merge rather than becoming a flaky gate.
-- Never bypass hooks or scanners.
-
-Create PRs as drafts with a concise brief containing a separate row for every in-scope requirement,
-its observable acceptance criterion, required proof type, exact evidence, and verification status.
-Include independent review state, live evidence, explicitly authorized out-of-scope limits, and the
-full exact head SHA. An unverified, ambiguous, skipped, stale, fallback, or wrong-target requirement
-is a blocker, not a residual limitation. Human authorization may accept a disclosed blocker but
-must not relabel it as verified or bypass a failed mandatory gate. A new commit invalidates both
-reviewer confidence and human authorization. For PR review, readiness, or merge, use
-`$review-verify-merge-pr`.
-
-## Report compactly
-
-Report the branch/worktree, changed areas, checks and results, and proof limits or blockers. For
-Release, add the exact SHA, required CI, independent-review result, readiness or merge action, and
-post-merge evidence when applicable.
+Report the worktree/branch, changed areas, checks and results, exact evidence classes, screenshots
+when required, proof gaps, exact SHA/PR state when published, and commit ID when committed. Never
+claim an unexecuted simulator, extension, gateway, device, signing, deployment, or release path.

@@ -16,7 +16,7 @@ if ! command -v xcrun >/dev/null 2>&1; then
 fi
 
 # The relevant domains are the same ones observed in historical successful
-# real-extension proof artifacts. Keep the base and emoji keyboards present so
+# automated real-extension regression artifacts. Keep the base and emoji keyboards present so
 # normal simulator text input remains usable, then add OpenKeyboard and map en_US
 # to it for host text fields whose preferred input mode is en-US.
 xcrun simctl spawn "$SIMULATOR_UDID" defaults write .GlobalPreferences AppleKeyboards \

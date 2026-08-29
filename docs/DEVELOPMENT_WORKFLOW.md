@@ -15,28 +15,55 @@ derive from canonical JSON; do not edit them or add fallback prompt copies in th
 
 ## Purpose
 
-OpenKeyboard uses proportional local checks and exact-head release evidence. This file owns
-verification selection and proof boundaries. `AGENTS.md` owns repository behavior and
-`.github/BRANCH_PROTECTION_GUIDE.md` owns the GitHub merge settings.
+OpenKeyboard uses proportional local checks and exact-head release evidence. `AGENTS.md` is the
+canonical straight-line workflow. This file is the detailed verification reference loaded only
+when a task needs route selection, hooks, CI, signing, deployment, or proof details.
 
-Repository automation is split across `$develop-openkeyboard`, the read-only
-`$plan-openkeyboard-work-package` planner route, and `$review-verify-merge-pr`. These skills route
-work but do not weaken the proof requirements below.
+Repository automation is split across `$develop-openkeyboard`, the read-only compact
+`$plan-openkeyboard-work-package` route, the read-only phased
+`$plan-openkeyboard-major-milestone` route, and `$review-verify-merge-pr`. These skills route work
+but do not weaken the proof requirements below.
 
-## Proof levels
+## Authority and proof-first mode
 
-Keep these claims separate:
+`AGENTS.md` owns the authority ledger and sticky constraints. Resolve them before fetching,
+creating a branch/worktree, initializing submodules, editing, staging, committing, pushing, or
+changing a PR. Exploratory language does not authorize tracked edits. Planning and proof-first
+experiments use existing routes or temporary non-repository harnesses.
 
-1. **Behavior proof:** focused tests validate deterministic Swift and keyboard behavior.
-2. **Build proof:** the host app and keyboard extension compile for the simulator.
-3. **Deterministic UI-target proof:** non-live UI-target tests pass on the documented simulator.
-4. **Real extension proof:** the installed keyboard extension completes its real lifecycle.
-5. **Live gateway proof:** an exact committed head completes the local gateway smoke.
-6. **Independent review proof:** the read-only reviewer finds no blocker on the same exact head.
-7. **Deployment proof:** a signed archive exports, validates, and uploads through App Store Connect.
+Proof-first mode is active when the user requests results, testing, or model comparison before
+implementation. Every tracked repository mutation—including production, test, documentation,
+configuration, workflow, staging, and commit changes—remains prohibited until the requested
+evidence is reported and the user explicitly authorizes implementation. An HTTP `503` or other
+gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do not infer model
+capability, and stop without speculative production changes.
 
-Never infer a stronger proof level from a weaker one. Normal GitHub CI proves behavior and build,
-not UI quality, real keyboard lifecycle, live gateway behavior, signing, or deployment.
+Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
+`LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
+the PR requirement ledger's `VERIFIED`/`UNVERIFIED` values. Required unverified live/runtime status
+prohibits a claim that the behavior is fixed or working.
+
+## Evidence classes and claims
+
+Every verification artifact belongs to one of three runtime evidence classes:
+
+1. **Automated regression evidence:** unit tests, XCTest, XCUITest, mocked gateway tests, debug
+   launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. An
+   XCUITest that installs and activates the real keyboard extension remains automated evidence.
+2. **Normal simulator runtime proof:** a normally installed and launched app, without
+   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. The actual
+   extension is exercised through an ordinary host-app text field and visible production UI, with
+   screenshots captured directly from Simulator/Xcode outside XCTest.
+3. **Physical-device proof:** the exact signed build is installed on the configured device and
+   exercised through the normal extension lifecycle, with screenshots captured directly from the
+   device.
+
+These classes support separate claims: build success, automated regression coverage, transport
+success, semantic acceptance, visual/runtime acceptance, physical-device acceptance, independent
+review, signing, deployment, and App Review. Never infer a stronger claim from a weaker class.
+Normal GitHub CI proves deterministic behavior/build only. Automated tests—including real-extension
+XCUITest—cannot alone authorize a proof-sensitive push, PR readiness, release readiness, or a claim
+that the user-visible workflow works.
 
 ## Modes and cumulative gates
 
@@ -58,8 +85,9 @@ Release readiness additionally requires exact-head GitHub checks and an independ
 - `--quick`: hygiene, OpenKeyboardCore tests, and app plus keyboard-extension build.
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
 
-Screenshots, real extension testing, and live gateway verification remain separate because they
-require simulator state, human inspection, or local credentials.
+Automated screenshots, automated real-extension tests, normal simulator runtime proof, and live
+gateway verification remain separate. The runtime proof does not replace XCTest coverage, and an
+`XCTAttachment` does not become normal simulator proof because the installed extension was active.
 
 The explicit `./scripts/ios/test.sh ui` route remains broader than `--full`. It includes
 credential- and simulator-state-dependent classes, so it is diagnostic rather than a mandatory
@@ -71,10 +99,10 @@ credential-free push gate.
 |---|---|
 | Model, parser, or core service | `./scripts/ios/test.sh core` |
 | Host app or extension compilation | `./scripts/ios/test.sh build` |
-| Host app user flow | `./scripts/ios/test.sh ui` |
-| Visual layout | `./scripts/ios/test.sh screenshots` plus image inspection |
-| Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` when configured |
-| Gateway runtime or contract | `./scripts/check-live.sh gateway` on committed exact `HEAD` |
+| Host app user flow | `./scripts/ios/test.sh ui` for automated regression; normal simulator runtime proof before push |
+| Visual layout | `./scripts/ios/test.sh screenshots` for automated regression; direct Simulator screenshots from a normal launch before push |
+| Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` for automated real-extension regression; normal host-app runtime route before push |
+| Gateway runtime or contract | `./scripts/check-live.sh gateway` for automated transport/contract evidence; normal runtime proof when user-visible semantic behavior changes |
 | Model capability, long input, parser compatibility, retry, or operation-scoped warnings | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
@@ -111,14 +139,18 @@ unsafe model IDs, missing differential roles, identical role models, reversed ma
 substitution are rejected without printing values. Ordinary checks use the high profile when it is
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
-The targeted differential runner performs deterministic prerequisites and `build-for-testing`
-once, then reuses the compiled `.xctestrun` for isolated low and high simulator clones. It runs one
-small baseline/boundary/follow-up test per role and removes both clones, injected environment,
-DerivedData, result bundles, summaries, and temporary evidence on exit. A low-model success at the
-candidate boundary is retained as `diagnostic-boundary-not-established`, not promoted to passing
-evidence. Before cleanup, the runner exports one sanitized text attachment per role and requires
-separate transport, grammar, rewrite, and translation status and latency rows in canonical order.
-The attachment grammar rejects extra content so credentials and response bodies cannot enter the
+The targeted differential runner performs automated deterministic prerequisites and
+`build-for-testing` once, then reuses the compiled `.xctestrun` for isolated low and high disposable
+simulators. It runs one small baseline/boundary/follow-up test per role and removes both simulators,
+injected environment, DerivedData, result bundles, summaries, and temporary evidence on exit. The
+default command is verification and exits nonzero unless the exact required low/high outcomes are
+verified. `--diagnostic` is the only permissive exploratory mode; an unverified diagnostic may exit
+zero but must report `LIVE_UNVERIFIED` and `diagnostic run complete`, never green verification
+success. A low-model success at the candidate boundary is retained as
+`diagnostic-boundary-not-established`, not promoted to passing evidence.
+Before cleanup, the runner exports one sanitized text attachment per role and requires separate
+transport, grammar, rewrite, and translation status and latency rows in canonical order. The
+attachment grammar rejects extra content so credentials and response bodies cannot enter the
 retained summary.
 
 ## Hooks
@@ -133,7 +165,9 @@ git config --local --get core.hooksPath
 
 The path must be `.githooks`.
 
-- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`.
+- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`. It can
+  establish `DETERMINISTIC_VERIFIED` only; it cannot grant commit authority or establish
+  `LIVE_VERIFIED`/`RUNTIME_VERIFIED`.
 - Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
   classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
@@ -143,20 +177,60 @@ The path must be `.githooks`.
   `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` must remain beneath that same canonical directory.
 - Live test runners place injected `.xctestrun`, DerivedData, and result bundles in a private
   temporary workspace and remove that workspace plus exported credential variables on every exit.
-- Ordinary and real-keyboard live routes parse `.xcresult` and require exactly one passing test with
+- Ordinary and real-keyboard live routes are automated regression evidence. They parse `.xcresult`
+  and require exactly one passing test with
   no failures, skips, or expected failures. The differential route separately requires its exact
   deterministic prerequisite count and high-profile pass; a low-profile success is an explicit
   diagnostic skip that the exact-head validator refuses as passing matrix evidence. A successful
   `xcodebuild` process alone is never accepted as proof.
-- The real-keyboard route clones the selected simulator, immediately restores the source to its
-  prior booted state when needed, seeds only the disposable clone, refreshes extension registration,
-  and deletes the clone on every handled exit. Source gateway configuration is not modified.
+- Simulator-backed test modes use one repository-wide host lock so concurrent worktrees or agents
+  cannot drive the same Simulator service at once.
+- Live routes create a fresh disposable simulator with the selected device type and runtime. They
+  never shut down, erase, delete, or modify the selected existing simulator. The automated
+  real-keyboard route seeds and restarts only its disposable simulator, then deletes it on exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 - The exact-head impact classifier selects `gateway-differential` only for changes touching
   model-capability classification, long-input handling, parser compatibility, retry behavior,
   automatic-analysis warnings, manual-action scope, Translate warning scope, or the matrix workflow
   itself. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
   explicitly. Unrelated pull requests do not run the two-profile matrix.
+
+## Normal simulator and device proof gate
+
+Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
+behavior, or result presentation require normal simulator runtime proof before push. Local
+implementation and commits may proceed after deterministic tests only when explicitly authorized
+and no proof-first constraint remains. Proof-first model-capability, long-input, parser, retry, or
+semantic-behavior work requires the requested live result and later implementation authority before
+production edits or commit.
+
+Normal simulator runtime proof must:
+
+- install and normally launch the actual app and bundled keyboard extension;
+- avoid `--uitesting`, debug-state injection, seeded result panels, component/test hosts, and
+  XCTest-driven interaction;
+- focus an ordinary host-app text field and activate OpenKeyboard through the normal keyboard
+  lifecycle;
+- invoke the action through visible production UI and use the configured live gateway when
+  semantic behavior is being verified;
+- capture screenshots directly from Simulator/Xcode, never from `XCTAttachment`;
+- record exact Git SHA, build configuration, simulator model, OS version, action, source text, and
+  observed result without exposing credentials or private configuration.
+
+If Codex can interact with the normal simulator confidently, it collects this proof directly. Use
+the first reliable route: a purpose-built, generically named Simulator-control integration;
+Computer Use or equivalent host UI automation that can inspect and operate the normal Simulator;
+or the manual checklist in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. If interaction is unavailable,
+unreliable, or ambiguous, stop before push/readiness and state the unverified behavior. Running
+more XCTest does not resolve the blocker.
+
+Physical-device proof requires the exact signed build installed on the configured device. A
+Simulator or XCTest run cannot satisfy it. When the configured device is unavailable, report the
+device requirement blocked and request manual verification.
+
+The user may explicitly authorize a proof-sensitive push with missing runtime proof disclosed, but
+that exception does not mark the evidence verified and cannot authorize PR readiness or merge.
+Never mark a PR ready or merge while required simulator/device proof is missing.
 
 ## GitHub checks
 
@@ -268,9 +342,9 @@ that unknown defects are impossible.
 A bounded implementation request continues through branch preparation, implementation, checks,
 commit, push, draft PR publication, in-scope review fixes, readiness, and guarded merge without a
 confirmation at every stage only when the reviewer reports `100%`. Below 100%, the root reports the
-exact head and every gap, then waits for explicit owner approval of that SHA. The latest `local
-only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
-instruction stops the corresponding state change.
+exact head and every gap, then waits for explicit owner approval of that SHA. Any active sticky
+`local only`, `do not commit`, `do not push`, `do not create a PR`, `keep draft`, or `do not merge`
+constraint stops the corresponding state change until the user explicitly revokes that constraint.
 
 After every exact-head gate and the selected authorization route pass, the root agent may invoke
 GitHub's native squash auto-merge with head-SHA matching. Human authorization never relabels an
@@ -289,10 +363,19 @@ the protected `app-store-connect` environment.
 mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
 change to the repository scripts above.
 
-When planning is explicitly requested, the read-only `work-package-planner` invokes
-`$plan-openkeyboard-work-package`. It reads only current status, work-queue, completion-plan, and
-directly relevant focused-plan sections, then returns a compact work order with source-object
-digests. A clear implementation request bypasses this planning route.
+For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
+`$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
+
+For an explicitly requested major milestone, roadmap, long-horizon plan, or multi-phase
+cross-cutting effort, the read-only `major-milestone-planner` invokes
+`$plan-openkeyboard-major-milestone`. It builds a dependency-aware sequence of bounded phases with
+entry criteria, exit criteria, proportional evidence, decision gates, risks, and the first
+executable work package. It does not make ordinary tasks adopt proof-first mode, and it does not
+require physical-device proof unless the requirement is device-specific or a material device-only
+uncertainty remains.
+
+A clear implementation request bypasses both planning routes. Neither planner edits, tests,
+publishes, or grants authority for a later lifecycle stage.
 
 ## Deployment
 

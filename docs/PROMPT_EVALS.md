@@ -31,7 +31,11 @@ Acceptance:
 - No network calls.
 - No real private user text.
 - Stable pass/fail behavior in normal CI.
-- Proves every built-in prompt requests exactly one JSON object with the canonical result contract.
+- Proves each operation covered by this Core fixture suite requests its canonical package-owned
+  response format: one complete plain-text replacement for Grammar and Core Rewrite, or one JSON
+  object for Summarize, Translate, and Continue Writing.
+- Contract and app/extension suites separately prove the same complete plain-text response contract
+  for Improve and every rewrite style.
 - Checks operation-specific rules, including granular grammar items, meaning preservation,
   facts-only summaries, translation fidelity, and continuation-only output.
 
@@ -76,7 +80,7 @@ Current live harness coverage:
 
 - Grammar correction sanity check.
 - Gemma-specific complete plain-text multi-error grammar correction checks.
-- Gemma-specific valid structured JSON checks for rewrite, summarize, translate, and continue writing.
+- Gemma-specific valid complete plain-text checks for rewrite and Improve, plus structured checks for summarize, translate, and continue writing.
 - Rewrite clarity sanity check.
 - Prompt-injection-as-input summarization check.
 - Broad latency budget tracking per scenario.
@@ -94,12 +98,18 @@ The exact-head workflow has a separate targeted route for a known low/high model
 
 ```bash
 ./scripts/ios/test.sh live-model-differential
+./scripts/ios/test.sh live-model-differential --diagnostic
 ./scripts/check-live.sh gateway-differential
 ```
 
-It is not a second full prompt-evaluation run. Deterministic warning/state prerequisites and the
-Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate case,
-and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
+The first command is strict verification and exits nonzero when a required outcome is unverified.
+The `--diagnostic` form is the explicit exploratory route: it may complete with unverified outcomes
+but reports `LIVE_UNVERIFIED` and cannot claim verification success. The exact-head command always
+uses strict mode.
+
+This route is not a second full prompt-evaluation run. Deterministic warning/state prerequisites
+and the Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate
+case, and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
 target-specific translation-capability classification or structurally usable Malayalam output,
 operation-scoped UI/ViewModel contracts, and latency—not generated wording.
 
