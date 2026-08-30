@@ -42,6 +42,7 @@
 - Action and source text: not required
 - Observed result: not required
 - Direct Simulator/Xcode screenshots: not required
+- Physical-device interaction authorization: not requested
 - Physical-device proof: not required
 
 ## Independent review

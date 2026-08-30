@@ -38,6 +38,7 @@ for ledger_field in \
   'Read-only activity authorized: YES/NO' \
   'Edits authorized: YES/NO' \
   'Production-code edits authorized: YES/NO' \
+  'Physical-device interaction authorized: YES/NO' \
   'Commit authorized: YES/NO' \
   'Push authorized: YES/NO' \
   'PR authorized: YES/NO' \
@@ -55,10 +56,22 @@ require_phrase 'Activate proof-first mode' "$AGENTS" \
   'AGENTS.md must define proof-first mode.'
 require_phrase 'Recheck it before the first tracked edit, staging, commit, push, PR mutation, readiness change, or' "$AGENTS" \
   'AGENTS.md must recheck authority before every material mutation stage.'
-require_phrase 'AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>' "$AGENTS" \
+require_phrase 'AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | physical device <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>' "$AGENTS" \
   'AGENTS.md must define the visible constrained-task authority checkpoint.'
 require_phrase 'tracked repository mutation—including production, test, documentation, staging, and commit' "$AGENTS" \
   'Proof-first mode must prohibit every tracked repository mutation, not only production changes.'
+require_phrase 'Physical-device interaction defaults to `NO` and is independently sticky.' "$AGENTS" \
+  'AGENTS.md must default physical-device interaction to denied.'
+require_phrase 'do not grant physical-device authority.' "$AGENTS" \
+  'AGENTS.md must not infer device authority from simulator, evidence, lifecycle, or merge work.'
+require_phrase 'Physical-device interaction is a separate ledger entry that defaults to `NO`' "$DEVELOP_SKILL" \
+  'The development skill must keep physical-device interaction separately denied by default.'
+require_phrase 'A device evidence requirement is a blocker when authority is absent, not permission.' "$DEVELOP_SKILL" \
+  'The development skill must not treat required device proof as device authority.'
+require_phrase 'Physical-device interaction remains separately denied until the user explicitly requests it.' "$REVIEW_SKILL" \
+  'The review lifecycle must not infer physical-device authority.'
+require_phrase 'Physical-device interaction defaults to denied and requires an explicit user request in the active task' "$REVIEWER_AGENT" \
+  'The independent reviewer must enforce explicit physical-device authority.'
 
 # Scenario A: results-first remains read-only after "Try chunks."
 require_phrase '`Test this and report before implementing` followed by `Try chunks` remains read-only: no tracked' "$AGENTS" \

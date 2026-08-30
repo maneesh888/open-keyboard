@@ -40,6 +40,38 @@ openkeyboard_relaunch_with_simulator_lock() {
   ' "$lock_file" "$@"
 }
 
+openkeyboard_require_sensitive_live_simulator_ownership() {
+  local simulator="${1:-}"
+
+  if [[ "${SENSITIVE_LIVE_SIMULATOR_OWNED:-false}" != "true" || \
+        "$simulator" != "${SENSITIVE_LIVE_SIMULATOR:-}" || \
+        ! "$simulator" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+    echo "Refusing to operate on a simulator not owned by this live workflow." >&2
+    return 1
+  fi
+}
+
+openkeyboard_delete_sensitive_live_simulator() {
+  local owned_simulator
+
+  if [[ -z "${SENSITIVE_LIVE_SIMULATOR:-}" && \
+        "${SENSITIVE_LIVE_SIMULATOR_OWNED:-false}" == "false" ]]; then
+    return 0
+  fi
+  if ! openkeyboard_require_sensitive_live_simulator_ownership "${SENSITIVE_LIVE_SIMULATOR:-}"; then
+    return 1
+  fi
+  owned_simulator="${SENSITIVE_LIVE_SIMULATOR:-}"
+
+  xcrun simctl shutdown "$owned_simulator" >/dev/null 2>&1 || true
+  if ! xcrun simctl delete "$owned_simulator" >/dev/null 2>&1; then
+    echo "Failed to delete the disposable live-test simulator." >&2
+    return 1
+  fi
+  SENSITIVE_LIVE_SIMULATOR=""
+  SENSITIVE_LIVE_SIMULATOR_OWNED="false"
+}
+
 openkeyboard_cleanup_live_evidence_file() {
   local evidence_file="${1:-}"
 

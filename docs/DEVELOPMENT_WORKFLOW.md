@@ -31,6 +31,11 @@ creating a branch/worktree, initializing submodules, editing, staging, committin
 changing a PR. Exploratory language does not authorize tracked edits. Planning and proof-first
 experiments use existing routes or temporary non-repository harnesses.
 
+Physical-device interaction is a separate, default-denied authority. Do not discover, inspect,
+connect to, install on, launch on, sign for, test on, or capture from a physical device until the
+user explicitly requests that work. Simulator testing, a device-proof requirement, push/PR
+authority, and merge authority do not imply physical-device permission.
+
 Proof-first mode is active when the user requests results, testing, or model comparison before
 implementation. Every tracked repository mutation—including production, test, documentation,
 configuration, workflow, staging, and commit changes—remains prohibited until the requested
@@ -84,6 +89,9 @@ Release readiness additionally requires exact-head GitHub checks and an independ
   tracked and untracked whitespace.
 - `--quick`: hygiene, OpenKeyboardCore tests, and app plus keyboard-extension build.
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
+
+The deterministic UI gate uses one worktree-scoped Xcode session with parallel testing disabled
+for its fixed iPhone 16 destination.
 
 Automated screenshots, automated real-extension tests, normal simulator runtime proof, and live
 gateway verification remain separate. The runtime proof does not replace XCTest coverage, and an
@@ -185,9 +193,16 @@ The path must be `.githooks`.
   `xcodebuild` process alone is never accepted as proof.
 - Simulator-backed test modes use one repository-wide host lock so concurrent worktrees or agents
   cannot drive the same Simulator service at once.
-- Live routes create a fresh disposable simulator with the selected device type and runtime. They
-  never shut down, erase, delete, or modify the selected existing simulator. The automated
-  real-keyboard route seeds and restarts only its disposable simulator, then deletes it on exit.
+- Repository test and local-validation automation is Simulator-only. Repository automation must
+  not use `devicectl`, `ios-deploy`, a concrete physical-device name/identifier destination, or an
+  equivalent device discovery/install/launch/test command. A separately authorized release or
+  deployment workflow may compile, sign, and archive against `generic/platform=iOS`; this generic
+  SDK destination does not operate a physical device or grant physical-device authority.
+- Live routes create a fresh disposable simulator with the selected device type and runtime. Each
+  process records ownership of the returned UDID and may restart, shut down, or delete only that
+  exact device. They never terminate Simulator.app or CoreSimulator processes, never use broad
+  `simctl` cleanup, and never modify the selected existing simulator. The automated real-keyboard
+  route seeds and restarts only its disposable simulator, then deletes it on exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 - The exact-head impact classifier selects `gateway-differential` only for changes touching
   model-capability classification, long-input handling, parser compatibility, retry behavior,
@@ -224,9 +239,10 @@ or the manual checklist in `docs/REAL_EXTENSION_SMOKE_PLAN.md`. If interaction i
 unreliable, or ambiguous, stop before push/readiness and state the unverified behavior. Running
 more XCTest does not resolve the blocker.
 
-Physical-device proof requires the exact signed build installed on the configured device. A
-Simulator or XCTest run cannot satisfy it. When the configured device is unavailable, report the
-device requirement blocked and request manual verification.
+Physical-device proof requires explicit physical-device interaction authority plus the exact
+signed build installed on the configured device. A Simulator or XCTest run cannot satisfy it.
+When authority is absent or the configured device is unavailable, do not inspect connected devices;
+report the device requirement blocked and request direction.
 
 The user may explicitly authorize a proof-sensitive push with missing runtime proof disclosed, but
 that exception does not mark the evidence verified and cannot authorize PR readiness or merge.

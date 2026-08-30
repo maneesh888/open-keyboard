@@ -241,6 +241,12 @@ These commands use the canonical seed and are credential-gated:
 ./scripts/ios/test.sh real-keyboard-live
 ```
 
+Simulator-backed repository routes share a host lock across linked worktrees. Every credentialed
+live route creates and records its own disposable simulator UDID, then shuts down and deletes only
+that exact device. The workflows never terminate Simulator.app or CoreSimulator processes and
+never use broad `simctl` cleanup, so one worktree's cleanup preserves devices owned by another
+workflow or by the user.
+
 All `test.sh` routes are automated regression evidence, including `real-keyboard-live` when it
 installs and activates the real extension. Their `.xcresult` files and `XCTAttachment` screenshots
 are not normal simulator runtime proof. UI, extension-lifecycle, Apply/Copy/Back/Rerun, live

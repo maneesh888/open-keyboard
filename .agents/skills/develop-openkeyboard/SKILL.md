@@ -15,6 +15,8 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 2. Build the canonical authority ledger before fetching, creating a branch/worktree, initializing
    submodules, editing, or testing. Preserve sticky constraints independently; ambiguous later
    wording such as `try`, `find out`, or `try chunks` does not revoke them.
+   Physical-device interaction is a separate ledger entry that defaults to `NO`; simulator work,
+   proof requirements, publication, and merge authority never turn it on.
 3. Keep a compact work order: objective, affected surfaces, exclusions, final state, verification
    level, required evidence class, and authority ledger.
 4. Work in the isolated session worktree selected by `AGENTS.md` only when edits are authorized.
@@ -54,6 +56,9 @@ push, PR mutation, readiness change, and merge.
 
 Use repository Simulator routes so their shared lock and disposable-device ownership apply.
 Never clear, stop, erase, or delete an existing or user-open Simulator to prepare a test.
+Never enumerate, inspect, connect to, install on, launch on, sign for, test on, or capture from a
+physical device unless the user explicitly requests physical-device interaction in the active
+task. A device evidence requirement is a blocker when authority is absent, not permission.
 
 XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
 diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
