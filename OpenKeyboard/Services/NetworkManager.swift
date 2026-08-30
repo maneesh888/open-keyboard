@@ -19,6 +19,7 @@ enum NetworkError: Error {
     case networkError(Error)
     case modelUnavailable
     case unusableCorrection
+    case unusableCapability(String)
     case timeout
     case cancelled
 
@@ -38,6 +39,8 @@ enum NetworkError: Error {
             return "The selected model is not available for this key."
         case .unusableCorrection:
             return "Gateway connected, but the selected model did not return a usable correction."
+        case .unusableCapability(let capability):
+            return "The selected model did not return a usable \(capability) response."
         case .timeout:
             return "Gateway connected, but the selected model did not respond within the model-check limit."
         case .cancelled:
@@ -114,7 +117,12 @@ struct GatewayDiagnosticReport: Equatable {
 
 class NetworkManager {
     static let shared = NetworkManager()
-    static let diagnosticSettingsCorrectionInput = "i recieved teh refnd."
+    static let grammarDiagnosticPresetID = "plain-grammar-fast"
+    static let rewriteDiagnosticPresetID = "structured-operation-rewrite"
+    static let translationDiagnosticPresetID = "structured-operation-translate-dutch"
+    static var diagnosticSettingsCorrectionInput: String {
+        requiredGatewayPreset(id: grammarDiagnosticPresetID).input
+    }
     static let correctionSmokeTestPhrases: [String] = [
         "I sent teh cliant an update this morning, but the timline still sound confussing to everyone.",
         "Our suport team definately need clearer notes befor they reply to the customer about the delayed refnd.",
@@ -151,15 +159,16 @@ class NetworkManager {
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
-        let smokeInput = Self.diagnosticSettingsCorrectionInput
-        let grammarRendering = KeyboardGatewayActionContract.rendering(operation: "fix_grammar", text: smokeInput)
+        let preset = Self.requiredGatewayPreset(id: Self.grammarDiagnosticPresetID)
+        let smokeInput = preset.input
+        let grammarRendering = preset.rendering
         let validationAttempts = 2
         for attempt in 1...validationAttempts {
             let content = try await chatCompletionContent(
                 gatewayURL: gatewayURL,
                 apiKey: apiKey,
                 model: trimmedModel,
-                operation: "fix_grammar",
+                operation: grammarRendering.wireOperationID,
                 inputText: smokeInput,
                 systemPrompt: grammarRendering.messages[0].content,
                 userPrompt: grammarRendering.messages[1].content,
@@ -182,7 +191,7 @@ class NetworkManager {
         var models: [String] = []
         var checks: [GatewayDiagnosticCheck] = []
 
-        checks.append(await diagnosticCheck(
+        let modelsOutcome = await diagnosticCheck(
             id: "models",
             title: "Models",
             endpoint: "GET /v1/models"
@@ -190,44 +199,110 @@ class NetworkManager {
             models = try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)
             guard !models.isEmpty else { throw NetworkError.modelUnavailable }
             return "Loaded \(models.count) model\(models.count == 1 ? "" : "s")."
-        })
-
-        let modelsCheckPassed = checks.last?.status == .passed
-        let selectedModel: String
-        let selectedModelIsAvailable: Bool
-        if trimmedPreferredModel.isEmpty {
-            selectedModel = AppConfig.gatewayModelCandidates(from: models, currentModel: "").first ?? ""
-            selectedModelIsAvailable = !selectedModel.isEmpty
-        } else if let exactModel = models.first(where: {
-            $0.trimmingCharacters(in: .whitespacesAndNewlines)
-                .caseInsensitiveCompare(trimmedPreferredModel) == .orderedSame
-        }) {
-            selectedModel = exactModel.trimmingCharacters(in: .whitespacesAndNewlines)
-            selectedModelIsAvailable = true
-        } else {
-            selectedModel = trimmedPreferredModel
-            selectedModelIsAvailable = false
         }
-        guard !selectedModel.isEmpty, modelsCheckPassed else {
-            checks.append(Self.skippedGrammarDiagnostic(reason: "Skipped because no model was available."))
-            return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
+        checks.append(modelsOutcome.check)
+        guard !modelsOutcome.wasCancelled else {
+            return GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks)
         }
 
-        checks.append(await diagnosticCheck(
-            id: "settings-correction-smoke",
-            title: "Plain-text grammar",
-            endpoint: "POST /v1/chat/completions"
-        ) {
-            guard selectedModelIsAvailable else { throw NetworkError.modelUnavailable }
-            try await testCorrectionSmoke(
-                gatewayURL: gatewayURL,
-                apiKey: apiKey,
-                model: selectedModel
+        let selectedModel = trimmedPreferredModel
+
+        let capabilities: [(id: String, title: String, presetID: String, success: String)] = [
+            (
+                "settings-correction-smoke",
+                "Fast plain-text grammar",
+                Self.grammarDiagnosticPresetID,
+                "Returned complete corrected text with a usable local edit."
+            ),
+            (
+                "settings-rewrite-improve",
+                "Rewrite and Improve",
+                Self.rewriteDiagnosticPresetID,
+                "Returned one complete validated plain-text replacement used by Rewrite and Improve."
+            ),
+            (
+                "settings-translation-dutch",
+                "Translation to Dutch",
+                Self.translationDiagnosticPresetID,
+                "Returned a schema-valid Dutch translation."
             )
-            return "Returned complete corrected text and derived local edits."
-        })
+        ]
+        for capability in capabilities {
+            guard !Task.isCancelled else { break }
+            let outcome = await diagnosticCheck(
+                id: capability.id,
+                title: capability.title,
+                endpoint: "POST /v1/chat/completions"
+            ) {
+                // Capability probes are deliberately independent from model discovery. The exact
+                // selected model may still accept completions when /models is unavailable or
+                // incomplete, and a failed probe must not prevent the remaining probes from
+                // reporting their own outcome.
+                guard !selectedModel.isEmpty else { throw NetworkError.modelUnavailable }
+                try await testDiagnosticCapability(
+                    gatewayURL: gatewayURL,
+                    apiKey: apiKey,
+                    model: selectedModel,
+                    presetID: capability.presetID
+                )
+                return capability.success
+            }
+            checks.append(outcome.check)
+            if outcome.wasCancelled { break }
+        }
 
         return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
+    }
+
+    private func testDiagnosticCapability(
+        gatewayURL: String,
+        apiKey: String,
+        model: String,
+        presetID: String
+    ) async throws {
+        let preset = Self.requiredGatewayPreset(id: presetID)
+        let rendering = preset.rendering
+        let content = try await chatCompletionContent(
+            gatewayURL: gatewayURL,
+            apiKey: apiKey,
+            model: model,
+            operation: rendering.wireOperationID,
+            inputText: preset.input,
+            systemPrompt: rendering.messages[0].content,
+            userPrompt: rendering.messages[1].content,
+            maxTokens: rendering.maxTokens,
+            temperature: rendering.temperature,
+            expectsStructuredResponse: rendering.responseFormatType != nil,
+            timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
+        )
+        do {
+            let validatedOutput = try SemanticPromptContract.validateGatewayPromptResponse(content, presetID: presetID)
+            if presetID == Self.grammarDiagnosticPresetID {
+                _ = try await Self.validatePlainTextCorrectionContent(content, inputText: preset.input, minimumCount: 1)
+            } else if presetID == Self.translationDiagnosticPresetID,
+                      TranslationLanguageOutputValidator().validationFailure(
+                          for: validatedOutput,
+                          expectedScript: .latin,
+                          expectedLanguageCodes: ["nl"]
+                      ) != nil {
+                throw NetworkError.unusableCapability("Dutch translation")
+            }
+        } catch let error as NetworkError {
+            throw error
+        } catch {
+            if presetID == Self.rewriteDiagnosticPresetID {
+                throw NetworkError.unusableCapability("Rewrite and Improve")
+            }
+            let capability = preset.label.replacingOccurrences(of: "Structured operation · ", with: "")
+            throw NetworkError.unusableCapability(capability.lowercased())
+        }
+    }
+
+    private static func requiredGatewayPreset(id: String) -> SemanticGatewayPromptPreset {
+        guard let preset = SemanticPromptContract.gatewayPromptPreset(id: id) else {
+            preconditionFailure("semantic-prompt-contract \(SemanticPromptContract.version) is missing gateway preset \(id)")
+        }
+        return preset
     }
 
     static func isUsableCorrectionSmokeResponse(_ value: String) -> Bool {
@@ -383,28 +458,35 @@ class NetworkManager {
         title: String,
         endpoint: String,
         operation: () async throws -> String
-    ) async -> GatewayDiagnosticCheck {
+    ) async -> (check: GatewayDiagnosticCheck, wasCancelled: Bool) {
         let started = Date()
         do {
             let message = try await operation()
-            return GatewayDiagnosticCheck(
+            return (GatewayDiagnosticCheck(
                 id: id,
                 title: title,
                 endpoint: endpoint,
                 status: .passed,
                 durationMilliseconds: Self.durationMilliseconds(since: started),
                 message: message
-            )
+            ), false)
         } catch {
-            return GatewayDiagnosticCheck(
+            return (GatewayDiagnosticCheck(
                 id: id,
                 title: title,
                 endpoint: endpoint,
                 status: .failed,
                 durationMilliseconds: Self.durationMilliseconds(since: started),
                 message: Self.diagnosticMessage(for: error)
-            )
+            ), Self.isDiagnosticCancellation(error))
         }
+    }
+
+    private static func isDiagnosticCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        if let networkError = error as? NetworkError, case .cancelled = networkError { return true }
+        return false
     }
 
     @MainActor
@@ -426,22 +508,11 @@ class NetworkManager {
         return correctionCount
     }
 
-    private static func skippedGrammarDiagnostic(reason: String) -> GatewayDiagnosticCheck {
-        GatewayDiagnosticCheck(
-            id: "settings-correction-smoke",
-            title: "Plain-text grammar",
-            endpoint: "POST /v1/chat/completions",
-            status: .skipped,
-            durationMilliseconds: nil,
-            message: reason
-        )
-    }
-
     private static func durationMilliseconds(since started: Date) -> Int {
         max(0, Int((Date().timeIntervalSince(started) * 1000).rounded()))
     }
 
-    private static func diagnosticMessage(for error: Error) -> String {
+    static func diagnosticMessage(for error: Error) -> String {
         let raw: String
         if let networkError = error as? NetworkError {
             raw = networkError.localizedDescription

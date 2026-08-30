@@ -156,6 +156,10 @@ verified. `--diagnostic` is the only permissive exploratory mode; an unverified 
 zero but must report `LIVE_UNVERIFIED` and `diagnostic run complete`, never green verification
 success. A low-model success at the candidate boundary is retained as
 `diagnostic-boundary-not-established`, not promoted to passing evidence.
+Before cleanup, the runner exports one sanitized text attachment per role and requires separate
+transport, grammar, rewrite, and translation status and latency rows in canonical order. The
+attachment grammar rejects extra content so credentials and response bodies cannot enter the
+retained summary.
 
 ## Hooks
 

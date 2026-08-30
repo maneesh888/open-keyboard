@@ -51,6 +51,72 @@ final class GatewayStatusUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    func testSettingsRequiresExplicitModelSelectionBeforeConnectionSave() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--settings-direct",
+            "--seed-settings-model-selection",
+            "--skip-onboarding"
+        ]
+        app.launch()
+
+        let picker = app.descendants(matching: .any)["settings_gateway_model_picker"]
+        let selectionRequired = app.descendants(matching: .any)["settings_gateway_model_selection_required"]
+        let testConnection = app.buttons["Test Connection & Save"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        XCTAssertTrue(selectionRequired.waitForExistence(timeout: 2))
+        XCTAssertTrue(testConnection.waitForExistence(timeout: 2))
+        XCTAssertFalse(testConnection.isEnabled)
+
+        picker.tap()
+        let modelOption = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "model-b"))
+            .firstMatch
+        XCTAssertTrue(modelOption.waitForExistence(timeout: 2))
+        modelOption.tap()
+
+        XCTAssertFalse(selectionRequired.exists)
+        XCTAssertTrue(testConnection.isEnabled)
+    }
+
+    func testSettingsRendersAllDiagnosticRowsAfterPartialFailures() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--settings-direct",
+            "--seed-settings-partial-diagnostics",
+            "--skip-onboarding"
+        ]
+        app.launch()
+
+        let models = app.descendants(matching: .any)["settings_gateway_diagnostic_models"]
+        let grammar = app.descendants(matching: .any)["settings_gateway_diagnostic_settings-correction-smoke"]
+        let rewrite = app.descendants(matching: .any)["settings_gateway_diagnostic_settings-rewrite-improve"]
+        let translation = app.descendants(matching: .any)["settings_gateway_diagnostic_settings-translation-dutch"]
+        for _ in 0..<4 where !models.exists {
+            app.swipeUp()
+        }
+        XCTAssertTrue(models.waitForExistence(timeout: 5))
+        XCTAssertTrue(grammar.waitForExistence(timeout: 2))
+        let modelsLabel = models.label
+        let grammarLabel = grammar.label
+
+        for _ in 0..<4 where !translation.exists {
+            app.swipeUp()
+        }
+
+        XCTAssertTrue(rewrite.exists)
+        XCTAssertTrue(translation.exists)
+        XCTAssertTrue(modelsLabel.contains("12 ms"))
+        XCTAssertTrue(grammarLabel.contains("34 ms"))
+        XCTAssertTrue(grammarLabel.contains("did not return usable grammar text"))
+        XCTAssertTrue(rewrite.label.contains("56 ms"))
+        XCTAssertTrue(rewrite.label.contains("plain-text replacement"))
+        XCTAssertTrue(translation.label.contains("78 ms"))
+        XCTAssertTrue(translation.label.contains("usable Dutch translation"))
+    }
 }
 
 final class KeyboardExtensionConfiguredUITests: XCTestCase {
@@ -216,7 +282,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("empty-input-no-stale-corrections")
     }
 
-    func testRealKeyboardShowsModelNotCompatibleStateScreenshot() throws {
+    func testRealKeyboardShowsGrammarCorrectionFailureStateScreenshot() throws {
         let sourceText = "Please keep this text unchanged."
         let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText
         let app = configuredContainingApp(extraArguments: [
@@ -240,14 +306,14 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "Open Keyboard extension did not appear"
         )
 
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].waitForExistence(timeout: 5))
         XCTAssertEqual(
             keyboardApp.staticTexts["ai_error_message"].label,
-            KeyboardActionErrorState.modelCapabilityMessage
+            KeyboardActionErrorState.grammarCapabilityMessage
         )
         XCTAssertEqual(input.value as? String, sourceText)
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
-        try captureRealKeyboardStep("real-keyboard-model-not-compatible")
+        try captureRealKeyboardStep("real-keyboard-grammar-correction-failure")
     }
 
     func testRealKeyboardAutomaticModelFailureKeepsKeysTappable() throws {
@@ -274,7 +340,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             "Open Keyboard extension did not appear"
         )
 
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].waitForExistence(timeout: 5))
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].waitForExistence(timeout: 5))
         XCTAssertFalse(keyboardApp.otherElements["ai_error_panel"].exists)
         XCTAssertEqual(input.value as? String, sourceText)
         XCTAssertTrue(keyboardApp.buttons["ai_sparkle_action"].isEnabled)
@@ -290,7 +356,7 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
 
         shiftKey.tap()
         shiftKey.tap()
-        XCTAssertTrue(keyboardApp.staticTexts["Model not compatible"].exists)
+        XCTAssertTrue(keyboardApp.staticTexts["Model couldn't correct this text"].exists)
         try captureRealKeyboardStep("real-keyboard-automatic-model-warning-keys")
 
         qKey.tap()
@@ -991,12 +1057,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
             throw XCTSkip("App Group defaults are unavailable for existing simulator gateway verification.")
         }
 
-        let gatewayURL = defaults.string(forKey: AppConfig.gatewayURLKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let selectedModel = defaults.string(forKey: AppConfig.selectedModelKey)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let connectionError = AppConfig.gatewayConnectionError(from: defaults)
-        guard defaults.bool(forKey: AppConfig.isConfiguredKey),
-              !gatewayURL.isEmpty,
-              !selectedModel.isEmpty,
+        guard defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey),
+              !(defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty,
               connectionError == nil else {
             throw XCTSkip("Existing simulator gateway config is not present or has a saved gateway error.")
         }

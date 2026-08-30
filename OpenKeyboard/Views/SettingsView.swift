@@ -11,6 +11,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var viewModel: SettingsViewModel
     @FocusState private var focusedField: SettingsField?
+    @State private var connectionTask: Task<Void, Never>?
+    @State private var diagnosticsTask: Task<Void, Never>?
 
     private enum SettingsField: Hashable {
         case gatewayURL
@@ -23,7 +25,10 @@ struct SettingsView: View {
                 Section(header: Label("Gateway Configuration", systemImage: "sparkles")) {
                     TextField("Gateway URL", text: Binding(
                         get: { viewModel.gatewayURLInput },
-                        set: { viewModel.updateGatewayURLInput($0) }
+                        set: {
+                            cancelGatewayTasks()
+                            viewModel.updateGatewayURLInput($0)
+                        }
                     ))
                         .keyboardType(.URL)
                         .autocapitalization(.none)
@@ -37,7 +42,10 @@ struct SettingsView: View {
 
                     SecureField("API Key", text: Binding(
                         get: { viewModel.apiKeyInput },
-                        set: { viewModel.updateAPIKeyInput($0) }
+                        set: {
+                            cancelGatewayTasks()
+                            viewModel.updateAPIKeyInput($0)
+                        }
                     ))
                         .autocapitalization(.none)
                         .disableAutocorrection(true)
@@ -52,10 +60,34 @@ struct SettingsView: View {
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
+                    if viewModel.shouldShowModelSelection {
+                        Picker("Model", selection: Binding(
+                            get: { viewModel.selectedModelInput },
+                            set: {
+                                cancelGatewayTasks()
+                                viewModel.updateSelectedModelInput($0)
+                            }
+                        )) {
+                            Text("Select a model").tag("")
+                            ForEach(viewModel.availableModels, id: \.self) { model in
+                                Text(model).tag(model)
+                            }
+                        }
+                        .accessibilityIdentifier("settings_gateway_model_picker")
+
+                        if let message = viewModel.modelSelectionMessage {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                                .accessibilityIdentifier("settings_gateway_model_selection_required")
+                        }
+                    }
+
                     if viewModel.shouldShowConnectionActions {
                         Button(action: {
                             dismissKeyboard()
-                            Task {
+                            connectionTask?.cancel()
+                            connectionTask = Task {
                                 await viewModel.testConnection()
                             }
                         }) {
@@ -124,13 +156,14 @@ struct SettingsView: View {
                 }
 
                 Section(header: Label("Gateway Diagnostics", systemImage: "waveform.path.ecg")) {
-                    Text("Check model access and the same plain-text grammar flow used by the keyboard.")
+                    Text("Check the exact selected model with one fast probe each for grammar, Rewrite/Improve, and translation to Dutch.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
 
                     Button(action: {
                         dismissKeyboard()
-                        Task {
+                        diagnosticsTask?.cancel()
+                        diagnosticsTask = Task {
                             await viewModel.runDiagnostics()
                         }
                     }) {
@@ -213,6 +246,7 @@ struct SettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Done") {
+                        cancelGatewayTasks()
                         viewModel.saveSettings()
                         dismiss()
                     }
@@ -228,12 +262,26 @@ struct SettingsView: View {
         }
         .onAppear {
             viewModel.applyConfig(viewModel.config)
+            #if DEBUG
+            viewModel.applyUITestSettingsStateIfNeeded()
+            #endif
+        }
+        .onDisappear {
+            cancelGatewayTasks()
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
     }
 
     private func dismissKeyboard() {
         focusedField = nil
+    }
+
+    private func cancelGatewayTasks() {
+        connectionTask?.cancel()
+        diagnosticsTask?.cancel()
+        connectionTask = nil
+        diagnosticsTask = nil
+        viewModel.cancelInFlightGatewayOperations()
     }
 
 }
@@ -262,6 +310,7 @@ private struct GatewayDiagnosticRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("settings_gateway_diagnostic_\(check.id)")
     }
 
     private var statusIcon: String {

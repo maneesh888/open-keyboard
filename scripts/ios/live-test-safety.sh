@@ -762,6 +762,76 @@ openkeyboard_assert_passing_xcresult_count() {
   rm -f -- "$summary_file"
 }
 
+openkeyboard_format_live_diagnostic_attachment() {
+  local role="$1"
+  local attachment_file="$2"
+
+  if [[ "$role" != "low" && "$role" != "high" ]]; then
+    echo "Live diagnostic evidence requires a canonical low or high role." >&2
+    return 2
+  fi
+  if [[ ! -f "$attachment_file" ]]; then
+    echo "Live diagnostic evidence attachment is missing." >&2
+    return 1
+  fi
+
+  ruby - "$role" "$attachment_file" <<'RUBY'
+role = ARGV.fetch(0)
+path = ARGV.fetch(1)
+expected_capabilities = %w[transport grammar rewrite translation]
+rows = File.readlines(path, chomp: true).map do |line|
+  match = line.match(
+    /\ALIVE_GATEWAY_DIAGNOSTIC role=(low|high) capability=(transport|grammar|rewrite|translation) status=(passed|failed) latency_ms=([0-9]+)\z/
+  )
+  abort "Live diagnostic attachment contains malformed or unsafe evidence." unless match
+  abort "Live diagnostic attachment contains the wrong profile role." unless match[1] == role
+  [match[2], match[3], Integer(match[4], 10)]
+end
+abort "Live diagnostic attachment must contain exactly four capability rows." unless rows.length == 4
+abort "Live diagnostic attachment capabilities are missing, duplicated, or reordered." unless rows.map(&:first) == expected_capabilities
+
+outcomes = rows.map { |capability, status, _| "#{capability}=#{status}" }.join(", ")
+latencies = rows.map { |capability, _, latency| "#{capability}=#{latency}ms" }.join(", ")
+puts "diagnostic_outcomes_#{role}=#{outcomes}"
+puts "diagnostic_latencies_#{role}=#{latencies}"
+RUBY
+}
+
+openkeyboard_extract_live_diagnostic_evidence() {
+  local result_bundle="$1"
+  local role="$2"
+  local export_dir manifest_file attachment_name attachment_file
+
+  export_dir="$(dirname "$result_bundle")/live-diagnostics-$role"
+  mkdir -p "$export_dir"
+  xcrun xcresulttool export attachments \
+    --path "$result_bundle" \
+    --output-path "$export_dir" >/dev/null
+  manifest_file="$export_dir/manifest.json"
+  [[ -f "$manifest_file" ]] || {
+    echo "Live diagnostic attachment manifest is missing." >&2
+    return 1
+  }
+
+  attachment_name="$(ruby -rjson - "$manifest_file" "$role" <<'RUBY'
+manifest = JSON.parse(File.read(ARGV.fetch(0)))
+role = ARGV.fetch(1)
+matches = manifest.flat_map do |test|
+  next [] unless test.fetch("testIdentifier", "").include?("LiveModelDifferentialTests/testConfiguredProfileDifferentialContract")
+  test.fetch("attachments", []).select do |attachment|
+    attachment.fetch("suggestedHumanReadableName", "").start_with?("live-gateway-diagnostics-#{role}")
+  end
+end
+abort "Expected exactly one retained live diagnostic attachment." unless matches.length == 1
+name = matches.first.fetch("exportedFileName")
+abort "Live diagnostic attachment filename is unsafe." unless File.basename(name) == name
+puts name
+RUBY
+)" || return 1
+  attachment_file="$export_dir/$attachment_name"
+  openkeyboard_format_live_diagnostic_attachment "$role" "$attachment_file"
+}
+
 openkeyboard_classify_low_differential_xcresult() {
   local result_bundle="$1"
   local summary_file outcome

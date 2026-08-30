@@ -448,6 +448,10 @@ case "$MODE" in
     high_baseline_outcome="unverified"
     high_differential_outcome="unverified"
     high_follow_up_outcome="unverified"
+    low_diagnostic_outcomes=""
+    low_diagnostic_latencies=""
+    high_diagnostic_outcomes=""
+    high_diagnostic_latencies=""
     for profile_role in low high; do
       if [[ "$profile_role" == "high" ]]; then
         openkeyboard_delete_sensitive_live_simulator
@@ -493,6 +497,19 @@ case "$MODE" in
           high_follow_up_outcome="passed"
         fi
       fi
+      profile_diagnostic_evidence="$(
+        openkeyboard_extract_live_diagnostic_evidence "$profile_result_bundle" "$profile_role"
+      )"
+      case "$profile_role" in
+        low)
+          low_diagnostic_outcomes="$(printf '%s\n' "$profile_diagnostic_evidence" | grep -E '^diagnostic_outcomes_low=')"
+          low_diagnostic_latencies="$(printf '%s\n' "$profile_diagnostic_evidence" | grep -E '^diagnostic_latencies_low=')"
+          ;;
+        high)
+          high_diagnostic_outcomes="$(printf '%s\n' "$profile_diagnostic_evidence" | grep -E '^diagnostic_outcomes_high=')"
+          high_diagnostic_latencies="$(printf '%s\n' "$profile_diagnostic_evidence" | grep -E '^diagnostic_latencies_high=')"
+          ;;
+      esac
       profile_latency="$(elapsed_seconds "$profile_started_at" "$profile_finished_at")"
       case "$profile_role" in
         low) low_latency="$profile_latency" ;;
@@ -506,7 +523,11 @@ case "$MODE" in
       "differential_outcomes=low=$low_differential_outcome, high=$high_differential_outcome" \
       "follow_up_outcomes=low=$low_follow_up_outcome, high=$high_follow_up_outcome" \
       'operation_scoped_warning_contracts=verified' \
-      "profile_latencies=low=${low_latency}s, high=${high_latency}s")"
+      "profile_latencies=low=${low_latency}s, high=${high_latency}s" \
+      "$low_diagnostic_outcomes" \
+      "$low_diagnostic_latencies" \
+      "$high_diagnostic_outcomes" \
+      "$high_diagnostic_latencies")"
     printf '%s\n' "$evidence_lines"
     if [[ -n "${OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT:-}" ]]; then
       umask 077

@@ -70,97 +70,21 @@ enum KeyboardTranslationTarget: String, CaseIterable, Hashable, Identifiable, Se
     }
 }
 
-enum KeyboardTranslationValidationFailure: Equatable {
-    case predominantlyWrongLanguage
-    case suspiciousMixedScripts
-}
-
 struct KeyboardTranslationOutputValidator {
-    fileprivate enum Script: Hashable {
-        case latin
-        case arabic
-        case devanagari
-        case bengali
-        case telugu
-        case tamil
-        case malayalam
-        case cyrillic
-        case han
-        case other
-    }
-
     func validationFailure(
         for output: String,
         target: KeyboardTranslationTarget
     ) -> KeyboardTranslationValidationFailure? {
-        let scriptCounts = output.unicodeScalars.reduce(into: [Script: Int]()) { counts, scalar in
-            guard let script = Self.script(for: scalar) else { return }
-            counts[script, default: 0] += 1
-        }
-        let totalScriptLetters = scriptCounts.values.reduce(0, +)
-        guard totalScriptLetters > 0 else { return nil }
-
-        let expectedScript = target.expectedScript
-        let expectedScriptCount = scriptCounts[expectedScript, default: 0]
-        let unexpectedScriptCount = totalScriptLetters - expectedScriptCount
-        let expectedScriptRatio = Double(expectedScriptCount) / Double(totalScriptLetters)
-        let unexpectedScriptRatio = Double(unexpectedScriptCount) / Double(totalScriptLetters)
-
-        if expectedScriptRatio < 0.55 {
-            return .predominantlyWrongLanguage
-        }
-        if unexpectedScriptCount >= 4, unexpectedScriptRatio >= 0.20 {
-            return .suspiciousMixedScripts
-        }
-
-        guard totalScriptLetters >= 4 else { return nil }
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(output)
-        let hypotheses = recognizer.languageHypotheses(withMaximum: 4)
-        let expectedConfidence = hypotheses
-            .filter { target.expectedLanguageCodes.contains($0.key.rawValue) }
-            .map(\.value)
-            .max() ?? 0
-        let dominantConfidence = hypotheses.values.max() ?? 0
-        let isShortOutput = totalScriptLetters < 18
-        let minimumExpectedConfidence = isShortOutput ? 0.08 : 0.12
-        let minimumDominantConfidence = isShortOutput ? 0.60 : 0.55
-        if expectedConfidence < minimumExpectedConfidence,
-           dominantConfidence >= minimumDominantConfidence {
-            return .predominantlyWrongLanguage
-        }
-        return nil
-    }
-
-    private static func script(for scalar: Unicode.Scalar) -> Script? {
-        let value = scalar.value
-        switch value {
-        case 0x0041...0x005A, 0x0061...0x007A, 0x00C0...0x024F, 0x1E00...0x1EFF:
-            return .latin
-        case 0x0400...0x052F:
-            return .cyrillic
-        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF:
-            return .arabic
-        case 0x0900...0x097F, 0xA8E0...0xA8FF:
-            return .devanagari
-        case 0x0980...0x09FF:
-            return .bengali
-        case 0x0B80...0x0BFF:
-            return .tamil
-        case 0x0C00...0x0C7F:
-            return .telugu
-        case 0x0D00...0x0D7F:
-            return .malayalam
-        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2EBEF:
-            return .han
-        default:
-            return CharacterSet.letters.contains(scalar) ? .other : nil
-        }
+        TranslationLanguageOutputValidator().validationFailure(
+            for: output,
+            expectedScript: target.expectedScript,
+            expectedLanguageCodes: target.expectedLanguageCodes
+        )
     }
 }
 
 private extension KeyboardTranslationTarget {
-    var expectedScript: KeyboardTranslationOutputValidator.Script {
+    var expectedScript: TranslationLanguageOutputValidator.Script {
         switch self {
         case .arabic, .urdu: return .arabic
         case .hindi, .marathi: return .devanagari

@@ -8,17 +8,17 @@ private enum RejectedGatewayFixture {
 
 @MainActor
 final class SettingsViewModelTests: XCTestCase {
-    private var previousSecretStore: AppConfigSecretStore!
+    private var previousSecureStore: AppConfigSecureStore!
 
     override func setUp() {
         super.setUp()
-        previousSecretStore = AppConfig.secretStore
-        AppConfig.secretStore = SettingsInMemorySecretStore()
+        previousSecureStore = AppConfig.secureStore
+        AppConfig.secureStore = SettingsInMemorySecureStore()
     }
 
     override func tearDown() {
-        AppConfig.secretStore = previousSecretStore
-        previousSecretStore = nil
+        AppConfig.secureStore = previousSecureStore
+        previousSecureStore = nil
         super.tearDown()
     }
 
@@ -500,7 +500,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
-    func testModelCheckDoesNotFallbackWhenDiscoveredModelFailsSmoke() async {
+    func testChangedCredentialsWithMultipleModelsRequireExplicitSelectionAndDoNotFallback() async {
         let tester = FakeGatewayTester(
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
             failingSmokeModels: ["apple-foundationmodel"]
@@ -511,12 +511,21 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
-        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertTrue(viewModel.shouldShowModelSelection)
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        XCTAssertFalse(viewModel.config.isConfigured)
+
+        viewModel.updateSelectedModelInput("apple-foundationmodel")
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
     }
 
-    func testConfiguredModelMustExistAndCannotBeReplacedByCatalogFallback() async {
+    func testSameCredentialsRequireExactSavedModelWithoutCatalogFallback() async {
         let configured = AppConfig(
             apiKey: "existing-key",
             gatewayURL: "https://existing.example",
@@ -527,8 +536,6 @@ final class SettingsViewModelTests: XCTestCase {
         )
         let tester = FakeGatewayTester(models: ["another-model"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
-        viewModel.updateGatewayURLInput("https://gateway.example")
-        viewModel.updateAPIKeyInput("test-key")
 
         await viewModel.testConnection()
 
@@ -536,6 +543,86 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
         XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
         XCTAssertTrue(tester.smokeModels.isEmpty)
+    }
+
+    func testChangedGatewayURLDiscardsSavedModelForDraftAndAutoSelectsSingleDiscoveredModel() async {
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["new-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://new.example")
+
+        XCTAssertEqual(viewModel.selectedModelInput, "")
+        XCTAssertEqual(viewModel.config.selectedModel, "old-model")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://new.example")
+        XCTAssertEqual(viewModel.config.selectedModel, "new-model")
+        XCTAssertEqual(tester.smokeModels, ["new-model"])
+    }
+
+    func testChangedAPIKeyDiscardsSavedModelForDraftAndAutoSelectsSingleDiscoveredModel() async {
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["new-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+        viewModel.updateAPIKeyInput("replacement-key")
+
+        XCTAssertEqual(viewModel.selectedModelInput, "")
+        XCTAssertEqual(viewModel.config.selectedModel, "old-model")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.apiKey, "replacement-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "new-model")
+    }
+
+    func testChangedCredentialsWithZeroModelsPreserveCompletePreviousProfile() async {
+        let suiteName = "SettingsViewModelTests.zero-models.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(configured.save(to: defaults))
+        let tester = FakeGatewayTester(models: [])
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://empty.example")
+        viewModel.updateAPIKeyInput("replacement-key")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://existing.example")
+        XCTAssertEqual(viewModel.config.apiKey, "existing-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "old-model")
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        let persisted = AppConfig.load(from: defaults)
+        XCTAssertEqual(persisted.gatewayURL, configured.gatewayURL)
+        XCTAssertEqual(persisted.apiKey, configured.apiKey)
+        XCTAssertEqual(persisted.selectedModel, configured.selectedModel)
+        XCTAssertTrue(persisted.isConfigured)
+        XCTAssertTrue(persisted.grammarCorrectionVerified)
     }
 
     func testResetOnboardingClearsPersistedFlagAndShowsConfirmation() {
@@ -563,17 +650,22 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.testConnection()
 
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        viewModel.updateSelectedModelInput("gemma4:latest")
+        await viewModel.testConnection()
+
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
         XCTAssertEqual(viewModel.config.apiKey, "test-key")
-        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertEqual(viewModel.config.selectedModel, "gemma4:latest")
         XCTAssertTrue(viewModel.config.isConfigured)
         XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
         XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
-        XCTAssertEqual(tester.smokeModel, "apple-foundationmodel")
+        XCTAssertEqual(tester.smokeModel, "gemma4:latest")
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertTrue(viewModel.trustedModelLoaded)
-        XCTAssertEqual(viewModel.trustedModelDisplay, "apple-foundationmodel")
+        XCTAssertEqual(viewModel.trustedModelDisplay, "gemma4:latest")
         XCTAssertEqual(viewModel.grammarCapabilityDisplay, "Plain text verified")
     }
 
@@ -648,36 +740,58 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.config.apiKey, "test-key")
     }
 
-    func testUnusableCorrectionKeepsGatewayConnectedAndPersistsUnverifiedModelCapability() async {
+    func testUnusableCorrectionDoesNotReplacePersistedAtomicSecureProfile() async {
         let suiteName = "SettingsViewModelTests.model-capability.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
+        let previous = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://working.example",
+            selectedModel: "working-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(previous.save(to: defaults))
+        let previousValidationDate = Date().addingTimeInterval(-60)
+        AppConfig.saveGatewayConnectionLastTestedAt(previousValidationDate, to: defaults)
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["gemma2:2b"],
             smokeSucceeds: false
         )
-        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        let viewModel = SettingsViewModel(config: previous, gatewayTester: tester, defaults: defaults)
         viewModel.gatewayURLInput = "https://gateway.example"
         viewModel.apiKeyInput = "test-key"
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertFalse(viewModel.isTestingConnection)
         XCTAssertFalse(viewModel.isGatewayValidationInProgress)
-        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.apiKey, "test-key")
-        XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
+        XCTAssertEqual(viewModel.config.gatewayURL, "https://working.example")
+        XCTAssertEqual(viewModel.config.apiKey, "working-key")
+        XCTAssertEqual(viewModel.config.selectedModel, "working-model")
         XCTAssertTrue(viewModel.config.isConfigured)
-        XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
+        XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
         XCTAssertEqual(viewModel.config.structuredCorrectionSchemaVersion, AppConfig.grammarCorrectionCapabilityVersion)
-        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertTrue(viewModel.trustedModelLoaded)
-        XCTAssertFalse(viewModel.hasConnectionError)
-        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertTrue(viewModel.hasConnectionError)
+        let persisted = AppConfig.load(from: defaults)
+        XCTAssertEqual(persisted.gatewayURL, previous.gatewayURL)
+        XCTAssertEqual(persisted.apiKey, previous.apiKey)
+        XCTAssertEqual(persisted.selectedModel, previous.selectedModel)
+        XCTAssertTrue(persisted.grammarCorrectionVerified)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertNotNil(AppConfig.gatewayConnectionLastTestedAt(from: defaults))
+        guard let persistedValidationDate = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else {
+            XCTFail("The previous profile validation timestamp should be preserved.")
+            return
+        }
+        XCTAssertEqual(
+            persistedValidationDate.timeIntervalSinceReferenceDate,
+            previousValidationDate.timeIntervalSinceReferenceDate,
+            accuracy: 0.001
+        )
     }
 
     func testCorrectionTimeoutShowsTimeoutFailureInsteadOfModelCapability() async {
@@ -757,14 +871,20 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.canTestConnection)
     }
 
-    func testDiagnosticsCanRunWhileBasicConnectionTestIsBusy() {
-        let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
-        viewModel.updateGatewayURLInput("gateway.example")
-        viewModel.updateAPIKeyInput("test-key")
+    func testDiagnosticsCannotOverlapConnectionValidation() {
+        let config = AppConfig(
+            apiKey: "test-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "selected-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let viewModel = SettingsViewModel(config: config, gatewayTester: FakeGatewayTester())
         viewModel.isTestingConnection = true
 
         XCTAssertFalse(viewModel.canTestConnection)
-        XCTAssertTrue(viewModel.canRunDiagnostics)
+        XCTAssertFalse(viewModel.canRunDiagnostics)
     }
 
     func testBareGatewayURLNormalizesBeforeTestingAndSaving() async {
@@ -857,13 +977,13 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
-    func testSuccessfulRetryClearsGlobalErrorAndSavesToInjectedSharedDefaultsAndSecretStore() async {
+    func testSuccessfulRetryClearsGlobalErrorAndSavesAtomicKeychainProfile() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.success.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = SettingsInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
         AppConfig.saveGatewayConnectionError("Previous keyboard error", to: defaults)
         let tester = FakeGatewayTester(healthSucceeds: true, models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
@@ -874,21 +994,24 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example")
-        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), "gpt-oss:120b-cloud")
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
-        XCTAssertEqual(secretStore.apiKey, "test-key")
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
+        XCTAssertEqual(secureStore.apiKey, "test-key")
+        XCTAssertEqual(AppConfig.load(from: defaults), viewModel.config)
     }
 
     func testSuccessfulGatewayValidationFailsIfSharedConfigCannotBePersisted() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.save-failure.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = SettingsInMemorySecretStore()
-        secretStore.shouldFailSave = true
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        secureStore.shouldFailSave = true
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
         let tester = FakeGatewayTester(healthSucceeds: true, models: ["gpt-oss:120b-cloud"], smokeSucceeds: true)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
         viewModel.updateGatewayURLInput("gateway.example")
@@ -902,14 +1025,14 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.apiKeyKey))
-        XCTAssertNil(secretStore.apiKey)
+        XCTAssertNil(secureStore.apiKey)
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
     }
 
     func testGatewayDiagnosticUsesDraftConfigWithoutSavingOrMarkingConnectionReady() async {
         let defaults = UserDefaults(suiteName: "SettingsViewModelTests.diagnostic.\(UUID().uuidString)")!
         defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
-        let tester = FakeGatewayTester(models: ["gpt-oss:120b-cloud"])
+        let tester = FakeGatewayTester(models: ["gpt-oss:120b-cloud", "gemma-model"])
         tester.diagnosticReport = GatewayDiagnosticReport(
             selectedModel: "gpt-oss:120b-cloud",
             checks: [
@@ -927,6 +1050,10 @@ final class SettingsViewModelTests: XCTestCase {
         viewModel.updateGatewayURLInput("gateway.example")
         viewModel.updateAPIKeyInput("test-key")
 
+        await viewModel.testConnection()
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        viewModel.updateSelectedModelInput("gpt-oss:120b-cloud")
+
         await viewModel.runDiagnostics()
 
         XCTAssertFalse(viewModel.isRunningDiagnostics)
@@ -939,7 +1066,94 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
     }
 
-    func testModelValidationDoesNotFallbackWhenAppleFoundationModelFailsSmoke() async {
+    func testCredentialEditDuringConnectionPreservesPreviousCommittedProfile() async {
+        let defaults = UserDefaults(suiteName: "SettingsViewModelTests.stale-connection.\(UUID().uuidString)")!
+        defer { defaults.removePersistentDomain(forName: defaultsSuiteName(defaults)) }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = SettingsInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
+        let previous = AppConfig(
+            apiKey: "previous-key",
+            gatewayURL: "https://previous.example",
+            selectedModel: "previous-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        XCTAssertTrue(previous.save(to: defaults))
+        let tester = FakeGatewayTester(models: ["draft-a-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: previous, gatewayTester: tester, defaults: defaults)
+        viewModel.updateGatewayURLInput("https://draft-a.example")
+        viewModel.updateAPIKeyInput("draft-a-key")
+
+        let connectionTask = Task { await viewModel.testConnection() }
+        for _ in 0..<100 where tester.healthChecks == 0 { await Task.yield() }
+        XCTAssertEqual(tester.healthChecks, 1)
+
+        viewModel.updateGatewayURLInput("https://draft-b.example")
+        viewModel.updateAPIKeyInput("draft-b-key")
+        await connectionTask.value
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://draft-b.example")
+        XCTAssertEqual(viewModel.apiKeyInput, "draft-b-key")
+        XCTAssertEqual(viewModel.config, previous)
+        XCTAssertEqual(AppConfig.load(from: defaults), previous)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+    }
+
+    func testCredentialEditDuringDiagnosticsDiscardsStaleReport() async {
+        let configured = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "selected-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester()
+        tester.diagnosticDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        let diagnosticTask = Task { await viewModel.runDiagnostics() }
+        for _ in 0..<100 where tester.diagnosticPreferredModel == nil { await Task.yield() }
+        XCTAssertEqual(tester.diagnosticPreferredModel, "selected-model")
+
+        viewModel.updateAPIKeyInput("replacement-key")
+        await diagnosticTask.value
+
+        XCTAssertNil(viewModel.diagnosticReport)
+        XCTAssertFalse(viewModel.isRunningDiagnostics)
+        XCTAssertEqual(viewModel.apiKeyInput, "replacement-key")
+    }
+
+    func testCancelledDiagnosticsDiscardReportAndClearLoadingState() async {
+        let configured = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "selected-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester()
+        tester.diagnosticDelayNanoseconds = 1_000_000_000
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        let diagnosticTask = Task { await viewModel.runDiagnostics() }
+        for _ in 0..<100 where tester.diagnosticPreferredModel == nil { await Task.yield() }
+        XCTAssertEqual(tester.diagnosticPreferredModel, "selected-model")
+
+        diagnosticTask.cancel()
+        await diagnosticTask.value
+
+        XCTAssertNil(viewModel.diagnosticReport)
+        XCTAssertFalse(viewModel.isRunningDiagnostics)
+    }
+
+    func testExplicitModelValidationDoesNotFallbackWhenSelectedModelFailsSmoke() async {
         let tester = FakeGatewayTester(
             healthSucceeds: true,
             models: ["apple-foundationmodel", "gpt-oss:120b-cloud"],
@@ -951,10 +1165,12 @@ final class SettingsViewModelTests: XCTestCase {
         viewModel.updateAPIKeyInput("test-key")
 
         await viewModel.testConnection()
+        viewModel.updateSelectedModelInput("apple-foundationmodel")
+        await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
-        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
+        XCTAssertFalse(viewModel.config.isConfigured)
     }
 
     func testResetOnboardingClearsSharedAndStandardFlags() {
@@ -991,23 +1207,56 @@ private func defaultsSuiteName(_ defaults: UserDefaults) -> String {
     ""
 }
 
-private final class SettingsInMemorySecretStore: AppConfigSecretStore {
-    var apiKey: String?
+private final class SettingsInMemorySecureStore: AppConfigSecureStore {
+    private var profileData: Data?
+    private var legacyAPIKey: String?
+    private var referencedAPIKeys: [String: String] = [:]
+    var apiKey: String? {
+        Self.apiKey(from: profileData) ?? legacyAPIKey
+    }
     var shouldFailSave = false
 
-    func loadAPIKey() -> String? { apiKey }
+    func loadProfile() -> Data? { profileData }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String) -> Bool {
+    func saveProfile(_ profile: Data) -> Bool {
         guard !shouldFailSave else { return false }
-        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        profileData = profile
         return true
     }
 
     @discardableResult
-    func clearAPIKey() -> Bool {
-        apiKey = nil
+    func clearProfile() -> Bool {
+        profileData = nil
         return true
+    }
+
+    func loadLegacyAPIKey() -> String? { legacyAPIKey }
+    func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+
+    @discardableResult
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool {
+        guard !shouldFailSave else { return false }
+        legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return true
+    }
+
+    @discardableResult
+    func clearLegacyAPIKey() -> Bool {
+        legacyAPIKey = nil
+        return true
+    }
+
+    @discardableResult
+    func clearLegacyAPIKey(reference: String) -> Bool {
+        referencedAPIKeys.removeValue(forKey: reference)
+        return true
+    }
+
+    private static func apiKey(from data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["apiKey"] as? String
     }
 }
 
@@ -1019,6 +1268,8 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var connectionFailure: Error?
     var modelFetchFailure: Error?
     var smokeFailure: Error
+    var connectionDelayNanoseconds: UInt64 = 0
+    var diagnosticDelayNanoseconds: UInt64 = 0
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
@@ -1051,6 +1302,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
         healthChecks += 1
         testedGatewayURLs.append(gatewayURL)
+        if connectionDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: connectionDelayNanoseconds)
+        }
         if let connectionFailure { throw connectionFailure }
         return healthSucceeds
     }
@@ -1072,6 +1326,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         diagnosticGatewayURL = gatewayURL
         diagnosticAPIKey = apiKey
         diagnosticPreferredModel = preferredModel
+        if diagnosticDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: diagnosticDelayNanoseconds)
+        }
         return diagnosticReport
     }
 }

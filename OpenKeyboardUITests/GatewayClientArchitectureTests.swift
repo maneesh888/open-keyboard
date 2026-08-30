@@ -1,5 +1,9 @@
 import XCTest
 
+private let validFastGrammarDiagnosticResponse = "The gateway connection is ready."
+private let validRewriteDiagnosticResponse = "Hi team, the app has issues that we need to fix soon, so please check it."
+private let validDutchDiagnosticResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"De gatewayverbinding is klaar voor schrijfacties.","replacement":"De gatewayverbinding is klaar voor schrijfacties."}],"corrected_text":"De gatewayverbinding is klaar voor schrijfacties."}"#
+
 final class GatewayClientArchitectureTests: XCTestCase {
     func testLiveImproveHarnessUsesCanonicalImprovePlainTextPath() throws {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
@@ -20,7 +24,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
     }
 
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
-        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.0.1")
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.1.0")
         let renderings = try KeyboardRewriteStyle.allCases.map { style in
             try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).rendering(for: "Source text"))
         }
@@ -724,7 +728,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testCorrectionSmokeBuildsAuthenticatedChatCompletionRequest() async throws {
-        let transport = NetworkManagerTestTransport(.chat(content: "I received the refund. "))
+        let transport = NetworkManagerTestTransport(.chat(content: validFastGrammarDiagnosticResponse))
         let manager = NetworkManager(transport: transport)
 
         try await manager.testCorrectionSmoke(
@@ -762,7 +766,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testCorrectionSmokeRetriesOneUnusablePlainTextResponse() async throws {
         let transport = NetworkManagerTestTransport([
             .chat(content: "This sentence is already fine."),
-            .chat(content: "I received the refund.")
+            .chat(content: validFastGrammarDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -858,10 +862,12 @@ final class NetworkManagerGatewayTests: XCTestCase {
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(URLError(.cancelled)))
     }
 
-    func testGatewayDiagnosticsRunsKeyboardPlainTextGrammarPathAndMeasuresPerformance() async throws {
+    func testGatewayDiagnosticsRunsContractOwnedGrammarRewriteAndTranslationPaths() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "I received the refund.")
+            .chat(content: validFastGrammarDiagnosticResponse),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -873,15 +879,17 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         XCTAssertFalse(report.hasFailures)
         XCTAssertEqual(report.selectedModel, "gpt-oss:120b-cloud")
-        XCTAssertEqual(report.passedCount, 2)
-        XCTAssertEqual(report.checks.count, 2)
-        XCTAssertEqual(report.measuredDurations.count, 2)
+        XCTAssertEqual(report.passedCount, 4)
+        XCTAssertEqual(report.checks.count, 4)
+        XCTAssertEqual(report.measuredDurations.count, 4)
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
             "/v1/models",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
             "/v1/chat/completions"
         ])
 
-        let chatBodyData = try XCTUnwrap(transport.requests.last?.httpBody)
+        let chatBodyData = try XCTUnwrap(transport.requests[1].httpBody)
         let chatBody = try XCTUnwrap(JSONSerialization.jsonObject(with: chatBodyData) as? [String: Any])
         XCTAssertEqual(chatBody["model"] as? String, "gpt-oss:120b-cloud")
         XCTAssertEqual(chatBody["operation"] as? String, "fix_grammar")
@@ -893,13 +901,27 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let settingsMessages = try XCTUnwrap(chatBody["messages"] as? [[String: Any]])
         XCTAssertTrue((settingsMessages.last?["content"] as? String)?.contains(settingsSmokeInput) == true)
         XCTAssertEqual(report.checks[1].id, "settings-correction-smoke")
-        XCTAssertEqual(report.checks[1].title, "Plain-text grammar")
-        XCTAssertTrue(report.checks[1].message.contains("derived local edits"))
+        XCTAssertEqual(report.checks[1].title, "Fast plain-text grammar")
+        XCTAssertEqual(report.checks[2].id, "settings-rewrite-improve")
+        XCTAssertEqual(report.checks[2].title, "Rewrite and Improve")
+        XCTAssertEqual(report.checks[3].id, "settings-translation-dutch")
+        XCTAssertEqual(report.checks[3].title, "Translation to Dutch")
+
+        let completionBodies = try transport.requests.dropFirst().map { request -> [String: Any] in
+            let body = try XCTUnwrap(request.httpBody)
+            return try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        }
+        XCTAssertEqual(completionBodies.compactMap { $0["operation"] as? String }, ["fix_grammar", "rewrite", "translate"])
+        XCTAssertNil(completionBodies[1]["response_format"])
+        XCTAssertTrue(completionBodies[2]["response_format"] is [String: Any])
     }
 
     func testGatewayDiagnosticsDoesNotSubstituteForUnavailablePreferredModel() async throws {
         let transport = NetworkManagerTestTransport([
-            .models(["another-model"])
+            .models(["another-model"]),
+            .chat(content: validFastGrammarDiagnosticResponse),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -910,14 +932,49 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         XCTAssertEqual(report.selectedModel, "gemma2:2b")
-        let grammarCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
-        XCTAssertEqual(grammarCheck.status, .failed)
-        XCTAssertEqual(grammarCheck.message, NetworkError.modelUnavailable.localizedDescription)
-        XCTAssertEqual(transport.requests.map { $0.url?.path }, ["/v1/models"])
+        XCTAssertFalse(report.hasFailures)
+        XCTAssertEqual(report.checks.count, 4)
+        XCTAssertEqual(transport.requests.map { $0.url?.path }, [
+            "/v1/models",
+            "/v1/chat/completions",
+            "/v1/chat/completions",
+            "/v1/chat/completions"
+        ])
+        for request in transport.requests.dropFirst() {
+            let bodyData = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, "gemma2:2b")
+        }
     }
 
-    func testGatewayDiagnosticsSkipsGrammarWhenModelsFail() async throws {
+    func testGatewayDiagnosticsPreservesExactPreferredModelCasing() async throws {
         let transport = NetworkManagerTestTransport([
+            .models(["GEMMA2:2B"]),
+            .chat(content: validFastGrammarDiagnosticResponse),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gemma2:2b"
+        )
+
+        XCTAssertEqual(report.selectedModel, "gemma2:2b")
+        XCTAssertFalse(report.hasFailures)
+        for request in transport.requests.dropFirst() {
+            let bodyData = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: bodyData) as? [String: Any])
+            XCTAssertEqual(body["model"] as? String, "gemma2:2b")
+        }
+    }
+
+    func testGatewayDiagnosticsReportsEveryCapabilityFailureWhenModelsFail() async throws {
+        let transport = NetworkManagerTestTransport([
+            .status(503),
+            .status(503),
+            .status(503),
             .status(503)
         ])
         let manager = NetworkManager(transport: transport)
@@ -929,20 +986,26 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         XCTAssertTrue(report.hasFailures)
-        XCTAssertEqual(report.failedCount, 1)
-        XCTAssertEqual(report.skippedCount, 1)
+        XCTAssertEqual(report.failedCount, 4)
+        XCTAssertEqual(report.skippedCount, 0)
         XCTAssertEqual(report.checks.first?.id, "models")
         XCTAssertEqual(report.checks.first?.status, .failed)
-        XCTAssertEqual(report.checks.last?.id, "settings-correction-smoke")
-        XCTAssertEqual(report.checks.last?.status, .skipped)
-        XCTAssertEqual(transport.requests.count, 1)
+        XCTAssertEqual(report.checks.map(\.id), [
+            "models",
+            "settings-correction-smoke",
+            "settings-rewrite-improve",
+            "settings-translation-dutch"
+        ])
+        XCTAssertTrue(report.checks.dropFirst().allSatisfy { $0.status == .failed })
+        XCTAssertEqual(transport.requests.count, 4)
     }
 
-    func testGatewayDiagnosticsRetriesTransientRequiredCorrectionValidation() async throws {
+    func testGatewayDiagnosticsUsesOneAttemptPerCapabilityAndContinuesAfterFailure() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
             .chat(content: "not json"),
-            .chat(content: "I received the refund.")
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -953,17 +1016,117 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
 
         let correctionCheck = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
-        XCTAssertEqual(correctionCheck.status, .passed)
-        XCTAssertTrue(correctionCheck.message.contains("derived local edits"))
-        XCTAssertFalse(report.hasFailures)
-        XCTAssertEqual(transport.requests.count, 3)
+        XCTAssertEqual(correctionCheck.status, .failed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
+        XCTAssertTrue(report.hasFailures)
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
+    func testGatewayDiagnosticsReportsPlainTextRewriteFailureWithoutBlockingTranslation() async throws {
+        let rewritePreset = try XCTUnwrap(
+            SemanticPromptContract.gatewayPromptPreset(id: NetworkManager.rewriteDiagnosticPresetID)
+        )
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: validFastGrammarDiagnosticResponse),
+            .chat(content: rewritePreset.input),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .passed)
+        let rewrite = try XCTUnwrap(report.checks.first { $0.id == "settings-rewrite-improve" })
+        XCTAssertEqual(rewrite.status, .failed)
+        XCTAssertEqual(
+            rewrite.message,
+            NetworkError.unusableCapability("Rewrite and Improve").localizedDescription
+        )
+        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
+        XCTAssertEqual(transport.requests.count, 4, "Each completion capability must run exactly once.")
+    }
+
+    func testGatewayDiagnosticsStopsAfterCancellationWithoutStartingLaterCapabilities() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .throwing(CancellationError()),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .failed)
+        XCTAssertNil(report.checks.first { $0.id == "settings-rewrite-improve" })
+        XCTAssertNil(report.checks.first { $0.id == "settings-translation-dutch" })
+        XCTAssertEqual(transport.requests.count, 2)
+    }
+
+    func testGatewayDiagnosticsSanitizesSensitiveFailureAndContinues() async throws {
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .throwing(SensitiveDiagnosticTransportError()),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
+        ])
+
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        let grammar = try XCTUnwrap(report.checks.first { $0.id == "settings-correction-smoke" })
+        XCTAssertEqual(grammar.status, .failed)
+        XCTAssertFalse(grammar.message.localizedCaseInsensitiveContains("authorization"))
+        XCTAssertFalse(grammar.message.localizedCaseInsensitiveContains("bearer"))
+        XCTAssertFalse(grammar.message.contains("sensitive-diagnostic-value"))
+        XCTAssertEqual(
+            NetworkManager.diagnosticMessage(for: SensitiveDiagnosticTransportError()),
+            "Gateway returned an invalid response."
+        )
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-translation-dutch" }?.status, .passed)
+        XCTAssertEqual(transport.requests.count, 4)
+    }
+
+    func testGatewayDiagnosticsRejectsSchemaValidNonDutchTranslation() async throws {
+        let frenchResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"La connexion de la passerelle est prête pour les actions d'écriture.","replacement":"La connexion de la passerelle est prête pour les actions d'écriture."}],"corrected_text":"La connexion de la passerelle est prête pour les actions d'écriture."}"#
+        let transport = NetworkManagerTestTransport([
+            .models(["gpt-oss:120b-cloud"]),
+            .chat(content: validFastGrammarDiagnosticResponse),
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: frenchResponse)
+        ])
+        let report = await NetworkManager(transport: transport).runGatewayDiagnostics(
+            gatewayURL: "gateway.example",
+            apiKey: "test-api-key",
+            preferredModel: "gpt-oss:120b-cloud"
+        )
+
+        XCTAssertEqual(report.checks.first { $0.id == "settings-correction-smoke" }?.status, .passed)
+        XCTAssertEqual(report.checks.first { $0.id == "settings-rewrite-improve" }?.status, .passed)
+        let translation = try XCTUnwrap(report.checks.first { $0.id == "settings-translation-dutch" })
+        XCTAssertEqual(translation.status, .failed)
+        XCTAssertEqual(translation.message, NetworkError.unusableCapability("Dutch translation").localizedDescription)
+        XCTAssertEqual(transport.requests.count, 4)
     }
 
     func testGatewayDiagnosticsFailsWhenPlainTextGrammarIsUnusable() async throws {
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
             .chat(content: NetworkManager.diagnosticSettingsCorrectionInput),
-            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput)
+            .chat(content: validRewriteDiagnosticResponse),
+            .chat(content: validDutchDiagnosticResponse)
         ])
         let manager = NetworkManager(transport: transport)
 
@@ -977,20 +1140,23 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(grammarCheck.status, .failed)
         XCTAssertEqual(grammarCheck.message, NetworkError.unusableCorrection.localizedDescription)
         XCTAssertTrue(report.hasFailures)
-        XCTAssertEqual(transport.requests.count, 3)
+        XCTAssertEqual(report.passedCount, 3)
+        XCTAssertEqual(transport.requests.count, 4)
     }
 
     @MainActor
-    func testViewModelKeepsExactDiscoveredModelWhenSmokeCannotVerifyIt() async throws {
+    func testViewModelRequiresExplicitModelAndDoesNotPublishWhenGrammarCannotVerify() async throws {
         let suiteName = "NetworkManagerGatewayTests.fallback.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let transport = NetworkManagerTestTransport([
+            .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
+            .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .chat(content: "This sentence is already fine."),
@@ -1002,12 +1168,18 @@ final class NetworkManagerGatewayTests: XCTestCase {
         viewModel.updateAPIKeyInput("test-api-key")
 
         await viewModel.testConnection()
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        XCTAssertTrue(transport.requests.allSatisfy { $0.url?.path == "/v1/models" })
+        viewModel.updateSelectedModelInput("apple-foundationmodel")
+        await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
-        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
-        XCTAssertEqual(secretStore.apiKey, "test-api-key")
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.config.isConfigured)
+        XCTAssertEqual(viewModel.config.selectedModel, "")
+        XCTAssertNil(secureStore.apiKey)
         XCTAssertEqual(transport.requests.map { $0.url?.path }, [
+            "/v1/models",
+            "/v1/models",
             "/v1/models",
             "/v1/models",
             "/v1/chat/completions",
@@ -1022,14 +1194,14 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     @MainActor
-    func testViewModelSavesConnectedGatewayWhenNetworkSmokeCannotVerifyModel() async throws {
+    func testViewModelPreservesEmptyPersistedProfileWhenNetworkSmokeCannotVerifyModel() async throws {
         let suiteName = "NetworkManagerGatewayTests.failure.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let transport = NetworkManagerTestTransport([
             .models(["apple-foundationmodel"]),
@@ -1044,17 +1216,17 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         await viewModel.testConnection()
 
-        XCTAssertEqual(viewModel.connectionStatus, .limited)
-        XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(viewModel.config.apiKey, "test-api-key")
-        XCTAssertEqual(viewModel.config.selectedModel, "apple-foundationmodel")
-        XCTAssertTrue(viewModel.config.isConfigured)
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.config.gatewayURL, "")
+        XCTAssertEqual(viewModel.config.apiKey, "")
+        XCTAssertEqual(viewModel.config.selectedModel, "")
+        XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertFalse(viewModel.config.supportsStructuredCorrections)
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), "https://gateway.example")
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
         XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
-        XCTAssertEqual(secretStore.apiKey, "test-api-key")
-        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertNil(secureStore.apiKey)
+        XCTAssertNotNil(AppConfig.gatewayConnectionError(from: defaults))
     }
 
     private func assertFetchModelsThrows(
@@ -1129,6 +1301,29 @@ final class LiveModelDifferentialTests: XCTestCase {
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         XCTAssertEqual(config.selectedModel, model)
+        let diagnosticReport = await NetworkManager().runGatewayDiagnostics(
+            gatewayURL: gatewayURL,
+            apiKey: apiKey,
+            preferredModel: model
+        )
+        try attachLiveGatewayDiagnosticEvidence(diagnosticReport, role: role)
+        let transportCheck = try XCTUnwrap(diagnosticReport.checks.first { $0.id == "models" })
+        XCTAssertEqual(transportCheck.status, .passed, transportCheck.message)
+        print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=transport status=\(transportCheck.status.rawValue.lowercased()) latency=\(transportCheck.durationDisplay)")
+        for checkID in ["settings-correction-smoke", "settings-rewrite-improve", "settings-translation-dutch"] {
+            let check = try XCTUnwrap(diagnosticReport.checks.first { $0.id == checkID })
+            XCTAssertGreaterThanOrEqual(try XCTUnwrap(check.durationMilliseconds), 0)
+            XCTAssertFalse(check.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(checkID) status=\(check.status.rawValue.lowercased()) latency=\(check.durationDisplay)")
+        }
+        let grammarCheck = try XCTUnwrap(
+            diagnosticReport.checks.first { $0.id == "settings-correction-smoke" }
+        )
+        let rewriteCheck = try XCTUnwrap(
+            diagnosticReport.checks.first { $0.id == "settings-rewrite-improve" }
+        )
+        XCTAssertEqual(grammarCheck.status, .passed, grammarCheck.message)
+        XCTAssertEqual(rewriteCheck.status, .passed, rewriteCheck.message)
         let service = KeyboardAIService(requestTimeoutInterval: 90)
 
         let baselineStartedAt = Date()
@@ -1301,6 +1496,27 @@ final class LiveModelDifferentialTests: XCTestCase {
         }
         return String(bytes: bytes, encoding: .utf8)
     }
+
+    private func attachLiveGatewayDiagnosticEvidence(
+        _ report: GatewayDiagnosticReport,
+        role: String
+    ) throws {
+        let capabilities: [(id: String, evidenceName: String)] = [
+            ("models", "transport"),
+            ("settings-correction-smoke", "grammar"),
+            ("settings-rewrite-improve", "rewrite"),
+            ("settings-translation-dutch", "translation")
+        ]
+        let lines = try capabilities.map { capability in
+            let check = try XCTUnwrap(report.checks.first { $0.id == capability.id })
+            let latency = try XCTUnwrap(check.durationMilliseconds)
+            return "LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(capability.evidenceName) status=\(check.status.rawValue.lowercased()) latency_ms=\(latency)"
+        }
+        let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
+        attachment.name = "live-gateway-diagnostics-\(role)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
 }
 
 private struct LongMalayalamTranslationEvidence {
@@ -1343,10 +1559,10 @@ final class LiveGatewaySmokeTests: XCTestCase {
         let suiteName = "LiveGatewaySmokeTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let oldSecretStore = AppConfig.secretStore
-        let secretStore = NetworkManagerInMemorySecretStore()
-        AppConfig.secretStore = secretStore
-        defer { AppConfig.secretStore = oldSecretStore }
+        let oldSecureStore = AppConfig.secureStore
+        let secureStore = NetworkManagerInMemorySecureStore()
+        AppConfig.secureStore = secureStore
+        defer { AppConfig.secureStore = oldSecureStore }
 
         let initialConfig = AppConfig(
             apiKey: "",
@@ -1361,6 +1577,14 @@ final class LiveGatewaySmokeTests: XCTestCase {
         viewModel.updateAPIKeyInput(apiKey)
 
         await viewModel.testConnection()
+        if viewModel.modelSelectionRequired {
+            guard viewModel.availableModels.contains(where: { $0.caseInsensitiveCompare(model) == .orderedSame }) else {
+                XCTFail("The exact seeded model is not available for this gateway profile.")
+                return
+            }
+            viewModel.updateSelectedModelInput(model)
+            await viewModel.testConnection()
+        }
 
         let connectionFailure = viewModel.errorMessage ?? "No user-facing error was recorded."
         XCTAssertEqual(
@@ -1377,13 +1601,16 @@ final class LiveGatewaySmokeTests: XCTestCase {
             "The live proof must exercise the exact seeded model without catalog fallback."
         )
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
-        XCTAssertEqual(defaults.string(forKey: AppConfig.gatewayURLKey), viewModel.config.gatewayURL)
-        XCTAssertEqual(defaults.string(forKey: AppConfig.selectedModelKey), viewModel.config.selectedModel)
-        XCTAssertTrue(defaults.bool(forKey: AppConfig.isConfiguredKey))
-        XCTAssertNotNil(secretStore.apiKey)
+        XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+        XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
+        XCTAssertFalse(defaults.bool(forKey: AppConfig.isConfiguredKey))
+        XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
+        XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
+        XCTAssertNotNil(secureStore.apiKey)
+        XCTAssertEqual(AppConfig.load(from: defaults), viewModel.config)
         XCTAssertTrue(viewModel.config.grammarCorrectionVerified)
 
-        print("OpenKeyboard live Test Connection status: connected; plain-text grammar verified.")
+        print("OpenKeyboard live Test Connection transport: passed; grammar save validation: passed.")
 
         let diagnosticReport = await NetworkManager().runGatewayDiagnostics(
             gatewayURL: viewModel.config.gatewayURL,
@@ -1392,11 +1619,14 @@ final class LiveGatewaySmokeTests: XCTestCase {
         )
         let requiredCheckIDs = [
             "models",
-            "settings-correction-smoke"
+            "settings-correction-smoke",
+            "settings-rewrite-improve",
+            "settings-translation-dutch"
         ]
         for checkID in requiredCheckIDs {
             let check = try XCTUnwrap(diagnosticReport.checks.first { $0.id == checkID })
             XCTAssertEqual(check.status, .passed, "\(check.title): \(check.message)")
+            print("OpenKeyboard live diagnostic \(check.title): \(check.status.rawValue.lowercased()); latency \(check.durationDisplay).")
         }
     }
 
@@ -1417,6 +1647,7 @@ final class LiveGatewaySmokeTests: XCTestCase {
               !value.isEmpty else { return nil }
         return value
     }
+
 }
 
 private final class CanonicalGatewayClientTestTransport: GatewayChatTransporting {
@@ -1517,6 +1748,12 @@ private enum ExpectedNetworkError {
     }
 }
 
+private struct SensitiveDiagnosticTransportError: LocalizedError {
+    var errorDescription: String? {
+        #"Authorization: Bearer sensitive-diagnostic-value {"error":"private"}"#
+    }
+}
+
 private final class NetworkManagerTestTransport: NetworkManagerTransporting {
     enum Response {
         case models([String])
@@ -1575,20 +1812,50 @@ private final class NetworkManagerTestTransport: NetworkManagerTransporting {
     }
 }
 
-private final class NetworkManagerInMemorySecretStore: AppConfigSecretStore {
-    var apiKey: String?
+private final class NetworkManagerInMemorySecureStore: AppConfigSecureStore {
+    private var profileData: Data?
+    private var legacyAPIKey: String?
+    private var referencedAPIKeys: [String: String] = [:]
+    var apiKey: String? { Self.apiKey(from: profileData) ?? legacyAPIKey }
 
-    func loadAPIKey() -> String? { apiKey }
+    func loadProfile() -> Data? { profileData }
 
     @discardableResult
-    func saveAPIKey(_ apiKey: String) -> Bool {
-        self.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    func saveProfile(_ profile: Data) -> Bool {
+        profileData = profile
         return true
     }
 
     @discardableResult
-    func clearAPIKey() -> Bool {
-        apiKey = nil
+    func clearProfile() -> Bool {
+        profileData = nil
         return true
+    }
+
+    func loadLegacyAPIKey() -> String? { legacyAPIKey }
+    func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+
+    @discardableResult
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool {
+        legacyAPIKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return true
+    }
+
+    @discardableResult
+    func clearLegacyAPIKey() -> Bool {
+        legacyAPIKey = nil
+        return true
+    }
+
+    @discardableResult
+    func clearLegacyAPIKey(reference: String) -> Bool {
+        referencedAPIKeys.removeValue(forKey: reference)
+        return true
+    }
+
+    private static func apiKey(from data: Data?) -> String? {
+        guard let data,
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["apiKey"] as? String
     }
 }

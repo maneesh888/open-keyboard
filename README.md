@@ -41,8 +41,8 @@ Open Keyboard is built for people who want AI writing help while keeping control
 - Connects to a user-controlled LLM Gateway using a gateway URL and API key.
 - Loads the selected model from the configured gateway.
 - Separates grammar and typo correction from the visible AI writing tools Improve, Rephrase, and Translate; Summarize support remains implemented but is hidden from the keyboard carousel.
-- Stores the gateway API key in a shared Keychain access group.
-- Shares non-sensitive gateway settings with the keyboard extension through App Group storage.
+- Stores the complete versioned gateway profile (URL, exact model, API key, and validation metadata) as one item in a shared Keychain access group.
+- Uses App Group storage only for non-authoritative configured/revision hints and transient connection or UI-test metadata; both production targets load the runtime profile from Keychain.
 - Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
 - Keeps normal CI deterministic with offline mocks; live model tests are opt-in.
 
@@ -76,8 +76,8 @@ The host app currently includes:
 - model discovery through the gateway
 - visible Full Access and privacy copy
 - link-out to the gateway admin UI when a gateway URL is configured
-- shared Keychain storage for the API key
-- App Group storage for gateway URL, selected model, and configured state
+- atomic shared Keychain storage for the complete gateway profile used by both the app and keyboard extension
+- migration from earlier split App Group/Keychain profiles without publishing a partially replaced runtime configuration
 
 ### Keyboard Extension
 
@@ -89,7 +89,7 @@ The keyboard extension currently includes:
 - separate toolbar workflows for correction review and AI writing actions:
   - grammar and typo correction shows loading, correction suggestions, no-issue results, or recoverable error states.
   - AI writing tools expose Improve, simple Rephrase, Translate, and independent rewrite-style actions without mixing them into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
-- typed keyboard errors keep gateway transport, authentication, missing-model, and per-operation model-capability failures distinct; an incompatible correction result does not disable unrelated writing actions.
+- typed keyboard errors keep gateway transport, authentication, missing-model, and per-operation model-capability failures distinct; an unusable grammar-only result keeps the original text, identifies the selected model's correction failure without declaring it globally incompatible, and does not disable unrelated writing actions.
 - automatic grammar-analysis failures stay as nonblocking toolbar warnings: the key grid and typed text remain available, and analysis retries after the next edit; manual AI-action failures remain scoped to the action that failed.
 - interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; the Settings model check uses at most two 20-second attempts.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
@@ -138,7 +138,7 @@ does not inject Open Keyboard prompts or rebuild the message conversation.
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `4.0.1`. This path is a checkout
+`Vendor/semantic-prompt-contract` Git submodule at contract version `4.1.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
 and UI tests compile the same generated Swift adapter. UI, request transport, gateway
@@ -270,6 +270,9 @@ verification success. Low success on the boundary is recorded as diagnostic—no
 flaky pass—and exact-head policy rejects it as verified matrix evidence. High-profile structural
 success remains independently required. Per-profile wall-clock latency is retained without
 response bodies.
+The same private result bundles retain a sanitized attachment for each role with separate
+transport, grammar, rewrite, and translation pass/fail plus per-capability latency; the live runner
+validates and reports those fields before deleting the temporary attachments.
 
 `./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
 catalog fallback. When a task requires a named model, set
