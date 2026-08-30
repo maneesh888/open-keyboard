@@ -1,6 +1,6 @@
 # AI Keyboard Project - Current TODO
 
-**Last Updated:** 2026-07-03
+**Last Updated:** 2026-09-05
 
 **Migration entry added:** 2026-09-05
 
@@ -38,6 +38,8 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 - [x] Gateway client/config core exists (`GatewayClient`, `GatewayConfig`, `GatewayConfigStore`, `URLSessionHTTPClient`).
 - [x] Main app connection testing and model loading exist.
+- [ ] Rename the developer-facing `Fast plain-text grammar` diagnostic to `Grammar correction`;
+  keep the short, one-attempt plain-text explanation in supporting copy.
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
 - [x] Structured suggestion/action result parsing exists.
 - [x] Offline prompt/user-flow tests and opt-in live gateway tests exist.
@@ -48,6 +50,18 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [ ] Streaming/SSE responses — needs verification; do not assume complete.
 - [ ] Debounced suggestions while typing — pending.
 - [ ] Timeout/cancellation/network resilience coverage — next queue item, partially present in tests but needs current verification before marking complete.
+- [ ] Long-text Fix Grammar model differential and rate-limit-safe chunking — future work.
+  Proof-first live evaluation on `91315578e4211f7343ccd62995530bc5b74358b5` used one
+  synthetic 11,430-character document with 20 known errors: the low profile returned the complete
+  text unchanged (`0/20` corrections), while the high profile corrected all `20/20` errors in one
+  request and preserved all 21 paragraphs. The existing approximately 120-character production
+  strategy generated 104 chunks for the same document and received HTTP `429` on chunk 13 when
+  running two requests concurrently, so that chunked outcome remains live-unverified. Before
+  implementation, evaluate sentence/paragraph-aligned chunks around 1,500–2,000 characters,
+  initially processed sequentially; require exact-order reassembly, preserved whitespace and
+  paragraph structure, per-chunk validation, no partial application, and a permanent live-model
+  differential test where high-profile long correction is required and low-profile support is
+  diagnostic/optional.
 - [ ] Shared Keychain release hardening and privacy copy — in progress; see `docs/RELEASE_HARDENING.md` and `docs/TDD_STATUS.md`.
 
 ### Testing and verification
