@@ -33,10 +33,15 @@
 ## Runtime evidence
 
 <!-- Automated XCTest/XCUITest/XCTAttachment evidence is not normal simulator runtime proof. -->
-<!-- Proof-sensitive UI/extension/live-result changes require the exact-head normal runtime fields. -->
+<!-- Proof-sensitive UI/extension/live-result changes require an exact-head capture or a verified test-only carry-forward record. -->
 - Automated regression evidence: pending
 - Normal simulator runtime proof: not required
-- Runtime-tested head: not required
+- Runtime evidence mode: not required
+- Runtime capture head: not required
+- Runtime-verified current head: not required
+- Runtime content digest: not required
+- Runtime carry-forward paths: not required
+- Runtime carry-forward verifier: not required
 - Build configuration: not required
 - Simulator model and OS: not required
 - Action and source text: not required
