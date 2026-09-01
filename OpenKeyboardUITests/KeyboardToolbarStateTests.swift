@@ -114,6 +114,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
 
     func testKeyboardInputModeTransitionsThroughNumbersAndSymbols() {
         XCTAssertEqual(KeyboardInputMode.letters.togglingNumbers, .numbers)
+        XCTAssertEqual(KeyboardInputMode.numbers.togglingNumbers, .letters)
         XCTAssertEqual(KeyboardInputMode.numbers.togglingSymbols, .symbols)
         XCTAssertEqual(KeyboardInputMode.symbols.togglingSymbols, .numbers)
         XCTAssertEqual(KeyboardInputMode.symbols.togglingNumbers, .letters)
