@@ -101,6 +101,24 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testSecondarySymbolsModeMatchesReferenceLayout() {
+        let mode = KeyboardInputMode.symbols
+
+        XCTAssertEqual(mode.topRowKeys, ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="])
+        XCTAssertEqual(mode.middleRowKeys, ["_", "\\", "|", "~", "<", ">", "$", "£", "€", "•"])
+        XCTAssertEqual(mode.bottomRowKeys, [".", ",", "?", "!", "'"])
+        XCTAssertEqual(mode.leadingBottomKeyLabel, "123")
+        XCTAssertEqual(mode.bottomControlKeyLabel, "ABC")
+        XCTAssertFalse(mode.usesMiddleRowInset)
+    }
+
+    func testKeyboardInputModeTransitionsThroughNumbersAndSymbols() {
+        XCTAssertEqual(KeyboardInputMode.letters.togglingNumbers, .numbers)
+        XCTAssertEqual(KeyboardInputMode.numbers.togglingSymbols, .symbols)
+        XCTAssertEqual(KeyboardInputMode.symbols.togglingSymbols, .numbers)
+        XCTAssertEqual(KeyboardInputMode.symbols.togglingNumbers, .letters)
+    }
+
     func testActionPanelUsesMinimumTapTargetsWithoutGrowingViewport() {
         XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionControlButtonHeight, 44)

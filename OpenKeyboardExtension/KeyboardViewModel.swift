@@ -6,6 +6,73 @@
 import SwiftUI
 import UIKit
 
+enum KeyboardInputMode: Equatable {
+    case letters
+    case numbers
+    case symbols
+
+    var topRowKeys: [String] {
+        switch self {
+        case .letters:
+            return ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]
+        case .numbers:
+            return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+        case .symbols:
+            return ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="]
+        }
+    }
+
+    var middleRowKeys: [String] {
+        switch self {
+        case .letters:
+            return ["a", "s", "d", "f", "g", "h", "j", "k", "l"]
+        case .numbers:
+            return ["-", "/", ":", ";", "(", ")", "$", "&", "@"]
+        case .symbols:
+            return ["_", "\\", "|", "~", "<", ">", "$", "£", "€", "•"]
+        }
+    }
+
+    var bottomRowKeys: [String] {
+        switch self {
+        case .letters:
+            return ["z", "x", "c", "v", "b", "n", "m"]
+        case .numbers:
+            return [".", ",", "?", "!", "'", "\"", "_"]
+        case .symbols:
+            return [".", ",", "?", "!", "'"]
+        }
+    }
+
+    var leadingBottomKeyLabel: String {
+        switch self {
+        case .letters: return "⇧"
+        case .numbers: return "#+="
+        case .symbols: return "123"
+        }
+    }
+
+    var bottomControlKeyLabel: String {
+        self == .letters ? "123" : "ABC"
+    }
+
+    var usesMiddleRowInset: Bool {
+        self != .symbols
+    }
+
+    var togglingNumbers: KeyboardInputMode {
+        self == .letters ? .numbers : .letters
+    }
+
+    var togglingSymbols: KeyboardInputMode {
+        switch self {
+        case .letters: return .letters
+        case .numbers: return .symbols
+        case .symbols: return .numbers
+        }
+    }
+}
+
 enum KeyboardRewriteOptionsIntent: Equatable {
     case improve
     case rephrase
@@ -241,7 +308,7 @@ final class KeyboardViewModel: ObservableObject {
     private let loadGatewayConnectionError: () -> String?
 
     @Published var isShiftEnabled = false
-    @Published var isNumbersEnabled = false
+    @Published private(set) var inputMode: KeyboardInputMode = .letters
     @Published private(set) var config = AppConfig.default
     @Published private(set) var hasFullAccess = false
     @Published private(set) var gatewayConnectionError: String?
@@ -473,7 +540,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func toggleNumbers() {
-        isNumbersEnabled.toggle()
+        inputMode = inputMode.togglingNumbers
+        isShiftEnabled = false
+    }
+
+    func toggleSymbols() {
+        inputMode = inputMode.togglingSymbols
         isShiftEnabled = false
     }
 
