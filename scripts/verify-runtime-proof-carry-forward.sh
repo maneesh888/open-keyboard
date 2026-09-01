@@ -62,7 +62,7 @@ record_intervening_paths() {
     for parent in "${revision_line[@]:1}"; do
       renamed_or_copied_paths="$(
         git -C "$REPOSITORY" diff --name-only --diff-filter=RC \
-          --find-renames --find-copies "$parent" "$commit"
+          --find-renames --find-copies-harder "$parent" "$commit"
       )"
       [[ -z "$renamed_or_copied_paths" ]] ||
         fail "intervening commit contains a renamed or copied path: $commit"

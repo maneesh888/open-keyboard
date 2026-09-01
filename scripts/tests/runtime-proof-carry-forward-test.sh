@@ -107,4 +107,20 @@ if OPEN_KEYBOARD_RUNTIME_PROOF_REPOSITORY="$RENAMED_TEST_REPOSITORY" \
   exit 1
 fi
 
+COPIED_TEST_REPOSITORY="$FIXTURE_ROOT/copied-test"
+initialize_fixture "$COPIED_TEST_REPOSITORY"
+COPIED_TEST_CAPTURE_SHA="$(git -C "$COPIED_TEST_REPOSITORY" rev-parse HEAD)"
+cp "$COPIED_TEST_REPOSITORY/OpenKeyboardUITests/layout.swift" \
+  "$COPIED_TEST_REPOSITORY/OpenKeyboardUITests/copied-layout.swift"
+git -C "$COPIED_TEST_REPOSITORY" add OpenKeyboardUITests/copied-layout.swift
+git -C "$COPIED_TEST_REPOSITORY" commit -qm 'Copy test source'
+COPIED_TEST_CURRENT_SHA="$(git -C "$COPIED_TEST_REPOSITORY" rev-parse HEAD)"
+
+if OPEN_KEYBOARD_RUNTIME_PROOF_REPOSITORY="$COPIED_TEST_REPOSITORY" \
+    "$VERIFIER" "$COPIED_TEST_CAPTURE_SHA" "$COPIED_TEST_CURRENT_SHA" \
+    >/dev/null 2>&1; then
+  echo 'Carry-forward verifier accepted an intervening unchanged-source test copy.' >&2
+  exit 1
+fi
+
 echo 'Runtime proof carry-forward regression tests passed.'
