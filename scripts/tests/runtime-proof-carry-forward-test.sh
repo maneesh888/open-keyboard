@@ -71,4 +71,40 @@ if OPEN_KEYBOARD_RUNTIME_PROOF_REPOSITORY="$RUNTIME_REPOSITORY" \
   exit 1
 fi
 
+REVERTED_RUNTIME_REPOSITORY="$FIXTURE_ROOT/reverted-runtime-change"
+initialize_fixture "$REVERTED_RUNTIME_REPOSITORY"
+REVERTED_RUNTIME_CAPTURE_SHA="$(git -C "$REVERTED_RUNTIME_REPOSITORY" rev-parse HEAD)"
+printf '%s\n' 'runtime-v2' > "$REVERTED_RUNTIME_REPOSITORY/OpenKeyboard/runtime.swift"
+git -C "$REVERTED_RUNTIME_REPOSITORY" add OpenKeyboard/runtime.swift
+git -C "$REVERTED_RUNTIME_REPOSITORY" commit -qm 'Temporarily change runtime content'
+printf '%s\n' 'runtime-v1' > "$REVERTED_RUNTIME_REPOSITORY/OpenKeyboard/runtime.swift"
+git -C "$REVERTED_RUNTIME_REPOSITORY" add OpenKeyboard/runtime.swift
+git -C "$REVERTED_RUNTIME_REPOSITORY" commit -qm 'Restore runtime content'
+printf '%s\n' 'test-v2' > "$REVERTED_RUNTIME_REPOSITORY/OpenKeyboardUITests/layout.swift"
+git -C "$REVERTED_RUNTIME_REPOSITORY" add OpenKeyboardUITests/layout.swift
+git -C "$REVERTED_RUNTIME_REPOSITORY" commit -qm 'Update test after runtime restoration'
+REVERTED_RUNTIME_CURRENT_SHA="$(git -C "$REVERTED_RUNTIME_REPOSITORY" rev-parse HEAD)"
+
+if OPEN_KEYBOARD_RUNTIME_PROOF_REPOSITORY="$REVERTED_RUNTIME_REPOSITORY" \
+    "$VERIFIER" "$REVERTED_RUNTIME_CAPTURE_SHA" "$REVERTED_RUNTIME_CURRENT_SHA" \
+    >/dev/null 2>&1; then
+  echo 'Carry-forward verifier accepted a reverted intervening runtime change.' >&2
+  exit 1
+fi
+
+RENAMED_TEST_REPOSITORY="$FIXTURE_ROOT/renamed-test"
+initialize_fixture "$RENAMED_TEST_REPOSITORY"
+RENAMED_TEST_CAPTURE_SHA="$(git -C "$RENAMED_TEST_REPOSITORY" rev-parse HEAD)"
+git -C "$RENAMED_TEST_REPOSITORY" mv \
+  OpenKeyboardUITests/layout.swift OpenKeyboardUITests/renamed-layout.swift
+git -C "$RENAMED_TEST_REPOSITORY" commit -qm 'Rename test source'
+RENAMED_TEST_CURRENT_SHA="$(git -C "$RENAMED_TEST_REPOSITORY" rev-parse HEAD)"
+
+if OPEN_KEYBOARD_RUNTIME_PROOF_REPOSITORY="$RENAMED_TEST_REPOSITORY" \
+    "$VERIFIER" "$RENAMED_TEST_CAPTURE_SHA" "$RENAMED_TEST_CURRENT_SHA" \
+    >/dev/null 2>&1; then
+  echo 'Carry-forward verifier accepted an intervening test-target rename.' >&2
+  exit 1
+fi
+
 echo 'Runtime proof carry-forward regression tests passed.'

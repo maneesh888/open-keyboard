@@ -45,6 +45,38 @@ runtime_tree_digest() {
     awk '{print $1}'
 }
 
+record_intervening_paths() {
+  local output_file="$1"
+  local commit
+  local revision_line
+  local parent
+  local renamed_or_copied_paths
+
+  while IFS= read -r commit; do
+    read -r -a revision_line <<< "$(
+      git -C "$REPOSITORY" rev-list --parents --max-count=1 "$commit"
+    )"
+    [[ "${#revision_line[@]}" -gt 1 ]] ||
+      fail "intervening commit has no parent: $commit"
+
+    for parent in "${revision_line[@]:1}"; do
+      renamed_or_copied_paths="$(
+        git -C "$REPOSITORY" diff --name-only --diff-filter=RC \
+          --find-renames --find-copies "$parent" "$commit"
+      )"
+      [[ -z "$renamed_or_copied_paths" ]] ||
+        fail "intervening commit contains a renamed or copied path: $commit"
+
+      git -C "$REPOSITORY" diff-tree \
+        --no-commit-id --name-only -r -z --no-renames \
+        "$parent" "$commit" >> "$output_file"
+    done
+  done < <(
+    git -C "$REPOSITORY" rev-list --reverse --topo-order \
+      "$CAPTURE_SHA..$CURRENT_SHA"
+  )
+}
+
 if [[ "$#" -ne 2 ]]; then
   usage >&2
   exit 2
@@ -69,15 +101,16 @@ if [[ "$CAPTURE_SHA" == "$CURRENT_SHA" ]]; then
   fail "capture and current SHA are identical; carry-forward is unnecessary."
 fi
 
+INTERVENING_PATHS_FILE="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-runtime-proof-paths.XXXXXX")"
+trap 'rm -f -- "$INTERVENING_PATHS_FILE"' EXIT
+record_intervening_paths "$INTERVENING_PATHS_FILE"
+
 CHANGE_COUNT=0
 while IFS= read -r -d '' path; do
   CHANGE_COUNT=$((CHANGE_COUNT + 1))
   is_nonshipping_test_path "$path" ||
     fail "intervening path can affect runtime content: $path"
-done < <(
-  git -C "$REPOSITORY" diff --no-renames --name-only -z \
-    "$CAPTURE_SHA..$CURRENT_SHA"
-)
+done < "$INTERVENING_PATHS_FILE"
 
 [[ "$CHANGE_COUNT" -gt 0 ]] || fail "the commit range contains no changed paths."
 
@@ -91,5 +124,6 @@ echo "Capture SHA: $CAPTURE_SHA"
 echo "Current SHA: $CURRENT_SHA"
 echo "Runtime content digest: $CURRENT_DIGEST"
 echo "Allowed intervening paths:"
-git -C "$REPOSITORY" diff --no-renames --name-only "$CAPTURE_SHA..$CURRENT_SHA" |
-  sed 's/^/- /'
+while IFS= read -r -d '' path; do
+  printf -- '- %s\n' "$path"
+done < "$INTERVENING_PATHS_FILE"
