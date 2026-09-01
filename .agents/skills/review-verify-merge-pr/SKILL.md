@@ -13,13 +13,18 @@ Bind every review conclusion and state change to one exact pull-request head.
 - A bounded implementation request starts the normal autonomous repository lifecycle through guarded merge.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
-- Apply the sticky authority ledger from `AGENTS.md`. Earlier edit, implementation, commit, push,
-  PR, readiness, or merge constraints remain active until explicitly revoked for that action;
-  ambiguous later wording does not revoke them.
+- Apply the sticky authority ledger from `AGENTS.md`. Honor active edit, implementation, commit,
+  push, PR, readiness, and merge constraints; do not resurrect a completed checkpoint's
+  phase-scoped constraints after a clear implementation transition. Objective- or task-wide
+  constraints remain active until explicitly revoked, and ambiguous later wording does not revoke
+  them.
 - Physical-device interaction remains separately denied until the user explicitly requests it.
   Review, release, readiness, or merge work and a physical-device evidence requirement never
   authorize device discovery, connection, installation, launch, testing, signing, or capture.
-- Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
+- Do not request another confirmation between normal lifecycle stages while their gates pass and
+  the independent reviewer reports operational confidence of exactly `100%`. The user does not
+  need to name commit, push, PR, readiness, or merge separately. Below 100%, explicit human
+  authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
 
@@ -29,7 +34,11 @@ Bind every review conclusion and state change to one exact pull-request head.
 2. Resolve the PR number, base, full head SHA, draft state, changed files, mergeability, reviews, unresolved threads, and checks using available read-only GitHub tools.
 3. Use an isolated clean worktree when the current checkout is not the exact PR head.
 4. Read `AGENTS.md`, the PR brief, the root diff, and only the relevant requirement and acceptance sources.
-5. Treat any head change as invalidating prior local, CI, live, independent-review evidence, and human merge authorization.
+5. Treat any head change as invalidating prior local, CI, live, independent-review evidence, and
+   human merge authorization. Normal-Simulator evidence is the only exception: it may carry from
+   an ancestor capture SHA when the current clean head passes the repository's test-only
+   carry-forward verifier and the record retains both SHAs, the runtime digest, and intervening
+   paths.
 
 ## Prepare neutral review context
 
@@ -64,7 +73,11 @@ private user text, generated artifacts, and raw logs out of the packet.
    installed extension is not normal simulator runtime proof. For proof-sensitive UI, extension
    lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes, require an
    exact-head normal runtime record from a normally launched app, ordinary host-app text field,
-   visible production UI, and direct Simulator/Xcode screenshots. Require explicit physical-device
+   visible production UI, and direct Simulator/Xcode screenshots. A complete ancestor-capture
+   record may satisfy the current head only when
+   `./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` passes on the clean
+   head and the reviewer independently inspects both SHAs, the identical non-test Git-tree digest,
+   every intervening test-only path, and the original screenshots. Require explicit physical-device
    interaction authority plus exact signed-build device evidence for physical-device rows;
    Simulator/XCTest cannot satisfy them. Without that authority, do not inspect connected devices.
 8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
@@ -101,9 +114,10 @@ every unverified requirement and blocker.
 
 Review-only work reports findings and stops. During an autonomous implementation lifecycle, the
 root agent fixes in-scope blockers while the PR remains draft. Every new commit invalidates local
-Release evidence, live evidence, independent review, human authorization, and GitHub gate conclusions. If the PR was
-already ready, immediately disable any auto-merge request and return it to draft, then refresh the
-PR brief and repeat the exact-head cycle.
+Release evidence, live evidence, independent review, human authorization, and GitHub gate
+conclusions. Normal-Simulator proof survives only through the verified test-only carry-forward
+record described above. If the PR was already ready, immediately disable any auto-merge request and
+return it to draft, then refresh the PR brief and repeat the exact-head cycle.
 
 ## Readiness gate
 
@@ -114,8 +128,9 @@ Before marking a PR ready or merging it, always require:
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
 5. successful exact-head normal simulator runtime proof for every proof-sensitive changed surface,
-   and successful exact signed-build device proof collected under explicit physical-device
-   interaction authority for every physical-device requirement;
+   or a verified test-only carry-forward record bound to the current head; and successful exact
+   signed-build device proof collected under explicit physical-device interaction authority for
+   every physical-device requirement;
 6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
 7. no undisclosed finding, current-head requested change, or unresolved review thread;
 8. an in-scope diff with no secret or generated-artifact violation;
@@ -222,4 +237,7 @@ verification, signing, deployment, or another claim that depends on the resultin
 
 Lead with blockers or state that none remain. Include the PR, exact reviewed head, local verification,
 independent-review result, required checks, unresolved threads, protection, mergeability, action
-taken, and residual proof limits.
+taken, and residual proof limits. Render or attach every screenshot used as required proof in the
+final response, even when it appeared in commentary or is linked from the PR. A path, `.xcresult`,
+review link, or summary alone is not delivery. If a required screenshot cannot be delivered, keep
+its requirement unverified and do not mark the PR ready or merge it.

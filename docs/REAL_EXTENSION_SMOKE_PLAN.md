@@ -172,10 +172,28 @@ Live transport/model checks remain separate automated evidence through
 
 Use a clean simulator appropriate to the change and the exact commit intended for push.
 
-For interaction, prefer a purpose-built, generically named Simulator-control integration. If it is
-unavailable, use Computer Use or equivalent host UI automation only when it can reliably inspect
-and operate the normal Simulator. Otherwise use the manual handoff below. The interaction tool
-does not change the evidence requirements.
+Use this escalation hierarchy for interaction and proof generation. Stop when a tier produces every
+required result; retain valid evidence from an earlier tier and escalate only what remains missing
+or ambiguous:
+
+1. **Simulator accessibility/control:** use a purpose-built, generically named integration to
+   inspect the normal app's accessibility hierarchy, operate discoverable controls, type, tap,
+   swipe, and capture direct Simulator screenshots. Accessibility metadata or action success alone
+   is not visual proof; inspect the resulting visible state and deliver the screenshots.
+2. **Computer Use:** when tier one is unavailable or insufficient for a system-level interaction or
+   visual judgment, use Computer Use or equivalent host UI automation to inspect and operate the
+   normal Simulator and capture direct screenshots.
+3. **Human verification:** when neither automated tier can establish sufficient proof, use the
+   manual handoff below.
+
+The interaction tier does not change the evidence requirements.
+
+A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
+not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
+identifier `com.apple.iphonesimulator` when supported. If that retry fails, attempt any other
+available non-XCTest Simulator accessibility/control route before using the human handoff; do not
+keep retrying a genuinely locked host. `simctl` can support setup and capture the current
+framebuffer, but a capture alone does not prove that the required visible interaction occurred.
 
 1. Build and install the app normally from Xcode using the required build configuration. Do not
    pass `--uitesting` or any debug-state/result-seeding arguments.
@@ -198,7 +216,10 @@ Record all of the following:
 
 ```text
 Evidence class: normal simulator runtime proof
-Git SHA: <full SHA>
+Capture Git SHA: <full SHA>
+Current verified Git SHA: <same SHA, or current head after verified test-only carry-forward>
+Runtime content digest: <not applicable | verifier digest>
+Intervening paths: <not applicable | verifier-approved test-only paths>
 Build configuration: <Debug/Release>
 Simulator model: <model>
 OS version: <version>
@@ -215,8 +236,32 @@ Expected screenshots for a keyboard action are:
 - visible production result panel after the live request, when a result is expected;
 - final host text or state after Apply/Copy/Back/Rerun, as applicable.
 
-The screenshots and record must bind to the same exact Git SHA. Report transport success,
-semantic acceptance, and visual/runtime acceptance separately.
+The screenshots and record must bind to the same capture Git SHA. They verify a later current head
+only through the test-only carry-forward procedure below. Report transport success, semantic
+acceptance, and visual/runtime acceptance separately.
+
+### Test-only carry-forward procedure
+
+When the only later changes are non-shipping test-target files, run
+`./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` from the clean current
+head. If it passes, retain its identical non-test Git-tree digest and intervening paths with the
+runtime record, inspect and deliver the complete original screenshot set, and label every image
+with the original capture SHA. The current task may then be `RUNTIME_VERIFIED` through verified
+test-only carry-forward evidence without repeating taps or asking the user for screenshots.
+
+If the verifier fails, the prior screenshots are incomplete, the runtime environment changed, or
+any intervening path is outside `OpenKeyboardCore/Tests/`, `OpenKeyboardTests/`, or
+`OpenKeyboardUITests/`, collect fresh runtime proof. This exception does not apply to
+physical-device proof or any other exact-head gate.
+
+### Final confirmation delivery
+
+Inspect every required screenshot for credentials, private configuration, and unrelated private
+content, then render or attach it in the final response. For a local artifact, use an inline
+Markdown image with its absolute non-repository path. A filesystem path, `.xcresult`, PR link,
+summary, or an image shown only in earlier commentary is not final delivery. If any required image
+cannot be delivered, keep runtime proof `RUNTIME_UNVERIFIED`, identify the missing image, and give
+the manual checklist below. Never copy screenshot proof into the repository.
 
 ## Manual handoff when Codex cannot verify runtime
 

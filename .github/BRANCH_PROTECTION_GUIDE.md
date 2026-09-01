@@ -27,10 +27,13 @@ authorization accepts the disclosed risk but never bypasses the required statuse
 
 The status checks do not themselves establish normal simulator or physical-device proof. For UI,
 keyboard-extension lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes,
-the PR ledger must retain exact-head normal runtime evidence from a normally launched app and
-direct Simulator/Xcode screenshots. XCTest/XCUITest, seeded states, and `XCTAttachment` screenshots
-remain automated regression evidence. Required physical-device proof must come from the exact
-signed build on the configured device. Missing required simulator/device proof blocks readiness and
+the PR ledger must retain normal runtime evidence from a normally launched app and direct
+Simulator/Xcode screenshots. Evidence normally binds to the exact head. It may bind an ancestor
+capture to the current head only when `verify-runtime-proof-carry-forward.sh` confirms a clean
+test-only commit range and identical non-test Git-tree digest, and the ledger retains both SHAs,
+the digest, paths, and original images. XCTest/XCUITest, seeded states, and `XCTAttachment`
+screenshots remain automated regression evidence. Required physical-device proof must come from the
+exact signed build on the configured device. Missing required simulator/device proof blocks readiness and
 merge under both automatic and human authorization routes.
 
 Every review/body event creates the fixed `Required checks` root job, and every live-evidence body
