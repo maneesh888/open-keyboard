@@ -61,7 +61,9 @@ Use repository Simulator routes so their shared lock and disposable-device owner
 Never clear, stop, erase, or delete an existing or user-open Simulator to prepare a test.
 Never enumerate, inspect, connect to, install on, launch on, sign for, test on, or capture from a
 physical device unless the user explicitly requests physical-device interaction in the active
-task. A device evidence requirement is a blocker when authority is absent, not permission.
+task. A device evidence requirement is a blocker for Codex-operated proof when authority is
+absent, not permission. This restriction governs Codex and its tools; the user may perform their
+own verification and approve the exact head without granting device access.
 
 XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
 diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
@@ -73,16 +75,23 @@ accessibility/control integration to inspect the normal app's accessibility hier
 discoverable controls, and capture direct screenshots. If that route cannot establish every
 required system interaction or visible result, retain its valid evidence and use Computer Use or
 equivalent reliable host UI automation for the missing proof. Ask for the exact human verification
-handoff only when both automated tiers remain unavailable, unreliable, or ambiguous. Accessibility
-metadata or action success without an inspected visible result and delivered screenshot is not
-visual proof.
+handoff only when both automated tiers remain unavailable, unreliable, or ambiguous. The handoff
+requests an exact-head approve/reject decision, never a user-uploaded screenshot or structured
+attestation. Accessibility metadata or action success without an inspected visible result and
+Codex-captured screenshot is not AI visual proof.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
 not a terminal runtime-proof conclusion. Refresh once and retry Simulator with bundle identifier
 `com.apple.iphonesimulator` when supported, then attempt any other available non-XCTest Simulator
 accessibility/control route. Do not loop on a genuinely locked host or treat a `simctl` framebuffer
 capture as proof of interaction. If interaction is still unavailable or ambiguous, stop before
-publication and disclose the gap; do not substitute more XCTest.
+publication and disclose the gap; do not substitute more XCTest or ask the user to upload an
+image. Explicit repository-owner approval for the exact head selects the human authorization
+route, satisfies the runtime/device decision gate, and lets the workflow continue automatically
+through the remaining authorized stages without another runtime, readiness, or merge confirmation.
+Record the mode as `human-approved`, qualify `RUNTIME_VERIFIED` accordingly, keep the independently
+uninspectable visual requirement `UNVERIFIED`, and disclose that the AI did not inspect screenshots.
+A new commit expires that approval.
 
 Do not repeat a complete normal-Simulator screenshot run merely because a later commit changes only
 non-shipping test-target files. Run
@@ -97,7 +106,9 @@ implementation request under the standing conditional lifecycle authority in `AG
 proof-first mode or an explicit edit/commit opt-out remains active. For proof-sensitive user-facing
 changes, do not push or create/update a readiness PR until normal simulator runtime proof succeeds
 unless the user explicitly authorizes a push with the gap disclosed. Never mark a PR ready or merge
-while required simulator or physical-device proof is missing.
+through the automatic route while required simulator or physical-device screenshot proof is
+missing. The human route may proceed after explicit exact-head repository-owner approval with that
+gap disclosed.
 
 Report automated regression, transport, semantic acceptance, visual/runtime acceptance, and device
 acceptance separately. Use the task-status labels from `AGENTS.md` and never call behavior fixed or
@@ -129,8 +140,8 @@ survive, and it remains labeled with its capture SHA.
 
 Report the worktree/branch, changed areas, checks and results, exact evidence classes, proof gaps,
 exact SHA/PR state when published, and commit ID when committed. Render or attach every required
-proof screenshot in the final response, even if it was shown in commentary; a filesystem path,
-`.xcresult`, PR link, or summary alone is not delivery. If delivery is unavailable, keep the
-affected requirement and runtime status unverified and give the exact manual screenshot checklist.
-Never claim an unexecuted simulator, extension, gateway, device, signing, deployment, or release
-path.
+proof screenshot that Codex actually captured or used in the final response, even if it was shown
+in commentary; a filesystem path, `.xcresult`, PR link, or summary alone is not delivery. Never ask
+the user to upload screenshots. For `human-approved` evidence, report the exact-head approval and
+absent AI-screenshot boundary instead. Never claim an unexecuted simulator, extension, gateway,
+device, signing, deployment, or release path.

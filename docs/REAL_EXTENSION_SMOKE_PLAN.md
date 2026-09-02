@@ -35,9 +35,11 @@ gateway behavior, or result presentation.
 
 ### Physical-device proof
 
-This class requires the exact signed build installed on the configured physical device. Exercise
-the normal keyboard-extension lifecycle and capture screenshots directly from the device.
-Simulator or XCTest evidence cannot satisfy a physical-device requirement.
+For AI verification, this class requires the exact signed build installed on the configured
+physical device, the normal keyboard-extension lifecycle, and screenshots captured and inspected
+by the AI. Human verification uses explicit repository-owner approval for the exact head; the user
+is never required to upload screenshots. Simulator or XCTest evidence cannot satisfy AI
+physical-device proof.
 
 ## Toolbar workflow contract
 
@@ -184,9 +186,10 @@ or ambiguous:
    visual judgment, use Computer Use or equivalent host UI automation to inspect and operate the
    normal Simulator and capture direct screenshots.
 3. **Human verification:** when neither automated tier can establish sufficient proof, use the
-   manual handoff below.
+   approval handoff below. Ask for an exact-head approve/reject decision, never a screenshot upload.
 
-The interaction tier does not change the evidence requirements.
+The first two tiers are AI-verification routes and require screenshot inspection. The human tier is
+a separate authorization route and does not.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
 not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
@@ -256,33 +259,36 @@ physical-device proof or any other exact-head gate.
 
 ### Final confirmation delivery
 
-Inspect every required screenshot for credentials, private configuration, and unrelated private
-content, then render or attach it in the final response. For a local artifact, use an inline
-Markdown image with its absolute non-repository path. A filesystem path, `.xcresult`, PR link,
-summary, or an image shown only in earlier commentary is not final delivery. If any required image
-cannot be delivered, keep runtime proof `RUNTIME_UNVERIFIED`, identify the missing image, and give
-the manual checklist below. Never copy screenshot proof into the repository.
+For AI verification, inspect every required screenshot for credentials, private configuration, and
+unrelated private content, then render or attach it in the final response. For a local artifact,
+use an inline Markdown image with its absolute non-repository path. A filesystem path, `.xcresult`,
+PR link, summary, or an image shown only in earlier commentary is not final delivery. For human
+verification, record the exact-head approval and state that the AI did not inspect screenshots;
+never ask the user to upload them. Never copy screenshot proof into the repository.
 
 ## Manual handoff when Codex cannot verify runtime
 
 If normal simulator control is unavailable, unreliable, or the observed result is ambiguous, stop
-before push/readiness and ask the user to perform this exact checklist:
+before push/readiness and present the current full Git SHA plus the exact AI screenshot/device gap.
+Ask the repository owner only whether they approve or reject that exact head based on their own
+verification. Do not ask for screenshots, screenshot paths, device details, or a structured test
+report.
 
-1. Install and normally launch the exact-SHA build without test arguments.
-2. Open an ordinary host-app text field and activate OpenKeyboard through the system keyboard UI.
-3. Enter the supplied non-private source text and invoke the specified production action.
-4. Exercise the specified Apply/Copy/Back/Rerun controls and note the exact observed result.
-5. Send the three direct screenshots listed above plus simulator model, OS version, build
-   configuration, and exact Git SHA.
+An explicit approval records `Runtime evidence mode: human-approved`, qualifies the task as
+`RUNTIME_VERIFIED (human-approved)`, and lets the workflow continue through the remaining
+authorized lifecycle without another runtime, readiness, or merge confirmation for that head. The
+PR requirement remains independently `UNVERIFIED`, and the human route accepts that disclosed
+risk. A new commit invalidates the approval.
 
 Do not run more XCTest as a substitute for the missing runtime proof.
 
 ## Physical-device procedure
 
-Install the exact signed build on the configured device and repeat the ordinary host-app lifecycle.
-Capture the corresponding before/result/after screenshots directly from the device and record the
-device model and OS version. If the device or signed build is unavailable, label physical-device
-proof `BLOCKED` and request manual verification; Simulator evidence cannot close the gap.
+When Codex has explicit physical-device interaction authority, install the exact signed build on
+the configured device, repeat the ordinary host-app lifecycle, and capture and inspect the
+before/result/after screenshots. Without that authority, do not inspect or operate the device; use
+the exact-head human approval route. Human approval requires no screenshot upload and does not
+grant Codex device access. Simulator evidence cannot close AI physical-device proof.
 
 ## Push and readiness policy
 
@@ -291,7 +297,9 @@ proceed after deterministic tests. For proof-sensitive changes, do not push or c
 readiness PR until normal simulator runtime proof succeeds unless the user explicitly authorizes a
 push with the missing proof disclosed. Such authorization does not make the proof verified.
 
-Never mark a PR ready or merge while required normal simulator or physical-device proof is missing.
+Never use the automatic route while required normal simulator or physical-device screenshots are
+missing. The human route may proceed after explicit exact-head repository-owner approval with the
+missing AI evidence disclosed.
 
 ## Historical evidence boundary
 

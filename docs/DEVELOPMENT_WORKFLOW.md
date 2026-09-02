@@ -50,7 +50,9 @@ confidence cannot override an active objective- or task-wide opt-out.
 Physical-device interaction is a separate, default-denied authority. Do not discover, inspect,
 connect to, install on, launch on, sign for, test on, or capture from a physical device until the
 user explicitly requests that work. Simulator testing, a device-proof requirement, push/PR
-authority, and merge authority do not imply physical-device permission.
+authority, and merge authority do not imply physical-device permission. This restriction applies
+to Codex and its tools; it does not prevent the user from performing their own verification and
+explicitly approving the exact head.
 
 Proof-first mode is active when the user requests results, testing, or model comparison before
 implementation. Every tracked repository mutation—including production, test, documentation,
@@ -76,8 +78,9 @@ Every verification artifact belongs to one of three runtime evidence classes:
    extension is exercised through an ordinary host-app text field and visible production UI, with
    screenshots captured directly from Simulator/Xcode outside XCTest.
 3. **Physical-device proof:** the exact signed build is installed on the configured device and
-   exercised through the normal extension lifecycle, with screenshots captured directly from the
-   device.
+   exercised through the normal extension lifecycle. AI verification requires screenshots that the
+   AI captures and inspects. Human verification uses explicit exact-head owner approval and never
+   requires a user screenshot upload.
 
 These classes support separate claims: build success, automated regression coverage, transport
 success, semantic acceptance, visual/runtime acceptance, physical-device acceptance, independent
@@ -248,11 +251,12 @@ Normal simulator runtime proof must:
 - record capture and current verified Git SHAs, build configuration, simulator model, OS version,
   action, source text, and observed result without exposing credentials or private configuration.
 
-Required screenshot proof must be inspected and then rendered or attached in the final response.
-For local images, use inline Markdown with absolute non-repository paths. Do not treat a filesystem
-path, `.xcresult`, PR/review link, summary, or an image shown only in earlier commentary as final
-delivery. If a required screenshot cannot be delivered, keep the affected requirement and runtime
-status unverified and provide the exact manual screenshot checklist.
+Required artifact-backed screenshot proof captured or used by Codex must be inspected and then
+rendered or attached in the final response. For local images, use inline Markdown with absolute
+non-repository paths. Do not treat a filesystem path, `.xcresult`, PR/review link, summary, or an
+image shown only in earlier commentary as final delivery. Never ask the user to upload or transfer
+screenshots. When Codex cannot capture the artifact, offer the human approval route below and
+preserve the absent AI-evidence boundary.
 
 If Codex can interact with the normal simulator confidently, it collects this proof directly using
 the following escalation hierarchy. Stop when one tier closes every requirement; preserve valid
@@ -267,7 +271,7 @@ evidence and escalate only the missing or ambiguous proof:
    or cannot establish a required system-level interaction or visual result.
 3. **Human verification:** use the exact manual checklist in
    `docs/REAL_EXTENSION_SMOKE_PLAN.md` only when the first two tiers remain unavailable, unreliable,
-   or ambiguous.
+   or ambiguous. Request an exact-head approve/reject decision, never a screenshot upload.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
 not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
@@ -275,7 +279,24 @@ identifier `com.apple.iphonesimulator` when supported, then try any other availa
 Simulator accessibility/control route. Do not loop on a genuinely locked host. `simctl` setup or
 framebuffer capture may support the proof session but does not establish the required visible
 interaction by itself. If interaction is still unavailable, unreliable, or ambiguous, stop before
-push/readiness and state the unverified behavior. Running more XCTest does not resolve the blocker.
+push/readiness and state the unverified behavior. Running more XCTest does not resolve the blocker,
+and asking the user to upload screenshots is not a fallback.
+
+### Human runtime approval
+
+If neither automated Simulator tier can finish the runtime check, or if physical-device behavior
+needs a human decision, show the repository owner the exact current head and the missing AI
+screenshot/device evidence once. Ask only whether they approve or reject that exact head based on
+their own verification. Do not request screenshots, paths, device details, or a structured
+attestation.
+
+An explicit exact-head approval records `Runtime evidence mode: human-approved`, satisfies the
+runtime/device decision gate, and authorizes the workflow to continue through every remaining
+standing lifecycle stage without another runtime, readiness, or merge confirmation for that head.
+Qualify `RUNTIME_VERIFIED` as `human-approved` and disclose that the AI did not inspect screenshots.
+The independent reviewer may retain the affected requirement as `UNVERIFIED`; human approval
+accepts that disclosed risk. It does not bypass failed mandatory checks, conflicts, requested
+changes, secrets, or other non-runtime blockers. A new commit expires the approval.
 
 ### Test-only runtime-proof carry-forward
 
@@ -298,14 +319,15 @@ configuration/gateway/script/documentation/workflow change, incomplete prior scr
 changed runtime environment requires fresh proof. Physical-device proof, full/live gates,
 independent review, GitHub results, and human authorization never carry forward through this rule.
 
-Physical-device proof requires explicit physical-device interaction authority plus the exact
-signed build installed on the configured device. A Simulator or XCTest run cannot satisfy it.
-When authority is absent or the configured device is unavailable, do not inspect connected devices;
-report the device requirement blocked and request direction.
+Codex-operated physical-device proof requires explicit physical-device interaction authority plus
+the exact signed build installed on the configured device. Human approval does not require or grant
+Codex device authority. A Simulator or XCTest run cannot satisfy AI physical-device proof. When
+authority is absent, do not inspect connected devices; offer the exact-head human approval route.
 
-The user may explicitly authorize a proof-sensitive push with missing runtime proof disclosed, but
-that exception does not mark the evidence verified and cannot authorize PR readiness or merge.
-Never mark a PR ready or merge while required simulator/device proof is missing.
+A user instruction limited to a proof-sensitive push with missing runtime proof disclosed does not
+authorize PR readiness or merge. Never use the automatic route while required simulator/device
+screenshot proof is missing. The separate human route may proceed after explicit exact-head owner
+approval, with the missing AI evidence disclosed.
 
 ## GitHub checks
 
