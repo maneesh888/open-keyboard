@@ -112,6 +112,80 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testLetterRowTouchTargetsFillEveryVisualGapWithoutChangingKeyFrames() throws {
+        let positions = KeyboardKeyPositions(availableWidth: 381)
+        let keyIDs = ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]
+        let row = positions.topRow(keyIDs: keyIDs, keyHeight: KeyboardPanelLayout.letterKeyHeight)
+
+        XCTAssertEqual(row.keys.count, keyIDs.count)
+        XCTAssertEqual(row.keys[0].touchFrame.minX, 0)
+        XCTAssertEqual(row.keys[row.keys.count - 1].touchFrame.maxX, 381)
+        for index in row.keys.indices.dropLast() {
+            XCTAssertEqual(
+                row.keys[index].touchFrame.maxX,
+                row.keys[index + 1].touchFrame.minX,
+                accuracy: 0.001
+            )
+            XCTAssertEqual(row.keys[index].visualFrame.width, positions.letterWidth, accuracy: 0.001)
+        }
+
+        let q = try XCTUnwrap(row.keys.first(where: { $0.id == "q" }))
+        let w = try XCTUnwrap(row.keys.first(where: { $0.id == "w" }))
+        XCTAssertEqual(w.visualFrame.minX - q.visualFrame.maxX, KeyboardKeyPositions.horizontalSpacing, accuracy: 0.001)
+
+        let gapMidpoint = (q.visualFrame.maxX + w.visualFrame.minX) / 2
+        XCTAssertEqual(
+            row.keyID(at: CGPoint(x: gapMidpoint - 0.01, y: 20)),
+            "q"
+        )
+        XCTAssertEqual(
+            row.keyID(at: CGPoint(x: gapMidpoint + 0.01, y: 20)),
+            "w"
+        )
+    }
+
+    func testStaggeredRowsRouteOuterAndModifierGuttersToNearestKey() throws {
+        let positions = KeyboardKeyPositions(availableWidth: 381)
+        let homeRow = positions.homeRow(
+            keyIDs: ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+            keyHeight: KeyboardPanelLayout.letterKeyHeight
+        )
+
+        XCTAssertEqual(homeRow.keyID(at: CGPoint(x: 1, y: 20)), "a")
+        XCTAssertEqual(homeRow.keyID(at: CGPoint(x: 380, y: 20)), "l")
+        XCTAssertEqual(homeRow.keys[0].visualFrame.minX, positions.homeRowInset, accuracy: 0.001)
+
+        let bottomRow = positions.bottomLetterRow(
+            leadingKeyID: "shift",
+            letterKeyIDs: ["z", "x", "c", "v", "b", "n", "m"],
+            trailingKeyID: "delete",
+            keyHeight: KeyboardPanelLayout.letterKeyHeight
+        )
+        let shift = try XCTUnwrap(bottomRow.keys.first(where: { $0.id == "shift" }))
+        let z = try XCTUnwrap(bottomRow.keys.first(where: { $0.id == "z" }))
+        let gutterMidpoint = (shift.visualFrame.maxX + z.visualFrame.minX) / 2
+
+        XCTAssertEqual(bottomRow.keyID(at: CGPoint(x: gutterMidpoint - 0.01, y: 20)), "shift")
+        XCTAssertEqual(bottomRow.keyID(at: CGPoint(x: gutterMidpoint + 0.01, y: 20)), "z")
+        XCTAssertEqual(bottomRow.keys[0].touchFrame.minX, 0)
+        XCTAssertEqual(bottomRow.keys[bottomRow.keys.count - 1].touchFrame.maxX, 381)
+    }
+
+    func testControlRowPreservesWidthsAndRejectsTouchesOutsideItsBounds() throws {
+        let positions = KeyboardKeyPositions(availableWidth: 381)
+        let row = positions.controlRow(
+            keyIDs: ["numbers", "emoji", "space", "return"],
+            keyHeight: KeyboardPanelLayout.controlKeyHeight
+        )
+        let space = try XCTUnwrap(row.keys.first(where: { $0.id == "space" }))
+
+        XCTAssertEqual(space.visualFrame.width, positions.spaceWidth, accuracy: 0.001)
+        XCTAssertEqual(row.keyID(at: CGPoint(x: space.visualFrame.midX, y: 20)), "space")
+        XCTAssertNil(row.keyID(at: CGPoint(x: -0.1, y: 20)))
+        XCTAssertNil(row.keyID(at: CGPoint(x: 381.1, y: 20)))
+        XCTAssertNil(row.keyID(at: CGPoint(x: 20, y: KeyboardPanelLayout.controlKeyHeight + 0.1)))
+    }
+
     func testConfiguredIdleStateDoesNotPretendToAnalyzeWhenEmpty() {
         let state = KeyboardToolbarState.current(
             hasFullAccess: true,
