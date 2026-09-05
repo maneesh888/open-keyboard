@@ -72,6 +72,8 @@
 		OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */; };
 		OKTOOLBARTEST0000002 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBARTEST0000001 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift */; };
 		OKTOOLBARUITEST000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */; };
+		OKTOUCHLAYOUTEXT0002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOUCHLAYOUT000001 /* OpenKeyboardExtension/KeyboardTouchLayout.swift */; };
+		OKTOUCHLAYOUTTEST002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOUCHLAYOUT000001 /* OpenKeyboardExtension/KeyboardTouchLayout.swift */; };
 		OKVISPREV000000000002 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */; };
 		OKVMUITEST0000000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
 /* End PBXBuildFile section */
@@ -158,6 +160,7 @@
 		OKTHEMETEST000000001 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/OpenKeyboardThemeTests.swift; sourceTree = SOURCE_ROOT; };
 		OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardToolbarState.swift; sourceTree = SOURCE_ROOT; };
 		OKTOOLBARTEST0000001 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardToolbarStateTests.swift; sourceTree = SOURCE_ROOT; };
+		OKTOUCHLAYOUT000001 /* OpenKeyboardExtension/KeyboardTouchLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardTouchLayout.swift; sourceTree = SOURCE_ROOT; };
 		OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/KeyboardVisualPreviewView.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -222,6 +225,7 @@
 				OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */,
 				OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */,
 				OKTOOLBAR000000000001 /* OpenKeyboardExtension/KeyboardToolbarState.swift */,
+				OKTOUCHLAYOUT000001 /* OpenKeyboardExtension/KeyboardTouchLayout.swift */,
 				AB000000000000000000000F /* OpenKeyboardUITests */,
 				31FF30F881C179EC5AEBB66C /* Products */,
 			);
@@ -430,6 +434,7 @@
 				OKAPPCFGUITEST000000002 /* OpenKeyboard/Models/AppConfig.swift in Sources */,
 				OKPLANUITEST0000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
 				OKTOOLBARUITEST000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
+				OKTOUCHLAYOUTTEST002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */,
 				OKPLANTEST000000000002 /* OpenKeyboardUITests/KeyboardReplacementPlannerTests.swift in Sources */,
 				OKTOOLBARTEST0000002 /* OpenKeyboardUITests/KeyboardToolbarStateTests.swift in Sources */,
 				OKPANELTEST00000002 /* OpenKeyboardUITests/KeyboardPanelModeTests.swift in Sources */,
@@ -465,6 +470,7 @@
 				OKCANONGWEXT000000002 /* OpenKeyboard/Services/CanonicalGatewayClient.swift in Sources */,
 				OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
 				OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
+				OKTOUCHLAYOUTEXT0002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */,
 				OKTHEMEEXT000000000002 /* OpenKeyboardTheme.swift in Sources */,
 				2012167C7CC2E3BB270F0D60B /* OpenKeyboard/Models/AppConfig.swift in Sources */,
 			);

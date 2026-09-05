@@ -556,6 +556,7 @@ case "$MODE" in
     require_xcodebuild
     live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
     case "$live_test_identifier" in
+      OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardExtensionMatchesNativeTouchGeometry|\
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured|\
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardTranslateReplacesTextWhenGatewayConfigured|\
       OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardAutomaticAnalysisWorkflowScreenshotsWhenExplicitlyRequested)

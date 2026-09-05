@@ -177,16 +177,37 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         )
 
         let qKey = keyboardApp.buttons["q"]
+        let wKey = keyboardApp.buttons["w"]
+        let pKey = keyboardApp.buttons["p"]
         let aKey = keyboardApp.buttons["a"]
         let zKey = keyboardApp.buttons["z"]
         let spaceKey = keyboardApp.buttons["space"]
-        for key in [qKey, aKey, zKey, spaceKey] {
+        for key in [qKey, wKey, pKey, aKey, zKey, spaceKey] {
             XCTAssertTrue(key.waitForExistence(timeout: 2), "Expected real keyboard key to be visible")
             XCTAssertEqual(key.frame.height, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
         }
         XCTAssertEqual(aKey.frame.minY - qKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
         XCTAssertEqual(zKey.frame.minY - aKey.frame.minY, KeyboardPanelLayout.letterKeyHeight, accuracy: 1)
         XCTAssertEqual(spaceKey.frame.minY - zKey.frame.minY, KeyboardPanelLayout.controlKeyHeight, accuracy: 1)
+
+        let rowWidth = keyboardApp.frame.width - (KeyboardPanelLayout.outerHorizontalPadding * 2)
+        let positions = KeyboardKeyPositions(availableWidth: rowWidth)
+        XCTAssertEqual(qKey.frame.maxX, wKey.frame.minX, accuracy: 1)
+
+        let qGapX = KeyboardPanelLayout.outerHorizontalPadding
+            + positions.letterWidth
+            + (KeyboardKeyPositions.horizontalSpacing / 4)
+        let qGapOffset = (qGapX - qKey.frame.minX) / qKey.frame.width
+        qKey.coordinate(withNormalizedOffset: CGVector(dx: qGapOffset, dy: 0.5)).tap()
+        expectation(for: NSPredicate(format: "value == %@", "q"), evaluatedWith: input)
+        waitForExpectations(timeout: 3)
+
+        let homeGutterX = KeyboardPanelLayout.outerHorizontalPadding + (positions.homeRowInset / 2)
+        let homeGutterOffset = (homeGutterX - aKey.frame.minX) / aKey.frame.width
+        aKey.coordinate(withNormalizedOffset: CGVector(dx: homeGutterOffset, dy: 0.5)).tap()
+        expectation(for: NSPredicate(format: "value == %@", "qa"), evaluatedWith: input)
+        waitForExpectations(timeout: 3)
+
         try captureRealKeyboardStep("real-extension-native-touch-geometry")
     }
 
