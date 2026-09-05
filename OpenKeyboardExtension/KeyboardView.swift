@@ -124,29 +124,30 @@ struct KeyboardView: View {
     private var keyGrid: some View {
         GeometryReader { geometry in
             let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
+            let bottomRowKeys = viewModel.inputMode.bottomRowKeys
 
             VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
                 keyRow(
-                    viewModel.isNumbersEnabled ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                    viewModel.inputMode.topRowKeys,
                     keyHeight: KeyboardPanelLayout.letterKeyHeight,
                     keyWidth: positions.letterWidth
                 )
                 .accessibilityIdentifier("keyboard_row_qwerty")
 
                 keyRow(
-                    viewModel.isNumbersEnabled ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"] : ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+                    viewModel.inputMode.middleRowKeys,
                     keyHeight: KeyboardPanelLayout.letterKeyHeight,
                     keyWidth: positions.letterWidth
                 )
-                .padding(.horizontal, positions.homeRowInset)
+                .padding(.horizontal, viewModel.inputMode.usesMiddleRowInset ? positions.homeRowInset : 0)
                 .accessibilityIdentifier("keyboard_row_home")
 
                 HStack(spacing: 0) {
-                    KeyButton(label: viewModel.isNumbersEnabled ? "#+=" : "⇧", role: .modifier, height: KeyboardPanelLayout.letterKeyHeight, isAccent: viewModel.isShiftEnabled) {
-                        if viewModel.isNumbersEnabled {
-                            viewModel.toggleNumbers()
-                        } else {
+                    KeyButton(label: viewModel.inputMode.leadingBottomKeyLabel, role: .modifier, height: KeyboardPanelLayout.letterKeyHeight, isAccent: viewModel.isShiftEnabled) {
+                        if viewModel.inputMode == .letters {
                             viewModel.toggleShift()
+                        } else {
+                            viewModel.toggleSymbols()
                         }
                     }
                     .frame(width: positions.modifierWidth)
@@ -155,9 +156,9 @@ struct KeyboardView: View {
                         .frame(width: positions.bottomLetterSideGap)
 
                     keyRow(
-                        viewModel.isNumbersEnabled ? [".", ",", "?", "!", "'", "\"", "_"] : ["z", "x", "c", "v", "b", "n", "m"],
+                        bottomRowKeys,
                         keyHeight: KeyboardPanelLayout.letterKeyHeight,
-                        keyWidth: positions.letterWidth
+                        keyWidth: viewModel.inputMode == .symbols ? positions.symbolBottomKeyWidth : positions.letterWidth
                     )
 
                     Spacer(minLength: positions.bottomLetterSideGap)
@@ -172,7 +173,7 @@ struct KeyboardView: View {
                 .accessibilityIdentifier("keyboard_row_bottom_letters")
 
                 HStack(spacing: KeyboardKeyPositions.horizontalSpacing) {
-                    KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
+                    KeyButton(label: viewModel.inputMode.bottomControlKeyLabel, role: .modifier, height: KeyboardPanelLayout.controlKeyHeight) {
                         viewModel.toggleNumbers()
                     }
                     .frame(width: positions.bottomControlWidth)
@@ -226,6 +227,7 @@ private struct KeyboardKeyPositions {
     let bottomControlWidth: CGFloat
     let spaceWidth: CGFloat
     let returnWidth: CGFloat
+    let symbolBottomKeyWidth: CGFloat
 
     init(availableWidth: CGFloat) {
         let letterWidth = (availableWidth - (Self.horizontalSpacing * 9)) / 10
@@ -237,6 +239,12 @@ private struct KeyboardKeyPositions {
         bottomLetterSideGap = letterWidth * (43 / 111)
         self.bottomControlWidth = bottomControlWidth
         self.returnWidth = returnWidth
+        symbolBottomKeyWidth = (
+            availableWidth
+                - (modifierWidth * 2)
+                - (bottomLetterSideGap * 2)
+                - (Self.horizontalSpacing * 4)
+        ) / 5
         spaceWidth = availableWidth
             - (bottomControlWidth * 2)
             - returnWidth
