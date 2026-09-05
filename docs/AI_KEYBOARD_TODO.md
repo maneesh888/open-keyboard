@@ -2,6 +2,8 @@
 
 **Last Updated:** 2026-07-03
 
+**Migration entry added:** 2026-09-05
+
 This file is a current-state guide for choosing the next OpenKeyboard implementation slice. It replaces the older April phase checklist; items are marked from repo/docs inspection only. Anything not proven by current docs/source is labeled **needs verification** rather than complete.
 
 ---
@@ -39,6 +41,10 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
 - [x] Structured suggestion/action result parsing exists.
 - [x] Offline prompt/user-flow tests and opt-in live gateway tests exist.
+- [ ] Remove structured model responses from Summarize, Translate, and Continue Writing. Migrate
+  their canonical response contracts to operation-specific validated plain text, omit
+  `response_format` from every built-in writing-action request, and preserve safe input/parameter
+  boundaries. Follow `docs/plans/plain-text-writing-responses.md`.
 - [ ] Streaming/SSE responses — needs verification; do not assume complete.
 - [ ] Debounced suggestions while typing — pending.
 - [ ] Timeout/cancellation/network resilience coverage — next queue item, partially present in tests but needs current verification before marking complete.
@@ -82,6 +88,25 @@ Why this is the smallest safe next step:
   host-app runtime route without debug injection or test control.
 
 Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+
+## Planned compatibility migration
+
+**Plain-text responses for all built-in writing actions**
+
+- Priority: high; removes an avoidable compatibility requirement for OpenAI-compatible gateways
+  and smaller/local models.
+- Status: planned; no production implementation or live verification has been performed.
+- Scope: convert Summarize, Translate, and Continue Writing from the legacy JSON result envelope to
+  operation-specific validated plain text. Grammar, Rewrite, and Improve are already plain text.
+- Connector dependency: complete this before Universal AI Connector adoption so the generic
+  connector does not need an OpenKeyboard-specific `json_object` response mode; preserve the
+  cross-repository ownership and parity requirements in the detailed plan.
+- Canonical order: update, test, version, and release `semantic-prompt-contract` first; then advance
+  the OpenKeyboard gitlink and update both clients, parsers, diagnostics, tests, and documentation.
+- Required proof: contract JavaScript/Swift parity, OpenKeyboard contract-sync and deterministic
+  gates, exact-model gateway differential evidence, and normal simulator runtime proof for visible
+  Translate behavior before publication/readiness.
+- Detailed plan: `docs/plans/plain-text-writing-responses.md`.
 
 ---
 
