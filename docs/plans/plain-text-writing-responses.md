@@ -28,6 +28,13 @@ consume one summary, translation, or continuation string. JSON mode adds provide
 token, latency, parsing, and malformed-envelope failure risks without enforcing the package's JSON
 Schema at transport time.
 
+This is also a prerequisite for the planned Universal AI Connector migration. That connector's
+generic response contract supports plain text and strict JSON Schema, but OpenKeyboard's legacy
+`json_object` mode was a separate compatibility gap. Converting these operations to validated plain
+text removes the reason to add generic JSON-object mode solely for OpenKeyboard. Strict JSON Schema
+must not be substituted for the old envelope: the intended result is plain text, not a different
+structured transport contract.
+
 ## In scope
 
 - `summarize`, `translate`, and `continue_writing` response semantics in the canonical contract.
@@ -47,6 +54,77 @@ Schema at transport time.
 - UI redesign, action ordering, model selection, gateway routing, authentication, or persistence.
 - Adding Continue Writing to the visible extension UI.
 - Physical-device interaction unless separately requested.
+
+## Universal AI Connector alignment
+
+This section records the cross-repository decisions relevant to this response migration. It does
+not activate the connector integration or duplicate the connector repository's implementation
+roadmap. The semantic-contract release and OpenKeyboard adoption in this plan must complete first;
+the later connector migration can then consume the same plain-text behavior without an
+OpenKeyboard-specific response mode.
+
+### Ownership boundaries
+
+- `semantic-prompt-contract` remains the only owner of writing-operation identifiers, prompts,
+  parameters, output instructions, validators, examples, and fixtures.
+- Universal AI Connector owns provider-neutral transport, provider adapters, model discovery,
+  public timeout configuration, cancellation, and stable technical errors. It must remain generic
+  and must not contain OpenKeyboard operation names, prompts, UI behavior, persistence, or
+  user-facing error copy.
+- OpenKeyboard owns settings and model-selection UI, App Group and Keychain persistence,
+  configuration reload, semantic prompt rendering, response validation, retry policy, result
+  presentation, and mapping typed connector errors to user-visible actions.
+- Existing settings screens, saved profiles, selected-model behavior, configuration sharing, and
+  keyboard action UX must remain behaviorally compatible through the later connector migration.
+
+### Follow-on connector integration decisions
+
+- Map every built-in writing action to the connector's plain-text response mode. Preserve the exact
+  rendered system/user messages and validate the returned text through the semantic contract; do
+  not rebuild prompts or writing-result parsers inside the connector.
+- Put a narrow connector-backed client behind both Settings diagnostics and
+  `KeyboardAIService`. Reuse one connector instance per gateway identity and close/replace it when
+  the saved URL, credential, or provider profile changes; do not construct a connector for every
+  action or grammar chunk.
+- Add provider-neutral `listModels(providerId)` behavior to the connector's Kotlin API and an
+  equivalent Swift `async` API for OpenAI, Anthropic, OpenRouter, and configured OpenAI-compatible
+  providers. Each provider adapter owns its endpoint, headers, pagination, deterministic ordering,
+  duplicate handling, bounds, cancellation, response translation, and typed
+  unsupported-discovery result.
+- Make one successful `listModels` call the connection/discovery phase. Do not require a universal
+  `/health` endpoint and do not use generation as a silent discovery fallback. In OpenKeyboard,
+  remove the current duplicate model-list request, populate/validate the model picker from that one
+  result, then retain the existing minimal grammar request through `respond` to prove the selected
+  model can actually generate before saving a trusted configuration. A compatible gateway that
+  explicitly lacks discovery may support manual model entry through a separate product decision,
+  but discovery failure must not be treated as a successful connection.
+- Expose the connector's connect and whole-request timeouts consistently to Kotlin and Swift with
+  validated defaults of 10 and 60 seconds respectively, and apply that policy to discovery,
+  response, and streaming. Preserve OpenKeyboard's explicit action-level timeout/retry behavior
+  until parity evidence justifies any change.
+- Keep generic authentication, permission, rate-limit, timeout, transport, malformed-response,
+  unsupported-discovery, and cancellation classification in the connector. Keep save eligibility,
+  field state, retry controls, logging, and user-facing copy in OpenKeyboard.
+- Integrate from a pinned source revision with a reproducible local XCFramework/Swift-package
+  bootstrap while formal release assets are unavailable; a connector P8 release is not a blocker.
+  Keep generated binary artifacts out of Git. Treat iOS Simulator `x86_64` support as lower
+  priority than ARM64 consumer and connection-validation support unless OpenKeyboard's supported
+  architecture policy makes it a release gate.
+
+### Follow-on parity and extension evidence
+
+- Exercise equivalent provider configuration, timeout defaults, model discovery, model selection,
+  response, typed-error, cancellation, and cleanup behavior through the connector's JVM, Android,
+  and iOS sample apps using only public APIs and shared deterministic fixtures.
+- Keep a separate minimal iOS application-extension consumer build. An iOS app sample proves the
+  Swift façade but does not prove custom keyboard-extension compatibility.
+- Before removing OpenKeyboard's legacy chat transport, prove request/result parity for Settings
+  smoke tests and keyboard actions, concurrent grammar chunks, connector replacement after config
+  changes, invalid credentials, unavailable models, rate limits, timeout, cancellation, malformed
+  output, truncation, and permitted URL behavior.
+- Measure the final keyboard extension's linked size, startup latency, and memory use. Verify every
+  supported app/extension architecture, then collect the normal extension runtime proof required
+  by the repository workflow.
 
 ## Target response contracts
 
@@ -164,6 +242,11 @@ Schema at transport time.
   required Translate normal-runtime proof pass on the same eligible heads.
 - Documentation accurately separates plain-text writing actions from the unrelated keyboard
   suggestions contract and future Gateway V2 structured-output support.
+
+The follow-on connector integration is not required to merge this planning change or to complete
+the plain-text response migration. When that later work is activated, its acceptance evidence must
+also satisfy the ownership, connection-validation, lifecycle, parity, distribution, architecture,
+and extension requirements recorded above.
 
 ## Risks and mitigations
 

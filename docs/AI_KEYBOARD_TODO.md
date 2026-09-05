@@ -98,6 +98,9 @@ Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 - Status: planned; no production implementation or live verification has been performed.
 - Scope: convert Summarize, Translate, and Continue Writing from the legacy JSON result envelope to
   operation-specific validated plain text. Grammar, Rewrite, and Improve are already plain text.
+- Connector dependency: complete this before Universal AI Connector adoption so the generic
+  connector does not need an OpenKeyboard-specific `json_object` response mode; preserve the
+  cross-repository ownership and parity requirements in the detailed plan.
 - Canonical order: update, test, version, and release `semantic-prompt-contract` first; then advance
   the OpenKeyboard gitlink and update both clients, parsers, diagnostics, tests, and documentation.
 - Required proof: contract JavaScript/Swift parity, OpenKeyboard contract-sync and deterministic
