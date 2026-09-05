@@ -101,6 +101,49 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testKeyboardVisualMeasurementsRemainAtReferenceGeometry() throws {
+        let positions = KeyboardKeyPositions(availableWidth: 381)
+
+        XCTAssertEqual(KeyboardKeyPositions.horizontalSpacing, 5.5, accuracy: 0.001)
+        XCTAssertEqual(positions.letterWidth, 33.15, accuracy: 0.001)
+        XCTAssertEqual(positions.homeRowInset, 19.325, accuracy: 0.001)
+        XCTAssertEqual(positions.modifierWidth, 44.49865, accuracy: 0.001)
+        XCTAssertEqual(positions.bottomLetterSideGap, 12.84189, accuracy: 0.001)
+        XCTAssertEqual(positions.symbolBottomKeyWidth, 48.86378, accuracy: 0.001)
+        XCTAssertEqual(positions.bottomControlWidth, 42.40811, accuracy: 0.001)
+        XCTAssertEqual(positions.spaceWidth, 189.49189, accuracy: 0.001)
+        XCTAssertEqual(positions.returnWidth, 90.19189, accuracy: 0.001)
+
+        let bottomRow = positions.bottomLetterRow(
+            leadingKeyID: "shift",
+            letterKeyIDs: ["z", "x", "c", "v", "b", "n", "m"],
+            trailingKeyID: "delete",
+            keyHeight: KeyboardPanelLayout.letterKeyHeight
+        )
+        let shift = try XCTUnwrap(bottomRow.keys.first)
+        let z = try XCTUnwrap(bottomRow.keys.dropFirst().first)
+        let delete = try XCTUnwrap(bottomRow.keys.last)
+        XCTAssertEqual(shift.visualFrame.width, 44.49865, accuracy: 0.001)
+        XCTAssertEqual(z.visualFrame.minX - shift.visualFrame.maxX, 12.84189, accuracy: 0.001)
+        XCTAssertEqual(delete.visualFrame.width, 44.49865, accuracy: 0.001)
+
+        let controlRow = positions.controlRow(
+            keyIDs: ["numbers", "emoji", "space", "return"],
+            keyHeight: KeyboardPanelLayout.controlKeyHeight
+        )
+        XCTAssertEqual(controlRow.keys[0].visualFrame.width, 42.40811, accuracy: 0.001)
+        XCTAssertEqual(controlRow.keys[1].visualFrame.width, 42.40811, accuracy: 0.001)
+        XCTAssertEqual(controlRow.keys[2].visualFrame.width, 189.49189, accuracy: 0.001)
+        XCTAssertEqual(controlRow.keys[3].visualFrame.width, 90.19189, accuracy: 0.001)
+        for index in controlRow.keys.indices.dropLast() {
+            XCTAssertEqual(
+                controlRow.keys[index + 1].visualFrame.minX - controlRow.keys[index].visualFrame.maxX,
+                5.5,
+                accuracy: 0.001
+            )
+        }
+    }
+
     func testSecondarySymbolsModeMatchesReferenceLayout() {
         let mode = KeyboardInputMode.symbols
 
