@@ -124,52 +124,49 @@ struct KeyboardView: View {
     private var keyGrid: some View {
         GeometryReader { geometry in
             let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
-            let topKeys = viewModel.isNumbersEnabled
-                ? ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-                : ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]
-            let homeKeys = viewModel.isNumbersEnabled
-                ? ["-", "/", ":", ";", "(", ")", "$", "&", "@"]
-                : ["a", "s", "d", "f", "g", "h", "j", "k", "l"]
-            let bottomKeys = viewModel.isNumbersEnabled
-                ? [".", ",", "?", "!", "'", "\"", "_"]
-                : ["z", "x", "c", "v", "b", "n", "m"]
+            let inputMode = viewModel.inputMode
 
             VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
                 keyRow(
                     positions.topRow(
-                        keyIDs: topKeys,
+                        keyIDs: inputMode.topRowKeys,
                         keyHeight: KeyboardPanelLayout.letterKeyHeight
                     )
                 )
                 .accessibilityIdentifier("keyboard_row_qwerty")
 
                 keyRow(
-                    positions.homeRow(
-                        keyIDs: homeKeys,
+                    positions.middleRow(
+                        keyIDs: inputMode.middleRowKeys,
+                        usesInset: inputMode.usesMiddleRowInset,
                         keyHeight: KeyboardPanelLayout.letterKeyHeight
                     )
                 )
                 .accessibilityIdentifier("keyboard_row_home")
 
+                let bottomKeyWidth = inputMode == .symbols
+                    ? positions.symbolBottomKeyWidth
+                    : positions.letterWidth
                 let bottomLetterLayout = positions.bottomLetterRow(
                     leadingKeyID: "keyboard_shift",
-                    letterKeyIDs: bottomKeys,
+                    letterKeyIDs: inputMode.bottomRowKeys,
                     trailingKeyID: "keyboard_delete",
+                    keyWidth: bottomKeyWidth,
                     keyHeight: KeyboardPanelLayout.letterKeyHeight
                 )
                 HStack(spacing: 0) {
                     ForEach(bottomLetterLayout.keys) { target in
                         if target.id == "keyboard_shift" {
                             KeyButton(
-                                label: viewModel.isNumbersEnabled ? "#+=" : "⇧",
+                                label: inputMode.leadingBottomKeyLabel,
                                 role: .modifier,
                                 target: target,
                                 isAccent: viewModel.isShiftEnabled
                             ) {
-                                if viewModel.isNumbersEnabled {
-                                    viewModel.toggleNumbers()
-                                } else {
+                                if inputMode == .letters {
                                     viewModel.toggleShift()
+                                } else {
+                                    viewModel.toggleSymbols()
                                 }
                             }
                         } else if target.id == "keyboard_delete" {
@@ -198,7 +195,7 @@ struct KeyboardView: View {
                     ForEach(controlLayout.keys) { target in
                         switch target.id {
                         case "keyboard_numbers":
-                            KeyButton(label: viewModel.isNumbersEnabled ? "ABC" : "123", role: .modifier, target: target) {
+                            KeyButton(label: inputMode.bottomControlKeyLabel, role: .modifier, target: target) {
                                 viewModel.toggleNumbers()
                             }
                             .accessibilityIdentifier("keyboard_key_numbers")

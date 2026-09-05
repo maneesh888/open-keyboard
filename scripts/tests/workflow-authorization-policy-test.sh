@@ -82,7 +82,7 @@ require_phrase 'do not grant physical-device authority.' "$AGENTS" \
   'AGENTS.md must not infer device authority from simulator, evidence, lifecycle, or merge work.'
 require_phrase 'Physical-device interaction is a separate ledger entry that defaults to `NO`' "$DEVELOP_SKILL" \
   'The development skill must keep physical-device interaction separately denied by default.'
-require_phrase 'A device evidence requirement is a blocker when authority is absent, not permission.' "$DEVELOP_SKILL" \
+require_phrase 'A device evidence requirement is a blocker for Codex-operated proof when authority is' "$DEVELOP_SKILL" \
   'The development skill must not treat required device proof as device authority.'
 require_phrase 'Physical-device interaction remains separately denied until the user explicitly requests it.' "$REVIEW_SKILL" \
   'The review lifecycle must not infer physical-device authority.'
@@ -108,6 +108,14 @@ require_phrase '`Correct it` starts an implementation phase: recompute edit, com
   'Scenario C must transition a completed authority test into normal implementation.'
 require_phrase "not resurrect the completed test phase's \`NO\` values." "$AGENTS" \
   'Scenario C must reject stale test-phase prohibitions.'
+
+# Scenario D: failed AI screenshot capture transitions to screenshot-free human approval.
+require_phrase '`AI screenshot verification is unavailable` followed by explicit repository-owner approval of' "$AGENTS" \
+  'Scenario D must recognize exact-head human approval after failed AI screenshot verification.'
+require_phrase 'Do not ask for a screenshot or structured report;' "$AGENTS" \
+  'Scenario D must never require the owner to upload screenshot evidence.'
+require_phrase 'mark the runtime decision gate ready and resume the standing lifecycle automatically' "$AGENTS" \
+  'Scenario D must continue the lifecycle automatically after human approval.'
 
 # Positive control: ordinary implementation receives conditional end-to-end lifecycle authority.
 require_phrase 'A clear bounded implementation request grants standing conditional authority for the normal' "$AGENTS" \
@@ -174,16 +182,24 @@ require_phrase 'do not copy a completed read-only test phase' "$DEVELOPMENT_WORK
 require_phrase 'Authority and readiness are separate.' "$DEVELOPMENT_WORKFLOW" \
   'The detailed workflow must separate authority from evidence readiness.'
 
-require_phrase 'render or attach every screenshot used as required proof' "$AGENTS" \
-  'AGENTS.md must require final-response delivery of every required proof screenshot.'
+require_phrase 'render or attach every screenshot actually used as' "$AGENTS" \
+  'AGENTS.md must require final-response delivery of every AI proof screenshot.'
 require_phrase 'earlier commentary is not final proof' "$AGENTS" \
   'AGENTS.md must reject commentary-only screenshot delivery.'
 require_phrase 'Render or attach every required' "$DEVELOP_SKILL" \
   'The development skill must deliver required screenshots in the final response.'
-require_phrase 'Render or attach every screenshot used as required proof' "$REVIEW_SKILL" \
-  'The review skill must deliver required screenshots in the final response.'
-require_phrase 'Required screenshot proof must be inspected and then rendered or attached in the final response.' "$DEVELOPMENT_WORKFLOW" \
-  'The detailed workflow must require final-response screenshot delivery.'
+require_phrase 'render or attach every screenshot used' "$REVIEW_SKILL" \
+  'The review skill must deliver AI proof screenshots in the final response.'
+require_phrase 'Required artifact-backed screenshot proof captured or used by Codex must be inspected' "$DEVELOPMENT_WORKFLOW" \
+  'The detailed workflow must require final-response AI screenshot delivery.'
+require_phrase 'Never ask the user to upload or transfer screenshots' "$AGENTS" \
+  'AGENTS.md must prohibit user screenshot-upload requests.'
+require_phrase 'An explicit owner approval for the exact current head selects the human authorization route' "$AGENTS" \
+  'AGENTS.md must let exact-head human approval clear the runtime decision gate.'
+require_phrase 'without another runtime, readiness, or merge confirmation' "$DEVELOP_SKILL" \
+  'The development skill must continue automatically after exact-head human approval.'
+require_phrase 'Ask the repository owner only whether they approve or reject that exact head' "$REAL_EXTENSION_SMOKE_PLAN" \
+  'The runtime smoke plan must use approval, not uploaded screenshots, for human verification.'
 require_phrase '### Final confirmation delivery' "$REAL_EXTENSION_SMOKE_PLAN" \
   'The runtime smoke plan must define final screenshot confirmation delivery.'
 require_phrase 'an image shown only in earlier commentary is not final delivery' "$REAL_EXTENSION_SMOKE_PLAN" \

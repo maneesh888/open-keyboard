@@ -101,6 +101,52 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testSecondarySymbolsModeMatchesReferenceLayout() {
+        let mode = KeyboardInputMode.symbols
+
+        XCTAssertEqual(mode.topRowKeys, ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="])
+        XCTAssertEqual(mode.middleRowKeys, ["_", "\\", "|", "~", "<", ">", "$", "£", "€", "•"])
+        XCTAssertEqual(mode.bottomRowKeys, [".", ",", "?", "!", "'"])
+        XCTAssertEqual(mode.leadingBottomKeyLabel, "123")
+        XCTAssertEqual(mode.bottomControlKeyLabel, "ABC")
+        XCTAssertFalse(mode.usesMiddleRowInset)
+    }
+
+    func testKeyboardInputModeTransitionsThroughNumbersAndSymbols() {
+        XCTAssertEqual(KeyboardInputMode.letters.togglingNumbers, .numbers)
+        XCTAssertEqual(KeyboardInputMode.numbers.togglingNumbers, .letters)
+        XCTAssertEqual(KeyboardInputMode.numbers.togglingSymbols, .symbols)
+        XCTAssertEqual(KeyboardInputMode.symbols.togglingSymbols, .numbers)
+        XCTAssertEqual(KeyboardInputMode.symbols.togglingNumbers, .letters)
+    }
+
+    func testSecondarySymbolRowsFillTouchAreaWithoutChangingSymbolWidths() throws {
+        let positions = KeyboardKeyPositions(availableWidth: 381)
+        let mode = KeyboardInputMode.symbols
+        let middleRow = positions.middleRow(
+            keyIDs: mode.middleRowKeys,
+            usesInset: mode.usesMiddleRowInset,
+            keyHeight: KeyboardPanelLayout.letterKeyHeight
+        )
+
+        XCTAssertEqual(middleRow.keys.first?.visualFrame.minX, 0)
+        XCTAssertEqual(middleRow.keys.first?.touchFrame.minX, 0)
+        XCTAssertEqual(middleRow.keys.last?.touchFrame.maxX, 381)
+
+        let bottomRow = positions.bottomLetterRow(
+            leadingKeyID: "shift",
+            letterKeyIDs: mode.bottomRowKeys,
+            trailingKeyID: "delete",
+            keyWidth: positions.symbolBottomKeyWidth,
+            keyHeight: KeyboardPanelLayout.letterKeyHeight
+        )
+        let firstSymbol = try XCTUnwrap(bottomRow.keys.first(where: { $0.id == "." }))
+
+        XCTAssertEqual(firstSymbol.visualFrame.width, positions.symbolBottomKeyWidth, accuracy: 0.001)
+        XCTAssertEqual(bottomRow.keys.first?.touchFrame.minX, 0)
+        XCTAssertEqual(bottomRow.keys.last?.touchFrame.maxX, 381)
+    }
+
     func testActionPanelUsesMinimumTapTargetsWithoutGrowingViewport() {
         XCTAssertEqual(KeyboardPanelLayout.actionCarouselButtonHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionControlButtonHeight, 44)

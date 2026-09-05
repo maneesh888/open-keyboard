@@ -20,7 +20,9 @@ Bind every review conclusion and state change to one exact pull-request head.
   them.
 - Physical-device interaction remains separately denied until the user explicitly requests it.
   Review, release, readiness, or merge work and a physical-device evidence requirement never
-  authorize device discovery, connection, installation, launch, testing, signing, or capture.
+  authorize Codex device discovery, connection, installation, launch, testing, signing, or capture.
+  This does not prevent the repository owner from verifying independently and approving the exact
+  head without uploading screenshots.
 - Do not request another confirmation between normal lifecycle stages while their gates pass and
   the independent reviewer reports operational confidence of exactly `100%`. The user does not
   need to name commit, push, PR, readiness, or merge separately. Below 100%, explicit human
@@ -77,9 +79,11 @@ private user text, generated artifacts, and raw logs out of the packet.
    record may satisfy the current head only when
    `./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` passes on the clean
    head and the reviewer independently inspects both SHAs, the identical non-test Git-tree digest,
-   every intervening test-only path, and the original screenshots. Require explicit physical-device
-   interaction authority plus exact signed-build device evidence for physical-device rows;
-   Simulator/XCTest cannot satisfy them. Without that authority, do not inspect connected devices.
+   every intervening test-only path, and the original screenshots. AI physical-device verification
+   requires explicit physical-device interaction authority plus exact signed-build screenshots that
+   the AI inspects; Simulator/XCTest cannot satisfy it. Without that authority, do not inspect
+   connected devices. The human route instead accepts explicit exact-head repository-owner approval
+   without a screenshot upload, while preserving the missing AI-evidence boundary.
 8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 9. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
 10. Follow the exact classifier result on the same head: `gateway` requires
@@ -127,10 +131,10 @@ Before marking a PR ready or merging it, always require:
 2. independently reviewed SHA equal to GitHub's current head;
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
-5. successful exact-head normal simulator runtime proof for every proof-sensitive changed surface,
-   or a verified test-only carry-forward record bound to the current head; and successful exact
-   signed-build device proof collected under explicit physical-device interaction authority for
-   every physical-device requirement;
+5. either successful exact-head AI screenshot proof for every proof-sensitive simulator/device
+   surface (including a verified test-only carry-forward record bound to the current head), or
+   explicit repository-owner approval for the exact head through the human route with the missing
+   AI evidence disclosed;
 6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
 7. no undisclosed finding, current-head requested change, or unresolved review thread;
 8. an in-scope diff with no secret or generated-artifact violation;
@@ -177,17 +181,18 @@ Then require exactly one authorization route:
   repository-owner approval for this exact head in the active Codex task`.
 
 Human authorization accepts the disclosed evidence risk; it does not relabel an unverified row as
-verified and never bypasses failed mandatory checks, live evidence, conflicts, requested changes,
-unresolved threads, secret controls, branch protection, or missing required normal simulator/device
-proof. The root must not infer approval from
+independently verified and never bypasses failed mandatory checks, live evidence, conflicts,
+requested changes, unresolved threads, secret controls, or branch protection. It may accept missing
+AI simulator/device screenshots for the exact approved head. The root must not infer approval from
 the implementation request, PR authorship, prior approval of another SHA, silence, or a general
 statement about policy. If confidence is below 100% and current-head human approval is absent, keep
 the PR draft, present the exact SHA and every blocker to the user, ask for their decision, and stop.
 
 Pending, skipped, missing, cancelled, timed-out, stale, or failed mandatory technical gates block
-readiness and merge in both routes. A missing requirement-specific proof prevents automatic
-authorization and remains disclosed if the owner chooses the human route. Missing required normal
-simulator or physical-device proof blocks readiness and merge in both routes.
+readiness and merge in both routes. Missing required AI simulator or physical-device screenshots
+block automatic authorization and remain disclosed if the owner chooses the human route. Explicit
+repository-owner approval for the exact head clears that runtime decision gate; do not request a
+screenshot upload or another readiness/merge confirmation for the same head.
 
 The root agent must post the independent review result as a durable GitHub `COMMENTED` review
 submission without secrets or raw gateway output, link that review from the PR brief, and run the
@@ -237,7 +242,7 @@ verification, signing, deployment, or another claim that depends on the resultin
 
 Lead with blockers or state that none remain. Include the PR, exact reviewed head, local verification,
 independent-review result, required checks, unresolved threads, protection, mergeability, action
-taken, and residual proof limits. Render or attach every screenshot used as required proof in the
-final response, even when it appeared in commentary or is linked from the PR. A path, `.xcresult`,
-review link, or summary alone is not delivery. If a required screenshot cannot be delivered, keep
-its requirement unverified and do not mark the PR ready or merge it.
+taken, and residual proof limits. For the automatic AI route, render or attach every screenshot used
+as required proof in the final response, even when it appeared in commentary or is linked from the
+PR. A path, `.xcresult`, review link, or summary alone is not delivery. For the human route, report
+the exact-head owner approval and missing AI-screenshot boundary; never ask the user to upload one.

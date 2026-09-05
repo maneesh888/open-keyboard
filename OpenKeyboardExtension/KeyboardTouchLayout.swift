@@ -91,6 +91,7 @@ struct KeyboardKeyPositions {
     let bottomControlWidth: CGFloat
     let spaceWidth: CGFloat
     let returnWidth: CGFloat
+    let symbolBottomKeyWidth: CGFloat
 
     init(availableWidth: CGFloat) {
         let letterWidth = (availableWidth - (Self.horizontalSpacing * 9)) / 10
@@ -103,6 +104,12 @@ struct KeyboardKeyPositions {
         bottomLetterSideGap = letterWidth * (43 / 111)
         self.bottomControlWidth = bottomControlWidth
         self.returnWidth = returnWidth
+        symbolBottomKeyWidth = (
+            availableWidth
+                - (modifierWidth * 2)
+                - (bottomLetterSideGap * 2)
+                - (Self.horizontalSpacing * 4)
+        ) / 5
         spaceWidth = availableWidth
             - (bottomControlWidth * 2)
             - returnWidth
@@ -119,10 +126,18 @@ struct KeyboardKeyPositions {
     }
 
     func homeRow(keyIDs: [String], keyHeight: CGFloat) -> KeyboardTouchRow {
+        middleRow(keyIDs: keyIDs, usesInset: true, keyHeight: keyHeight)
+    }
+
+    func middleRow(
+        keyIDs: [String],
+        usesInset: Bool,
+        keyHeight: CGFloat
+    ) -> KeyboardTouchRow {
         evenlySpacedRow(
             keyIDs: keyIDs,
             keyWidth: letterWidth,
-            leadingInset: homeRowInset,
+            leadingInset: usesInset ? homeRowInset : 0,
             keyHeight: keyHeight
         )
     }
@@ -131,11 +146,13 @@ struct KeyboardKeyPositions {
         leadingKeyID: String,
         letterKeyIDs: [String],
         trailingKeyID: String,
+        keyWidth: CGFloat? = nil,
         keyHeight: CGFloat
     ) -> KeyboardTouchRow {
+        let resolvedKeyWidth = keyWidth ?? letterWidth
         let keyIDs = [leadingKeyID] + letterKeyIDs + [trailingKeyID]
         let widths = [modifierWidth]
-            + Array(repeating: letterWidth, count: letterKeyIDs.count)
+            + Array(repeating: resolvedKeyWidth, count: letterKeyIDs.count)
             + [modifierWidth]
         let gaps = [bottomLetterSideGap]
             + Array(repeating: Self.horizontalSpacing, count: max(0, letterKeyIDs.count - 1))

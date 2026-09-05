@@ -33,8 +33,10 @@ capture to the current head only when `verify-runtime-proof-carry-forward.sh` co
 test-only commit range and identical non-test Git-tree digest, and the ledger retains both SHAs,
 the digest, paths, and original images. XCTest/XCUITest, seeded states, and `XCTAttachment`
 screenshots remain automated regression evidence. Required physical-device proof must come from the
-exact signed build on the configured device. Missing required simulator/device proof blocks readiness and
-merge under both automatic and human authorization routes.
+exact signed build on the configured device for AI verification. Missing AI simulator/device
+screenshots block the automatic route. The human route may proceed after explicit repository-owner
+approval for the exact head with that evidence gap disclosed; never require the owner to upload a
+screenshot.
 
 Every review/body event creates the fixed `Required checks` root job, and every live-evidence body
 event creates the fixed `Required live verification` root job. The first project-review submission

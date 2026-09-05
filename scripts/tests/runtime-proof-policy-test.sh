@@ -73,10 +73,16 @@ require_phrase 'XCUITest real-extension coverage remains automated regression' "
   "The development skill must classify real-extension XCUITest accurately."
 require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must block proof-sensitive publication without runtime proof."
-require_phrase 'simulator or physical-device proof blocks readiness and merge in both routes.' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
-  "The review skill must fail closed on missing runtime/device proof."
-require_phrase 'Missing required normal simulator or physical-device proof is always a readiness and merge blocker' "$ROOT/.codex/agents/pr-reviewer.toml" \
-  "The independent reviewer must reject runtime/device proof substitution."
+require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
+  "The review skill must block automatic authorization without AI screenshot proof."
+require_phrase 'explicit repository-owner approval for the exact head may accept that disclosed gap' "$ROOT/.codex/agents/pr-reviewer.toml" \
+  "The independent reviewer must recognize the screenshot-free human route."
+require_phrase 'Never ask the user to upload or transfer screenshots' "$ROOT/AGENTS.md" \
+  "AGENTS.md must never require a user screenshot upload."
+require_phrase 'Ask for an exact-head approve/reject decision, never a screenshot upload.' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime handoff must request human approval rather than screenshots."
+require_phrase '`RUNTIME_VERIFIED (human-approved)`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must define the human-approved evidence boundary."
 
 require_phrase '## Evidence classes and claims' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
   "Development workflow must define the evidence classes."
@@ -100,8 +106,10 @@ require_phrase 'Normal simulator runtime proof:' "$ROOT/.github/pull_request_tem
   "The PR template must retain the normal runtime proof classification."
 require_phrase 'Physical-device proof:' "$ROOT/.github/pull_request_template.md" \
   "The PR template must retain the physical-device proof classification."
-require_phrase 'Missing required simulator/device proof blocks readiness and' "$ROOT/.github/BRANCH_PROTECTION_GUIDE.md" \
-  "Branch-protection guidance must not allow readiness without runtime/device proof."
+require_phrase 'Missing AI simulator/device' "$ROOT/.github/BRANCH_PROTECTION_GUIDE.md" \
+  "Branch-protection guidance must keep missing screenshots out of the automatic route."
+require_phrase 'The human route may proceed after explicit repository-owner' "$ROOT/.github/BRANCH_PROTECTION_GUIDE.md" \
+  "Branch-protection guidance must permit exact-head human approval without screenshot upload."
 
 require_phrase 'Evidence boundary: XCTest/XCUITest regression only; not normal simulator or device proof.' "$ROOT/scripts/ios/test.sh" \
   "The real-keyboard-live route must print its automated evidence boundary."
@@ -167,6 +175,12 @@ assert_rejected_fixture simulator-device \
 if rg --fixed-strings --quiet 'real keyboard extension live test' \
   "$ROOT/scripts/ios/test.sh" "$ROOT/scripts/local-ci.sh"; then
   echo "An XCTest route is still labeled as a real keyboard extension live test." >&2
+  exit 1
+fi
+
+if rg --fixed-strings --quiet 'Send the three direct screenshots' "${ACTIVE_INTERACTION_POLICY_FILES[@]}" ||
+    rg --fixed-strings --quiet 'supply the required screenshots' "${ACTIVE_INTERACTION_POLICY_FILES[@]}"; then
+  echo "Human verification must never require the user to upload screenshots." >&2
   exit 1
 fi
 
