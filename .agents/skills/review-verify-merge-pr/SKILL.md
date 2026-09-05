@@ -13,13 +13,20 @@ Bind every review conclusion and state change to one exact pull-request head.
 - A bounded implementation request starts the normal autonomous repository lifecycle through guarded merge.
 - Only the root agent may fix findings, commit, push, update the PR, change readiness, or merge.
 - The independent `pr-reviewer` is always read-only.
-- Apply the sticky authority ledger from `AGENTS.md`. Earlier edit, implementation, commit, push,
-  PR, readiness, or merge constraints remain active until explicitly revoked for that action;
-  ambiguous later wording does not revoke them.
+- Apply the sticky authority ledger from `AGENTS.md`. Honor active edit, implementation, commit,
+  push, PR, readiness, and merge constraints; do not resurrect a completed checkpoint's
+  phase-scoped constraints after a clear implementation transition. Objective- or task-wide
+  constraints remain active until explicitly revoked, and ambiguous later wording does not revoke
+  them.
 - Physical-device interaction remains separately denied until the user explicitly requests it.
   Review, release, readiness, or merge work and a physical-device evidence requirement never
-  authorize device discovery, connection, installation, launch, testing, signing, or capture.
-- Do not request another confirmation between requested lifecycle stages while the independent reviewer reports operational confidence of exactly `100%`. Below 100%, explicit human authorization for the current exact head is mandatory before readiness or merge.
+  authorize Codex device discovery, connection, installation, launch, testing, signing, or capture.
+  This does not prevent the repository owner from verifying independently and approving the exact
+  head without uploading screenshots.
+- Do not request another confirmation between normal lifecycle stages while their gates pass and
+  the independent reviewer reports operational confidence of exactly `100%`. The user does not
+  need to name commit, push, PR, readiness, or merge separately. Below 100%, explicit human
+  authorization for the current exact head is mandatory before readiness or merge.
 - Deployment remains outside the implementation lifecycle and requires explicit authorization.
 - Never bypass branch protection, hooks, scanners, required checks, environment approval, or review findings.
 
@@ -29,7 +36,11 @@ Bind every review conclusion and state change to one exact pull-request head.
 2. Resolve the PR number, base, full head SHA, draft state, changed files, mergeability, reviews, unresolved threads, and checks using available read-only GitHub tools.
 3. Use an isolated clean worktree when the current checkout is not the exact PR head.
 4. Read `AGENTS.md`, the PR brief, the root diff, and only the relevant requirement and acceptance sources.
-5. Treat any head change as invalidating prior local, CI, live, independent-review evidence, and human merge authorization.
+5. Treat any head change as invalidating prior local, CI, live, independent-review evidence, and
+   human merge authorization. Normal-Simulator evidence is the only exception: it may carry from
+   an ancestor capture SHA when the current clean head passes the repository's test-only
+   carry-forward verifier and the record retains both SHAs, the runtime digest, and intervening
+   paths.
 
 ## Prepare neutral review context
 
@@ -64,9 +75,15 @@ private user text, generated artifacts, and raw logs out of the packet.
    installed extension is not normal simulator runtime proof. For proof-sensitive UI, extension
    lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes, require an
    exact-head normal runtime record from a normally launched app, ordinary host-app text field,
-   visible production UI, and direct Simulator/Xcode screenshots. Require explicit physical-device
-   interaction authority plus exact signed-build device evidence for physical-device rows;
-   Simulator/XCTest cannot satisfy them. Without that authority, do not inspect connected devices.
+   visible production UI, and direct Simulator/Xcode screenshots. A complete ancestor-capture
+   record may satisfy the current head only when
+   `./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` passes on the clean
+   head and the reviewer independently inspects both SHAs, the identical non-test Git-tree digest,
+   every intervening test-only path, and the original screenshots. AI physical-device verification
+   requires explicit physical-device interaction authority plus exact signed-build screenshots that
+   the AI inspects; Simulator/XCTest cannot satisfy it. Without that authority, do not inspect
+   connected devices. The human route instead accepts explicit exact-head repository-owner approval
+   without a screenshot upload, while preserving the missing AI-evidence boundary.
 8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
 9. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
 10. Follow the exact classifier result on the same head: `gateway` requires
@@ -101,9 +118,10 @@ every unverified requirement and blocker.
 
 Review-only work reports findings and stops. During an autonomous implementation lifecycle, the
 root agent fixes in-scope blockers while the PR remains draft. Every new commit invalidates local
-Release evidence, live evidence, independent review, human authorization, and GitHub gate conclusions. If the PR was
-already ready, immediately disable any auto-merge request and return it to draft, then refresh the
-PR brief and repeat the exact-head cycle.
+Release evidence, live evidence, independent review, human authorization, and GitHub gate
+conclusions. Normal-Simulator proof survives only through the verified test-only carry-forward
+record described above. If the PR was already ready, immediately disable any auto-merge request and
+return it to draft, then refresh the PR brief and repeat the exact-head cycle.
 
 ## Readiness gate
 
@@ -113,9 +131,10 @@ Before marking a PR ready or merging it, always require:
 2. independently reviewed SHA equal to GitHub's current head;
 3. successful `./scripts/check.sh --full` for that SHA;
 4. successful applicable exact-head live evidence;
-5. successful exact-head normal simulator runtime proof for every proof-sensitive changed surface,
-   and successful exact signed-build device proof collected under explicit physical-device
-   interaction authority for every physical-device requirement;
+5. either successful exact-head AI screenshot proof for every proof-sensitive simulator/device
+   surface (including a verified test-only carry-forward record bound to the current head), or
+   explicit repository-owner approval for the exact head through the human route with the missing
+   AI evidence disclosed;
 6. a durable GitHub `COMMENTED` review submission containing the independent report and a PR-brief link to that review;
 7. no undisclosed finding, current-head requested change, or unresolved review thread;
 8. an in-scope diff with no secret or generated-artifact violation;
@@ -162,17 +181,18 @@ Then require exactly one authorization route:
   repository-owner approval for this exact head in the active Codex task`.
 
 Human authorization accepts the disclosed evidence risk; it does not relabel an unverified row as
-verified and never bypasses failed mandatory checks, live evidence, conflicts, requested changes,
-unresolved threads, secret controls, branch protection, or missing required normal simulator/device
-proof. The root must not infer approval from
+independently verified and never bypasses failed mandatory checks, live evidence, conflicts,
+requested changes, unresolved threads, secret controls, or branch protection. It may accept missing
+AI simulator/device screenshots for the exact approved head. The root must not infer approval from
 the implementation request, PR authorship, prior approval of another SHA, silence, or a general
 statement about policy. If confidence is below 100% and current-head human approval is absent, keep
 the PR draft, present the exact SHA and every blocker to the user, ask for their decision, and stop.
 
 Pending, skipped, missing, cancelled, timed-out, stale, or failed mandatory technical gates block
-readiness and merge in both routes. A missing requirement-specific proof prevents automatic
-authorization and remains disclosed if the owner chooses the human route. Missing required normal
-simulator or physical-device proof blocks readiness and merge in both routes.
+readiness and merge in both routes. Missing required AI simulator or physical-device screenshots
+block automatic authorization and remain disclosed if the owner chooses the human route. Explicit
+repository-owner approval for the exact head clears that runtime decision gate; do not request a
+screenshot upload or another readiness/merge confirmation for the same head.
 
 The root agent must post the independent review result as a durable GitHub `COMMENTED` review
 submission without secrets or raw gateway output, link that review from the PR brief, and run the
@@ -222,4 +242,7 @@ verification, signing, deployment, or another claim that depends on the resultin
 
 Lead with blockers or state that none remain. Include the PR, exact reviewed head, local verification,
 independent-review result, required checks, unresolved threads, protection, mergeability, action
-taken, and residual proof limits.
+taken, and residual proof limits. For the automatic AI route, render or attach every screenshot used
+as required proof in the final response, even when it appeared in commentary or is linked from the
+PR. A path, `.xcresult`, review link, or summary alone is not delivery. For the human route, report
+the exact-head owner approval and missing AI-screenshot boundary; never ask the user to upload one.

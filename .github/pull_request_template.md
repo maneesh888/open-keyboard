@@ -33,15 +33,24 @@
 ## Runtime evidence
 
 <!-- Automated XCTest/XCUITest/XCTAttachment evidence is not normal simulator runtime proof. -->
-<!-- Proof-sensitive UI/extension/live-result changes require the exact-head normal runtime fields. -->
+<!-- Automatic proof-sensitive authorization requires an exact-head capture or a verified test-only carry-forward record. -->
+<!-- AI verification requires AI-captured screenshots. Human verification requires exact-head owner approval, never a user screenshot upload. -->
 - Automated regression evidence: pending
 - Normal simulator runtime proof: not required
-- Runtime-tested head: not required
+- Runtime evidence mode: not required
+- Runtime verification route: not required
+- Runtime capture head: not required
+- Runtime-verified current head: not required
+- Runtime content digest: not required
+- Runtime carry-forward paths: not required
+- Runtime carry-forward verifier: not required
 - Build configuration: not required
 - Simulator model and OS: not required
 - Action and source text: not required
 - Observed result: not required
 - Direct Simulator/Xcode screenshots: not required
+- Human runtime approval: not required
+- Human runtime-approved head: not required
 - Physical-device interaction authorization: not requested
 - Physical-device proof: not required
 

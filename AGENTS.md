@@ -35,9 +35,11 @@ it.
    Stage only intended files and inspect `git diff --cached --name-only` plus the staged diff for
    secrets or generated artifacts.
 7. **Collect runtime proof when required and authorized.** Proof-sensitive user-facing changes
-   require normal simulator runtime proof before push. Physical-device interaction remains
-   prohibited until the user explicitly requests it; a device-specific requirement creates a
-   blocker, not permission to connect to a device. Follow the evidence and interaction rules below.
+   require normal simulator runtime proof before push. Codex-operated physical-device interaction
+   remains prohibited until the user explicitly requests it; a device-specific requirement creates
+   a blocker for Codex-operated proof, not permission to connect to a device. The user may perform
+   their own verification and explicitly approve the exact head without granting Codex device
+   access. Follow the evidence and interaction rules below.
 8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
    authorized push, run `./scripts/check.sh --full` and the
    classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
@@ -55,7 +57,9 @@ Before the first mutation, internally record and retain this ledger:
 
 ```text
 Objective:
+Current objective/phase:
 Requested activity:
+Active constraints (scope and expiry):
 Read-only activity authorized: YES/NO
 Edits authorized: YES/NO
 Production-code edits authorized: YES/NO
@@ -64,24 +68,55 @@ Commit authorized: YES/NO
 Push authorized: YES/NO
 PR authorized: YES/NO
 Merge authorized: YES/NO
+Lifecycle gates: commit/push/PR/readiness/merge WAITING|READY|BLOCKED|COMPLETE
 Required evidence:
 Current blockers:
 ```
 
 Recheck it before the first tracked edit, staging, commit, push, PR mutation, readiness change, or
-merge. A `NO` is a hard gate for that action. When a constrained task needs user visibility, report
-one compact checkpoint:
+merge, and recompute it whenever the objective or phase changes, a scoped constraint expires, or
+new evidence changes a lifecycle gate. An authority `NO` is a hard prohibition for that action. A
+`WAITING` or `BLOCKED` lifecycle gate means the action is authorized but its required evidence is
+not yet sufficient. When a constrained task needs user visibility, report one compact checkpoint:
 `AUTHORITY: <mode> | read-only <YES/NO> | edits <YES/NO> | production edits <YES/NO> | physical device <YES/NO> | commit <YES/NO> | push <YES/NO> | PR <YES/NO> | merge <YES/NO>`.
+When gate state explains progress, add a separate compact checkpoint:
+`GATES: commit <state> | push <state> | PR <state> | readiness <state> | merge <state>`.
 
-- User constraints are sticky and independently scoped. `Do not edit`, `do not implement`,
-  `results first`, `report first`, `test only`, `no changes`, `do not commit`, and `do not push`
-  remain active until the user explicitly revokes the applicable constraint. Authorization for one
-  action does not authorize another action.
+A clear bounded implementation request grants standing conditional authority for the normal
+repository lifecycle: read and inspect, make scoped edits, change production code when the task
+requires it, stage and commit, push, create or update a draft PR, fix in-scope review findings,
+mark ready, and guarded-merge. Initialize the applicable ledger fields to `YES`; the user does not
+need to enumerate or separately authorize those ordinary stages. Conditional authority means each
+state change still waits for its required deterministic, live, runtime, exact-head, review, and
+GitHub gates. Those gates decide whether the workflow may advance; they are not prompts for a new
+permission. As evidence and exact-head review confidence satisfy a gate, mark it `READY` and
+advance to the next authorized lifecycle stage without asking again. Deployment and destructive
+cleanup remain outside this standing authority.
+
+- User constraints are sticky within their independently recorded scope. Assign every explicit
+  constraint the narrowest scope supported by the user's words and conversation: a named
+  experiment/checkpoint, the current objective or phase, or the whole task. `For this test`,
+  `begin read-only`, and a request to `report, then stop and wait` create phase-scoped constraints
+  when they describe a bounded test checkpoint. Preserve those constraints through that
+  checkpoint, then mark them expired—without erasing their history—when its result is delivered
+  and a clear implementation request starts the next phase. A constraint stated for the whole
+  task, branch, or implementation, or reinforced with `still`, `throughout`, `never`, or equivalent
+  wording, remains active until the user explicitly revokes it. An active opt-out overrides
+  standing lifecycle authority for that action and dependent later actions. Silence about commit,
+  push, PR, readiness, or merge is not an opt-out.
+- Recompute authority at every real phase transition. `Correct it`, `Fix it`, and `Implement the
+  proposed change now` are clear implementation requests when they follow a completed diagnostic
+  or proof-first checkpoint. They end that checkpoint's read-only/no-publication constraints and
+  initialize normal standing lifecycle authority unless a separately scoped task-wide opt-out is
+  still active. Do not carry `NO` values forward merely because they appeared in an earlier ledger.
+  Confidence does not override an active constraint; it advances lifecycle gates after authority
+  has been recomputed.
 - Physical-device interaction defaults to `NO` and is independently sticky. Do not enumerate,
   inspect, connect to, install on, launch on, sign for, run tests on, capture from, or otherwise
   operate a physical device until the user explicitly requests physical-device work. Simulator
   authorization, a required device evidence row, normal lifecycle autonomy, and merge permission
-  do not grant physical-device authority.
+  do not grant physical-device authority. This ledger entry governs Codex and its tools; it does
+  not prohibit the user from operating their own device and reporting what they observed.
 - Ambiguous or exploratory wording never revokes a sticky constraint. `Try`, `investigate`,
   `evaluate`, `diagnose`, `measure`, `see whether it works`, `find out`, `give it a test`, `report
   the results`, and `try chunks` request read-only experimentation unless the user explicitly
@@ -96,20 +131,33 @@ one compact checkpoint:
   implementing a speculative solution, or substituting deterministic tests.
 - `Test this and report before implementing` followed by `Try chunks` remains read-only: no tracked
   edits and no commit. `Do not commit` followed by a clear `Fix the issue` may authorize scoped
-  edits, but staging and commit remain blocked. `Implement the proposed change now` can authorize
-  production edits, but it does not silently authorize commit, push, or a PR.
-- A clear `Implement this feature` request enters normal implementation mode and authorizes scoped
-  production edits when no sticky no-edit, no-implementation, or proof-first constraint remains.
-  It does not by itself authorize staging, commit, push, a PR, readiness, merge, or deployment.
-- A bounded implementation request starts the normal lifecycle only when the ledger authorizes the
-  applicable actions and no proof-first constraint remains. Planning, diagnosis, review-only work,
-  readiness assessment, and blocker requests are read-only.
+  edits, but staging, commit, and dependent publication remain blocked when `Do not commit` applies
+  to the continuing objective rather than only a completed checkpoint. After the requested
+  proof-first result has been reported, `Implement the proposed change now` ends proof-first mode
+  and starts the normal autonomous lifecycle unless another explicit sticky constraint remains.
+- `Perform a workflow-authority test only; begin read-only; do not edit, commit, push, create a PR,
+  or merge; report and wait` scopes those prohibitions to that test phase. After its report,
+  `Correct it` starts an implementation phase: recompute edit, commit, push, PR, and merge authority
+  to `YES` under the standing conditional lifecycle, and let evidence gates advance the work. Do
+  not resurrect the completed test phase's `NO` values.
+- `AI screenshot verification is unavailable` followed by explicit repository-owner approval of
+  the current exact SHA selects the human route. Do not ask for a screenshot or structured report;
+  mark the runtime decision gate ready and resume the standing lifecycle automatically without
+  another readiness or merge confirmation for that head. The approval does not grant Codex
+  physical-device interaction authority.
+- A clear `Implement this feature` request enters normal implementation mode and grants standing
+  conditional authority through guarded merge when no sticky no-edit, no-implementation,
+  local-only, no-commit, no-push, no-PR, keep-draft, or no-merge constraint remains. It never grants
+  deployment or destructive-cleanup authority.
+- Planning, diagnosis, review-only work, readiness assessment, and blocker requests are read-only.
 - Deployment and destructive cleanup are separate external actions and require explicit authority.
 - Below exact-head independent-review confidence of `100%`, keep the PR draft and require explicit
   repository-owner approval for that exact SHA. Approval accepts disclosed risk; it cannot bypass a
   mandatory gate or relabel missing proof as verified.
 - A new commit invalidates prior full/live evidence, independent review, GitHub gate conclusions,
-  and human merge authorization.
+  and human merge authorization. It also invalidates normal simulator evidence unless the narrow
+  test-only carry-forward rule below is verified; that exception applies to normal simulator
+  evidence only.
 
 ## Engineering boundaries
 
@@ -148,9 +196,10 @@ Use exactly these classes in plans, PR ledgers, and reports:
    debug-state injection, seeded result panels, component/test hosts, or test-host shortcuts. Use
    the actual extension through an ordinary host-app text field and visible production UI. Capture
    screenshots directly from Simulator/Xcode outside XCTest.
-3. **Physical-device proof:** the exact signed build installed on the configured device, exercised
-   through the normal keyboard-extension lifecycle, with screenshots captured directly from that
-   device.
+3. **Physical-device proof:** for AI verification, the exact signed build is installed on the
+   configured device, exercised through the normal keyboard-extension lifecycle, and verified by
+   screenshots that the AI captures and inspects. Human verification uses the separate exact-head
+   approval route below and never requires the user to upload a screenshot.
 
 Automated evidence remains required, but XCTest/XCUITest cannot by itself authorize a
 proof-sensitive push, PR readiness, release readiness, or a claim that the user-visible workflow
@@ -166,29 +215,99 @@ or result presentation require normal simulator runtime proof before push. Norma
 - invoke the action through visible production UI with no test-only state or interaction;
 - use the configured live gateway when semantic behavior is being verified;
 - capture direct Simulator/Xcode screenshots, never `XCTAttachment` artifacts;
-- record exact Git SHA, build configuration, simulator model, OS version, action, source text, and
-  observed result; and
+- record the capture Git SHA, current verified Git SHA, build configuration, simulator model, OS
+  version, action, source text, and observed result; and
 - keep credentials and private configuration out of screenshots and logs.
 
-Collect normal runtime proof using the first reliable route:
+Collect normal runtime proof using this escalation hierarchy. Stop at the first tier that produces
+all required evidence; retain valid evidence from an earlier tier and escalate only the missing or
+ambiguous requirements:
 
-1. a purpose-built, generically named Simulator-control integration;
-2. Computer Use or equivalent host UI automation that can reliably inspect and operate the normal
-   Simulator and capture direct screenshots; or
-3. manual verification by the user.
+1. **Simulator accessibility/control:** use a purpose-built, generically named Simulator-control integration;
+   inspect the normally launched app's accessibility hierarchy, operate discoverable controls,
+   type, tap, swipe, and capture direct Simulator screenshots. Accessibility metadata and action
+   success alone are not visual proof; inspect the resulting visible state and deliver the required
+   screenshots.
+2. **Computer Use:** use Computer Use or equivalent host UI automation when the
+   accessibility/control route is unavailable or cannot establish a required system-level
+   interaction or visual result; inspect and operate the normal Simulator and capture direct
+   screenshots.
+3. **Human verification:** when the first two tiers remain unavailable, unreliable, or ambiguous,
+   disclose the missing AI-verification evidence and ask the repository owner to approve or reject
+   the exact current head based on their own verification. Never ask the user to upload or transfer
+   screenshots.
+
+An interaction-tool error applies to that route only. A Computer Use report that the host is locked
+or Simulator is unavailable is a route-level failure, not a terminal runtime-proof conclusion. If
+Computer Use was selected, refresh its app state once and retry Simulator with the canonical bundle
+identifier `com.apple.iphonesimulator` when bundle targeting is supported; then try any other
+available non-XCTest Simulator accessibility/control route before falling back to human
+verification. Do not loop on a genuinely locked host. `simctl` may install, launch, inspect device
+state, and capture the current framebuffer, but those operations alone do not prove that the
+required visible interaction occurred.
 
 Tool availability does not change the proof standard. If interaction is unavailable, unreliable,
 or ambiguous, stop before push/readiness, state exactly what remains unverified, and provide the
-short checklist and expected screenshots from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+short checklist and exact head from `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 Additional XCTest runs do not replace missing runtime proof.
 
-Physical-device proof requires both explicit physical-device interaction authority and the exact
-signed build on the configured device. Without that authority, do not query or touch connected
-devices; report device proof blocked and request direction. Simulator and XCTest are not substitutes.
+### Human runtime approval
 
-Deliver required screenshots in the chat or through clickable non-repository artifact links after
-inspecting them for private content. An `.xcresult` path alone is not delivery. Exported
-`XCTAttachment` images must stay labeled automated artifacts. Never commit proof artifacts.
+AI verification requires the AI to capture, inspect, and deliver the required screenshots. Human
+verification does not. When AI verification cannot complete, report the exact current head and the
+missing visual/device evidence once, then ask the repository owner for an explicit approve/reject
+decision. Never ask the user to upload or transfer screenshots, provide screenshot paths, or fill
+out a structured attestation.
+
+An explicit owner approval for the exact current head selects the human authorization route,
+satisfies the runtime/device decision gate, and lets the workflow continue automatically through
+the remaining authorized lifecycle stages. Record the evidence mode as `human-approved`, preserve
+that the AI did not inspect screenshot proof, and qualify `RUNTIME_VERIFIED` as `human-approved`.
+The affected PR requirement may remain `UNVERIFIED` from the independent reviewer's perspective;
+that is the disclosed risk accepted by the human route, not a reason to stop after approval. Do not
+ask for another runtime, readiness, or merge confirmation for the same head. A new commit still
+expires the exact-head approval.
+
+Physical-device interaction authority governs Codex and its tools. Human approval neither requires
+nor grants Codex physical-device access. Missing AI screenshots block only the automatic route;
+missing exact-head human approval blocks the human route.
+
+### Test-only normal-runtime evidence carry-forward
+
+A new screenshot run is not required solely because a later commit changes non-shipping test-target
+files. Prior complete normal simulator evidence may verify the current head only when all of these
+conditions hold:
+
+- the screenshot capture SHA is an ancestor of a clean current `HEAD`;
+- `./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` passes;
+- every intervening path is under `OpenKeyboardCore/Tests/`, `OpenKeyboardTests/`, or
+  `OpenKeyboardUITests/`, and the verifier reports an identical non-test Git-tree digest;
+- the prior proof already contains every required interaction, visible result, screenshot, runtime
+  configuration, simulator model, and OS record; and
+- the current requirement ledger records the capture SHA, current SHA, verifier output, runtime
+  content digest, and intervening paths.
+
+Keep each image labeled with its original capture SHA and describe it as verified test-only
+carry-forward evidence; never claim that it was captured from the current SHA. Any runtime,
+resource, project, dependency, configuration, gateway, script, documentation, workflow, unknown,
+renamed, or dirty-worktree change requires fresh runtime proof. This exception never carries
+forward physical-device proof, full/live gates, independent review, GitHub conclusions, or human
+merge authorization.
+
+Codex-operated physical-device proof requires explicit physical-device interaction authority and
+the exact signed build on the configured device. Without that authority, do not query or touch
+connected devices; offer the exact-head human approval route. Human approval does not require
+permission for Codex to access the device and does not silently grant it.
+Simulator and XCTest are not substitutes.
+They cannot establish AI physical-device proof.
+
+After inspecting them for private content, render or attach every screenshot actually used as
+artifact-backed required proof in the final response. When a local image is available, use an
+inline Markdown image with its absolute non-repository path; use the available media-preview
+mechanism for remote artifacts. A path, `.xcresult`, PR link, summary, or image shown only in
+earlier commentary is not final proof delivery. In `human-approved` mode, report the exact-head
+approval and state that the AI did not inspect screenshot proof; no user screenshot is required.
+Exported `XCTAttachment` images must stay labeled automated artifacts. Never commit proof artifacts.
 
 Report automated test results, transport success, semantic acceptance, and visual/runtime
 acceptance separately.
@@ -274,14 +393,16 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
   unless the user explicitly requests staging without a commit.
 - Before push, stop if the branch would publish earlier unrelated commits whose ownership or scope
   is ambiguous.
-- Local implementation and commits may proceed after deterministic tests only for explicitly
-  authorized implementation with `Commit authorized: YES` and no active proof-first constraint.
+- Local implementation and commits may proceed after deterministic tests for a bounded
+  implementation request under standing lifecycle authority, or under separate explicit edit and
+  commit authority, when no active proof-first or commit opt-out remains.
   Proof-first model-capability, long-input, parser, retry, or semantic-behavior work requires the
   explicitly requested live evaluation and later implementation authority before production edits
   or commit. For other proof-sensitive
   user-facing changes, do not push or create/update a readiness PR until normal simulator runtime
   proof succeeds unless the user explicitly authorizes the push with the missing proof disclosed.
-  That exception never authorizes readiness or merge.
+  A push-only exception never authorizes readiness or merge; the separate exact-head human runtime
+  approval route above does.
 - Do not use a fix-style subject such as `Fix`, `Handle`, or `Make ... work` for behavior whose
   required live/runtime evidence is missing. If the user explicitly authorizes an experimental
   commit, begin its subject with `Experimental:` or `Diagnostic:`. This naming rule never grants
@@ -297,9 +418,11 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
   same head. Before readiness and merge, re-fetch the head, body, linked review, threads,
   protection, mergeability, and complete check rollup; rerun trusted validators and require
   `gh pr checks <number> --required` to succeed.
-- Never mark ready or merge with missing normal simulator or physical-device proof, a failed or
-  pending mandatory check, unresolved requested changes/threads, conflicts, secret violations, or
-  stale evidence. If guarded auto-merge queues instead of completing, disable it immediately.
+- Never use the automatic route with missing normal simulator or physical-device screenshot proof.
+  The human route may proceed after explicit repository-owner approval for the exact head despite
+  that disclosed evidence gap. Failed or pending mandatory checks, unresolved requested
+  changes/threads, conflicts, secret violations, or stale approval still block both routes. If
+  guarded auto-merge queues instead of completing, disable it immediately.
 
 `$review-verify-merge-pr` owns the exact report schema, revalidation wording, event-family check
 handling, automatic-versus-human authorization record, and guarded merge command. Do not duplicate
@@ -308,5 +431,8 @@ or improvise those mechanics here.
 ## Reporting
 
 Lead with the outcome. Include changed areas, checks and pass/fail results, evidence class and proof
-limits, screenshots when required, exact SHA/PR state for published work, remaining blockers, and
-commit ID when committed. A green build is not verified app functionality.
+limits, exact SHA/PR state for published work, remaining blockers, and commit ID when committed.
+The final response must render or attach every screenshot actually used for AI proof even when it
+appeared in earlier commentary. For `human-approved` evidence, report the exact-head approval and
+state that the AI did not inspect screenshots; never request a user upload. A green build is not
+verified app functionality.
