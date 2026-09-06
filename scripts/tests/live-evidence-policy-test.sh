@@ -72,6 +72,8 @@ valid_body="$(cat <<EOF
 - Exact live-tested models: reference-test-model
 - Live-model substitutions: none
 - Live plain-text grammar verification: verified
+- Live summarize outcomes: not required
+- Live continue-writing outcomes: not required
 - Live baseline outcomes: not required
 - Live differential outcomes: not required
 - Live follow-up outcomes: not required
@@ -116,6 +118,8 @@ differential_body="$(cat <<EOF
 - Exact live-tested models: low=low-test-model:2b, high=high-test-model:120b
 - Live-model substitutions: none
 - Live plain-text grammar verification: verified
+- Live summarize outcomes: low=passed, high=passed
+- Live continue-writing outcomes: low=passed, high=passed
 - Live baseline outcomes: low=passed, high=passed
 - Live differential outcomes: low=expected-model-capability, high=passed
 - Live follow-up outcomes: low=passed, high=passed
@@ -136,6 +140,8 @@ same_profile_body="${differential_body//high-test-model:120b/low-test-model:2b}"
 low_success_body="${differential_body/Live differential outcomes: low=expected-model-capability, high=passed/Live differential outcomes: low=passed, high=passed}"
 high_failure_body="${differential_body/Live differential outcomes: low=expected-model-capability, high=passed/Live differential outcomes: low=expected-model-capability, high=expected-model-capability}"
 missing_baseline_body="${differential_body/- Live baseline outcomes: low=passed, high=passed/}"
+missing_summarize_body="${differential_body/- Live summarize outcomes: low=passed, high=passed/}"
+failed_continue_body="${differential_body/Live continue-writing outcomes: low=passed, high=passed/Live continue-writing outcomes: low=passed, high=failed}"
 unverified_warning_body="${differential_body/Live operation-scoped warning contracts: verified/Live operation-scoped warning contracts: unverified}"
 malformed_latency_body="${differential_body/Live profile latencies: low=12.345s, high=23.456s/Live profile latencies: high=23.456s, low=12.345s}"
 
@@ -295,6 +301,14 @@ if run_policy "$high_failure_body" gateway-differential; then
 fi
 if run_policy "$missing_baseline_body" gateway-differential; then
   echo "Missing differential baseline evidence was accepted." >&2
+  exit 1
+fi
+if run_policy "$missing_summarize_body" gateway-differential; then
+  echo "Missing differential Summarize evidence was accepted." >&2
+  exit 1
+fi
+if run_policy "$failed_continue_body" gateway-differential; then
+  echo "Failed differential Continue Writing evidence was accepted." >&2
   exit 1
 fi
 if run_policy "$unverified_warning_body" gateway-differential; then

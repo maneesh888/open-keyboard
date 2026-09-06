@@ -11,7 +11,6 @@ import UIKit
 
 enum KeyboardGatewayActionContract {
     static let contractVersion = SemanticPromptContract.version
-    static let structuredSystemPrompt = SemanticPromptContract.writingSystemInstruction
 
     static func prompt(
         operation: String,
@@ -1769,20 +1768,20 @@ struct KeyboardActionOperationResult: Equatable {
     let items: [Item]
     let summary: String?
     let correctedText: String?
-    let isStructuredResponse: Bool
     let isNoChangeResult: Bool
 
-    init(operation: String, items: [Item], summary: String? = nil, correctedText: String? = nil, isStructuredResponse: Bool = false, isNoChangeResult: Bool = false) {
+    init(
+        operation: String,
+        items: [Item],
+        summary: String? = nil,
+        correctedText: String? = nil,
+        isNoChangeResult: Bool = false
+    ) {
         self.operation = operation
         self.items = items
         self.summary = summary
         self.correctedText = correctedText
-        self.isStructuredResponse = isStructuredResponse
         self.isNoChangeResult = isNoChangeResult
-    }
-
-    var containsWarningItem: Bool {
-        items.contains(where: \.isWarning)
     }
 
     @MainActor
@@ -1812,19 +1811,16 @@ struct KeyboardActionOperationResult: Equatable {
     }
 
     var displayText: String {
-        if ["fix_grammar", "rewrite"].contains(operation), let correctedText {
+        if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return correctedText
         }
-        if let correctedText, !correctedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return correctedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
         if let replacement = items.first(where: { ($0.replacement ?? "").isEmpty == false })?.replacement {
-            return replacement.trimmingCharacters(in: .whitespacesAndNewlines)
+            return replacement
         }
         if let text = items.first(where: { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })?.text {
-            return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text
         }
-        return summary?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return summary ?? ""
     }
 
     @MainActor
@@ -1838,156 +1834,63 @@ struct KeyboardActionOperationResult: Equatable {
         )
     }
 
-    static func plainTextReplacement(
+    static func plainTextResponse(
         _ content: String,
-        contractOperationID: String,
-        wireOperation: String,
+        rendering: SemanticPromptRendering,
         title: String,
         source: String
     ) throws -> KeyboardActionOperationResult {
-        let replacement: String
+        let validated: String
         do {
-            replacement = try SemanticPromptContract.validatePlainTextResponse(
+            validated = try SemanticPromptContract.validatePlainTextResponse(
                 content,
-                operationID: contractOperationID,
+                rendering: rendering,
                 source: source
             )
         } catch {
             throw KeyboardActionOperationResultError.invalidResponse
         }
+
+        let operation = rendering.wireOperationID ?? rendering.operationID
+        let resultType: String
+        let summary: String?
+        let correctedText: String?
+        switch rendering.plainTextValidationPolicy?.mode {
+        case "summary":
+            resultType = "summary"
+            summary = validated
+            correctedText = nil
+        case "translation":
+            resultType = "translation"
+            summary = nil
+            correctedText = validated
+        case "continuation":
+            resultType = "suggestion"
+            summary = nil
+            correctedText = validated
+        case "complete_replacement":
+            resultType = "suggestion"
+            summary = nil
+            correctedText = validated
+        default:
+            throw KeyboardActionOperationResultError.invalidResponse
+        }
+
         return KeyboardActionOperationResult(
-            operation: wireOperation,
+            operation: operation,
             items: [
                 Item(
                     id: "plain-text-result",
-                    type: "suggestion",
+                    type: resultType,
                     title: title,
-                    text: replacement,
+                    text: validated,
                     original: source,
-                    replacement: replacement
+                    replacement: validated
                 )
             ],
-            correctedText: replacement
+            summary: summary,
+            correctedText: correctedText
         )
-    }
-
-    static func parse(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
-        let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard normalizedOperation != "fix_grammar", normalizedOperation != "rewrite" else {
-            throw KeyboardActionOperationResultError.invalidResponse
-        }
-        let stripped = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !stripped.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
-        if let structuredContent = try normalizedStructuredContent(from: stripped) {
-            return try parseStructuredContent(structuredContent, operation: operation, fallbackText: fallbackText)
-        }
-        guard !isJSONLike(stripped) else { throw KeyboardActionOperationResultError.invalidResponse }
-        let legacy = stripped
-        guard !legacy.isEmpty, legacy != fallbackText.trimmingCharacters(in: .whitespacesAndNewlines) else { throw KeyboardActionOperationResultError.invalidResponse }
-        return KeyboardActionOperationResult(
-            operation: operation,
-            items: [Item(id: "legacy-1", type: "correction", title: defaultTitle(for: "correction", operation: operation), text: legacy, original: fallbackText, replacement: legacy, category: "grammar")],
-            summary: nil,
-            correctedText: legacy
-        )
-    }
-
-    private static func parseStructuredContent(_ content: String, operation: String, fallbackText: String) throws -> KeyboardActionOperationResult {
-        guard let data = content.data(using: .utf8), let decoded = try? JSONDecoder().decode(Raw.self, from: data) else {
-            throw KeyboardActionOperationResultError.invalidResponse
-        }
-        let items = decoded.decodedItems.enumerated().compactMap { index, raw -> Item? in
-            let text = clean(raw.text ?? raw.replacement ?? raw.explanation ?? raw.title)
-            guard let text, !text.isEmpty, !isNestedJSONLike(text) else { return nil }
-            return Item(
-                id: clean(raw.id) ?? "item-\(index + 1)",
-                type: clean(raw.type) ?? "suggestion",
-                title: clean(raw.title) ?? defaultTitle(for: raw.type, operation: decoded.operation ?? operation),
-                text: text,
-                original: clean(raw.original),
-                replacement: clean(raw.replacement).flatMap { isNestedJSONLike($0) ? nil : $0 },
-                range: raw.range,
-                confidence: raw.confidence,
-                explanation: clean(raw.explanation),
-                category: clean(raw.category)
-            )
-        }
-        let correctedText = clean(decoded.correctedText).flatMap { isNestedJSONLike($0) ? nil : $0 }
-        let summary = clean(decoded.summary).flatMap { isNestedJSONLike($0) ? nil : $0 }
-        let topLevelDisplayText = clean(decoded.topLevelDisplayText).flatMap { isNestedJSONLike($0) ? nil : $0 }
-        if items.isEmpty, correctedText == nil, summary == nil, topLevelDisplayText == nil { throw KeyboardActionOperationResultError.invalidResponse }
-
-        var canonicalItems = items
-        if canonicalItems.isEmpty, let topLevelDisplayText {
-            canonicalItems = [Item(
-                id: "result-1",
-                type: operation == "summarize" ? "summary" : "suggestion",
-                title: defaultTitle(for: operation == "summarize" ? "summary" : "suggestion", operation: operation),
-                text: topLevelDisplayText,
-                replacement: topLevelDisplayText
-            )]
-        }
-
-        let finalCorrectedText = correctedText ?? topLevelDisplayText
-        return KeyboardActionOperationResult(operation: clean(decoded.operation) ?? operation, items: canonicalItems, summary: summary, correctedText: finalCorrectedText, isStructuredResponse: true)
-    }
-
-    private static func normalizedStructuredContent(from stripped: String, depth: Int = 0) throws -> String? {
-        guard depth < 4 else { return nil }
-        guard let data = stripped.data(using: .utf8) else { return nil }
-        if let wrapped = try? JSONDecoder().decode(ChatCompletionWrapper.self, from: data),
-           let content = wrapped.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !content.isEmpty {
-            let nested = stripMarkdownFence(content).trimmingCharacters(in: .whitespacesAndNewlines)
-            return try normalizedStructuredContent(from: nested, depth: depth + 1)
-        }
-        if isJSONObjectLike(stripped) { return stripped }
-        if let jsonString = try? JSONDecoder().decode(String.self, from: data) {
-            let nested = stripMarkdownFence(jsonString).trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !nested.isEmpty else { throw KeyboardActionOperationResultError.invalidResponse }
-            if isJSONObjectLike(nested) { return nested }
-            if isJSONLike(nested) { throw KeyboardActionOperationResultError.invalidResponse }
-            return try normalizedStructuredContent(from: nested, depth: depth + 1)
-        }
-        return nil
-    }
-
-    private static func clean(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private static func isNestedJSONLike(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isJSONLike(trimmed) else { return false }
-        return (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil
-    }
-
-    private static func isJSONObjectLike(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("{") && trimmed.hasSuffix("}")
-    }
-
-    private static func isJSONLike(_ value: String) -> Bool {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.hasPrefix("{") || trimmed.hasPrefix("[")
-    }
-
-    private static func defaultTitle(for type: String?, operation: String) -> String {
-        if operation == "fix_grammar" { return "Grammar correction" }
-        if operation == "summarize" || type == "summary" { return "Summary" }
-        if operation == "rewrite" { return "Rewrite" }
-        if operation == "improve" { return "Improve" }
-        return "Writing result"
-    }
-
-    private static func stripMarkdownFence(_ value: String) -> String {
-        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.hasPrefix("```") else { return value }
-        trimmed = trimmed.replacingOccurrences(of: "```json", with: "")
-        trimmed = trimmed.replacingOccurrences(of: "```JSON", with: "")
-        trimmed = trimmed.replacingOccurrences(of: "```", with: "")
-        return trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     struct Item: Equatable {
@@ -2015,10 +1918,6 @@ struct KeyboardActionOperationResult: Equatable {
             self.category = category
         }
 
-        var isWarning: Bool {
-            type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "warning"
-        }
-
         var correctionSuggestion: KeyboardCorrectionSuggestion? {
             guard type.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "correction" else { return nil }
             let cleanOriginal = original?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -2040,101 +1939,6 @@ struct KeyboardActionOperationResult: Equatable {
         }
     }
 
-    private struct ChatCompletionWrapper: Decodable {
-        let choices: [Choice]
-
-        struct Choice: Decodable {
-            let message: Message
-        }
-
-        struct Message: Decodable {
-            let content: String?
-        }
-    }
-
-    private struct Raw: Decodable {
-        let operation: String?
-        let results: [RawItem]?
-        let rawItems: [RawItem]?
-        let rawResult: RawItem?
-        let summary: String?
-        let correctedText: String?
-        let topLevelDisplayText: String?
-
-        enum CodingKeys: String, CodingKey {
-            case operation
-            case results
-            case rawItems = "items"
-            case rawResult = "result"
-            case summary
-            case correctedText = "corrected_text"
-            case correctedTextCamel = "correctedText"
-            case rewrittenText = "rewritten_text"
-            case rewrittenTextCamel = "rewrittenText"
-            case improvedText = "improved_text"
-            case improvedTextCamel = "improvedText"
-            case replacement
-            case text
-            case output
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            operation = try? container.decode(String.self, forKey: .operation)
-            results = try? container.decode([RawItem].self, forKey: .results)
-            rawItems = try? container.decode([RawItem].self, forKey: .rawItems)
-            rawResult = try? container.decode(RawItem.self, forKey: .rawResult)
-            summary = try? container.decode(String.self, forKey: .summary)
-            correctedText = Self.firstString(in: container, keys: [.correctedText, .correctedTextCamel])
-            topLevelDisplayText = Self.firstString(in: container, keys: [.rawResult, .rewrittenText, .rewrittenTextCamel, .improvedText, .improvedTextCamel, .replacement, .text, .output])
-        }
-
-        var decodedItems: [RawItem] { results ?? rawItems ?? rawResult.map { [$0] } ?? [] }
-
-        private static func firstString(in container: KeyedDecodingContainer<CodingKeys>, keys: [CodingKeys]) -> String? {
-            for key in keys {
-                if let value = try? container.decodeIfPresent(String.self, forKey: key) { return value }
-            }
-            return nil
-        }
-    }
-
-    private struct RawItem: Decodable {
-        let id: String?
-        let type: String?
-        let title: String?
-        let text: String?
-        let original: String?
-        let replacement: String?
-        let range: KeyboardTextRange?
-        let confidence: Double?
-        let explanation: String?
-        let category: String?
-
-        enum CodingKeys: String, CodingKey {
-            case id, type, title, text, original, replacement, range, confidence, explanation, category
-        }
-
-        init(from decoder: Decoder) throws {
-            let container = try decoder.container(keyedBy: CodingKeys.self)
-            id = try? container.decode(String.self, forKey: .id)
-            type = try? container.decode(String.self, forKey: .type)
-            title = try? container.decode(String.self, forKey: .title)
-            text = try? container.decode(String.self, forKey: .text)
-            original = try? container.decode(String.self, forKey: .original)
-            replacement = try? container.decode(String.self, forKey: .replacement)
-            range = try? container.decode(KeyboardTextRange.self, forKey: .range)
-            confidence = Self.decodeConfidence(from: container)
-            explanation = try? container.decode(String.self, forKey: .explanation)
-            category = try? container.decode(String.self, forKey: .category)
-        }
-
-        private static func decodeConfidence(from container: KeyedDecodingContainer<CodingKeys>) -> Double? {
-            if let value = try? container.decode(Double.self, forKey: .confidence) { return value }
-            guard let value = try? container.decode(String.self, forKey: .confidence) else { return nil }
-            return Double(value)
-        }
-    }
 }
 
 enum KeyboardActionProductOutcome: Equatable {
@@ -2148,7 +1952,6 @@ enum KeyboardActionProductOutcome: Equatable {
 enum KeyboardActionResultHandler {
     static func outcome(operation: String, result: KeyboardActionOperationResult, sourceText: String = "") -> KeyboardActionProductOutcome {
         let normalizedOperation = operation.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !result.containsWarningItem else { return .noUsableResult }
         if normalizedOperation == "fix_grammar" {
             guard let correctedText = result.correctedText else {
                 return result.isNoChangeResult ? .noChanges : .noUsableResult
@@ -2177,8 +1980,10 @@ enum KeyboardActionResultHandler {
             ])
         }
 
-        let displayText = result.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !displayText.isEmpty else { return .noUsableResult }
+        let displayText = result.displayText
+        guard !displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .noUsableResult
+        }
         guard KeyboardReplacementTextSafety.isSafeReplacementText(displayText) else { return .noUsableResult }
         return .replaceText(displayText)
     }
@@ -2220,11 +2025,9 @@ enum KeyboardSuggestionParser {
         do {
             let decoded = try JSONDecoder().decode(RawResponse.self, from: data)
             let corrections = decoded.corrections.prefix(maxItems).compactMap(cleanCorrection)
-            let remainingSlots = max(maxItems - corrections.count, 0)
-            let canonicalCorrections = decoded.canonicalCorrectionItems.prefix(remainingSlots).compactMap(cleanOperationItemCorrection)
             return KeyboardSuggestionResponse(
-                corrections: corrections + canonicalCorrections,
-                predictions: decoded.usesStructuredOperationContract ? [] : decoded.predictions.prefix(maxItems).compactMap(cleanPrediction),
+                corrections: corrections,
+                predictions: decoded.predictions.prefix(maxItems).compactMap(cleanPrediction),
                 correctedText: decoded.correctedText
             )
         } catch {
@@ -2260,24 +2063,6 @@ enum KeyboardSuggestionParser {
         return KeyboardPredictionSuggestion(label: clean(raw.label, fallback: "Suggestion"), text: text, kind: raw.kind?.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
-    private static func cleanOperationItemCorrection(_ raw: RawOperationItem) -> KeyboardCorrectionSuggestion? {
-        let type = raw.type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        guard type == "correction" else { return nil }
-        let original = (raw.original ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let replacement = capped(raw.replacement ?? "")
-        guard !original.isEmpty, !replacement.isEmpty else { return nil }
-        let id = raw.id?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let label = clean(raw.title ?? raw.text, fallback: "Correct grammar")
-        return KeyboardCorrectionSuggestion(
-            id: id?.isEmpty == false ? id! : UUID().uuidString,
-            label: label,
-            original: original,
-            replacement: replacement,
-            explanation: raw.explanation?.trimmingCharacters(in: .whitespacesAndNewlines),
-            category: type
-        )
-    }
-
     private static func clean(_ value: String?, fallback: String) -> String {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         return trimmed.isEmpty ? fallback : capped(trimmed)
@@ -2291,15 +2076,11 @@ enum KeyboardSuggestionParser {
         let correctedText: String?
         let corrections: [RawCorrection]
         let predictions: [RawPrediction]
-        let results: [RawOperationItem]
-        let rawItems: [RawOperationItem]
 
         enum CodingKeys: String, CodingKey {
             case correctedText = "corrected_text"
             case corrections
             case predictions
-            case results
-            case rawItems = "items"
         }
 
         init(from decoder: Decoder) throws {
@@ -2307,12 +2088,7 @@ enum KeyboardSuggestionParser {
             correctedText = try? container.decode(String.self, forKey: .correctedText)
             corrections = (try? container.decode([RawCorrection].self, forKey: .corrections)) ?? []
             predictions = (try? container.decode([RawPrediction].self, forKey: .predictions)) ?? []
-            results = (try? container.decode([RawOperationItem].self, forKey: .results)) ?? []
-            rawItems = (try? container.decode([RawOperationItem].self, forKey: .rawItems)) ?? []
         }
-
-        var canonicalCorrectionItems: [RawOperationItem] { results.isEmpty ? rawItems : results }
-        var usesStructuredOperationContract: Bool { !results.isEmpty || !rawItems.isEmpty || correctedText != nil }
     }
 
     private struct RawCorrection: Decodable {
@@ -2330,13 +2106,4 @@ enum KeyboardSuggestionParser {
         let kind: String?
     }
 
-    private struct RawOperationItem: Decodable {
-        let id: String?
-        let type: String?
-        let title: String?
-        let text: String?
-        let original: String?
-        let replacement: String?
-        let explanation: String?
-    }
 }

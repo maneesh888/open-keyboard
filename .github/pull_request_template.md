@@ -94,6 +94,8 @@
 - Exact live-tested models: not required
 - Live-model substitutions: not required
 - Live plain-text grammar verification: not required
+- Live summarize outcomes: not required
+- Live continue-writing outcomes: not required
 - Live baseline outcomes: not required
 - Live differential outcomes: not required
 - Live follow-up outcomes: not required

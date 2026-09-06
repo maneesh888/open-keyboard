@@ -43,19 +43,10 @@ public enum WritingAction: Equatable, Sendable {
         }
     }
 
-    public var requiresStructuredJSON: Bool {
-        switch self {
-        case .fixGrammar, .rewrite, .custom:
-            return false
-        default:
-            return true
-        }
-    }
 }
 
 public enum WritingPromptBuilder {
     public static let contractVersion = SemanticPromptContract.version
-    public static let structuredSystemPrompt = SemanticPromptContract.writingSystemInstruction
 
     public static func prompt(for action: WritingAction, text: String) -> String {
         if case .custom(_, _, let promptTemplate) = action {

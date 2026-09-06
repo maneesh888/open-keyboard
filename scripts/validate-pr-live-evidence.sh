@@ -34,6 +34,10 @@ live_model_substitutions=""
 live_model_substitutions_count=0
 plain_text_grammar_verification=""
 plain_text_grammar_verification_count=0
+live_summarize_outcomes=""
+live_summarize_outcomes_count=0
+live_continue_writing_outcomes=""
+live_continue_writing_outcomes_count=0
 live_baseline_outcomes=""
 live_baseline_outcomes_count=0
 live_differential_outcomes=""
@@ -76,6 +80,14 @@ while IFS= read -r body_line; do
     '- Live plain-text grammar verification: '*)
       plain_text_grammar_verification="${body_line#- Live plain-text grammar verification: }"
       ((plain_text_grammar_verification_count += 1))
+      ;;
+    '- Live summarize outcomes: '*)
+      live_summarize_outcomes="${body_line#- Live summarize outcomes: }"
+      ((live_summarize_outcomes_count += 1))
+      ;;
+    '- Live continue-writing outcomes: '*)
+      live_continue_writing_outcomes="${body_line#- Live continue-writing outcomes: }"
+      ((live_continue_writing_outcomes_count += 1))
       ;;
     '- Live baseline outcomes: '*)
       live_baseline_outcomes="${body_line#- Live baseline outcomes: }"
@@ -143,6 +155,10 @@ if [[ "$plain_text_grammar_verification_count" -ne 1 || "$plain_text_grammar_ver
   echo "The pull request must record exactly one verified live plain-text grammar field." >&2
   exit 1
 fi
+if [[ "$live_summarize_outcomes_count" -ne 1 || "$live_continue_writing_outcomes_count" -ne 1 ]]; then
+  echo "The pull request must record exactly one Summarize and one Continue Writing live-outcome field." >&2
+  exit 1
+fi
 if [[ "$required_live_models" != "model-agnostic" && "$required_live_models" != "$exact_live_tested_models" ]]; then
   echo "Exact live-tested models do not match the required model coverage." >&2
   exit 1
@@ -171,6 +187,14 @@ if [[ "$live_verification_target" == "gateway-differential" ]]; then
     echo "Differential evidence must verify the baseline on both profiles." >&2
     exit 1
   fi
+  if [[ "$live_summarize_outcomes" != "low=passed, high=passed" ]]; then
+    echo "Differential evidence must verify Summarize on both profiles." >&2
+    exit 1
+  fi
+  if [[ "$live_continue_writing_outcomes" != "low=passed, high=passed" ]]; then
+    echo "Differential evidence must verify Continue Writing on both profiles." >&2
+    exit 1
+  fi
   if [[ "$live_differential_outcomes_count" -ne 1 || "$live_differential_outcomes" != "low=expected-model-capability, high=passed" ]]; then
     echo "Differential evidence must retain the expected low boundary and high success." >&2
     exit 1
@@ -194,7 +218,9 @@ else
     echo "Ordinary gateway evidence contains an unsafe tested model ID." >&2
     exit 1
   fi
-  if [[ "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "not required" || \
+  if [[ "$live_summarize_outcomes" != "not required" || \
+        "$live_continue_writing_outcomes" != "not required" || \
+        "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "not required" || \
         "$live_differential_outcomes_count" -ne 1 || "$live_differential_outcomes" != "not required" || \
         "$live_follow_up_outcomes_count" -ne 1 || "$live_follow_up_outcomes" != "not required" || \
         "$live_operation_scoped_warning_contracts_count" -ne 1 || "$live_operation_scoped_warning_contracts" != "not required" || \

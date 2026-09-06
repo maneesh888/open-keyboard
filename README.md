@@ -129,16 +129,18 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 The pinned semantic prompt package owns the operation-specific instructions, response contract
 metadata, and deterministic message rendering. Open Keyboard owns request transport, local grammar
 diffing, response parsing, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
-style, and Improve return one complete validated plain-text replacement with no structured response
-format; the client derives grammar edits and writing-action comparison highlights locally.
-Summarize, Translate, and Continue Writing retain their package-owned structured contracts. The gateway is
-the trust boundary for model access, API keys, rate limits, logs, and upstream model routing; it
-does not inject Open Keyboard prompts or rebuild the message conversation.
+style, Improve, Summarize, Translate, and Continue Writing return operation-specific validated
+plain text with no structured response format. The client derives grammar edits and writing-action
+result objects locally, retains target-language validation and retry behavior for Translate, and
+preserves continuation boundary whitespace exactly. The separate keyboard-suggestions contract
+remains prompt-owned JSON. The gateway is the trust boundary for model access, API keys, rate
+limits, logs, and upstream model routing; it does not inject Open Keyboard prompts or rebuild the
+message conversation.
 
 ### Shared semantic prompt contract
 
 Canonical writing-action and bounded-suggestion semantics live in the pinned
-`Vendor/semantic-prompt-contract` Git submodule at contract version `4.1.0`. This path is a checkout
+`Vendor/semantic-prompt-contract` Git submodule at contract version `5.0.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
 and UI tests compile the same generated Swift adapter. UI, request transport, gateway
