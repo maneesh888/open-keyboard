@@ -2,7 +2,7 @@ import XCTest
 
 private let validFastGrammarDiagnosticResponse = "The gateway connection is ready."
 private let validRewriteDiagnosticResponse = "Hi team, the app has issues that we need to fix soon, so please check it."
-private let validDutchDiagnosticResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"De gatewayverbinding is klaar voor schrijfacties.","replacement":"De gatewayverbinding is klaar voor schrijfacties."}],"corrected_text":"De gatewayverbinding is klaar voor schrijfacties."}"#
+private let validDutchDiagnosticResponse = "De gatewayverbinding is klaar voor schrijfacties."
 
 final class GatewayClientArchitectureTests: XCTestCase {
     func testLiveImproveHarnessUsesCanonicalImprovePlainTextPath() throws {
@@ -17,14 +17,14 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
         XCTAssertTrue(source.contains(#"run(action: "improve")"#))
         XCTAssertFalse(source.contains(#"run(action: "rewrite")"#))
-        XCTAssertTrue(source.contains(#"else if action == "improve""#))
-        XCTAssertTrue(source.contains("KeyboardActionOperationResult.plainTextReplacement"))
-        XCTAssertTrue(source.contains("contractOperationID: action"))
-        XCTAssertTrue(source.contains("wireOperation: rendering.wireOperationID ?? action"))
+        XCTAssertTrue(source.contains("KeyboardActionOperationResult.plainTextResponse"))
+        XCTAssertTrue(source.contains("rendering: rendering"))
+        XCTAssertTrue(source.contains("ChatResponseFormat(semanticType: rendering.responseFormatType)"))
+        XCTAssertFalse(source.contains("KeyboardActionOperationResult.parse"))
     }
 
     func testSharedContractVersionAndRewriteStylesArePinned() throws {
-        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "4.1.0")
+        XCTAssertEqual(KeyboardGatewayActionContract.contractVersion, "5.0.0")
         let renderings = try KeyboardRewriteStyle.allCases.map { style in
             try XCTUnwrap(KeyboardAIAction.rewriteStyle(style).rendering(for: "Source text"))
         }
@@ -47,10 +47,6 @@ final class GatewayClientArchitectureTests: XCTestCase {
             ("continue_writing", "Once upon a time", [:]),
         ]
 
-        XCTAssertEqual(
-            KeyboardGatewayActionContract.structuredSystemPrompt,
-            SemanticPromptContract.writingSystemInstruction
-        )
         for scenario in scenarios {
             let translationLanguage = scenario.parameters["target_language"]
             let rendering = KeyboardGatewayActionContract.rendering(
@@ -101,7 +97,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
             maxTokens: 256,
             config: config,
             temperature: nil,
-            expectsStructuredResponse: false
+            responseFormat: nil
         )
 
         XCTAssertEqual(content, "  I have an apple; this does not sound good.  ")
@@ -120,6 +116,23 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(json["stream"] as? Bool, false)
         XCTAssertNil(json["response_format"])
         XCTAssertNil(json["temperature"])
+    }
+
+    func testCanonicalGatewayOperationDoesNotInferStructuredResponseFormat() throws {
+        let request = try CanonicalGatewayClient().chatCompletionRequest(
+            systemPrompt: "Return one plain-text summary.",
+            userPrompt: #"{"source_text":"A short source.","operation_parameters":{}}"#,
+            operation: "summarize",
+            inputText: "A short source.",
+            maxTokens: 128,
+            config: configuredGateway,
+            responseFormat: nil
+        )
+
+        let body = try XCTUnwrap(request.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual(json["operation"] as? String, "summarize")
+        XCTAssertNil(json["response_format"])
     }
 
     func testCanonicalGatewayClientMapsStructuredUnavailableModelErrors() async throws {
@@ -141,7 +154,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
                     maxTokens: 256,
                     config: configuredGateway,
                     temperature: nil,
-                    expectsStructuredResponse: false
+                    responseFormat: nil
                 )
                 XCTFail("Expected unavailable-model response to retain its typed category")
             } catch let error as CanonicalGatewayClientError {
@@ -162,7 +175,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 maxTokens: 256,
                 config: configuredGateway,
                 temperature: nil,
-                expectsStructuredResponse: false
+                responseFormat: nil
             )
             XCTFail("Expected generic HTTP failure")
         } catch let error as CanonicalGatewayClientError {
@@ -279,7 +292,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
     }
 
     func testKeyboardAIServiceBuildsTypedTranslationRequest() async throws {
-        let assistantContent = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Goedemorgen","replacement":"Goedemorgen"}],"corrected_text":"Goedemorgen"}"#
+        let assistantContent = "Goedemorgen"
         let responseBody = try JSONSerialization.data(withJSONObject: [
             "choices": [["message": ["role": "assistant", "content": assistantContent]]]
         ])
@@ -302,13 +315,14 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
         XCTAssertEqual(result.operation, "translate")
         XCTAssertEqual(result.displayText, "Goedemorgen")
+        XCTAssertEqual(result.items.map(\.type), ["translation"])
         let request = try XCTUnwrap(transport.requests.first)
         let body = try XCTUnwrap(request.httpBody)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual(json["operation"] as? String, "translate")
         XCTAssertEqual(json["input_text"] as? String, "Good morning")
         XCTAssertEqual(json["max_tokens"] as? Int, KeyboardGatewayActionContract.maxTokens(operation: "translate"))
-        XCTAssertEqual((json["response_format"] as? [String: String])?["type"], "json_object")
+        XCTAssertNil(json["response_format"])
         let messages = try XCTUnwrap(json["messages"] as? [[String: Any]])
         let rendering = KeyboardGatewayActionContract.rendering(
             operation: "translate",
@@ -411,8 +425,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
     func testKeyboardAIServiceRetriesInvalidTranslationOnceThenAcceptsValidOutput() async throws {
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
-            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#,
-            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع.","replacement":"صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع."}]}"#
+            "Good morning, I hope you are well and enjoying a wonderful day.",
+            "صباح الخير، أتمنى أن تكون بخير وأن تستمتع بيوم رائع."
         ])
         let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
 
@@ -427,7 +441,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
     }
 
     func testKeyboardAIServiceRetriesInvalidTranslationOnceThenReturnsTargetedFailure() async throws {
-        let wrongLanguage = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Good morning, I hope you are well and enjoying a wonderful day.","replacement":"Good morning, I hope you are well and enjoying a wonderful day."}]}"#
+        let wrongLanguage = "Good morning, I hope you are well and enjoying a wonderful day."
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [wrongLanguage, wrongLanguage])
         let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
 
@@ -471,7 +485,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(transport.requests.count, 2)
     }
 
-    func testKeyboardAIServiceRetriesStructuredTranslationWarningThenReturnsTargetedWarning() async throws {
+    func testKeyboardAIServiceRetriesLegacyJSONTranslationEnvelopeThenReturnsTargetedWarning() async throws {
         let warning = #"{"operation":"translate","results":[{"id":"translation-warning","type":"warning","title":"Translation warning","text":"No","replacement":"No"}]}"#
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [warning, warning])
         let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
@@ -482,7 +496,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 on: "Nee",
                 config: configuredGateway
             )
-            XCTFail("Expected a structured warning to remain a translation-scoped warning")
+            XCTFail("Expected the legacy JSON envelope to produce a translation-scoped warning")
         } catch let error as KeyboardAIError {
             XCTAssertEqual(error, .unreliableTranslation(.englishAmerican))
             XCTAssertEqual(error.actionErrorKind, .translationCapability)
@@ -512,8 +526,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
     func testKeyboardAIServiceRetriesShortWrongScriptTranslationThenAcceptsValidOutput() async throws {
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [
-            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"Yes","replacement":"Yes"}]}"#,
-            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Arabic translation","text":"نعم","replacement":"نعم"}]}"#
+            "Yes",
+            "نعم"
         ])
         let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
 
@@ -528,7 +542,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
     }
 
     func testKeyboardAIServiceRetriesShortSameScriptTranslationOnceThenReturnsTargetedFailure() async throws {
-        let wrongLanguage = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Bonjour","replacement":"Bonjour"}]}"#
+        let wrongLanguage = "Bonjour"
         let transport = SequencedCanonicalGatewayClientTestTransport(contents: [wrongLanguage, wrongLanguage])
         let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
 
@@ -637,11 +651,15 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.timeoutInterval, 0.02)
     }
 
-    func testKeyboardAIServiceClassifiesMalformedStructuredJSONAsModelCapabilityFailure() async throws {
-        try await assertModelCapabilityFailure(content: #"{"#, action: .fixGrammar, sourceText: "i has a apple")
+    func testKeyboardAIServiceRejectsLegacyJSONWritingEnvelopeAsModelCapabilityFailure() async throws {
+        try await assertModelCapabilityFailure(
+            content: #"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#,
+            action: .fixGrammar,
+            sourceText: "i has a apple"
+        )
     }
 
-    func testKeyboardAIServiceClassifiesEmptyPlainTextRewriteOutputAsModelCapabilityFailure() async throws {
+    func testKeyboardAIServiceRejectsLegacyJSONRewriteEnvelopeAsModelCapabilityFailure() async throws {
         try await assertModelCapabilityFailure(
             content: #"{"operation":"rewrite","results":[]}"#,
             action: .rewrite,
@@ -662,7 +680,6 @@ final class GatewayClientArchitectureTests: XCTestCase {
             .performResult(action: .fixGrammar, on: "The app works well.", config: configuredGateway)
 
         XCTAssertTrue(result.isNoChangeResult)
-        XCTAssertFalse(result.isStructuredResponse)
         XCTAssertEqual(
             KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: "The app works well."),
             .noChanges
@@ -913,7 +930,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         }
         XCTAssertEqual(completionBodies.compactMap { $0["operation"] as? String }, ["fix_grammar", "rewrite", "translate"])
         XCTAssertNil(completionBodies[1]["response_format"])
-        XCTAssertTrue(completionBodies[2]["response_format"] is [String: Any])
+        XCTAssertNil(completionBodies[2]["response_format"])
     }
 
     func testGatewayDiagnosticsDoesNotSubstituteForUnavailablePreferredModel() async throws {
@@ -1100,7 +1117,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     }
 
     func testGatewayDiagnosticsRejectsSchemaValidNonDutchTranslation() async throws {
-        let frenchResponse = #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch","text":"La connexion de la passerelle est prête pour les actions d'écriture.","replacement":"La connexion de la passerelle est prête pour les actions d'écriture."}],"corrected_text":"La connexion de la passerelle est prête pour les actions d'écriture."}"#
+        let frenchResponse = "La connexion de la passerelle est prête pour les actions d'écriture."
         let transport = NetworkManagerTestTransport([
             .models(["gpt-oss:120b-cloud"]),
             .chat(content: validFastGrammarDiagnosticResponse),
@@ -1343,9 +1360,56 @@ final class LiveModelDifferentialTests: XCTestCase {
         }
         let baselineLatency = Date().timeIntervalSince(baselineStartedAt)
         XCTAssertEqual(baseline.operation, "fix_grammar")
-        XCTAssertFalse(baseline.isStructuredResponse)
         XCTAssertFalse(baseline.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
-        XCTAssertFalse(baseline.containsWarningItem)
+
+        let summary: KeyboardActionOperationResult
+        do {
+            summary = try await service.performResult(
+                action: .summarize,
+                on: Self.summaryFixture,
+                config: config
+            )
+        } catch let error as KeyboardAIError {
+            XCTFail("The summary contract failed with canonical classification \(error.actionErrorKind).")
+            return
+        }
+        XCTAssertEqual(summary.operation, "summarize")
+        XCTAssertEqual(summary.items.count, 1)
+        XCTAssertTrue(summary.displayText.localizedCaseInsensitiveContains("Friday"))
+        XCTAssertFalse(Self.looksLikeJSONContainer(summary.displayText))
+
+        let continuationRendering = KeyboardGatewayActionContract.rendering(
+            operation: "continue_writing",
+            text: Self.continuationFixture
+        )
+        let continuationOutput: String
+        do {
+            continuationOutput = try await CanonicalGatewayClient().chatCompletionContent(
+                systemPrompt: continuationRendering.messages[0].content,
+                userPrompt: continuationRendering.messages[1].content,
+                operation: continuationRendering.wireOperationID,
+                inputText: Self.continuationFixture,
+                maxTokens: continuationRendering.maxTokens,
+                config: config,
+                temperature: continuationRendering.temperature,
+                responseFormat: CanonicalGatewayResponseFormat(
+                    semanticType: continuationRendering.responseFormatType
+                ),
+                timeoutInterval: 90
+            )
+        } catch {
+            XCTFail("The continuation contract failed through the canonical gateway client: \(error).")
+            return
+        }
+        let continuation = try SemanticPromptContract.validatePlainTextResponse(
+            continuationOutput,
+            rendering: continuationRendering,
+            source: Self.continuationFixture
+        )
+        XCTAssertFalse(continuation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(continuation.contains(Self.continuationFixture))
+        XCTAssertFalse(Self.looksLikeJSONContainer(continuation))
+        print("LIVE_PLAIN_TEXT_WRITING role=\(role) summarize=passed continue_writing=passed")
 
         let boundaryStartedAt = Date()
         var lowBoundaryEstablished = true
@@ -1358,9 +1422,7 @@ final class LiveModelDifferentialTests: XCTestCase {
                     config: config
                 )
                 XCTAssertEqual(result.operation, "translate")
-                XCTAssertTrue(result.isStructuredResponse)
                 XCTAssertFalse(result.items.isEmpty)
-                XCTAssertFalse(result.containsWarningItem)
                 lowBoundaryEstablished = false
             } catch let error as KeyboardAIError {
                 XCTAssertEqual(error, .unreliableTranslation(.malayalam))
@@ -1382,9 +1444,7 @@ final class LiveModelDifferentialTests: XCTestCase {
                 return
             }
             XCTAssertEqual(result.operation, "translate")
-            XCTAssertTrue(result.isStructuredResponse)
             XCTAssertFalse(result.items.isEmpty)
-            XCTAssertFalse(result.containsWarningItem)
             assertUsableLongMalayalamTranslation(
                 result.displayText,
                 source: Self.longCapabilityFixture
@@ -1412,10 +1472,8 @@ final class LiveModelDifferentialTests: XCTestCase {
         }
         let followUpLatency = Date().timeIntervalSince(followUpStartedAt)
         XCTAssertEqual(followUp.operation, "translate")
-        XCTAssertTrue(followUp.isStructuredResponse)
         XCTAssertFalse(followUp.items.isEmpty)
         XCTAssertFalse(followUp.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
-        XCTAssertFalse(followUp.containsWarningItem)
         XCTAssertTrue(
             followUp.displayText.unicodeScalars.contains {
                 (0x0D00...0x0D7F).contains($0.value)
@@ -1436,6 +1494,8 @@ final class LiveModelDifferentialTests: XCTestCase {
     }
 
     private static let baselineFixture = "Our support team definately needs the corrected refund note."
+    private static let summaryFixture = "The release moved to Friday. The team will run every full check on Thursday."
+    private static let continuationFixture = "The rain stopped just as Maya opened the door, and"
     private static let followUpFixture = "Good morning, I hope you are well."
     private static let longCapabilityFixture = """
     Each morning the community garden opens before the streets become busy. Volunteers check the paths, water young plants, and place clean tools beside the storage shed. They leave simple notes about work that is finished and tasks that still need attention, so the next group can continue without repeating anything.
@@ -1495,6 +1555,12 @@ final class LiveModelDifferentialTests: XCTestCase {
             index = next
         }
         return String(bytes: bytes, encoding: .utf8)
+    }
+
+    private static func looksLikeJSONContainer(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (trimmed.hasPrefix("{") && trimmed.hasSuffix("}"))
+            || (trimmed.hasPrefix("[") && trimmed.hasSuffix("]"))
     }
 
     private func attachLiveGatewayDiagnosticEvidence(

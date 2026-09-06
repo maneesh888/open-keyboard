@@ -11,6 +11,22 @@ enum GatewayRequestTimeouts {
     static let modelCheckAttempt: TimeInterval = 20
 }
 
+struct CanonicalGatewayResponseFormat: Encodable, Equatable, Sendable {
+    let type: String
+
+    init?(semanticType: String?) {
+        guard let semanticType else { return nil }
+        let type = semanticType.trimmingCharacters(in: .whitespacesAndNewlines)
+        precondition(
+            type == "json_object",
+            "Unsupported semantic response format: \(type.isEmpty ? "<empty>" : type)"
+        )
+        self.type = type
+    }
+
+    static let jsonObject = CanonicalGatewayResponseFormat(semanticType: "json_object")!
+}
+
 enum CanonicalGatewayClientError: LocalizedError, Equatable {
     case invalidURL
     case notConfigured
@@ -56,7 +72,7 @@ struct CanonicalGatewayClient {
         maxTokens: Int,
         config: AppConfig,
         temperature: Double? = 0.1,
-        expectsStructuredResponse: Bool? = nil,
+        responseFormat: CanonicalGatewayResponseFormat? = nil,
         timeoutInterval: TimeInterval = 45
     ) async throws -> String {
         let request = try chatCompletionRequest(
@@ -67,7 +83,7 @@ struct CanonicalGatewayClient {
             maxTokens: maxTokens,
             config: config,
             temperature: temperature,
-            expectsStructuredResponse: expectsStructuredResponse,
+            responseFormat: responseFormat,
             timeoutInterval: timeoutInterval
         )
         let data: Data
@@ -180,18 +196,17 @@ struct CanonicalGatewayClient {
         maxTokens: Int,
         config: AppConfig,
         temperature: Double? = 0.1,
-        expectsStructuredResponse: Bool? = nil,
+        responseFormat: CanonicalGatewayResponseFormat? = nil,
         timeoutInterval: TimeInterval = 45
     ) throws -> URLRequest {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         let normalizedOperation = operation?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        let usesCanonicalPlainTextInput = expectsStructuredResponse == false
-            && ["fix_grammar", "rewrite"].contains(normalizedOperation)
-        let prompt = usesCanonicalPlainTextInput ? userPrompt : userPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard config.isConfigured, !apiKey.isEmpty else { throw CanonicalGatewayClientError.notConfigured }
         guard !model.isEmpty else { throw CanonicalGatewayClientError.modelUnavailable }
-        guard !prompt.isEmpty else { throw CanonicalGatewayClientError.missingInput }
+        guard !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CanonicalGatewayClientError.missingInput
+        }
         let url = try Self.endpointURL(gatewayURL: config.gatewayURL, path: "v1/chat/completions")
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -201,12 +216,12 @@ struct CanonicalGatewayClient {
         request.httpBody = try JSONEncoder().encode(CanonicalChatCompletionRequest(
             model: model,
             operation: normalizedOperation,
-            inputText: (usesCanonicalPlainTextInput ? inputText : inputText?.trimmingCharacters(in: .whitespacesAndNewlines))?.nilIfEmpty,
+            inputText: inputText?.nilIfEmpty,
             messages: [
                 CanonicalChatMessage(role: "system", content: systemPrompt),
-                CanonicalChatMessage(role: "user", content: prompt)
+                CanonicalChatMessage(role: "user", content: userPrompt)
             ],
-            responseFormat: (expectsStructuredResponse ?? (normalizedOperation != nil)) ? .jsonObject : nil,
+            responseFormat: responseFormat,
             maxTokens: maxTokens,
             temperature: temperature,
             stream: false
@@ -330,7 +345,7 @@ private struct CanonicalChatCompletionRequest: Encodable {
     let operation: String?
     let inputText: String?
     let messages: [CanonicalChatMessage]
-    let responseFormat: CanonicalChatResponseFormat?
+    let responseFormat: CanonicalGatewayResponseFormat?
     let maxTokens: Int
     let temperature: Double?
     let stream: Bool
@@ -342,12 +357,6 @@ private struct CanonicalChatCompletionRequest: Encodable {
         case responseFormat = "response_format"
         case maxTokens = "max_tokens"
     }
-}
-
-private struct CanonicalChatResponseFormat: Encodable {
-    let type: String
-
-    static let jsonObject = CanonicalChatResponseFormat(type: "json_object")
 }
 
 private struct CanonicalChatMessage: Codable {

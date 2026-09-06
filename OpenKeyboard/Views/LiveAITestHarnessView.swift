@@ -119,7 +119,7 @@ struct LiveAITestHarnessView: View {
             operation: rendering.wireOperationID ?? action,
             inputText: text,
             messages: rendering.messages.map { ChatMessage(role: $0.role, content: $0.content) },
-            responseFormat: rendering.responseFormatType == "json_object" ? .jsonObject : nil,
+            responseFormat: ChatResponseFormat(semanticType: rendering.responseFormatType),
             maxTokens: rendering.maxTokens,
             temperature: rendering.temperature,
             stream: false
@@ -146,19 +146,12 @@ struct LiveAITestHarnessView: View {
                 choice.message.content,
                 original: text
             )
-        } else if action == "improve" {
-            result = try KeyboardActionOperationResult.plainTextReplacement(
-                choice.message.content,
-                contractOperationID: action,
-                wireOperation: rendering.wireOperationID ?? action,
-                title: "Improve",
-                source: text
-            )
         } else {
-            result = try KeyboardActionOperationResult.parse(
+            result = try KeyboardActionOperationResult.plainTextResponse(
                 choice.message.content,
-                operation: action,
-                fallbackText: text
+                rendering: rendering,
+                title: action == "summarize" ? "Summarize" : "Improve",
+                source: text
             )
         }
         let output = result.displayText
@@ -227,7 +220,15 @@ private struct ChatRequest: Encodable {
 private struct ChatResponseFormat: Encodable {
     let type: String
 
-    static let jsonObject = ChatResponseFormat(type: "json_object")
+    init?(semanticType: String?) {
+        guard let semanticType else { return nil }
+        let type = semanticType.trimmingCharacters(in: .whitespacesAndNewlines)
+        precondition(
+            type == "json_object",
+            "Unsupported semantic response format: \(type.isEmpty ? "<empty>" : type)"
+        )
+        self.type = type
+    }
 }
 
 private struct ChatMessage: Codable {

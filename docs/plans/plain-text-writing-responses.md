@@ -2,8 +2,10 @@
 
 ## Status
 
-Planned. This document defines the work needed to stop requesting structured model responses for
-Summarize, Translate, and Continue Writing. It does not implement the migration.
+Implemented in `semantic-prompt-contract` 5.0.0 and adopted by OpenKeyboard. The legacy writing
+response schema remains packaged only as explicitly deprecated compatibility material and has no
+active manifest, prompt, preset, or generated-adapter reference. Publication remains subject to
+the exact-head live-model, normal Simulator runtime, review, and repository gates below.
 
 ## Objective
 
@@ -16,12 +18,12 @@ This is a response-contract change, not a requirement to make every user message
 contract may continue JSON-encoding source text and validated operation parameters inside the
 prompt when that provides a clear prompt-injection and parameter boundary.
 
-## Current state and reason for the change
+## Prior state and reason for the change
 
-The semantic contract's pack-level default is `json_object`. Grammar, Rewrite, and Improve override
-that default with `plain_text`; Summarize, Translate, and Continue Writing inherit it. The generated
-adapter exposes `responseFormatType: "json_object"`, and both gateway clients convert that metadata
-into `response_format: {"type":"json_object"}`.
+Before version 5.0.0, the semantic contract's pack-level default was `json_object`. Grammar,
+Rewrite, and Improve overrode that default with `plain_text`; Summarize, Translate, and Continue
+Writing inherited it. The generated adapter exposed `responseFormatType: "json_object"`, and both
+gateway clients converted that metadata into `response_format: {"type":"json_object"}`.
 
 The remaining structured envelope is not required by the product UI. These operations ultimately
 consume one summary, translation, or continuation string. JSON mode adds provider-compatibility,

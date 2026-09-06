@@ -99,6 +99,8 @@ openkeyboard_write_trusted_gateway_projection() {
       "- Exact live-tested models: $tested_high_model" \
       '- Live-model substitutions: none' \
       '- Live plain-text grammar verification: verified' \
+      '- Live summarize outcomes: not required' \
+      '- Live continue-writing outcomes: not required' \
       '- Live baseline outcomes: not required' \
       '- Live differential outcomes: not required' \
       '- Live follow-up outcomes: not required' \

@@ -48,6 +48,8 @@ cat > "$BODY_FILE" <<EOF
 - Exact live-tested models: low=low-test-model:2b, high=high-test-model:120b
 - Live-model substitutions: none
 - Live plain-text grammar verification: verified
+- Live summarize outcomes: low=passed, high=passed
+- Live continue-writing outcomes: low=passed, high=passed
 - Live baseline outcomes: low=passed, high=passed
 - Live differential outcomes: low=expected-model-capability, high=passed
 - Live follow-up outcomes: low=passed, high=passed

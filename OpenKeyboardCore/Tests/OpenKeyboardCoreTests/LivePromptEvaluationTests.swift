@@ -12,7 +12,6 @@ final class LivePromptEvaluationTests: XCTestCase {
         let latency = Date().timeIntervalSince(startedAt)
         print(String(format: "LIVE_GRAMMAR_REQUEST_LATENCY_SECONDS=%.3f", latency))
 
-        XCTAssertFalse(result.isStructuredResponse, "Grammar must use the plain-text response contract.")
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertTrue(result.items.isEmpty, "The model must not return patch metadata for grammar.")
         XCTAssertEqual(result.displayText, expected)
@@ -35,15 +34,11 @@ final class LivePromptEvaluationTests: XCTestCase {
             XCTAssertEqual(result.operation, expectedOperation)
             XCTAssertFalse(result.displayText.isEmpty, "\(expectedOperation) must contain usable result content.")
             if action == .fixGrammar {
-                XCTAssertFalse(result.isStructuredResponse)
                 XCTAssertTrue(result.items.isEmpty)
-            } else if action == .rewrite {
-                XCTAssertFalse(result.isStructuredResponse)
-                XCTAssertEqual(result.items.count, 1, "Rewrite must expose one validated plain-text replacement.")
-                XCTAssertEqual(result.items.first?.replacement, result.displayText)
             } else {
-                XCTAssertTrue(result.isStructuredResponse, "\(expectedOperation) must return parseable structured JSON.")
-                XCTAssertFalse(result.items.isEmpty, "\(expectedOperation) must return at least one structured result item.")
+                XCTAssertEqual(result.items.count, 1, "\(expectedOperation) must expose one validated plain-text result.")
+                XCTAssertFalse(Self.isJSONContainer(result.displayText), "\(expectedOperation) returned a JSON container.")
+                XCTAssertFalse(result.displayText.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```"))
             }
         }
     }
@@ -154,6 +149,14 @@ final class LivePromptEvaluationTests: XCTestCase {
         try config.validate()
         let client = GatewayClient(config: config, httpClient: URLSessionHTTPClient())
         return (client, model)
+    }
+
+    private static func isJSONContainer(_ value: String) -> Bool {
+        guard let data = value.trimmingCharacters(in: .whitespacesAndNewlines).data(using: .utf8),
+              let decoded = try? JSONSerialization.jsonObject(with: data) else {
+            return false
+        }
+        return decoded is [String: Any] || decoded is [Any]
     }
 }
 

@@ -1094,7 +1094,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
             Self.plainRewriteResult(),
-            Self.structuredTranslationResult()
+            Self.plainTranslationResult()
         ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -1236,71 +1236,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
     }
 
-    func testSafeTranslationWarningResultStaysWarningScopedAndDoesNotAffectRewrite() async {
-        let sourceText = "Goedemorgen, ik hoop dat het goed met je gaat."
-        let warningText = "No"
-        let proxy = FakeTextDocumentProxy(text: sourceText)
-        let service = SequencedKeyboardAIService(results: [
-            Self.plainRewriteResult(),
-            KeyboardActionOperationResult(
-                operation: "translate",
-                items: [
-                    KeyboardActionOperationResult.Item(
-                        id: "translation-warning",
-                        type: "warning",
-                        title: "Translation warning",
-                        text: warningText,
-                        replacement: warningText
-                    )
-                ],
-                isStructuredResponse: true
-            ),
-            Self.plainRewriteResult()
-        ])
-        let viewModel = KeyboardViewModel(
-            textDocumentProxy: proxy,
-            aiService: service,
-            loadConfig: { Self.configuredGateway },
-            productionTestFullAccess: true
-        )
-
-        viewModel.showActionPanel()
-        await waitUntil { service.requestedActions == [.improve] && !viewModel.isPerformingAIAction }
-        viewModel.selectActionPanelAction(.translate(nil))
-        viewModel.selectActionPanelTranslationTarget(.englishAmerican)
-        await waitUntil {
-            viewModel.actionPanelState?.warningMessage != nil
-                && !viewModel.isPerformingAIAction
-        }
-
-        XCTAssertEqual(viewModel.panelMode, .actions)
-        XCTAssertEqual(
-            viewModel.actionPanelState?.warningMessage,
-            "This model may not reliably translate to English (American). Try again or choose another model."
-        )
-        XCTAssertNil(viewModel.actionError)
-        XCTAssertEqual(proxy.text, sourceText)
-
-        viewModel.selectActionPanelAction(.rewrite)
-        await waitUntil {
-            service.requestedActions.count == 3
-                && viewModel.actionPanelState?.selectedOption != nil
-                && !viewModel.isPerformingAIAction
-        }
-
-        XCTAssertEqual(service.requestedActions.last, .rewrite)
-        XCTAssertEqual(viewModel.actionPanelState?.selectedAction, .rewrite)
-        XCTAssertNil(viewModel.actionPanelState?.warningMessage)
-        XCTAssertNil(viewModel.actionError)
-        XCTAssertEqual(proxy.text, sourceText)
-    }
-
     func testTranslationTargetSelectionDoesNotReuseCapturedTextAfterHostClears() async {
         let sourceText = "Good morning, I hope you are well."
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
             Self.plainRewriteResult(),
-            Self.structuredTranslationResult()
+            Self.plainTranslationResult()
         ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -1383,8 +1324,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         let proxy = FakeTextDocumentProxy(text: sourceText)
         let service = SequencedKeyboardAIService(results: [
             Self.plainRewriteResult(),
-            Self.structuredTranslationResult(),
-            Self.structuredTranslationResult()
+            Self.plainTranslationResult(),
+            Self.plainTranslationResult()
         ])
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -2267,7 +2208,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, sourceText)
     }
 
-    func testInvalidStructuredResponseCopyIsSpecificAndSanitized() async {
+    func testInvalidGatewayResponseCopyIsSpecificAndSanitized() async {
         let proxy = FakeTextDocumentProxy(text: "i has a apple,ths is nt sound sound")
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
@@ -2293,12 +2234,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(UIPasteboard.general.string, "AI unavailable: Gateway returned an invalid response.")
     }
 
-    func testErrorTextOperationResultShowsErrorAndNeverReplacesDocumentText() async {
+    func testUnsafePlainTextOperationResultShowsErrorAndNeverReplacesDocumentText() async {
         let original = "Keep my original words."
         let proxy = FakeTextDocumentProxy(text: original)
         let viewModel = KeyboardViewModel(
             textDocumentProxy: proxy,
-            aiService: ErrorTextResultKeyboardAIService(),
+            aiService: UnsafePlainTextResultKeyboardAIService(),
             loadConfig: { Self.configuredGateway },
             productionTestFullAccess: true
         )
@@ -2758,12 +2699,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
                     replacement: replacement
                 )
             ],
-            correctedText: replacement,
-            isStructuredResponse: false
+            correctedText: replacement
         )
     }
 
-    private static func structuredTranslationResult() -> KeyboardActionOperationResult {
+    private static func plainTranslationResult() -> KeyboardActionOperationResult {
         KeyboardActionOperationResult(
             operation: "translate",
             items: [
@@ -2775,8 +2715,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
                     replacement: "Goedemorgen, ik hoop dat het goed met je gaat."
                 )
             ],
-            correctedText: "Goedemorgen, ik hoop dat het goed met je gaat.",
-            isStructuredResponse: true
+            correctedText: "Goedemorgen, ik hoop dat het goed met je gaat."
         )
     }
 
@@ -3150,7 +3089,7 @@ private final class DelayedKeyboardAIService: KeyboardAIServiceProviding {
     }
 }
 
-private final class ErrorTextResultKeyboardAIService: KeyboardAIServiceProviding {
+private final class UnsafePlainTextResultKeyboardAIService: KeyboardAIServiceProviding {
     private let errorText = "The model returned malformed JSON and no safe keyboard text could be extracted."
 
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
@@ -3164,8 +3103,16 @@ private final class ErrorTextResultKeyboardAIService: KeyboardAIServiceProviding
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         KeyboardActionOperationResult(
             operation: action.operationName,
-            items: [KeyboardActionOperationResult.Item(id: "error-1", type: "warning", title: "Error", text: errorText, replacement: errorText)],
-            isStructuredResponse: true
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "plain-text-result",
+                    type: "suggestion",
+                    title: "Replacement",
+                    text: errorText,
+                    replacement: errorText
+                )
+            ],
+            correctedText: errorText
         )
     }
 }

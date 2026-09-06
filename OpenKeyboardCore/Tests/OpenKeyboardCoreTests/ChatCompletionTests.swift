@@ -61,7 +61,9 @@ final class ChatCompletionTests: XCTestCase {
 
         XCTAssertEqual(result.displayText, replacement)
         XCTAssertEqual(result.items.map(\.replacement), [replacement])
-        XCTAssertFalse(result.isStructuredResponse)
+        XCTAssertEqual(result.items.map(\.type), ["suggestion"])
+        XCTAssertNil(result.summary)
+        XCTAssertEqual(result.correctedText, replacement)
         let request = try XCTUnwrap(server.requests.first)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: XCTUnwrap(request.body)) as? [String: Any])
         XCTAssertEqual(json["operation"] as? String, "rewrite")
@@ -76,96 +78,58 @@ final class ChatCompletionTests: XCTestCase {
         XCTAssertEqual(messages.first?["content"], rendering.messages.first?.content)
     }
 
-    func testPerformWritingActionResultParsesMultipleStructuredItems() async throws {
-        let server = DummyGatewayServer(.chatStructuredCorrection(
-            correctedText: "i has an apple, this is not sound good",
-            items: [
-                .init(id: "grammar-1", title: "Article", text: "Use an before apple", original: "a apple", replacement: "an apple", range: WritingActionTextRange(start: 6, end: 13), confidence: 0.94, explanation: "Apple starts with a vowel sound."),
-                .init(id: "spelling-1", title: "Spelling", text: "Fix typo", original: "ths", replacement: "this", confidence: 0.9)
-            ],
-            summary: "Found two issues."
-        ))
-        let client = GatewayClient(config: validConfig, httpClient: server)
-
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple,ths is nt sound god", model: "test-model")
-
-        XCTAssertEqual(result.operation, "fix_grammar")
-        XCTAssertEqual(result.items.count, 2)
-        XCTAssertEqual(result.items[0].type, "correction")
-        XCTAssertEqual(result.items[0].replacement, "an apple")
-        XCTAssertEqual(result.items[0].range, WritingActionTextRange(start: 6, end: 13))
-        XCTAssertEqual(result.items[1].original, "ths")
-        XCTAssertEqual(result.correctedText, "i has an apple, this is not sound good")
-    }
-
-    func testMockGatewayComplexSpellFixResponseParsesThroughClient() async throws {
-        let server = DummyGatewayServer(.chatComplexSpellFix)
-        let client = GatewayClient(config: validConfig, httpClient: server)
-
-        let result = try await client.performWritingActionResult(.summarize, text: DummyGatewayServer.complexSpellFixOriginalText, model: "test-model")
-
-        XCTAssertEqual(server.requestedURLs, ["https://gateway.example/v1/chat/completions"])
-        XCTAssertEqual(result.operation, "fix_grammar")
-        XCTAssertTrue(result.isStructuredResponse)
-        XCTAssertEqual(result.items.count, 12)
-        XCTAssertEqual(result.items.filter { $0.type == "correction" }.map(\.replacement), DummyGatewayServer.complexSpellFixReplacements)
-        XCTAssertEqual(result.items.last?.type, "warning")
-        XCTAssertEqual(result.items[9].range, WritingActionTextRange(start: 84, end: 91))
-        XCTAssertEqual(result.correctedText, DummyGatewayServer.complexSpellFixCorrectedText)
-        XCTAssertEqual(result.displayText, DummyGatewayServer.complexSpellFixCorrectedText)
-    }
-
-
-    func testStructuredOperationResultScenarios() async throws {
+    func testBuiltInWritingActionsMapValidatedPlainTextToOperationSpecificResults() async throws {
         struct Scenario {
             let name: String
             let action: WritingAction
             let input: String
             let content: String
-            let expectedDisplayText: String
-            let expectedItemTypes: [String]
+            let expectedOperation: String
+            let expectedType: String
+            let expectedSummary: String?
+            let expectedCorrectedText: String?
         }
 
         let scenarios = [
             Scenario(
-                name: "multi-error grammar",
+                name: "summary",
                 action: .summarize,
-                input: "i has a apple,ths is nt sound god",
-                content: #"{"operation":"fix_grammar","results":[{"id":"article","type":"correction","title":"Article","text":"Use an before apple","original":"a apple","replacement":"an apple"},{"id":"spelling","type":"correction","title":"Spelling","text":"Fix ths","original":"ths","replacement":"this"},{"id":"grammar","type":"correction","title":"Grammar","text":"Use does not sound good","original":"is nt sound god","replacement":"does not sound good"}],"summary":"Found three issues.","corrected_text":"i has an apple,this does not sound good"}"#,
-                expectedDisplayText: "i has an apple,this does not sound good",
-                expectedItemTypes: ["correction", "correction", "correction"]
+                input: "OpenKeyboard keeps prompts in a shared contract and validates model output before showing it to the user.",
+                content: "OpenKeyboard centrally defines prompts and validates model output.",
+                expectedOperation: "summarize",
+                expectedType: "summary",
+                expectedSummary: "OpenKeyboard centrally defines prompts and validates model output.",
+                expectedCorrectedText: nil
             ),
             Scenario(
-                name: "clean text all good",
-                action: .summarize,
-                input: "The app works well today.",
-                content: #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#,
-                expectedDisplayText: "No issues found.",
-                expectedItemTypes: []
+                name: "rewrite",
+                action: .rewrite,
+                input: "This draft is difficult to read.",
+                content: "This draft is easier to read.",
+                expectedOperation: "rewrite",
+                expectedType: "suggestion",
+                expectedSummary: nil,
+                expectedCorrectedText: "This draft is easier to read."
             ),
             Scenario(
-                name: "summary operation",
-                action: .summarize,
-                input: "The keyboard supports private AI. It can fix grammar and summarize text.",
-                content: #"{"operation":"summarize","results":[{"id":"summary-1","type":"summary","title":"Summary","text":"The keyboard offers private AI writing help."}],"summary":"The keyboard offers private AI writing help."}"#,
-                expectedDisplayText: "The keyboard offers private AI writing help.",
-                expectedItemTypes: ["summary"]
+                name: "translation",
+                action: .translate(language: "Dutch"),
+                input: "Good morning",
+                content: "Goedemorgen",
+                expectedOperation: "translate",
+                expectedType: "translation",
+                expectedSummary: nil,
+                expectedCorrectedText: "Goedemorgen"
             ),
             Scenario(
-                name: "rewrite operation",
-                action: .summarize,
-                input: "this sounds bad and confusing",
-                content: #"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","title":"Clearer rewrite","text":"This could be clearer and easier to read.","replacement":"This could be clearer and easier to read."}],"summary":"Rewritten for clarity."}"#,
-                expectedDisplayText: "This could be clearer and easier to read.",
-                expectedItemTypes: ["suggestion"]
-            ),
-            Scenario(
-                name: "mixed result types",
-                action: .summarize,
-                input: "i has a apple, maybe send it",
-                content: #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Grammar","text":"Use have","original":"has","replacement":"have","extra":"ignored"},{"id":"s1","type":"suggestion","title":"Tone","text":"Consider adding context."},{"id":"w1","type":"warning","title":"Ambiguous pronoun","text":"It is unclear what it refers to."},{"id":"e1","type":"explanation","title":"Why","text":"The verb should match the subject."}],"corrected_text":"i have a apple, maybe send it"}"#,
-                expectedDisplayText: "i have a apple, maybe send it",
-                expectedItemTypes: ["correction", "suggestion", "warning", "explanation"]
+                name: "continuation",
+                action: .continueWriting,
+                input: "The team approved the proposal",
+                content: " and scheduled implementation for Monday.",
+                expectedOperation: "continue_writing",
+                expectedType: "suggestion",
+                expectedSummary: nil,
+                expectedCorrectedText: " and scheduled implementation for Monday."
             ),
         ]
 
@@ -175,139 +139,53 @@ final class ChatCompletionTests: XCTestCase {
 
             let result = try await client.performWritingActionResult(scenario.action, text: scenario.input, model: "test-model")
 
-            XCTAssertEqual(result.displayText, scenario.expectedDisplayText, scenario.name)
-            XCTAssertEqual(result.items.map(\.type), scenario.expectedItemTypes, scenario.name)
+            XCTAssertEqual(result.operation, scenario.expectedOperation, scenario.name)
+            XCTAssertEqual(result.items.map(\.type), [scenario.expectedType], scenario.name)
+            XCTAssertEqual(result.items.map(\.text), [scenario.content], scenario.name)
+            XCTAssertEqual(result.summary, scenario.expectedSummary, scenario.name)
+            XCTAssertEqual(result.correctedText, scenario.expectedCorrectedText, scenario.name)
+            XCTAssertEqual(result.displayText, scenario.content, scenario.name)
+
+            let request = try XCTUnwrap(server.requests.first, scenario.name)
+            let json = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: try XCTUnwrap(request.body)) as? [String: Any],
+                scenario.name
+            )
+            XCTAssertNil(json["response_format"], scenario.name)
         }
     }
 
-    func testStructuredOperationResultParsesGatewayCanonicalGrammarContract() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":"detected-capitalization-i","type":"correction","title":"Capitalization","text":"Capitalize the pronoun \"I\".","original":"i","replacement":"I","range":{"start":0,"end":1},"confidence":0.98},{"id":"detected-article-an-apple","type":"correction","title":"Article","text":"Use \"an\" before \"apple\".","original":"a apple","replacement":"an apple","range":{"start":6,"end":13},"confidence":0.96},{"id":"detected-missing-not","type":"correction","title":"Missing word","text":"Expand \"nt\" to \"not\".","original":"nt","replacement":"not","confidence":0.82},{"id":"detected-word-choice-good","type":"correction","title":"Word choice","text":"Use \"good\" instead of \"god\".","original":"god","replacement":"good","confidence":0.9}],"corrected_text":"I have an apple; this does not sound good."}"#
-        let http = DummyGatewayServer(.chatRawContent(content))
-        let client = GatewayClient(config: validConfig, httpClient: http)
+    func testDeprecatedWritingEnvelopeIsRejectedAsPlainTextForEveryBuiltInMode() async {
+        let payloads = [
+            #"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}],"corrected_text":"Clearer text."}"#,
+            #"{"operation":"rewrite","results":["#
+        ]
+        let scenarios: [(WritingAction, String)] = [
+            (.fixGrammar, "this need work"),
+            (.rewrite, "This is difficult to read."),
+            (.summarize, "This source contains enough detail to summarize into a shorter response."),
+            (.translate(language: "Dutch"), "Good morning"),
+            (.continueWriting, "The team approved the proposal")
+        ]
 
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple,ths is nt sound god", model: "test-model")
+        for payload in payloads {
+            for (action, source) in scenarios {
+                let client = GatewayClient(
+                    config: validConfig,
+                    httpClient: DummyGatewayServer(.chatRawContent(payload))
+                )
 
-        XCTAssertEqual(result.operation, "fix_grammar")
-        XCTAssertEqual(result.correctedText, "I have an apple; this does not sound good.")
-        XCTAssertEqual(result.displayText, "I have an apple; this does not sound good.")
-        XCTAssertTrue(result.items.contains { $0.original == "a apple" && $0.replacement == "an apple" })
-        XCTAssertTrue(result.items.contains { $0.original == "nt" && $0.replacement == "not" })
-        XCTAssertTrue(result.items.contains { $0.original == "god" && $0.replacement == "good" })
-    }
-
-    func testStructuredOperationResultToleratesNoncanonicalOptionalMetadata() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":1,"type":"correction","title":"Spelling","text":"Fix typo","original":"teh","replacement":"the","range":{"start":"0","end":"3"},"confidence":"0.97"}],"summary":{"unexpected":true},"corrected_text":"the message"}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "teh message", model: "test-model")
-
-        XCTAssertTrue(result.isStructuredResponse)
-        XCTAssertEqual(result.items.count, 1)
-        XCTAssertEqual(result.items[0].id, "item-1")
-        XCTAssertEqual(result.items[0].replacement, "the")
-        XCTAssertEqual(result.items[0].range, WritingActionTextRange(start: 0, end: 3))
-        XCTAssertEqual(result.items[0].confidence, 0.97)
-        XCTAssertNil(result.summary)
-        XCTAssertEqual(result.correctedText, "the message")
-    }
-
-
-    func testStructuredOperationResultParsesItemsAliasAndMarkdownFence() async throws {
-        let content = """
-        ```json
-        {"operation":"fix_grammar","items":[{"id":"item-1","type":"correction","title":"Spelling","text":"Fix typo","original":"teh","replacement":"the"}],"corrected_text":"the quick brown fox"}
-        ```
-        """
-        let http = DummyGatewayServer(.chatRawContent(content))
-        let client = GatewayClient(config: validConfig, httpClient: http)
-
-        let result = try await client.performWritingActionResult(.summarize, text: "teh quick brown fox", model: "test-model")
-
-        XCTAssertEqual(result.operation, "fix_grammar")
-        XCTAssertEqual(result.items.count, 1)
-        XCTAssertEqual(result.items[0].replacement, "the")
-        XCTAssertEqual(result.displayText, "the quick brown fox")
-    }
-
-    func testStructuredOperationResultRejectsInvalidEmptyStructuredResponse() async {
-        let content = #"{"operation":"fix_grammar","results":[]}"#
-        let http = DummyGatewayServer(.chatRawContent(content))
-        let client = GatewayClient(config: validConfig, httpClient: http)
-
-        await XCTAssertThrowsErrorAsync(try await client.performWritingActionResult(.summarize, text: "i has a apple", model: "test-model")) { error in
-            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
+                await XCTAssertThrowsErrorAsync(
+                    try await client.performWritingActionResult(action, text: source, model: "test-model")
+                ) { error in
+                    XCTAssertEqual(error as? GatewayClientError, .invalidResponse, action.operationName)
+                }
+            }
         }
     }
 
-    func testStructuredOperationResultIgnoresMalformedNestedJSONCards() async throws {
-        let content = #"{"operation":"rewrite","results":[{"id":"bad","type":"suggestion","title":"Nested payload","text":"{\"corrected_text\":\"I have an apple.\"}"},{"id":"good","type":"suggestion","title":"Rewrite","text":"Use have","original":"has","replacement":"have"}],"corrected_text":"I have an apple."}"#
-        let http = DummyGatewayServer(.chatRawContent(content))
-        let client = GatewayClient(config: validConfig, httpClient: http)
-
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple", model: "test-model")
-
-        XCTAssertEqual(result.items.count, 1)
-        XCTAssertEqual(result.items.first?.id, "good")
-        XCTAssertEqual(result.items.first?.replacement, "have")
-        XCTAssertEqual(result.correctedText, "I have an apple.")
-    }
-
-
-    func testParsesCanonicalStructuredResultWithCorrectedTextKeepsAllItems() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Verb","text":"Use have","original":"has","replacement":"have"},{"id":"c2","type":"correction","title":"Article","text":"Use an","original":"a apple","replacement":"an apple"}],"summary":"Two issues.","corrected_text":"I have an apple."}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple", model: "test-model")
-
-        XCTAssertEqual(result.operation, "fix_grammar")
-        XCTAssertEqual(result.items.count, 2)
-        XCTAssertEqual(result.items.map(\.replacement), ["have", "an apple"])
-        XCTAssertEqual(result.correctedText, "I have an apple.")
-    }
-
-    func testParsesCanonicalStructuredResultWithoutCorrectedTextKeepsAllItems() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":"c1","type":"correction","title":"Verb","text":"Use have","original":"has","replacement":"have"},{"id":"c2","type":"correction","title":"Article","text":"Use an","original":"a apple","replacement":"an apple"}]}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple", model: "test-model")
-
-        XCTAssertEqual(result.items.count, 2)
-        XCTAssertEqual(result.items.map(\.original), ["has", "a apple"])
-        XCTAssertNil(result.correctedText)
-        XCTAssertEqual(result.displayText, "have", "Legacy display text may still choose the first replacement, but structured items must remain intact.")
-    }
-
-    func testParsesItemsAliasAsResults() async throws {
-        let content = #"{"operation":"fix_grammar","items":[{"id":"c1","type":"correction","title":"Spelling","text":"Fix ths","original":"ths","replacement":"this"},{"id":"c2","type":"correction","title":"Missing word","text":"Expand nt","original":"nt","replacement":"not"}]}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "ths is nt good", model: "test-model")
-
-        XCTAssertEqual(result.items.count, 2)
-        XCTAssertEqual(result.items.map(\.replacement), ["this", "not"])
-    }
-
-    func testUnknownResultTypesDoNotCrash() async throws {
-        let content = #"{"operation":"fix_grammar","results":[{"id":"w1","type":"warning","title":"Warning","text":"Ambiguous text"},{"id":"s1","type":"summary","title":"Summary","text":"Short summary"},{"id":"e1","type":"explanation","title":"Why","text":"Explanation text"},{"id":"x1","type":"made_up","title":"Unknown","text":"Unknown item"}],"summary":"Handled safely."}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "Some text", model: "test-model")
-
-        XCTAssertEqual(result.items.map(\.type), ["warning", "summary", "explanation", "made_up"])
-        XCTAssertEqual(result.summary, "Handled safely.")
-    }
-
-    func testLegacyPlainTextStillWorks() async throws {
+    func testPlainTextGrammarResponseWorks() async throws {
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatPlainText("I have an apple.")))
-
-        let output = try await client.performWritingAction(.fixGrammar, text: "i has a apple", model: "test-model")
-
-        XCTAssertEqual(output, "I have an apple.")
-    }
-
-    func testPerformWritingActionKeepsLegacyCorrectedTextCompatible() async throws {
-        let http = DummyGatewayServer(.chatPlainText("I have an apple."))
-        let client = GatewayClient(config: validConfig, httpClient: http)
 
         let output = try await client.performWritingAction(.fixGrammar, text: "i has a apple", model: "test-model")
 
@@ -896,59 +774,6 @@ final class ChatCompletionTests: XCTestCase {
             XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
         }
     }
-
-
-    func testStructuredOperationResultParsesCommonDisplayAliases() async throws {
-        let scenarios: [(String, WritingAction, String)] = [
-            (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, .summarize, "This is clearer."),
-            (#"{"operation":"rewrite","correctedText":"I have an apple."}"#, .summarize, "I have an apple."),
-            (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, .summarize, "Clearer text."),
-            (#"{"operation":"rewrite","improved_text":"I have an apple."}"#, .summarize, "I have an apple."),
-            (#"{"operation":"rewrite","replacement":"Replacement text."}"#, .summarize, "Replacement text."),
-            (#"{"operation":"rewrite","text":"Top-level text."}"#, .summarize, "Top-level text."),
-            (#"{"operation":"rewrite","output":"Output text."}"#, .summarize, "Output text.")
-        ]
-
-        for (content, action, expectedDisplayText) in scenarios {
-            let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-            let result = try await client.performWritingActionResult(action, text: "i has a apple", model: "test-model")
-
-            XCTAssertEqual(result.displayText, expectedDisplayText)
-            XCTAssertTrue(result.isStructuredResponse)
-        }
-    }
-
-    func testStructuredJSONStringPayloadIsParsedInsteadOfReturnedAsRawText() async throws {
-        let payload = #"{"operation":"rewrite","results":[{"id":"1","type":"suggestion","title":"Rewrite","text":"Use clearer wording.","original":"bad","replacement":"clear"}],"summary":"One rewrite found."}"#
-        let encodedPayload = String(data: try JSONEncoder().encode(payload), encoding: .utf8)!
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(encodedPayload)))
-
-        let result = try await client.performWritingActionResult(.summarize, text: "i has a apple", model: "test-model")
-
-        XCTAssertTrue(result.isStructuredResponse)
-        XCTAssertEqual(result.items.count, 1)
-        XCTAssertEqual(result.items.first?.replacement, "clear")
-        XCTAssertFalse(result.displayText.contains("\"operation\""), "Raw JSON string must not become display text")
-    }
-
-    func testMalformedJSONLikeWritingActionResponseIsInvalidNotLegacyReplacement() async {
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(#"{"operation":"fix_grammar","results":["#)))
-
-        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "i has a apple", model: "test-model")) { error in
-            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
-        }
-    }
-
-    func testPerformWritingActionDoesNotReplaceTextWithStructuredNoIssueSummary() async {
-        let content = #"{"operation":"fix_grammar","results":[],"summary":"No issues found."}"#
-        let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))
-
-        await XCTAssertThrowsErrorAsync(try await client.performWritingAction(.fixGrammar, text: "The app works well.", model: "test-model")) { error in
-            XCTAssertEqual(error as? GatewayClientError, .invalidResponse)
-        }
-    }
-
     func testPerformWritingActionDoesNotReplaceCleanTextWithSameCorrectedText() async throws {
         let content = "The app works well today."
         let client = GatewayClient(config: validConfig, httpClient: DummyGatewayServer(.chatRawContent(content)))

@@ -239,10 +239,6 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         }
     }
 
-    var usesCanonicalPlainTextReplacement: Bool {
-        self == .improve || isRewrite
-    }
-
     var title: String {
         switch self {
         case .improve: return "Improve"
@@ -385,6 +381,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 inputText: nil,
                 maxTokens: 1_200,
                 config: config,
+                responseFormat: nil,
                 timeoutInterval: requestTimeoutInterval
             )
         } catch let error as CancellationError {
@@ -436,8 +433,10 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 throw scopedError
             }
             guard let target = action.translationTarget else { return result }
-            let isUnusableTranslation = result.containsWarningItem
-                || translationValidator.validationFailure(for: result.displayText, target: target) != nil
+            let isUnusableTranslation = translationValidator.validationFailure(
+                for: result.displayText,
+                target: target
+            ) != nil
             guard isUnusableTranslation else {
                 return result
             }
@@ -466,7 +465,9 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 maxTokens: rendering.maxTokens,
                 config: config,
                 temperature: rendering.temperature,
-                expectsStructuredResponse: rendering.responseFormatType != nil,
+                responseFormat: CanonicalGatewayResponseFormat(
+                    semanticType: rendering.responseFormatType
+                ),
                 timeoutInterval: requestTimeoutInterval
             )
         } catch let error as CancellationError {
@@ -475,16 +476,12 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw Self.keyboardError(from: error)
         }
         do {
-            if action.usesCanonicalPlainTextReplacement {
-                return try KeyboardActionOperationResult.plainTextReplacement(
-                    output,
-                    contractOperationID: action.contractOperationID,
-                    wireOperation: action.operationName,
-                    title: action.title,
-                    source: text
-                )
-            }
-            return try KeyboardActionOperationResult.parse(output, operation: action.operationName, fallbackText: text)
+            return try KeyboardActionOperationResult.plainTextResponse(
+                output,
+                rendering: rendering,
+                title: action.title,
+                source: text
+            )
         } catch {
             if let target = action.translationTarget {
                 throw KeyboardAIError.unreliableTranslation(target)
@@ -523,7 +520,9 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                             maxTokens: rendering.maxTokens,
                             config: config,
                             temperature: rendering.temperature,
-                            expectsStructuredResponse: rendering.responseFormatType != nil,
+                            responseFormat: CanonicalGatewayResponseFormat(
+                                semanticType: rendering.responseFormatType
+                            ),
                             timeoutInterval: self.requestTimeoutInterval
                         )
                         return (chunkIndex, try await GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
