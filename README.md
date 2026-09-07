@@ -72,8 +72,8 @@ The host app currently includes:
 
 - onboarding for gateway setup and iOS keyboard enablement
 - settings for gateway URL and API key entry
-- connection testing against the configured gateway
-- model discovery through the gateway
+- one authenticated model-list request for connection testing and exact model discovery
+- explicit model choice when the gateway exposes multiple models; a sole discovered model may be selected automatically
 - visible Full Access and privacy copy
 - link-out to the gateway admin UI when a gateway URL is configured
 - atomic shared Keychain storage for the complete gateway profile used by both the app and keyboard extension
@@ -91,7 +91,7 @@ The keyboard extension currently includes:
   - AI writing tools expose Improve, simple Rephrase, Translate, and independent rewrite-style actions without mixing them into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
 - typed keyboard errors keep gateway transport, authentication, missing-model, and per-operation model-capability failures distinct; an unusable grammar-only result keeps the original text, identifies the selected model's correction failure without declaring it globally incompatible, and does not disable unrelated writing actions.
 - automatic grammar-analysis failures stay as nonblocking toolbar warnings: the key grid and typed text remain available, and analysis retries after the next edit; manual AI-action failures remain scoped to the action that failed.
-- interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; the Settings model check uses at most two 20-second attempts.
+- interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; each Settings model-check operation is bounded to 20 seconds.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
@@ -103,13 +103,13 @@ Next focus: broader selected-text, paragraph, and multi-action workflows beyond 
 
 ### OpenKeyboardCore
 
-`OpenKeyboardCore` contains UI-independent logic:
+`OpenKeyboardCore` contains UI-independent logic and legacy gateway compatibility fixtures used by
+deterministic tests:
 
 - gateway URL/API key validation and normalization
 - gateway config persistence abstractions
-- OpenAI-compatible `/v1/models` parsing
-- OpenAI-compatible `/v1/chat/completions` request/response handling
-- typed gateway error mapping
+- test-only OpenAI-compatible request/response and error-mapping coverage; shipped app and extension
+  targets do not use this direct transport path
 - prompt builders for grammar fixing, rewrite, summarize, translate, continue writing, and custom templates
 - keyboard reducer behavior
 - context extraction and replacement strategies
@@ -127,8 +127,11 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 - can route selected models to an optional Apfel backend
 
 The pinned semantic prompt package owns the operation-specific instructions, response contract
-metadata, and deterministic message rendering. Open Keyboard owns request transport, local grammar
-diffing, response parsing, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
+metadata, and deterministic message rendering. The pinned Universal AI Connector owns provider
+transport, authenticated model discovery, canonical request/response translation, typed provider
+failures, concurrency, cancellation, and transport lifecycle. Open Keyboard owns gateway profile
+persistence, exact model selection, action deadlines, local grammar diffing, semantic response
+validation, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
 style, Improve, Summarize, Translate, and Continue Writing return operation-specific validated
 plain text with no structured response format. The client derives grammar edits and writing-action
 result objects locally, retains target-language validation and retry behavior for Translate, and
@@ -143,8 +146,31 @@ Canonical writing-action and bounded-suggestion semantics live in the pinned
 `Vendor/semantic-prompt-contract` Git submodule at contract version `5.0.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
-and UI tests compile the same generated Swift adapter. UI, request transport, gateway
-authentication, model routing, response parsing, and product presentation remain local.
+and UI tests compile the same generated Swift adapter. UI, gateway profile persistence, exact model
+selection, semantic validation, and product presentation remain local.
+
+### Universal AI Connector
+
+Provider-neutral networking is consumed from the pinned `Vendor/universal-ai-connector` Git
+submodule. The Xcode app, keyboard extension, and UI-test targets link only the public
+`UniversalAiConnector` Swift package product; they never import its private bridge. Each process
+reuses one connector for the active normalized gateway URL and credential. A configuration change
+atomically replaces and closes the old connector, operation cancellation remains scoped to its
+owner, and adapter teardown closes the retained connector. Open Keyboard adds its own 15-second
+keyboard and 20-second Settings wall-clock deadlines outside the connector's validated 10-second
+connect and 60-second request limits.
+
+The generated binary artifact is intentionally not committed. Repository iOS build and test
+routes call the guarded bootstrap automatically. Before building directly in Xcode, run:
+
+```bash
+git submodule update --init --recursive
+./scripts/bootstrap-universal-ai-connector.sh
+```
+
+The bootstrap uses the connector repository's canonical XCFramework build, rejects tracked local
+connector changes, and verifies that the checkout matches the recorded gitlink. See
+`docs/UNIVERSAL_AI_CONNECTOR.md` for the ownership and failure-mapping boundary.
 
 For a fresh checkout, clone with the submodule initialized:
 
@@ -152,8 +178,8 @@ For a fresh checkout, clone with the submodule initialized:
 git clone --recurse-submodules https://github.com/maneesh888/open-keyboard.git
 ```
 
-For an existing clone, or if `Vendor/semantic-prompt-contract` is empty, recover the pinned checkout
-from the OpenKeyboard repository root:
+For an existing clone, or if either vendored checkout is empty, recover both pinned checkouts from
+the OpenKeyboard repository root:
 
 ```bash
 git submodule update --init --recursive
@@ -178,10 +204,9 @@ after an upgrade. Never copy canonical prompt wording back into an OpenKeyboard 
 
 ## API Contract
 
-Open Keyboard expects the gateway to provide:
+Through the connector's `openai-compatible` adapter, Open Keyboard expects the gateway to provide:
 
 ```text
-GET  /health
 GET  /v1/models
 POST /v1/chat/completions
 ```
@@ -206,6 +231,9 @@ The quick CI path runs:
 
 - Swift package tests for `OpenKeyboardCore`
 - iOS simulator build for the app and keyboard extension
+
+The iOS routes bootstrap the exact pinned Universal AI Connector XCFramework before Xcode package
+resolution. Direct Xcode builds require the manual bootstrap command shown above.
 
 Individual checks:
 
@@ -304,17 +332,17 @@ seed diagnostics report the dynamically resolved expected path, never values.
 
 ## Current Verification
 
-Recent local verification:
+Recent deterministic verification for the connector migration:
 
-- `git diff --check`: passed
-- `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath "${TMPDIR:-/tmp}/openkeyboard-derived" build-for-testing`: passed
-- `KeyboardSuggestionModelsTests`: passed
-- `KeyboardViewModelActionErrorTests`: passed
-- automated configured real-extension XCUITest regression for AI controls: passed
+- app plus extension link against the public connector product: passed
+- deterministic UI-target suite: 307 tests, 0 failures
+- connector request, response, discovery, typed-error, reuse, close, and cancellation regressions: passed
+- production-source transport-boundary policy: passed
 
-This result does not establish normal simulator or physical-device proof. The project still needs
-normal simulator runtime proof, broader physical-device and live-gateway acceptance, prompt-quality
-evaluation, release signing, and App Store readiness verification before release. See
+This deterministic result does not establish live gateway, normal simulator, or physical-device
+proof. The connector migration still needs exact-head live differential evidence and normal
+simulator runtime proof before publication/readiness. Broader physical-device acceptance, release
+signing, and App Store verification remain release work. See
 `docs/REAL_EXTENSION_SMOKE_PLAN.md` for the separated automated, normal-simulator, and device routes.
 
 ## Roadmap

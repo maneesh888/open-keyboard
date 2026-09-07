@@ -1,6 +1,6 @@
 # AI Keyboard Project - Current TODO
 
-**Last Updated:** 2026-09-07
+**Last Updated:** 2026-09-08
 
 **Migration entry added:** 2026-09-05
 
@@ -36,8 +36,13 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 ### AI integration
 
-- [x] Gateway client/config core exists (`GatewayClient`, `GatewayConfig`, `GatewayConfigStore`, `URLSessionHTTPClient`).
-- [x] Main app connection testing and model loading exist.
+- [x] Gateway config and legacy deterministic compatibility fixtures exist in `OpenKeyboardCore`;
+  direct URLSession transport is test-only and no longer part of an active app/extension path.
+- [x] Main app connection testing and model loading use the pinned Universal AI Connector: one
+  model-list operation, exact identifiers, sole-model auto-selection, and explicit multi-model choice.
+- [x] App and keyboard actions use the connector's public Swift package product with process-local
+  reuse, typed failures, cancellation, and close-on-profile-change behavior. The private bridge is
+  not imported by OpenKeyboard.
 - [ ] Rename the developer-facing `Fast plain-text grammar` diagnostic to `Grammar correction`;
   keep the short, one-attempt plain-text explanation in supporting copy.
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
@@ -50,7 +55,8 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
   boundaries. Follow `docs/plans/plain-text-writing-responses.md`.
 - [ ] Streaming/SSE responses — needs verification; do not assume complete.
 - [ ] Debounced suggestions while typing — pending.
-- [ ] Timeout/cancellation/network resilience coverage — next queue item, partially present in tests but needs current verification before marking complete.
+- [x] Timeout/cancellation/network resilience coverage for connector mapping, wall-clock action
+  deadlines, unsupported discovery, reuse, profile replacement, close, and active-request cancellation.
 - [ ] Long-text Fix Grammar model differential and rate-limit-safe chunking — future work.
   Proof-first live evaluation on `91315578e4211f7343ccd62995530bc5b74358b5` used one
   synthetic 11,430-character document with 20 known errors: the low profile returned the complete
@@ -89,20 +95,34 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 ## Current next recommended slice
 
-**Next slice: add DEBUG-only config-state instrumentation, rerun the automated real-extension
-regression once, then collect separate normal simulator runtime proof.**
+**Next slice: complete exact-head live differential and normal simulator runtime proof for the
+Universal AI Connector cutover, then perform independent review.**
 
 Why this is the smallest safe next step:
 
-- The current automated-regression blocker is narrow: XCUITest can activate the installed extension
-  and show QWERTY keys, but cannot reach the AI action menu because the extension reports
-  `Gateway not configured`. This does not establish or replace normal runtime acceptance.
-- Product code already has the app/extension config pipeline, shared Keychain/App Group pieces, and UI tests; another broad UI redesign or blind smoke retry would not isolate the failure.
-- A redacted DEBUG-only config probe can distinguish wrong App Group suite, seed cleanup, Keychain access failure, legacy fallback failure, or stale in-memory config without exposing secrets.
-- This unblocks automated lifecycle diagnosis; final product acceptance still requires the normal
-  host-app runtime route without debug injection or test control.
+- The connector is integrated and deterministic request, response, model-discovery, lifecycle,
+  cancellation, extension-link, and transport-boundary tests pass locally.
+- Gateway and semantic behavior still require the exact-head two-profile live gate; deterministic
+  results cannot substitute for that evidence.
+- Visible Settings and real keyboard actions still require the normal host-app runtime route with
+  no UI-test launch state, injected result panel, or test host.
 
 Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+
+## Universal AI Connector migration
+
+- Status: implemented with deterministic evidence; live and runtime verification remain pending
+  until they run against the final committed connector gitlink and OpenKeyboard head.
+- Dependency: pin only the connector repository's exact public, remotely available source revision.
+- Build boundary: initialize the submodule and run `scripts/bootstrap-universal-ai-connector.sh`;
+  repository iOS routes run the guarded bootstrap automatically.
+- Production boundary: Settings discovery and every keyboard/live-harness generation request go
+  through `UniversalAiConnector`; no production OpenKeyboard target owns `URLSession` transport.
+- Required remaining proof: exact-head `./scripts/check.sh --full`, classifier-selected
+  `./scripts/check-live.sh gateway-differential`, automated real-extension coverage, normal
+  simulator Settings plus visible Improve/Rephrase/Translate actions with Apply/Back/Rerun as
+  applicable, linked-size/startup/memory measurements, and independent exact-head review.
+- Architecture reference: `docs/UNIVERSAL_AI_CONNECTOR.md`.
 
 ## Plain-text response migration
 

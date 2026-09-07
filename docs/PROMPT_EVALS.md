@@ -1,6 +1,6 @@
 # Prompt Evaluation Suite
 
-Last updated: 2026-08-12
+Last updated: 2026-09-08
 
 ## Purpose
 
@@ -51,6 +51,10 @@ The curated playground and gateway smoke phrases must be synthetic and meaningfu
 
 ## Live prompt evals
 
+The Core package route below remains an opt-in legacy compatibility harness. It does not exercise
+the shipped app/extension transport after the Universal AI Connector migration and therefore cannot
+serve as production-consumer transport proof by itself.
+
 Live prompt evals should be skipped unless explicit env vars are set:
 
 ```bash
@@ -90,6 +94,18 @@ Current live harness coverage:
 The shared live scenarios intentionally use broad assertions because model output is non-deterministic.
 The Gemma cases add a stable minimum-detail rubric and skip when the configured model is not Gemma.
 Normal CI compiles the file and skips live execution unless all live env vars are set.
+
+Production-consumer live verification runs through the iOS target and pinned connector:
+
+```bash
+./scripts/ios/test.sh live-gateway-smoke
+./scripts/ios/test.sh live-model-differential
+./scripts/check-live.sh gateway-differential
+```
+
+Those routes build the connector artifact from the recorded gitlink, exercise exact canonical
+plain-text request/response mapping, and preserve the existing operation-specific validators. They
+are automated live evidence, not normal simulator visual proof.
 
 Live eval fixtures must use synthetic, non-sensitive text only. Do not add real private user text, secrets, API keys, Authorization headers, or production conversation content to live eval scenarios.
 

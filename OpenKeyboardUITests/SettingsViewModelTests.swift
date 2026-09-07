@@ -323,7 +323,6 @@ final class SettingsViewModelTests: XCTestCase {
         }
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
-        XCTAssertEqual(tester.healthChecks, 1)
         XCTAssertEqual(tester.modelFetches, 1)
         XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
     }
@@ -350,7 +349,6 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
-        XCTAssertEqual(tester.healthChecks, 0)
         XCTAssertEqual(tester.modelFetches, 0)
         XCTAssertTrue(viewModel.trustedModelLoaded)
     }
@@ -377,7 +375,7 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
-        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.modelFetches, 1)
         XCTAssertEqual(tester.smokeModels, ["apple-foundationmodel"])
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertTrue(viewModel.config.supportsStructuredCorrections)
@@ -409,7 +407,7 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
-        XCTAssertEqual(tester.healthChecks, 0)
+        XCTAssertEqual(tester.modelFetches, 0)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
     }
 
@@ -437,7 +435,7 @@ final class SettingsViewModelTests: XCTestCase {
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
         let refreshedTimestamp = AppConfig.gatewayConnectionLastTestedAt(from: defaults)
-        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.modelFetches, 1)
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertGreaterThanOrEqual(refreshedTimestamp?.timeIntervalSince1970 ?? 0, validationStartedAt.timeIntervalSince1970)
     }
@@ -542,6 +540,27 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
         XCTAssertEqual(viewModel.config.selectedModel, "gemma2:2b")
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+    }
+
+    func testSavedModelValidationIsCaseSensitiveAndDoesNotRewriteConnectorIdentifiers() async {
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "Exact-Model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["exact-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
+        XCTAssertEqual(viewModel.config.selectedModel, "Exact-Model")
+        XCTAssertEqual(viewModel.availableModels, ["exact-model"])
         XCTAssertTrue(tester.smokeModels.isEmpty)
     }
 
@@ -902,7 +921,7 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.gatewayURLInput, "https://gateway.example")
         XCTAssertEqual(viewModel.config.gatewayURL, "https://gateway.example")
-        XCTAssertEqual(tester.testedGatewayURLs, ["https://gateway.example", "https://gateway.example"])
+        XCTAssertEqual(tester.testedGatewayURLs, ["https://gateway.example"])
     }
 
     func testPersistedGlobalGatewayErrorIsVisibleAndHidesValidatedDetails() {
@@ -944,14 +963,14 @@ final class SettingsViewModelTests: XCTestCase {
 
         await viewModel.validateSavedGatewayOnceOnLaunch()
 
-        XCTAssertEqual(tester.healthChecks, 0)
+        XCTAssertEqual(tester.modelFetches, 0)
         XCTAssertEqual(viewModel.connectionStatus, .failure)
         XCTAssertEqual(viewModel.errorMessage, "Keyboard detected gateway timeout")
         XCTAssertEqual(AppConfig.gatewayConnectionError(from: defaults), "Keyboard detected gateway timeout")
 
         await viewModel.retrySavedGatewayValidation()
 
-        XCTAssertEqual(tester.healthChecks, 1)
+        XCTAssertEqual(tester.modelFetches, 1)
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertNil(viewModel.errorMessage)
         XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
@@ -1089,8 +1108,8 @@ final class SettingsViewModelTests: XCTestCase {
         viewModel.updateAPIKeyInput("draft-a-key")
 
         let connectionTask = Task { await viewModel.testConnection() }
-        for _ in 0..<100 where tester.healthChecks == 0 { await Task.yield() }
-        XCTAssertEqual(tester.healthChecks, 1)
+        for _ in 0..<100 where tester.modelFetches == 0 { await Task.yield() }
+        XCTAssertEqual(tester.modelFetches, 1)
 
         viewModel.updateGatewayURLInput("https://draft-b.example")
         viewModel.updateAPIKeyInput("draft-b-key")
@@ -1273,7 +1292,6 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
-    private(set) var healthChecks = 0
     private(set) var modelFetches = 0
     var diagnosticReport = GatewayDiagnosticReport(selectedModel: "gpt-oss:120b-cloud", checks: [])
     private(set) var diagnosticGatewayURL: String?
@@ -1299,19 +1317,14 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         self.smokeFailure = smokeFailure
     }
 
-    func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
-        healthChecks += 1
+    func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
+        modelFetches += 1
         testedGatewayURLs.append(gatewayURL)
         if connectionDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: connectionDelayNanoseconds)
         }
         if let connectionFailure { throw connectionFailure }
-        return healthSucceeds
-    }
-
-    func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
-        modelFetches += 1
-        testedGatewayURLs.append(gatewayURL)
+        if !healthSucceeds { throw FakeGatewayTestError.connectionFailed }
         if let modelFetchFailure { throw modelFetchFailure }
         return models
     }
@@ -1331,4 +1344,10 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         }
         return diagnosticReport
     }
+}
+
+private enum FakeGatewayTestError: LocalizedError {
+    case connectionFailed
+
+    var errorDescription: String? { "Connection failed" }
 }

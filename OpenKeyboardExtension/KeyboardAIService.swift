@@ -349,16 +349,16 @@ enum KeyboardAIError: LocalizedError, Equatable {
 }
 
 final class KeyboardAIService: KeyboardAIServiceProviding {
-    private let gatewayClient: CanonicalGatewayClient
+    private let connector: OpenKeyboardAIConnectorServing
     private let requestTimeoutInterval: TimeInterval
     private let translationValidator: KeyboardTranslationOutputValidator
 
     init(
-        gatewayClient: CanonicalGatewayClient = CanonicalGatewayClient(),
+        connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared,
         requestTimeoutInterval: TimeInterval = GatewayRequestTimeouts.keyboardAction,
         translationValidator: KeyboardTranslationOutputValidator = KeyboardTranslationOutputValidator()
     ) {
-        self.gatewayClient = gatewayClient
+        self.connector = connector
         self.requestTimeoutInterval = requestTimeoutInterval
         self.translationValidator = translationValidator
     }
@@ -374,16 +374,17 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
     private func performRawSuggestionRequest(prompt: String, config: AppConfig) async throws -> String {
         do {
-            return try await gatewayClient.chatCompletionContent(
-                systemPrompt: SemanticPromptContract.keyboardSuggestionsSystemInstruction,
-                userPrompt: prompt,
-                operation: nil,
-                inputText: nil,
-                maxTokens: 1_200,
-                config: config,
-                responseFormat: nil,
+            let profile = try Self.connectorProfile(from: config)
+            let request = try OpenKeyboardAIRequest.keyboardSuggestions(
+                prompt: prompt,
+                modelID: config.selectedModel,
                 timeoutInterval: requestTimeoutInterval
             )
+            return try await OpenKeyboardRequestDeadline.value(
+                timeoutInterval: requestTimeoutInterval
+            ) {
+                try await self.connector.respond(to: request, profile: profile)
+            }
         } catch let error as CancellationError {
             throw error
         } catch {
@@ -403,8 +404,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             return try await performGrammarCorrection(on: text, config: config)
         }
         guard let rendering = action.rendering(for: text),
-              let systemMessage = rendering.messages.first,
-              let userMessage = rendering.messages.last else {
+              rendering.messages.count >= 2 else {
             throw KeyboardAIError.missingTranslationTarget
         }
         let maximumAttempts = action.isTranslation ? 2 : 1
@@ -415,8 +415,6 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                     action: action,
                     text: text,
                     rendering: rendering,
-                    systemPrompt: systemMessage.content,
-                    userPrompt: userMessage.content,
                     config: config
                 )
             } catch let error as KeyboardAIError {
@@ -451,25 +449,21 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         action: KeyboardAIAction,
         text: String,
         rendering: SemanticPromptRendering,
-        systemPrompt: String,
-        userPrompt: String,
         config: AppConfig
     ) async throws -> KeyboardActionOperationResult {
         let output: String
         do {
-            output = try await gatewayClient.chatCompletionContent(
-                systemPrompt: systemPrompt,
-                userPrompt: userPrompt,
-                operation: rendering.wireOperationID,
-                inputText: text,
-                maxTokens: rendering.maxTokens,
-                config: config,
-                temperature: rendering.temperature,
-                responseFormat: CanonicalGatewayResponseFormat(
-                    semanticType: rendering.responseFormatType
-                ),
+            let profile = try Self.connectorProfile(from: config)
+            let request = try OpenKeyboardAIRequest.writing(
+                rendering: rendering,
+                modelID: config.selectedModel,
                 timeoutInterval: requestTimeoutInterval
             )
+            output = try await OpenKeyboardRequestDeadline.value(
+                timeoutInterval: requestTimeoutInterval
+            ) {
+                try await self.connector.respond(to: request, profile: profile)
+            }
         } catch let error as CancellationError {
             throw error
         } catch {
@@ -512,19 +506,17 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                             operation: "fix_grammar",
                             text: chunk.text
                         )
-                        let output = try await self.gatewayClient.chatCompletionContent(
-                            systemPrompt: rendering.messages[0].content,
-                            userPrompt: rendering.messages[1].content,
-                            operation: rendering.wireOperationID,
-                            inputText: chunk.text,
-                            maxTokens: rendering.maxTokens,
-                            config: config,
-                            temperature: rendering.temperature,
-                            responseFormat: CanonicalGatewayResponseFormat(
-                                semanticType: rendering.responseFormatType
-                            ),
+                        let profile = try Self.connectorProfile(from: config)
+                        let request = try OpenKeyboardAIRequest.writing(
+                            rendering: rendering,
+                            modelID: config.selectedModel,
                             timeoutInterval: self.requestTimeoutInterval
                         )
+                        let output = try await OpenKeyboardRequestDeadline.value(
+                            timeoutInterval: self.requestTimeoutInterval
+                        ) {
+                            try await self.connector.respond(to: request, profile: profile)
+                        }
                         return (chunkIndex, try await GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
                     }
                 }
@@ -539,7 +531,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw error
         } catch let error as KeyboardAIError {
             throw error
-        } catch let error as CanonicalGatewayClientError {
+        } catch let error as OpenKeyboardAIConnectorError {
             throw Self.keyboardError(from: error)
         } catch is GrammarCorrectionResponseError {
             throw KeyboardAIError.modelCapability
@@ -560,32 +552,40 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         if let urlError = error as? URLError, urlError.code == .timedOut {
             return .timeout
         }
-        guard let gatewayError = error as? CanonicalGatewayClientError else {
+        guard let connectorError = error as? OpenKeyboardAIConnectorError else {
             return .transport
         }
 
-        switch gatewayError {
+        switch connectorError {
         case .invalidURL:
             return .invalidURL
         case .notConfigured:
             return .notConfigured
         case .missingInput:
             return .missingInput
-        case .unauthorized:
+        case .unauthorized, .forbidden:
             return .unauthorized
         case .modelUnavailable:
             return .modelUnavailable
-        case .unusableCorrection:
-            return .modelCapability
         case .timeout:
             return .timeout
-        case .transport:
+        case .transport, .provider, .closed, .unsupportedModelDiscovery:
             return .transport
-        case .invalidResponse:
-            return .invalidResponse
-        case .serverStatus(let status):
-            return .server("Gateway HTTP \(status)")
+        case .invalidResponse, .truncatedResponse:
+            return .modelCapability
+        case .rateLimited:
+            return .server("Gateway HTTP 429")
+        case .serverStatus(let statusCode):
+            return .server("Gateway HTTP \(statusCode)")
         }
+    }
+
+    private static func connectorProfile(from config: AppConfig) throws -> OpenKeyboardGatewayProfile {
+        guard config.isConfigured else { throw OpenKeyboardAIConnectorError.notConfigured }
+        return try OpenKeyboardGatewayProfile(
+            gatewayURL: config.gatewayURL,
+            apiKey: config.apiKey
+        )
     }
 }
 

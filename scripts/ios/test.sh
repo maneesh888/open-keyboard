@@ -57,6 +57,7 @@ require_xcodebuild() {
     echo -e "${RED}✗ xcodebuild not found. Run this on the Mac host with Xcode installed.${NC}"
     exit 1
   fi
+  "$REPO_ROOT/scripts/bootstrap-universal-ai-connector.sh"
 }
 
 require_swift() {

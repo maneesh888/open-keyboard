@@ -13,6 +13,20 @@ run `./scripts/check-semantic-prompt-contract.sh`. Contract or adapter changes a
 and require the normal exact-head live gateway evidence before release. Generated adapters must
 derive from canonical JSON; do not edit them or add fallback prompt copies in this repository.
 
+## Universal AI Connector consumption
+
+`Vendor/universal-ai-connector` is a second pinned Git submodule. OpenKeyboard links only the public
+`UniversalAiConnector` Swift package product from its `swift-package/` directory. Never import the
+private bridge or consume an adjacent checkout, branch tip, local modification, or uncommitted API.
+
+After initializing submodules, run `./scripts/bootstrap-universal-ai-connector.sh` before a direct
+Xcode build. Repository iOS test routes call it automatically. The bootstrap verifies the checkout
+against the recorded gitlink, refuses tracked connector modifications, invokes the connector's
+canonical XCFramework build, and validates its arm64 iOS device and Simulator slices. Connector
+gitlink, bootstrap, package-project, adapter, model-discovery, or generation-pipeline changes are
+gateway-differential and require the exact-head live matrix plus normal simulator runtime proof.
+See `docs/UNIVERSAL_AI_CONNECTOR.md` for the runtime ownership boundary.
+
 ## Purpose
 
 OpenKeyboard uses proportional local checks and exact-head release evidence. `AGENTS.md` is the

@@ -10,7 +10,6 @@ import SwiftUI
 import UIKit
 
 protocol GatewayConnectionTesting {
-    func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String]
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws
     func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport
@@ -329,94 +328,79 @@ class SettingsViewModel: ObservableObject {
             let previousDiscoveryIdentity = modelDiscoveryIdentity
             let previousDraftModel = selectedModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            let success = try await gatewayTester.testConnection(
+            let models = try await gatewayTester.fetchModels(
                 gatewayURL: draftGatewayURL,
                 apiKey: draftAPIKey
             )
             guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
+            availableModels = Self.normalizedModelChoices(models)
+            modelDiscoveryIdentity = draftIdentity
+            let gatewayModel: String
+            if isSavedGatewayIdentity {
+                let configuredModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let exactModel = Self.exactModel(configuredModel, in: availableModels) else {
+                    failConnection(with: NetworkError.modelUnavailable.localizedDescription)
+                    return
+                }
+                gatewayModel = exactModel
+                selectedModelInput = exactModel
+            } else if availableModels.isEmpty {
+                selectedModelInput = ""
+                modelSelectionMessage = nil
+                failConnection(with: "No models returned by gateway")
+                return
+            } else if availableModels.count == 1 {
+                gatewayModel = availableModels[0]
+                selectedModelInput = gatewayModel
+                modelSelectionMessage = nil
+            } else if previousDiscoveryIdentity == draftIdentity,
+                      let exactModel = Self.exactModel(previousDraftModel, in: availableModels) {
+                gatewayModel = exactModel
+                selectedModelInput = exactModel
+                modelSelectionMessage = nil
+            } else {
+                selectedModelInput = ""
+                modelSelectionMessage = "Choose a model for these gateway credentials, then test again."
+                connectionStatus = .unknown
+                errorMessage = nil
+                showsValidatedGatewayDetails = false
+                return
+            }
+            guard !gatewayModel.isEmpty else { return }
 
-            if success {
-                let models = try await gatewayTester.fetchModels(
+            do {
+                try await gatewayTester.testCorrectionSmoke(
                     gatewayURL: draftGatewayURL,
-                    apiKey: draftAPIKey
+                    apiKey: draftAPIKey,
+                    model: gatewayModel
                 )
                 guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
-                availableModels = Self.normalizedModelChoices(models)
-                modelDiscoveryIdentity = draftIdentity
-                let gatewayModel: String
-                if isSavedGatewayIdentity {
-                    let configuredModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard let exactModel = Self.exactModel(configuredModel, in: availableModels) else {
-                        failConnection(with: NetworkError.modelUnavailable.localizedDescription)
-                        return
-                    }
-                    gatewayModel = exactModel
-                    selectedModelInput = exactModel
-                } else if availableModels.isEmpty {
-                    selectedModelInput = ""
-                    modelSelectionMessage = nil
-                    failConnection(with: "No models returned by gateway")
-                    return
-                } else if availableModels.count == 1 {
-                    gatewayModel = availableModels[0]
-                    selectedModelInput = gatewayModel
-                    modelSelectionMessage = nil
-                } else if previousDiscoveryIdentity == draftIdentity,
-                          let exactModel = Self.exactModel(previousDraftModel, in: availableModels) {
-                    gatewayModel = exactModel
-                    selectedModelInput = exactModel
-                    modelSelectionMessage = nil
-                } else {
-                    selectedModelInput = ""
-                    modelSelectionMessage = "Choose a model for these gateway credentials, then test again."
-                    connectionStatus = .unknown
-                    errorMessage = nil
-                    showsValidatedGatewayDetails = false
-                    return
-                }
-                guard !gatewayModel.isEmpty else {
-                    if availableModels.isEmpty {
-                        failConnection(with: "No models returned by gateway")
-                    }
+                let validatedConfig = AppConfig(
+                    apiKey: draftAPIKey,
+                    gatewayURL: draftGatewayURL,
+                    selectedModel: gatewayModel,
+                    isConfigured: true,
+                    grammarCorrectionVerified: true,
+                    grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+                )
+                let validatedAt = Date()
+                guard saveConfig(validatedConfig, validatedAt: validatedAt) else {
+                    failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
                     return
                 }
 
-                do {
-                    try await gatewayTester.testCorrectionSmoke(
-                        gatewayURL: draftGatewayURL,
-                        apiKey: draftAPIKey,
-                        model: gatewayModel
-                    )
-                    guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
-                    let validatedConfig = AppConfig(
-                        apiKey: draftAPIKey,
-                        gatewayURL: draftGatewayURL,
-                        selectedModel: gatewayModel,
-                        isConfigured: true,
-                        grammarCorrectionVerified: true,
-                        grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
-                    )
-                    let validatedAt = Date()
-                    guard saveConfig(validatedConfig, validatedAt: validatedAt) else {
-                        failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
-                        return
-                    }
-
-                    config = validatedConfig
-                    connectionStatus = .success
-                    errorMessage = nil
-                    modelSelectionMessage = nil
-                    AppConfig.clearGatewayConnectionError(from: defaults)
-                    showsValidatedGatewayDetails = true
-                    return
-                } catch {
-                    if Self.isCancellation(error) {
-                        throw NetworkError.cancelled
-                    }
-                    failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel))
+                config = validatedConfig
+                connectionStatus = .success
+                errorMessage = nil
+                modelSelectionMessage = nil
+                AppConfig.clearGatewayConnectionError(from: defaults)
+                showsValidatedGatewayDetails = true
+                return
+            } catch {
+                if Self.isCancellation(error) {
+                    throw NetworkError.cancelled
                 }
-            } else {
-                failConnection(with: "Connection failed")
+                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel))
             }
         } catch {
             guard operationGeneration == gatewayOperationGeneration,
@@ -512,9 +496,10 @@ class SettingsViewModel: ObservableObject {
         var choices: [String] = []
         for model in models {
             let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty,
-                  !choices.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) else { continue }
-            choices.append(trimmed)
+            guard !model.isEmpty,
+                  model == trimmed,
+                  !choices.contains(model) else { continue }
+            choices.append(model)
         }
         return choices
     }
@@ -522,7 +507,7 @@ class SettingsViewModel: ObservableObject {
     private static func exactModel(_ model: String, in choices: [String]) -> String? {
         let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return choices.first { $0.caseInsensitiveCompare(trimmed) == .orderedSame }
+        return choices.first { $0 == trimmed }
     }
 
     private func failConnection(with message: String) {

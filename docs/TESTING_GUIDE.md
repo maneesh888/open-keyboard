@@ -244,6 +244,8 @@ http://localhost:8080/admin/
    - Repeat for OpenKeyboardExtension target
 
 8. **Build:**
+   - From the repository root, run `git submodule update --init --recursive` and
+     `./scripts/bootstrap-universal-ai-connector.sh` once before a direct Xcode build.
    - Select iPhone Simulator
    - Press ⌘+R to build and run
 
@@ -277,7 +279,9 @@ But they need to be **imported into an Xcode project** to build.
 
 1. **Launch OpenKeyboard app** (on Simulator or device)
 2. **Enter API key** from Test 3
-3. **Test connection** → should hit `http://localhost:8080/health`
+3. **Test connection** → should perform one authenticated `GET /v1/models`, require an exact model
+   selection when multiple models are returned, then run the grammar smoke through
+   `POST /v1/chat/completions`. The app does not call `/health`.
 4. **Enable keyboard:**
    - Settings → General → Keyboard → Keyboards
    - Add "OpenKeyboard"
@@ -286,7 +290,7 @@ But they need to be **imported into an Xcode project** to build.
 6. **Switch to OpenKeyboard** (globe key)
 7. **Type something** → AI suggestions should appear
 8. **Tap AI button** → AI actions menu
-9. **Select "Fix Grammar"** → should call gateway `/v1/completions`
+9. **Select "Fix Grammar"** → should call gateway `/v1/chat/completions` through Universal AI Connector
 
 ---
 

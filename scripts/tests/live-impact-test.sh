@@ -57,7 +57,6 @@ gateway_sensitive_paths=(
   scripts/ios/enable-openkeyboard-simulator-keyboard.sh
   OpenKeyboard/Info.plist
   OpenKeyboard/Views/PlaygroundView.swift
-  OpenKeyboard/Views/LiveAITestHarnessView.swift
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
@@ -81,6 +80,7 @@ differential_workflow_paths=(
   .github/workflows/live.yml
   .gitmodules
   Vendor/semantic-prompt-contract
+  Vendor/universal-ai-connector
   scripts/check-live.sh
   scripts/live-impact.sh
   scripts/live-policy-bootstrap.sh
@@ -89,6 +89,7 @@ differential_workflow_paths=(
   scripts/ios/openkeyboard-gateway.seed.env.example
   scripts/ios/seed-simulator-gateway-config.sh
   scripts/ios/test.sh
+  scripts/tests/universal-ai-connector-policy-test.sh
 )
 
 for differential_workflow_path in "${differential_workflow_paths[@]}"; do
@@ -97,8 +98,10 @@ done
 
 differential_model_pipeline_paths=(
   OpenKeyboard/Models/KeyboardSuggestionModels.swift
-  OpenKeyboard/Services/CanonicalGatewayClient.swift
+  OpenKeyboard/Services/OpenKeyboardAIConnector.swift
+  OpenKeyboard/Services/UniversalAIConnectorAdapter.swift
   OpenKeyboard/Services/NetworkManager.swift
+  OpenKeyboard/Views/LiveAITestHarnessView.swift
   OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
   OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift
   OpenKeyboardExtension/KeyboardAIService.swift

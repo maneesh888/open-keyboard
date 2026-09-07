@@ -1,6 +1,6 @@
 # Open Keyboard TDD Status
 
-Last updated: 2026-06-07
+Last updated: 2026-09-08
 
 ## Local CI
 
@@ -12,9 +12,11 @@ Host command:
 
 Current verified host result:
 
-- Focused `KeyboardContextTests`: 12 tests, 0 failed
-- Core package tests: 61 executed, 2 skipped live tests, 0 failed
-- iOS app/extension build: passed on iPhone 16
+- Core package tests: 86 executed, 4 opt-in live tests skipped, 0 failed
+- iOS app/extension build: passed with the public Universal AI Connector product linked into both targets
+- Deterministic UI-target suite: 307 tests, 0 failed
+- Universal AI Connector consumption policy: passed; no private-bridge import or direct production
+  `URLSession`/`URLRequest` path
 - Xcode UI screenshot harness: passed on iPhone 16 and iPhone SE (3rd generation) in the previous foundation slice
 - Latest full quick-CI verifier request ID: `2026-05-28T124406-openkeyboard-context-regression-verify`
 - Latest automated real-extension XCUITest request ID: `20260606T022442-openkeyboard-uitest-debug-flag-rerun`
@@ -46,10 +48,14 @@ Current verified host result:
 - [x] Onboarding first-page layout covered by an automated simulator `XCTAttachment`
 - [x] Xcode UI-test automated screenshot harness for iPhone 16 + iPhone SE
 - [x] Automated real-extension Fix Grammar XCUITest path with injected gateway credentials
+- [x] Pinned Universal AI Connector Swift-package consumption in the app and extension
+- [x] Exact connector request and response mapping tests
+- [x] Connector model discovery, unsupported-discovery, typed-error, reuse, close, and cancellation tests
+- [x] Direct HTTP client moved to test-only Core fixtures
 
 ## Live smoke scaffold
 
-- [x] `URLSessionHTTPClient`
+- [x] Test-only `TestURLSessionHTTPClient` for legacy Core compatibility coverage
 - [x] Opt-in `LiveGatewayTests` compile and skip cleanly without env vars
 
 ## Live gateway smoke test
@@ -63,7 +69,8 @@ OPEN_KEYBOARD_LIVE_MODEL=... \
 swift test --package-path OpenKeyboardCore --filter LiveGatewayTests
 ```
 
-The live smoke covers:
+This legacy Core live smoke is a compatibility test fixture, not the shipped app/extension
+transport. The production iOS live routes use Universal AI Connector. The Core smoke covers:
 
 - gateway health
 - model list request
@@ -71,11 +78,11 @@ The live smoke covers:
 
 ## Next TDD TODO
 
-1. Expand prompt quality/performance eval fixtures and rubric coverage.
-2. Run opt-in live prompt evals against a configured gateway/model and record results.
-3. Move gateway API key sharing from App Group `UserDefaults` to shared Keychain before release.
-4. Wire the documented Full Access/network privacy copy into onboarding/settings/error states.
-5. Add remaining rewrite/fix-tone/summarize/continue keyboard actions after Fix Grammar stabilizes.
+1. Run the exact-head gateway differential through the Universal AI Connector iOS path.
+2. Collect normal simulator Settings, Improve, and Translate runtime proof.
+3. Record extension linked size, startup latency, and memory measurements for the exact head.
+4. Complete independent exact-head review and required GitHub checks.
+5. Continue broader prompt quality/performance evaluation and release hardening.
 
 ## Release-hardening docs
 
