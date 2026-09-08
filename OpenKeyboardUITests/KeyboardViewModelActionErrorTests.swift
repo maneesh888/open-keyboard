@@ -465,9 +465,30 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.performAIAction(.fixGrammar)
         await waitUntil { viewModel.actionError != nil }
 
-        XCTAssertEqual(viewModel.actionError?.kind, .grammarCapability)
-        XCTAssertEqual(viewModel.actionError?.title, "Model couldn't correct this text")
-        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.grammarCapabilityMessage)
+        XCTAssertEqual(viewModel.actionError?.kind, .invalidResponse)
+        XCTAssertEqual(viewModel.actionError?.title, "Couldn't use response")
+        XCTAssertEqual(viewModel.actionError?.message, "Couldn't generate a usable suggestion. Try again.")
+        XCTAssertEqual(proxy.text, source)
+    }
+
+    func testInvalidGrammarResponseShowsRetryableErrorInsteadOfModelIncompatibility() async {
+        let source = "The report need correction."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: .invalidResponse),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.scope, .grammar)
+        XCTAssertEqual(viewModel.actionError?.kind, .invalidResponse)
+        XCTAssertEqual(viewModel.actionError?.title, "Couldn't use response")
+        XCTAssertEqual(viewModel.actionError?.message, "Couldn't generate a usable suggestion. Try again.")
+        XCTAssertNotEqual(viewModel.actionError?.title, "Model couldn't correct this text")
         XCTAssertEqual(proxy.text, source)
     }
 
@@ -2586,6 +2607,122 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.completionPanelState, .noIssues)
     }
 
+    func testWholeVersionGrammarProposalCanCopyNavigateBackAndDismissWithoutChangingText() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+        XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.originalText, source)
+        XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.proposedText, proposed)
+        XCTAssertEqual(
+            viewModel.grammarWholeVersionProposalState?.replacementDiff.highlightedReplacementSegments
+                .map(\.text).joined(),
+            proposed
+        )
+        XCTAssertEqual(proxy.text, source)
+
+        UIPasteboard.general.string = nil
+        viewModel.copyGrammarWholeVersionProposal()
+        XCTAssertEqual(UIPasteboard.general.string, proposed)
+
+        viewModel.showKeyboardPanel()
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+        viewModel.showAnalysisResult()
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+
+        viewModel.dismissGrammarWholeVersionProposal()
+        XCTAssertEqual(proxy.text, source)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testUseWholeVersionGrammarProposalAppliesOnlyAfterExplicitReviewAction() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+        XCTAssertEqual(proxy.text, source)
+
+        viewModel.useGrammarWholeVersionProposal()
+
+        XCTAssertEqual(proxy.text, proposed)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarVersionApplied)
+    }
+
+    func testStaleWholeVersionGrammarProposalNeverReplacesChangedDocument() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let edited = source + " New user text."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+        proxy.replaceTextForTest(edited)
+
+        viewModel.useGrammarWholeVersionProposal()
+
+        XCTAssertEqual(proxy.text, edited)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testRerunWholeVersionGrammarProposalRequestsTheSameCapturedTextAgain() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let service = SequencedKeyboardAIService(results: [
+            Self.wholeVersionGrammarResult(proposed),
+            Self.wholeVersionGrammarResult(proposed)
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: source),
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts.count == 1 && viewModel.grammarWholeVersionProposalState != nil }
+        viewModel.rerunGrammarWholeVersionProposal()
+        await waitUntil { service.requestedTexts.count == 2 && viewModel.grammarWholeVersionProposalState != nil }
+
+        XCTAssertEqual(service.requestedTexts, [source, source])
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+    }
+
     func testRejectAllKeepsOriginalAndManualDocumentEditInvalidatesGrammarSession() async {
         let source = "i has teh note."
         let corrected = "I have the note."
@@ -2677,12 +2814,20 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
-    private static func plainGrammarResult(_ correctedText: String) -> KeyboardActionOperationResult {
+    private static func plainGrammarResult(
+        _ correctedText: String,
+        presentation: GrammarCorrectionPresentation? = nil
+    ) -> KeyboardActionOperationResult {
         KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
-            correctedText: correctedText
+            correctedText: correctedText,
+            grammarPresentation: presentation
         )
+    }
+
+    private static func wholeVersionGrammarResult(_ proposedText: String) -> KeyboardActionOperationResult {
+        plainGrammarResult(proposedText, presentation: .wholeVersionProposal)
     }
 
     private static func plainRewriteResult(

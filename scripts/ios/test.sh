@@ -431,7 +431,7 @@ case "$MODE" in
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
-      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRejectsLegacyJSONWritingEnvelopeAsModelCapabilityFailure \
+      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRejectsLegacyJSONGrammarEnvelopeAsRetryableInvalidResponse \
       -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRetriesGenericTranslationCapabilityFailureThenScopesWarning \
       -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testModelCapabilityFailureIsShownForRewriteActionPanelAndPreservesText \
       -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testAutomaticGrammarCapabilityFailureShowsTypedStateAndPreservesText \

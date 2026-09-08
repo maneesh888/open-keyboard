@@ -10,6 +10,7 @@ enum KeyboardPanelMode: Equatable {
     case keyboard
     case actions
     case rewriteOptions
+    case grammarWholeVersionProposal
     case correctionDetail
     case correctionComplete
 }
@@ -46,7 +47,7 @@ enum KeyboardPanelLayout {
         for panelMode: KeyboardPanelMode,
         actionPanelState: KeyboardActionPanelState?
     ) -> CGFloat {
-        if panelMode == .actions, actionPanelState != nil {
+        if panelMode == .grammarWholeVersionProposal || (panelMode == .actions && actionPanelState != nil) {
             return actionPanelHeight
         }
         return preferredKeyboardHeight
@@ -79,6 +80,11 @@ struct KeyboardCompletionPanelState: Equatable {
         title: "Review complete",
         message: "Your grammar choices are applied.",
         allowsGrammarCheckAgain: true
+    )
+
+    static let grammarVersionApplied = KeyboardCompletionPanelState(
+        title: "Version applied",
+        message: "The reviewed version replaced the original text."
     )
 
     static let rewriteApplied = KeyboardCompletionPanelState(

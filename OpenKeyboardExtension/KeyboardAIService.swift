@@ -322,7 +322,7 @@ enum KeyboardAIError: LocalizedError, Equatable {
         case .server(let message):
             return message
         case .invalidResponse:
-            return "No AI response"
+            return "Couldn't generate a usable suggestion. Try again."
         case .missingTranslationTarget:
             return "Choose a language"
         case .unreliableTranslation(let target):
@@ -342,7 +342,9 @@ enum KeyboardAIError: LocalizedError, Equatable {
             return .translationCapability
         case .timeout:
             return .timeout
-        case .notConfigured, .missingInput, .invalidURL, .transport, .server, .invalidResponse, .missingTranslationTarget:
+        case .invalidResponse:
+            return .invalidResponse
+        case .notConfigured, .missingInput, .invalidURL, .transport, .server, .missingTranslationTarget:
             return .gatewayUnavailable
         }
     }
@@ -494,13 +496,13 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         let chunks = GrammarTextChunker.chunks(in: text)
         guard !chunks.isEmpty,
               chunks.allSatisfy({ $0.text.count <= GrammarTextChunker.absoluteMaximumCharacters }) else {
-            throw KeyboardAIError.modelCapability
+            throw KeyboardAIError.invalidResponse
         }
-        var correctedChunks = Array<String?>(repeating: nil, count: chunks.count)
+        var correctedChunks = Array<ValidatedGrammarCorrectionResponse?>(repeating: nil, count: chunks.count)
         let concurrencyLimit = 2
 
         do {
-            try await withThrowingTaskGroup(of: (Int, String).self) { group in
+            try await withThrowingTaskGroup(of: (Int, ValidatedGrammarCorrectionResponse).self) { group in
                 var nextIndex = 0
                 func addNext() {
                     guard nextIndex < chunks.count else { return }
@@ -525,7 +527,10 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                             ),
                             timeoutInterval: self.requestTimeoutInterval
                         )
-                        return (chunkIndex, try await GrammarCorrectionResponseValidator.validated(output, original: chunk.text))
+                        return (
+                            chunkIndex,
+                            try await GrammarCorrectionResponseValidator.classified(output, original: chunk.text)
+                        )
                     }
                 }
 
@@ -542,17 +547,31 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         } catch let error as CanonicalGatewayClientError {
             throw Self.keyboardError(from: error)
         } catch is GrammarCorrectionResponseError {
-            throw KeyboardAIError.modelCapability
+            throw KeyboardAIError.invalidResponse
         } catch {
             throw Self.keyboardError(from: error)
         }
 
         guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
-        let corrected = correctedChunks.compactMap { $0 }.joined()
+        let validatedChunks = correctedChunks.compactMap { $0 }
+        let corrected = validatedChunks.map(\.text).joined()
         do {
-            return try await KeyboardActionOperationResult.plainTextGrammarResponse(corrected, original: text)
+            let validatedWholeResponse = try await GrammarCorrectionResponseValidator.classified(
+                corrected,
+                original: text
+            )
+            let hasStructurallyDriftingChunk = validatedChunks.contains {
+                $0.disposition == .wholeVersionProposal
+            }
+            return KeyboardActionOperationResult.plainTextGrammarResponse(
+                validatedWholeResponse,
+                original: text,
+                forceWholeVersionProposal: hasStructurallyDriftingChunk
+            )
+        } catch is GrammarCorrectionResponseError {
+            throw KeyboardAIError.invalidResponse
         } catch {
-            throw KeyboardAIError.modelCapability
+            throw Self.keyboardError(from: error)
         }
     }
 
