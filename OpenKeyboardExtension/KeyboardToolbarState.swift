@@ -84,7 +84,8 @@ struct KeyboardCompletionPanelState: Equatable {
 
     static let grammarVersionApplied = KeyboardCompletionPanelState(
         title: "Version applied",
-        message: "The reviewed version replaced the original text."
+        message: "The reviewed version replaced the original text.",
+        allowsGrammarCheckAgain: true
     )
 
     static let rewriteApplied = KeyboardCompletionPanelState(

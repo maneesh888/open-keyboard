@@ -1244,8 +1244,21 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks.allSatisfy { chunk in
-            chunk.range.end == text.count || chunk.text.hasSuffix("\n") || ".!?".contains(chunk.text.last ?? "x")
+            let content = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return chunk.range.end == text.count || ".!?".contains(content.last ?? "x")
         })
+    }
+
+    func testGrammarChunkerProcessesEverySentenceIndependentlyByDefault() {
+        let text = "Mr. Smith recieve the first note. The second sentence have an error. The final sentence is clean."
+        let chunks = GrammarTextChunker.chunks(in: text)
+
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.map(\.text).joined(), text)
+        XCTAssertEqual(chunks[0].text, "Mr. Smith recieve the first note. ")
+        XCTAssertEqual(chunks[1].text, "The second sentence have an error. ")
+        XCTAssertEqual(chunks[2].text, "The final sentence is clean.")
+        XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
     }
 
     func testGrammarChunkerIsolatesSubstantialMultiParagraphTextForLowWeightModels() {
@@ -1260,13 +1273,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         """
         let chunks = GrammarTextChunker.chunks(in: text)
 
-        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.count, 4)
         XCTAssertEqual(chunks.map(\.text).joined(), text)
         XCTAssertEqual(chunks.first?.range.start, 0)
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks[1].text.hasPrefix("This clean paragraph should remain unchanged. 😊\n\n"))
-        XCTAssertTrue(chunks[1].text.contains("please seperate the qustions"))
+        XCTAssertTrue(chunks[2].text.contains("please seperate the qustions"))
     }
 
     func testDenseDefiniteCorrectionsRemainValidWithoutDroppingCleanParagraphs() throws {

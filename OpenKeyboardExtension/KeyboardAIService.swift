@@ -616,30 +616,34 @@ struct GrammarTextChunk: Equatable, Sendable {
 struct GrammarTextChunker {
     static let maximumCharacters = 6_000
     static let absoluteMaximumCharacters = 24_000
-    private static let multiParagraphSafetyCharacters = 256
-    private static let multiParagraphChunkCharacters = 120
 
     static func chunks(in text: String, maximumCharacters: Int = GrammarTextChunker.maximumCharacters) -> [GrammarTextChunk] {
         let characters = Array(text)
-        let paragraphEnds = paragraphBoundaryEnds(in: characters)
-        if maximumCharacters == GrammarTextChunker.maximumCharacters,
-           characters.count >= multiParagraphSafetyCharacters,
-           paragraphEnds.count >= 2 {
-            return chunks(
-                in: characters,
-                sectionEnds: [characters.count],
-                maximumCharacters: multiParagraphChunkCharacters
-            )
-        }
-        guard characters.count > maximumCharacters else {
-            return [GrammarTextChunk(range: KeyboardTextRange(start: 0, end: characters.count), text: text)]
-        }
-
+        guard !characters.isEmpty else { return [] }
         return chunks(
             in: characters,
-            sectionEnds: [characters.count],
+            sectionEnds: sentenceBoundaryEnds(in: text, characterCount: characters.count),
             maximumCharacters: maximumCharacters
         )
+    }
+
+    private static func sentenceBoundaryEnds(in text: String, characterCount: Int) -> [Int] {
+        let tokenizer = NLTokenizer(unit: .sentence)
+        tokenizer.string = text
+        var ends: [Int] = []
+        tokenizer.enumerateTokens(in: text.startIndex..<text.endIndex) { range, _ in
+            let end = text.distance(from: text.startIndex, to: range.upperBound)
+            if text[range].contains(where: { $0.isLetter || $0.isNumber }) {
+                ends.append(end)
+            } else if !ends.isEmpty {
+                ends[ends.count - 1] = end
+            }
+            return true
+        }
+
+        guard !ends.isEmpty else { return [characterCount] }
+        ends[ends.count - 1] = characterCount
+        return ends
     }
 
     private static func chunks(
@@ -690,22 +694,18 @@ struct GrammarTextChunker {
                     candidate -= 1
                 }
                 if !foundBoundary {
-                    candidate = hardEnd + 1
-                    while candidate < sectionEnd {
-                        let previous = characters[candidate - 1]
-                        let next = characters[candidate]
-                        let paragraphBoundary = previous == "\n" && (candidate < 2 || characters[candidate - 2] == "\n")
-                        let sentenceBoundary = ".!?".contains(previous) && next.isWhitespace
-                        if paragraphBoundary || sentenceBoundary {
+                    candidate = hardEnd
+                    while candidate > minimumEnd {
+                        if characters[candidate - 1].isWhitespace {
                             end = candidate
                             foundBoundary = true
                             break
                         }
-                        candidate += 1
+                        candidate -= 1
                     }
                 }
                 if !foundBoundary {
-                    end = sectionEnd
+                    end = hardEnd
                 }
             }
             let chunkText = String(characters[start..<end])
@@ -717,22 +717,4 @@ struct GrammarTextChunker {
         }
     }
 
-    private static func paragraphBoundaryEnds(in characters: [Character]) -> [Int] {
-        guard characters.count >= 2 else { return [] }
-        var boundaries: [Int] = []
-        var index = 1
-        while index < characters.count {
-            guard characters[index - 1] == "\n", characters[index] == "\n" else {
-                index += 1
-                continue
-            }
-            var end = index + 1
-            while end < characters.count, characters[end] == "\n" {
-                end += 1
-            }
-            boundaries.append(end)
-            index = end
-        }
-        return boundaries
-    }
 }

@@ -252,8 +252,14 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
     func testKeyboardAIServicePresentsSafeStructuralGrammarResponseAsWholeVersionProposal() async throws {
         let source = "First sentnce needs correction.\nSecond line stays here."
-        let proposed = "First sentence needs correction. Second line stays here."
-        let result = try await keyboardService(content: proposed).performResult(
+        let proposed = "A different opening sentence appears.\nSecond line stays here."
+        let chunks = GrammarTextChunker.chunks(in: source)
+        var contentsByInput = Dictionary(uniqueKeysWithValues: chunks.map { ($0.text, $0.text) })
+        contentsByInput[chunks[0].text] = "A different opening sentence appears.\n"
+        let transport = InputMappedCanonicalGatewayClientTestTransport(contentsByInput: contentsByInput)
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
             action: .fixGrammar,
             on: source,
             config: configuredGateway
@@ -271,6 +277,30 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testKeyboardAIServiceChecksAndReassemblesEverySentence() async throws {
+        let source = "The first sentence are wrong. The second sentence have an error. The final sentence is clean."
+        let corrected = "The first sentence is wrong. The second sentence has an error. The final sentence is clean."
+        let chunks = GrammarTextChunker.chunks(in: source)
+        XCTAssertEqual(chunks.count, 3)
+        let correctedChunks = GrammarTextChunker.chunks(in: corrected)
+        let contentsByInput = Dictionary(uniqueKeysWithValues: zip(chunks, correctedChunks).map { pair in
+            (pair.0.text, pair.1.text)
+        })
+        let transport = InputMappedCanonicalGatewayClientTestTransport(contentsByInput: contentsByInput)
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, corrected)
+        let requestedInputs = await transport.requestedInputs
+        XCTAssertEqual(Set(requestedInputs), Set(chunks.map(\.text)))
+        XCTAssertEqual(requestedInputs.count, chunks.count)
+    }
+
     func testKeyboardAIServiceAggregatesMixedChunkDriftIntoOneWholeVersionProposal() async throws {
         let source = """
         This opening sentence continues
@@ -282,11 +312,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
         """
         let chunks = GrammarTextChunker.chunks(in: source)
         XCTAssertGreaterThan(chunks.count, 1)
-        let structuralChunk = try XCTUnwrap(chunks.first { $0.text.contains("continues\nwith") })
-        let structurallyChanged = structuralChunk.text.replacingOccurrences(
-            of: "continues\nwith",
-            with: "continues with"
-        )
+        let structuralChunk = try XCTUnwrap(chunks.first { $0.text.contains("deliberate line break") })
+        let structurallyChanged = "The launch plan is complete and the customer can review it tomorrow. "
         var contentsByInput = Dictionary(uniqueKeysWithValues: chunks.map { ($0.text, $0.text) })
         contentsByInput[structuralChunk.text] = structurallyChanged
         let transport = InputMappedCanonicalGatewayClientTestTransport(contentsByInput: contentsByInput)
@@ -733,9 +760,9 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
     func testKeyboardAIServiceMapsEmptyMalformedAndClearlyTruncatedGrammarToRetryableInvalidResponse() async throws {
         let longSource = String(
-            repeating: "The detailed account update contains important information for every reviewer. ",
+            repeating: "The detailed account update contains important information for every reviewer ",
             count: 6
-        )
+        ) + "."
         let cases = [
             ("   ", "A grammar source."),
             ("```\nA corrected grammar source.\n```", "A grammar source."),
