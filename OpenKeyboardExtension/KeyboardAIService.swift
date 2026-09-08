@@ -498,6 +498,37 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
               chunks.allSatisfy({ $0.text.count <= GrammarTextChunker.absoluteMaximumCharacters }) else {
             throw KeyboardAIError.invalidResponse
         }
+
+        var validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+        if validatedChunks.map(\.text).joined() == text {
+            validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+        }
+
+        let corrected = validatedChunks.map(\.text).joined()
+        do {
+            let validatedWholeResponse = try await GrammarCorrectionResponseValidator.classified(
+                corrected,
+                original: text
+            )
+            let hasStructurallyDriftingChunk = validatedChunks.contains {
+                $0.disposition == .wholeVersionProposal
+            }
+            return KeyboardActionOperationResult.plainTextGrammarResponse(
+                validatedWholeResponse,
+                original: text,
+                forceWholeVersionProposal: hasStructurallyDriftingChunk
+            )
+        } catch is GrammarCorrectionResponseError {
+            throw KeyboardAIError.invalidResponse
+        } catch {
+            throw Self.keyboardError(from: error)
+        }
+    }
+
+    private func requestGrammarCorrections(
+        for chunks: [GrammarTextChunk],
+        config: AppConfig
+    ) async throws -> [ValidatedGrammarCorrectionResponse] {
         var correctedChunks = Array<ValidatedGrammarCorrectionResponse?>(repeating: nil, count: chunks.count)
         let concurrencyLimit = 2
 
@@ -553,26 +584,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         }
 
         guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
-        let validatedChunks = correctedChunks.compactMap { $0 }
-        let corrected = validatedChunks.map(\.text).joined()
-        do {
-            let validatedWholeResponse = try await GrammarCorrectionResponseValidator.classified(
-                corrected,
-                original: text
-            )
-            let hasStructurallyDriftingChunk = validatedChunks.contains {
-                $0.disposition == .wholeVersionProposal
-            }
-            return KeyboardActionOperationResult.plainTextGrammarResponse(
-                validatedWholeResponse,
-                original: text,
-                forceWholeVersionProposal: hasStructurallyDriftingChunk
-            )
-        } catch is GrammarCorrectionResponseError {
-            throw KeyboardAIError.invalidResponse
-        } catch {
-            throw Self.keyboardError(from: error)
-        }
+        return correctedChunks.compactMap { $0 }
     }
 
     static func keyboardError(from error: Error) -> KeyboardAIError {

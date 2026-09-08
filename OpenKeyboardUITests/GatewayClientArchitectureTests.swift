@@ -814,6 +814,28 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testKeyboardAIServiceRetriesOneCompletelyUnchangedGrammarPass() async throws {
+        let source = "Our support team definately needs the corrected refund note."
+        let corrected = "Our support team definitely needs the corrected refund note."
+        let transport = SequencedCanonicalGatewayClientTestTransport(contents: [source, corrected])
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, corrected)
+        XCTAssertEqual(transport.requests.count, 2)
+        let requestInputs = try transport.requests.map { request -> String in
+            let data = try XCTUnwrap(request.httpBody)
+            let body = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+            return try XCTUnwrap(body["input_text"] as? String)
+        }
+        XCTAssertEqual(requestInputs, [source, source])
+    }
+
     private func assertModelCapabilityFailure(
         content: String,
         action: KeyboardAIAction,
