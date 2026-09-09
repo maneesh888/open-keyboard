@@ -85,7 +85,9 @@ private user text, generated artifacts, and raw logs out of the packet.
    connected devices. The human route instead accepts explicit exact-head repository-owner approval
    without a screenshot upload, while preserving the missing AI-evidence boundary.
 8. Treat every `UNVERIFIED` in-scope row as a blocker and tie every material finding or uncertainty to an `UNVERIFIED` row. Residual proof limits may contain explicitly authorized out-of-scope behavior only.
-9. For release readiness, run `./scripts/check.sh --full` on the clean exact head.
+9. For release readiness, classify the clean exact-head diff with
+   `./scripts/technical-impact.sh`. Run `./scripts/check.sh --hygiene` only when it reports
+   `docs-only`; run `./scripts/check.sh --full` when it reports `full`.
 10. Follow the exact classifier result on the same head: `gateway` requires
    `./scripts/check-live.sh gateway`; `gateway-differential` requires
    `./scripts/check-live.sh gateway-differential`. Exact single-model work sets
@@ -129,7 +131,8 @@ Before marking a PR ready or merging it, always require:
 
 1. a current PR brief and neutral reviewer packet bound to the full head SHA, with every in-scope requirement listed separately;
 2. independently reviewed SHA equal to GitHub's current head;
-3. successful `./scripts/check.sh --full` for that SHA;
+3. successful classifier-selected exact-head verification for that SHA (`--hygiene` for
+   `docs-only`, otherwise `--full`);
 4. successful applicable exact-head live evidence;
 5. either successful exact-head AI screenshot proof for every proof-sensitive simulator/device
    surface (including a verified test-only carry-forward record bound to the current head), or

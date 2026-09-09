@@ -41,9 +41,11 @@ it.
    their own verification and explicitly approve the exact head without granting Codex device
    access. Follow the evidence and interaction rules below.
 8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
-   authorized push, run `./scripts/check.sh --full` and the
-   classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
-   `$review-verify-merge-pr` for exact-head review, readiness, and guarded merge.
+   authorized push, use `./scripts/technical-impact.sh` to run `./scripts/check.sh --hygiene` for a
+   documentation-only exact-head diff and `./scripts/check.sh --full` for every other diff, then
+   run the classifier-selected exact-head live gate when applicable. Open a draft PR, keep a
+   requirement ledger, and use `$review-verify-merge-pr` for exact-head review, readiness, and
+   guarded merge.
 9. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
    Remove a session worktree and delete its merged branch only after confirming it is clean and no
    longer needed; never destructively clean uncommitted or unmerged work without explicit approval.
@@ -333,7 +335,8 @@ Prefer repository scripts to equivalent hand-written commands:
 | Hygiene or policy-only change | `./scripts/check.sh --hygiene` |
 | Standard deterministic gate | `./scripts/check.sh --quick` |
 | Default local CI (`core` + `build`) | `./scripts/local-ci.sh --quick` |
-| Exact-head release/pre-push gate | `./scripts/check.sh --full` |
+| Documentation-only exact-head release/pre-push gate | `./scripts/check.sh --hygiene` selected by `./scripts/technical-impact.sh` |
+| Code/configuration/dependency/workflow exact-head release/pre-push gate | `./scripts/check.sh --full` selected by `./scripts/technical-impact.sh` |
 | Core model/parser/service | `./scripts/ios/test.sh core` |
 | App + keyboard-extension build | `./scripts/ios/test.sh build` |
 | Deterministic UI targets | `./scripts/ios/test.sh deterministic-ui` |
@@ -412,8 +415,9 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
   missing, stale, fallback, wrong-target, wrong-model, or contributor-attested-only material
   evidence is `UNVERIFIED` and blocks automatic authorization.
 - Use the read-only project `pr-reviewer` through `$review-verify-merge-pr`. Bind its report, the
-  full gate, live/runtime evidence, and all GitHub checks to the same exact head. Post the report as
-  a durable GitHub `COMMENTED` review and link the newest same-head report from the PR body.
+  classifier-selected proportional gate, live/runtime evidence, and all GitHub checks to the same
+  exact head. Post the report as a durable GitHub `COMMENTED` review and link the newest same-head
+  report from the PR body.
 - After linking the report, submit the skill-specified non-approval revalidation trigger on the
   same head. Before readiness and merge, re-fetch the head, body, linked review, threads,
   protection, mergeability, and complete check rollup; rerun trusted validators and require

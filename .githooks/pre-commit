@@ -17,6 +17,19 @@ if [[ -n "$(git -C "$ROOT" ls-files --others --exclude-standard)" ]]; then
   exit 1
 fi
 
-echo "Running OpenKeyboard deterministic pre-commit checks..."
+TECHNICAL_IMPACT="$("$ROOT/scripts/technical-impact.sh" --staged)"
+
+echo "Running OpenKeyboard deterministic pre-commit checks ($TECHNICAL_IMPACT)..."
 echo "Evidence boundary: this hook can establish DETERMINISTIC_VERIFIED only; it does not grant commit authority or establish LIVE_VERIFIED or RUNTIME_VERIFIED."
-"$ROOT/scripts/check.sh" --quick
+case "$TECHNICAL_IMPACT" in
+  docs-only)
+    "$ROOT/scripts/check.sh" --hygiene
+    ;;
+  full)
+    "$ROOT/scripts/check.sh" --quick
+    ;;
+  *)
+    echo "Technical-impact classification returned an invalid result." >&2
+    exit 1
+    ;;
+esac

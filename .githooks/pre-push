@@ -39,25 +39,48 @@ require_pushed_refs_match_head() {
 require_clean_tree
 require_pushed_refs_match_head < "$PUSH_REFS_FILE"
 
-echo "Running OpenKeyboard pre-push checks..."
-env \
-  -u OPEN_KEYBOARD_LIVE_GATEWAY_URL \
-  -u OPEN_KEYBOARD_LIVE_API_KEY \
-  -u OPEN_KEYBOARD_LIVE_MODEL \
-  -u OPEN_KEYBOARD_TEST_GATEWAY_URL \
-  -u OPEN_KEYBOARD_TEST_API_KEY \
-  -u OPEN_KEYBOARD_TEST_MODEL \
-  -u OPEN_KEYBOARD_LIVE_EXPECTED_SHA \
-  "$ROOT/scripts/check.sh" --full
-require_clean_tree
-
 LIVE_BASE_REF="${OPEN_KEYBOARD_LIVE_BASE_REF:-origin/main}"
 LIVE_BASE_SHA="$(git -C "$ROOT" rev-parse --verify "$LIVE_BASE_REF^{commit}" 2>/dev/null)" || {
-  echo "Live-impact classification could not resolve $LIVE_BASE_REF." >&2
+  echo "Technical/live-impact classification could not resolve $LIVE_BASE_REF." >&2
   echo "Fetch the base branch or set OPEN_KEYBOARD_LIVE_BASE_REF." >&2
   exit 1
 }
 HEAD_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
+TECHNICAL_IMPACT="$("$ROOT/scripts/technical-impact.sh" "$LIVE_BASE_SHA" "$HEAD_SHA")"
+
+echo "Running OpenKeyboard pre-push checks ($TECHNICAL_IMPACT)..."
+case "$TECHNICAL_IMPACT" in
+  docs-only)
+    env \
+      -u OPEN_KEYBOARD_LIVE_GATEWAY_URL \
+      -u OPEN_KEYBOARD_LIVE_API_KEY \
+      -u OPEN_KEYBOARD_LIVE_MODEL \
+      -u OPEN_KEYBOARD_TEST_GATEWAY_URL \
+      -u OPEN_KEYBOARD_TEST_API_KEY \
+      -u OPEN_KEYBOARD_TEST_MODEL \
+      -u OPEN_KEYBOARD_LIVE_EXPECTED_SHA \
+      "$ROOT/scripts/check.sh" --hygiene
+    require_clean_tree
+    exit 0
+    ;;
+  full)
+    env \
+      -u OPEN_KEYBOARD_LIVE_GATEWAY_URL \
+      -u OPEN_KEYBOARD_LIVE_API_KEY \
+      -u OPEN_KEYBOARD_LIVE_MODEL \
+      -u OPEN_KEYBOARD_TEST_GATEWAY_URL \
+      -u OPEN_KEYBOARD_TEST_API_KEY \
+      -u OPEN_KEYBOARD_TEST_MODEL \
+      -u OPEN_KEYBOARD_LIVE_EXPECTED_SHA \
+      "$ROOT/scripts/check.sh" --full
+    ;;
+  *)
+    echo "Technical-impact classification returned an invalid result." >&2
+    exit 1
+    ;;
+esac
+require_clean_tree
+
 LIVE_IMPACT="$("$ROOT/scripts/live-impact.sh" "$LIVE_BASE_SHA" "$HEAD_SHA")"
 
 case "$LIVE_IMPACT" in
