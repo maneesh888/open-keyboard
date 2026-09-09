@@ -158,6 +158,17 @@ if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" --staged)" != "f
   exit 1
 fi
 
+git -C "$FIXTURE" checkout -q -B staged-rename-case "$base_sha"
+mkdir -p "$FIXTURE/OpenKeyboard" "$FIXTURE/docs"
+printf 'runtime\n' > "$FIXTURE/OpenKeyboard/staged-runtime.swift"
+git -C "$FIXTURE" add OpenKeyboard/staged-runtime.swift
+git -C "$FIXTURE" commit -q -m staged-rename-base
+git -C "$FIXTURE" mv OpenKeyboard/staged-runtime.swift docs/staged-runtime.md
+if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" --staged)" != "full" ]]; then
+  echo "A staged source rename into docs bypassed the full gate." >&2
+  exit 1
+fi
+
 git -C "$FIXTURE" checkout -q -B rename-base "$base_sha"
 mkdir -p "$FIXTURE/OpenKeyboard" "$FIXTURE/docs"
 printf 'runtime\n' > "$FIXTURE/OpenKeyboard/runtime.txt"
