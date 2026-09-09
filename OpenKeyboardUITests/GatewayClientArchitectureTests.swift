@@ -1494,6 +1494,7 @@ final class LiveModelDifferentialTests: XCTestCase {
         let service = KeyboardAIService(requestTimeoutInterval: 90)
 
         var grammarLatencies: [TimeInterval] = []
+        var grammarFollowUpSource: String?
         for fixture in Self.grammarFixtures {
             let startedAt = Date()
             let result: KeyboardActionOperationResult
@@ -1517,6 +1518,9 @@ final class LiveModelDifferentialTests: XCTestCase {
             XCTAssertFalse(Self.looksLikeJSONContainer(result.displayText))
             XCTAssertNotEqual(result.displayText, fixture.text, "The definite errors in \(fixture.id) were not corrected.")
             XCTAssertNotNil(result.grammarPresentation)
+            if fixture.id == "short" {
+                grammarFollowUpSource = result.correctedText
+            }
             print(String(
                 format: "LIVE_GRAMMAR_VARIANT role=%@ case=%@ source_chars=%d result_chars=%d presentation=%@ latency=%.3f",
                 role,
@@ -1622,31 +1626,31 @@ final class LiveModelDifferentialTests: XCTestCase {
         }
         let boundaryLatency = Date().timeIntervalSince(boundaryStartedAt)
 
+        let followUpSource = try XCTUnwrap(
+            grammarFollowUpSource,
+            "The initial grammar pass must produce corrected text for the live follow-up."
+        )
         let followUpStartedAt = Date()
         let followUp: KeyboardActionOperationResult
         do {
             followUp = try await service.performResult(
-                action: .translate(.malayalam),
-                on: Self.followUpFixture,
+                action: .fixGrammar,
+                on: followUpSource,
                 config: config
             )
         } catch let error as KeyboardAIError {
-            XCTFail("The short follow-up failed with canonical classification \(error.actionErrorKind).")
+            XCTFail("The grammar follow-up failed with canonical classification \(error.actionErrorKind).")
             return
         } catch {
-            XCTFail("The short follow-up failed without a canonical keyboard classification.")
+            XCTFail("The grammar follow-up failed without a canonical keyboard classification.")
             return
         }
         let followUpLatency = Date().timeIntervalSince(followUpStartedAt)
-        XCTAssertEqual(followUp.operation, "translate")
-        XCTAssertFalse(followUp.items.isEmpty)
-        XCTAssertFalse(followUp.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
-        XCTAssertTrue(
-            followUp.displayText.unicodeScalars.contains {
-                (0x0D00...0x0D7F).contains($0.value)
-            },
-            "The short follow-up must contain usable Malayalam text."
-        )
+        XCTAssertEqual(followUp.operation, "fix_grammar")
+        XCTAssertFalse(followUp.displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(Self.looksLikeJSONContainer(followUp.displayText))
+        XCTAssertNotNil(followUp.grammarPresentation)
+        print("LIVE_GRAMMAR_FOLLOW_UP role=\(role) source_chars=\(followUpSource.count) result_chars=\(followUp.displayText.count)")
 
         print(String(
             format: "LIVE_MODEL_DIFFERENTIAL_LATENCY role=%@ baseline=%.3f boundary=%.3f follow_up=%.3f",
@@ -1682,7 +1686,6 @@ final class LiveModelDifferentialTests: XCTestCase {
     ]
     private static let summaryFixture = "The release moved to Friday. The team will run every full check on Thursday."
     private static let continuationFixture = "The rain stopped just as Maya opened the door, and"
-    private static let followUpFixture = "Good morning, I hope you are well."
     private static let longCapabilityFixture = """
     Each morning the community garden opens before the streets become busy. Volunteers check the paths, water young plants, and place clean tools beside the storage shed. They leave simple notes about work that is finished and tasks that still need attention, so the next group can continue without repeating anything.
 
