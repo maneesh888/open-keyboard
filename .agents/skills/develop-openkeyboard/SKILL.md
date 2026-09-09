@@ -41,8 +41,10 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 4. Run affected tests while iterating, then select the final gate:
    - **Fast/local policy:** affected tests plus `./scripts/check.sh --hygiene`.
    - **Standard completed work:** `./scripts/check.sh --quick`.
-   - **Release/publish:** exact-head `./scripts/check.sh --full`, classifier-selected live gate,
-     required runtime proof, GitHub checks, and independent review.
+   - **Release/publish:** exact-head `./scripts/check.sh --hygiene` for a documentation-only diff
+     or `./scripts/check.sh --full` for every other diff, as selected by
+     `./scripts/technical-impact.sh`; then the classifier-selected live gate, required runtime
+     proof, GitHub checks, and independent review.
 5. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
    changes. Use `gateway-differential` only for the classifier-selected low/high surfaces or
    pre-release verification; preserve exact role/model identity and treat an unstable low boundary

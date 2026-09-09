@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CI_WORKFLOW="$ROOT/.github/workflows/ci.yml"
 LIVE_WORKFLOW="$ROOT/.github/workflows/live.yml"
+PRE_COMMIT_HOOK="$ROOT/.githooks/pre-commit"
 PRE_PUSH_HOOK="$ROOT/.githooks/pre-push"
 DEPLOY_WORKFLOW="$ROOT/.github/workflows/deploy-ios.yml"
 DEPENDABOT="$ROOT/.github/dependabot.yml"
@@ -37,10 +38,14 @@ RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
 WORKFLOW_AUTHORIZATION_POLICY_TEST="$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
 SEMANTIC_CONTRACT_CHECK="$ROOT/scripts/check-semantic-prompt-contract.sh"
 SEMANTIC_CONTRACT_ROOT="$ROOT/Vendor/semantic-prompt-contract"
+TECHNICAL_IMPACT_CLASSIFIER="$ROOT/scripts/technical-impact.sh"
+TECHNICAL_IMPACT_TEST="$ROOT/scripts/tests/technical-impact-test.sh"
+TECHNICAL_GATE_ROUTING_TEST="$ROOT/scripts/tests/technical-gate-routing-test.sh"
 
 for required_file in \
   "$CI_WORKFLOW" \
   "$LIVE_WORKFLOW" \
+  "$PRE_COMMIT_HOOK" \
   "$PRE_PUSH_HOOK" \
   "$DEPLOY_WORKFLOW" \
   "$DEPENDABOT" \
@@ -72,6 +77,9 @@ for required_file in \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$RUNTIME_PROOF_POLICY_TEST" \
   "$WORKFLOW_AUTHORIZATION_POLICY_TEST" \
+  "$TECHNICAL_IMPACT_CLASSIFIER" \
+  "$TECHNICAL_IMPACT_TEST" \
+  "$TECHNICAL_GATE_ROUTING_TEST" \
   "$SEMANTIC_CONTRACT_CHECK" \
   "$SEMANTIC_CONTRACT_ROOT/contracts/manifest.json"; do
   if [[ ! -f "$required_file" ]]; then
@@ -147,6 +155,14 @@ if rg --fixed-strings --quiet 'if [[ "$PR_BODY" != *"$HEAD_SHA"* ]]' "$LIVE_EVID
 fi
 rg --quiet 'Required checks' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'Required technical checks' "$CI_WORKFLOW"
+rg --quiet '^  technical-impact:$' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'git show "$base_sha:scripts/technical-impact.sh"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'needs.technical-impact.outputs.impact == '\''full'\''' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'TECHNICAL_IMPACT: ${{ needs.technical-impact.outputs.impact }}' "$CI_WORKFLOW"
+rg --fixed-strings --quiet 'docs-only)' "$CI_WORKFLOW"
+rg --fixed-strings --quiet '"$CORE_TESTS_RESULT" == "skipped"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet '"$IOS_BUILD_RESULT" == "skipped"' "$CI_WORKFLOW"
+rg --fixed-strings --quiet '"$SEMANTIC_CONTRACT_RESULT" == "skipped"' "$CI_WORKFLOW"
 if rg --fixed-strings --quiet 'Incomplete review evidence' "$CI_WORKFLOW"; then
   echo "Every review-metadata event must create the protected check instead of hiding failures under another name." >&2
   exit 1
@@ -175,13 +191,85 @@ if rg --quiet 'pull-request-commits\.json|CONTRIBUTORS_JSON_FILE' "$CI_WORKFLOW"
 fi
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$CI_WORKFLOW"
 ruby -e '
+  require "open3"
   require "yaml"
 
   jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
+  impact = jobs.fetch("technical-impact")
+  abort "Technical-impact classification must expose its result." unless
+    impact.fetch("outputs").key?("impact")
+
+  %w[core-tests ios-build semantic-contract].each do |job_name|
+    job = jobs.fetch(job_name)
+    abort "#{job_name} must depend on technical-impact classification." unless
+      Array(job.fetch("needs")).include?("technical-impact")
+    abort "#{job_name} must run only for full technical impact." unless
+      job.fetch("if").include?("needs.technical-impact.outputs.impact") &&
+        job.fetch("if").include?("full")
+  end
+
   technical = jobs.fetch("required-technical-checks")
   abort "Technical aggregation has the wrong protected name." unless technical.fetch("name") == "Required technical checks"
   abort "Technical aggregation must not depend on review classification." if
     Array(technical.fetch("needs")).include?("required-review-evidence")
+  abort "Technical aggregation must include the classifier." unless
+    Array(technical.fetch("needs")).include?("technical-impact")
+  aggregate_script = technical.fetch("steps").fetch(0).fetch("run")
+  unless aggregate_script.include?("docs-only") && aggregate_script.include?("skipped") &&
+      aggregate_script.include?("full") && aggregate_script.include?("success")
+    abort "Technical aggregation must accept intentional docs-only skips and require full-job success otherwise."
+  end
+  aggregate_cases = [
+    [
+      "docs-only skips",
+      {
+        "TECHNICAL_IMPACT_RESULT" => "success", "TECHNICAL_IMPACT" => "docs-only",
+        "HYGIENE_RESULT" => "success", "CORE_TESTS_RESULT" => "skipped",
+        "IOS_BUILD_RESULT" => "skipped", "SEMANTIC_CONTRACT_RESULT" => "skipped"
+      },
+      true
+    ],
+    [
+      "full success",
+      {
+        "TECHNICAL_IMPACT_RESULT" => "success", "TECHNICAL_IMPACT" => "full",
+        "HYGIENE_RESULT" => "success", "CORE_TESTS_RESULT" => "success",
+        "IOS_BUILD_RESULT" => "success", "SEMANTIC_CONTRACT_RESULT" => "success"
+      },
+      true
+    ],
+    [
+      "docs-only unexpected heavy execution",
+      {
+        "TECHNICAL_IMPACT_RESULT" => "success", "TECHNICAL_IMPACT" => "docs-only",
+        "HYGIENE_RESULT" => "success", "CORE_TESTS_RESULT" => "success",
+        "IOS_BUILD_RESULT" => "skipped", "SEMANTIC_CONTRACT_RESULT" => "skipped"
+      },
+      false
+    ],
+    [
+      "full skipped build",
+      {
+        "TECHNICAL_IMPACT_RESULT" => "success", "TECHNICAL_IMPACT" => "full",
+        "HYGIENE_RESULT" => "success", "CORE_TESTS_RESULT" => "success",
+        "IOS_BUILD_RESULT" => "skipped", "SEMANTIC_CONTRACT_RESULT" => "success"
+      },
+      false
+    ],
+    [
+      "classifier failure",
+      {
+        "TECHNICAL_IMPACT_RESULT" => "failure", "TECHNICAL_IMPACT" => "",
+        "HYGIENE_RESULT" => "success", "CORE_TESTS_RESULT" => "skipped",
+        "IOS_BUILD_RESULT" => "skipped", "SEMANTIC_CONTRACT_RESULT" => "skipped"
+      },
+      false
+    ]
+  ]
+  aggregate_cases.each do |name, environment, should_pass|
+    _stdout, _stderr, status = Open3.capture3(environment, "bash", stdin_data: aggregate_script)
+    abort "Required technical aggregation mishandled #{name}." unless status.success? == should_pass
+  end
 
   review = jobs.fetch("required-review-evidence")
   review_name = review.fetch("name")
@@ -193,6 +281,16 @@ ruby -e '
   abort "The live check has the wrong protected name." unless live.fetch("name") == "Required live verification"
   abort "The protected live check must be a root job so cancellation cannot hide behind a prerequisite." if live.key?("needs")
 ' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet '"$ROOT/scripts/technical-impact.sh" --staged' "$PRE_COMMIT_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check.sh" --hygiene' "$PRE_COMMIT_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check.sh" --quick' "$PRE_COMMIT_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/technical-impact.sh" "$LIVE_BASE_SHA" "$HEAD_SHA"' "$PRE_PUSH_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check.sh" --hygiene' "$PRE_PUSH_HOOK"
+rg --fixed-strings --quiet '"$ROOT/scripts/check.sh" --full' "$PRE_PUSH_HOOK"
+rg --fixed-strings --quiet 'README.md | docs/*.md' "$TECHNICAL_IMPACT_CLASSIFIER"
+rg --fixed-strings --quiet 'LICENSE*)' "$TECHNICAL_IMPACT_CLASSIFIER"
+rg --fixed-strings --quiet '[[ "$mode" == "100644" ]]' "$TECHNICAL_IMPACT_CLASSIFIER"
+rg --fixed-strings --quiet 'echo "full"' "$TECHNICAL_IMPACT_CLASSIFIER"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
