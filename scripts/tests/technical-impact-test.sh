@@ -169,6 +169,25 @@ if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" --staged)" != "f
   exit 1
 fi
 
+git -C "$FIXTURE" checkout -q -B staged-literal-path-case "$base_sha"
+mkdir -p "$FIXTURE/docs"
+printf 'regular document\n' > "$FIXTURE/docs/z!.md"
+git -C "$FIXTURE" add -- 'docs/z!.md'
+git -C "$FIXTURE" commit -q -m literal-path-base
+literal_path_base_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+ln -s ../README.md "$FIXTURE/docs/z[!a].md"
+git -C "$FIXTURE" add -- ':(literal)docs/z[!a].md'
+if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" --staged)" != "full" ]]; then
+  echo "A staged Markdown symlink with pathspec metacharacters bypassed the full gate." >&2
+  exit 1
+fi
+git -C "$FIXTURE" commit -q -m literal-path-symlink
+literal_path_head_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
+if [[ "$(OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" "$literal_path_base_sha" "$literal_path_head_sha")" != "full" ]]; then
+  echo "A committed Markdown symlink with pathspec metacharacters bypassed the full gate." >&2
+  exit 1
+fi
+
 git -C "$FIXTURE" checkout -q -B rename-base "$base_sha"
 mkdir -p "$FIXTURE/OpenKeyboard" "$FIXTURE/docs"
 printf 'runtime\n' > "$FIXTURE/OpenKeyboard/runtime.txt"

@@ -94,7 +94,7 @@ commit_path_is_plain_file() {
   local entry
   local mode
 
-  entry="$(git -C "$ROOT" ls-tree "$revision" -- "$changed_path")"
+  entry="$(git -C "$ROOT" ls-tree "$revision" -- ":(literal)$changed_path")"
   if [[ -z "$entry" ]]; then
     return 0
   fi
@@ -107,7 +107,7 @@ index_path_is_plain_file() {
   local entry
   local mode
 
-  entry="$(git -C "$ROOT" ls-files --stage -- "$changed_path")"
+  entry="$(git -C "$ROOT" ls-files --stage -- ":(literal)$changed_path")"
   if [[ -z "$entry" ]]; then
     return 0
   fi
