@@ -24,77 +24,6 @@ permissions:
   pull-requests: read
 
 jobs:
-  technical-impact:
-    name: Classify technical impact
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      impact: ${{ steps.classify.outputs.impact }}
-    steps:
-      - name: Check out exact candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
-
-      - name: Classify exact change set
-        id: classify
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-        run: |
-          impact="full"
-          base_sha=""
-          head_sha="$(git rev-parse HEAD)"
-
-          case "$EVENT_NAME" in
-            pull_request|pull_request_review)
-              base_sha="$(jq -er '.pull_request.base.sha' "$GITHUB_EVENT_PATH")"
-              event_head_sha="$(jq -er '.pull_request.head.sha' "$GITHUB_EVENT_PATH")"
-              if [[ "$head_sha" != "$event_head_sha" ]]; then
-                echo "The checked-out commit does not match the pull-request head." >&2
-                exit 1
-              fi
-              ;;
-            push)
-              base_sha="$(jq -er '.before' "$GITHUB_EVENT_PATH")"
-              event_head_sha="$(jq -er '.after' "$GITHUB_EVENT_PATH")"
-              if [[ "$head_sha" != "$event_head_sha" ]]; then
-                echo "The checked-out commit does not match the pushed head." >&2
-                exit 1
-              fi
-              ;;
-            workflow_call)
-              # Deployment calls the reusable workflow and must always retain release coverage.
-              ;;
-            *)
-              echo "Unsupported CI event for technical-impact classification: $EVENT_NAME" >&2
-              exit 1
-              ;;
-          esac
-
-          if [[ -n "$base_sha" && ! "$base_sha" =~ ^0{40}$ ]] && \
-              git cat-file -e "$base_sha^{commit}" 2>/dev/null && \
-              git cat-file -e "$base_sha:scripts/technical-impact.sh" 2>/dev/null; then
-            trusted_classifier="$RUNNER_TEMP/technical-impact.sh"
-            git show "$base_sha:scripts/technical-impact.sh" > "$trusted_classifier"
-            chmod +x "$trusted_classifier"
-            impact="$(
-              OPEN_KEYBOARD_REPOSITORY_ROOT="$GITHUB_WORKSPACE" \
-                "$trusted_classifier" "$base_sha" "$head_sha"
-            )"
-          fi
-
-          case "$impact" in
-            docs-only|full)
-              ;;
-            *)
-              echo "Technical-impact classification returned an invalid result." >&2
-              exit 1
-              ;;
-          esac
-          echo "Technical impact: $impact"
-          echo "impact=$impact" >> "$GITHUB_OUTPUT"
-
   required-review-evidence:
     name: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && 'Required checks' || 'Review evidence not applicable' }}
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
@@ -239,9 +168,6 @@ jobs:
 
   core-tests:
     name: OpenKeyboardCore tests
-    if: needs.technical-impact.outputs.impact == 'full'
-    needs:
-      - technical-impact
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -256,9 +182,6 @@ jobs:
 
   ios-build:
     name: iOS app + keyboard extension build
-    if: needs.technical-impact.outputs.impact == 'full'
-    needs:
-      - technical-impact
     runs-on: macos-15
     timeout-minutes: 30
     steps:
@@ -273,9 +196,6 @@ jobs:
 
   semantic-contract:
     name: Semantic prompt contract
-    if: needs.technical-impact.outputs.impact == 'full'
-    needs:
-      - technical-impact
     runs-on: macos-15
     timeout-minutes: 15
     steps:
@@ -300,7 +220,6 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
-      - technical-impact
       - hygiene
       - core-tests
       - ios-build
@@ -308,43 +227,21 @@ jobs:
     steps:
       - name: Confirm required jobs passed
         env:
-          TECHNICAL_IMPACT: ${{ needs.technical-impact.outputs.impact }}
-          TECHNICAL_IMPACT_RESULT: ${{ needs.technical-impact.result }}
           HYGIENE_RESULT: ${{ needs.hygiene.result }}
           CORE_TESTS_RESULT: ${{ needs.core-tests.result }}
           IOS_BUILD_RESULT: ${{ needs.ios-build.result }}
           SEMANTIC_CONTRACT_RESULT: ${{ needs.semantic-contract.result }}
         run: |
-          technical_checks_passed="false"
-          if [[ "$TECHNICAL_IMPACT_RESULT" == "success" && \
-                "$HYGIENE_RESULT" == "success" ]]; then
-            case "$TECHNICAL_IMPACT" in
-              docs-only)
-                if [[ "$CORE_TESTS_RESULT" == "skipped" && \
-                      "$IOS_BUILD_RESULT" == "skipped" && \
-                      "$SEMANTIC_CONTRACT_RESULT" == "skipped" ]]; then
-                  technical_checks_passed="true"
-                fi
-                ;;
-              full)
-                if [[ "$CORE_TESTS_RESULT" == "success" && \
-                      "$IOS_BUILD_RESULT" == "success" && \
-                      "$SEMANTIC_CONTRACT_RESULT" == "success" ]]; then
-                  technical_checks_passed="true"
-                fi
-                ;;
-            esac
+          if [[ "$HYGIENE_RESULT" != "success" ||
+                "$CORE_TESTS_RESULT" != "success" ||
+                "$IOS_BUILD_RESULT" != "success" ||
+                "$SEMANTIC_CONTRACT_RESULT" != "success" ]]; then
+            echo "Required technical checks did not pass."
+            echo "hygiene=$HYGIENE_RESULT"
+            echo "core-tests=$CORE_TESTS_RESULT"
+            echo "ios-build=$IOS_BUILD_RESULT"
+            echo "semantic-contract=$SEMANTIC_CONTRACT_RESULT"
+            exit 1
           fi
 
-          if [[ "$technical_checks_passed" != "true" ]]; then
-              echo "Required technical checks did not pass."
-              echo "technical-impact-job=$TECHNICAL_IMPACT_RESULT"
-              echo "technical-impact=$TECHNICAL_IMPACT"
-              echo "hygiene=$HYGIENE_RESULT"
-              echo "core-tests=$CORE_TESTS_RESULT"
-              echo "ios-build=$IOS_BUILD_RESULT"
-              echo "semantic-contract=$SEMANTIC_CONTRACT_RESULT"
-              exit 1
-            fi
-
-          echo "Required OpenKeyboard technical checks passed for $TECHNICAL_IMPACT changes."
+          echo "All required OpenKeyboard technical checks passed."

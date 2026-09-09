@@ -97,16 +97,12 @@ Run targeted tests while editing, then run the highest cumulative gate required 
 |---|---|---|
 | Fast | Affected tests, then `./scripts/check.sh --hygiene` | Bounded local change |
 | Standard | `./scripts/check.sh --quick` | Normal completed implementation or commit |
-| Release | Classifier-selected `./scripts/check.sh --hygiene` for docs-only or `--full` otherwise, on exact `HEAD` | PR readiness, tag, or release |
+| Release | `./scripts/check.sh --full` on exact `HEAD` | PR readiness, tag, or release |
 
 Calling `./scripts/check.sh` without an argument runs `--full`.
 
 Release readiness additionally requires exact-head GitHub checks and an independent review through
-`$review-verify-merge-pr`; the local proportional gate alone is insufficient. The fail-closed
-`./scripts/technical-impact.sh` classifier recognizes only regular mode-`100644` Markdown files
-under `docs/`, the top-level `README.md`, and top-level `LICENSE*` files as documentation-only.
-Source, tests, scripts, hooks, workflows, configuration, dependencies, project files, agent policy,
-symlinks, executable documentation, unknown paths, and mixed diffs retain full coverage.
+`$review-verify-merge-pr`; the local full gate alone is insufficient.
 
 - `--hygiene`: environment preflight, shell/YAML syntax, secret and policy regressions,
   tracked and untracked whitespace.
@@ -196,13 +192,11 @@ git config --local --get core.hooksPath
 
 The path must be `.githooks`.
 
-- Pre-commit requires an exact staged candidate. It runs `./scripts/check.sh --hygiene` for a
-  documentation-only staged diff and `./scripts/check.sh --quick` for every other diff. It can
+- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`. It can
   establish `DETERMINISTIC_VERIFIED` only; it cannot grant commit authority or establish
   `LIVE_VERIFIED`/`RUNTIME_VERIFIED`.
-- Pre-push requires a clean exact `HEAD`, compares it with `origin/main`, and runs
-  `./scripts/check.sh --hygiene` for a documentation-only diff. Every other diff runs
-  `./scripts/check.sh --full` and then applies the gateway-impact classifier.
+- Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
+  classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
   `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`, which live scripts resolve from
   Git's common directory and read directly from every linked worktree. The seed is never copied to
@@ -338,12 +332,9 @@ approval, with the missing AI evidence disclosed.
 ## GitHub checks
 
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
-It validates the requirement ledger and durable independent-review link, then always runs
-repository hygiene. A trusted-base technical-impact classifier skips OpenKeyboardCore tests,
-semantic-contract checks, and the iOS app/extension build only for documentation-only diffs;
-workflow calls from deployment always retain full coverage. The stable `Required technical checks`
-job accepts intentional heavy-job skips only when that trusted classification is `docs-only`.
-Every review/body
+It validates the requirement ledger and durable independent-review link, then runs repository
+hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
+stable `Required technical checks` job covers the ordinary build and test gates. Every review/body
 event creates the fixed protected `Required checks` root job. That job accepts only when the trusted
 validators accept both the immutable event snapshot and a separately fetched current snapshot of
 the exact-head requirement ledger, durable independent-review link, and selected automatic-or-human

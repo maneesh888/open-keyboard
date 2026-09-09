@@ -4,14 +4,11 @@
 
 ```text
 Pull request
-  -> Exact-head technical-impact classification
-     -> documentation-only: hygiene/policy gate
-     -> every other change: full deterministic gate
+  -> Exact-head local full gate
   -> Independent read-only PR reviewer
   -> GitHub repository hygiene
-  -> GitHub OpenKeyboardCore tests (full-impact changes only)
-  -> GitHub semantic-contract validation (full-impact changes only)
-  -> GitHub iOS app + keyboard extension build (full-impact changes only)
+  -> GitHub OpenKeyboardCore tests
+  -> GitHub iOS app + keyboard extension build
   -> Required technical checks
   -> Required checks (passes only with complete event-and-current exact-head review evidence)
   -> Required live verification
@@ -31,11 +28,7 @@ Version tag or manual deployment
 ```
 
 Normal CI is read-only and secretless. It does not run live gateway calls or receive gateway
-credentials. GitHub Actions are pinned to full commit SHAs. Documentation-only diffs still run
-hygiene, policy, and review-evidence validation, while the core, semantic-contract, and iOS build
-jobs are intentionally skipped. The protected `Required technical checks` aggregator accepts those
-skips only after trusted-base classification; all other and unknown changes fail closed to the full
-technical flow. Reusable deployment calls always run the full flow.
+credentials. GitHub Actions are pinned to full commit SHAs.
 
 ## Independent reviewer
 
