@@ -431,7 +431,7 @@ case "$MODE" in
     run_xcodebuild xcodebuild test-without-building \
       -xctestrun "$xctestrun" \
       -destination "$destination" \
-      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceClassifiesMalformedStructuredJSONAsModelCapabilityFailure \
+      -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRejectsLegacyJSONGrammarEnvelopeAsRetryableInvalidResponse \
       -only-testing:OpenKeyboardUITests/GatewayClientArchitectureTests/testKeyboardAIServiceRetriesGenericTranslationCapabilityFailureThenScopesWarning \
       -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testModelCapabilityFailureIsShownForRewriteActionPanelAndPreservesText \
       -only-testing:OpenKeyboardUITests/KeyboardViewModelActionErrorTests/testAutomaticGrammarCapabilityFailureShowsTypedStateAndPreservesText \
@@ -448,6 +448,10 @@ case "$MODE" in
     high_baseline_outcome="unverified"
     high_differential_outcome="unverified"
     high_follow_up_outcome="unverified"
+    low_summarize_outcome="unverified"
+    high_summarize_outcome="unverified"
+    low_continue_writing_outcome="unverified"
+    high_continue_writing_outcome="unverified"
     low_diagnostic_outcomes=""
     low_diagnostic_latencies=""
     high_diagnostic_outcomes=""
@@ -483,6 +487,8 @@ case "$MODE" in
             )"; then
             low_baseline_outcome="passed"
             low_follow_up_outcome="passed"
+            low_summarize_outcome="passed"
+            low_continue_writing_outcome="passed"
           else
             low_differential_outcome="unverified"
           fi
@@ -495,6 +501,8 @@ case "$MODE" in
           high_baseline_outcome="passed"
           high_differential_outcome="passed"
           high_follow_up_outcome="passed"
+          high_summarize_outcome="passed"
+          high_continue_writing_outcome="passed"
         fi
       fi
       profile_diagnostic_evidence="$(
@@ -522,6 +530,8 @@ case "$MODE" in
       "baseline_outcomes=low=$low_baseline_outcome, high=$high_baseline_outcome" \
       "differential_outcomes=low=$low_differential_outcome, high=$high_differential_outcome" \
       "follow_up_outcomes=low=$low_follow_up_outcome, high=$high_follow_up_outcome" \
+      "summarize_outcomes=low=$low_summarize_outcome, high=$high_summarize_outcome" \
+      "continue_writing_outcomes=low=$low_continue_writing_outcome, high=$high_continue_writing_outcome" \
       'operation_scoped_warning_contracts=verified' \
       "profile_latencies=low=${low_latency}s, high=${high_latency}s" \
       "$low_diagnostic_outcomes" \

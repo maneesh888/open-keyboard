@@ -36,7 +36,7 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
 
     func testParsesCorrectionsAndPredictions() throws {
         let json = """
-        {"corrections":[{"label":"Correct capitalization","original":" i ","replacement":" I ","explanation":"Capitalize I.","category":"capitalization"}],"predictions":[{"label":"Suggestion","text":" apple ","kind":"nextWord"}]}
+        {"corrections":[{"label":"Correct capitalization","original":" i ","replacement":" I ","explanation":"Capitalize I.","category":"capitalization"}],"predictions":[{"label":"Suggestion","text":" apple ","kind":"nextWord"}],"corrected_text":"I have an apple."}
         """
         let response = try KeyboardSuggestionParser.parseAssistantContent(json)
         XCTAssertEqual(response.corrections.first?.label, "Correct capitalization")
@@ -45,6 +45,7 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(response.corrections.first?.category, "capitalization")
         XCTAssertEqual(response.predictions.first?.label, "Suggestion")
         XCTAssertEqual(response.predictions.first?.text, "apple")
+        XCTAssertEqual(response.correctedText, "I have an apple.")
     }
 
     func testParsesCorrectionOnlyPredictionOnlyAndEmptyResponses() throws {
@@ -443,84 +444,106 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
-    func testSummarizeStillReplacesButPlainTextRewriteReturnsOneOption() throws {
-        let summary = try KeyboardActionOperationResult.parse(#"{"operation":"summarize","results":[{"id":"summary-1","type":"summary","title":"Summary","text":"The keyboard helps with writing."}],"summary":"The keyboard helps with writing."}"#, operation: "summarize", fallbackText: "Long source text")
-        let rewrite = try KeyboardActionOperationResult.plainTextReplacement(
-            "Clearer text.",
-            contractOperationID: "rewrite",
-            wireOperation: "rewrite",
-            title: "Rephrase",
-            source: "bad text"
+    func testPlainTextWritingResultsMapToOperationSpecificProductOutcomes() throws {
+        let summarySource = "OpenKeyboard keeps prompts in one shared contract and validates every model response before displaying it."
+        let summary = try KeyboardActionOperationResult.plainTextResponse(
+            "OpenKeyboard centralizes prompts and validates model responses.",
+            rendering: KeyboardGatewayActionContract.rendering(operation: "summarize", text: summarySource),
+            title: "Summarize",
+            source: summarySource
+        )
+        let rewriteSource = "This bad"
+        let rewrite = try KeyboardActionOperationResult.plainTextResponse(
+            "This is clearer.",
+            rendering: KeyboardGatewayActionContract.rendering(operation: "rewrite_professional", text: rewriteSource),
+            title: "Professional",
+            source: rewriteSource
+        )
+        let translation = try KeyboardActionOperationResult.plainTextResponse(
+            "Goedemorgen",
+            rendering: KeyboardGatewayActionContract.rendering(
+                operation: "translate",
+                text: "Good morning",
+                translationLanguage: "Dutch"
+            ),
+            title: "Translate",
+            source: "Good morning"
         )
 
-        XCTAssertEqual(KeyboardActionResultHandler.outcome(operation: "summarize", result: summary), .replaceText("The keyboard helps with writing."))
+        XCTAssertEqual(summary.items.map(\.type), ["summary"])
+        XCTAssertEqual(summary.summary, "OpenKeyboard centralizes prompts and validates model responses.")
+        XCTAssertNil(summary.correctedText)
         XCTAssertEqual(
-            KeyboardActionResultHandler.outcome(operation: "rewrite", result: rewrite, sourceText: "bad text"),
-            .showRewriteOptions([KeyboardRewriteOption(id: "plain-text-result", title: "Rephrase", text: "Clearer text.")])
+            KeyboardActionResultHandler.outcome(operation: "summarize", result: summary),
+            .replaceText("OpenKeyboard centralizes prompts and validates model responses.")
         )
-    }
-
-    func testTranslateStructuredResultReturnsSafeReplacement() throws {
-        let result = try KeyboardActionOperationResult.parse(
-            #"{"operation":"translate","results":[{"id":"translation-1","type":"translation","title":"Dutch translation","text":"Goedemorgen","replacement":"Goedemorgen"}],"corrected_text":"Goedemorgen"}"#,
-            operation: "translate",
-            fallbackText: "Good morning"
+        XCTAssertEqual(rewrite.items.map(\.type), ["suggestion"])
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "rewrite", result: rewrite, sourceText: rewriteSource),
+            .showRewriteOptions([
+                KeyboardRewriteOption(id: "plain-text-result", title: "Professional", text: "This is clearer.")
+            ])
         )
-
-        XCTAssertEqual(result.operation, "translate")
+        XCTAssertEqual(translation.items.map(\.type), ["translation"])
         XCTAssertEqual(
             KeyboardActionResultHandler.outcome(
                 operation: "translate",
-                result: result,
+                result: translation,
                 sourceText: "Good morning"
             ),
             .replaceText("Goedemorgen")
         )
     }
 
-    func testTranslateWarningItemNeverBecomesReplacementText() throws {
-        let result = try KeyboardActionOperationResult.parse(
-            #"{"operation":"translate","results":[{"id":"translation-warning","type":"warning","title":"Translation warning","text":"No","replacement":"No"}]}"#,
-            operation: "translate",
-            fallbackText: "Nee"
+    func testPlainTextContinuationPreservesLeadingWhitespaceExactly() throws {
+        let source = "The team approved the proposal"
+        let continuation = " and scheduled implementation for Monday."
+        let result = try KeyboardActionOperationResult.plainTextResponse(
+            continuation,
+            rendering: KeyboardGatewayActionContract.rendering(operation: "continue_writing", text: source),
+            title: "Continue Writing",
+            source: source
         )
 
-        let outcome = KeyboardActionResultHandler.outcome(
-            operation: "translate",
-            result: result,
-            sourceText: "Nee"
+        XCTAssertEqual(result.operation, "continue_writing")
+        XCTAssertEqual(result.items.map(\.type), ["suggestion"])
+        XCTAssertEqual(result.correctedText, continuation)
+        XCTAssertEqual(result.displayText, continuation)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(operation: "continue_writing", result: result, sourceText: source),
+            .replaceText(continuation)
         )
-
-        XCTAssertEqual(outcome, .noUsableResult)
-        XCTAssertNotEqual(outcome, .replaceText("No"))
     }
 
-    func testStructuredRewriteCandidateArraysAreRejected() throws {
-        let json = #"""
-        {
-          "operation": "rewrite",
-          "results": [
-            {"id": "same", "type": "suggestion", "title": "Same", "text": "  bad text  ", "replacement": "bad text"},
-            {"id": "clear", "type": "suggestion", "title": "Clearer", "text": "Clearer text.", "replacement": " Clearer text. "},
-            {"id": "safe", "type": "suggestion", "title": "Shorter", "text": "Short text.", "replacement": "Short text."},
-            {"id": "unsafe", "type": "warning", "title": "Error", "text": "The model returned malformed JSON and no safe keyboard text could be extracted.", "replacement": "The model returned malformed JSON and no safe keyboard text could be extracted."}
-          ],
-          "corrected_text": "Clearer text.",
-          "output": "Friendlier text."
+    func testDeprecatedWritingEnvelopeAndMalformedJSONPrefixAreRejectedAsPlainText() {
+        let source = "This text is difficult to read."
+        let rendering = KeyboardGatewayActionContract.rendering(operation: "rewrite", text: source)
+        let payloads = [
+            #"{"operation":"rewrite","results":[{"id":"rewrite-1","type":"suggestion","text":"Clear text.","replacement":"Clear text."}],"corrected_text":"Clear text."}"#,
+            #"{"operation":"rewrite","results":["#
+        ]
+
+        for payload in payloads {
+            XCTAssertThrowsError(
+                try KeyboardActionOperationResult.plainTextResponse(
+                    payload,
+                    rendering: rendering,
+                    title: "Rephrase",
+                    source: source
+                )
+            ) { error in
+                XCTAssertEqual(error as? KeyboardActionOperationResultError, .invalidResponse)
+            }
         }
-        """#
-        XCTAssertThrowsError(
-            try KeyboardActionOperationResult.parse(json, operation: "rewrite", fallbackText: "bad text")
-        )
     }
 
     func testPlainTextRewriteProducesExactlyOneOption() throws {
-        let result = try KeyboardActionOperationResult.plainTextReplacement(
+        let source = "This bad"
+        let result = try KeyboardActionOperationResult.plainTextResponse(
             "This is clearer.",
-            contractOperationID: "rewrite_professional",
-            wireOperation: "rewrite",
+            rendering: KeyboardGatewayActionContract.rendering(operation: "rewrite_professional", text: source),
             title: "Professional",
-            source: "This bad"
+            source: source
         )
 
         XCTAssertEqual(
@@ -533,10 +556,9 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
 
     func testPlainTextRewritePreservesValidatedBoundaryWhitespace() throws {
         let source = "  This bad  "
-        let result = try KeyboardActionOperationResult.plainTextReplacement(
+        let result = try KeyboardActionOperationResult.plainTextResponse(
             "This is clearer.",
-            contractOperationID: "rewrite",
-            wireOperation: "rewrite",
+            rendering: KeyboardGatewayActionContract.rendering(operation: "rewrite", text: source),
             title: "Rephrase",
             source: source
         )
@@ -555,54 +577,37 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     }
 
 
-    func testErrorCopyStructuredResultDoesNotBecomeReplacementText() throws {
-        XCTAssertThrowsError(
-            try KeyboardActionOperationResult.plainTextReplacement(
-                "Error: The model returned malformed JSON and no safe keyboard text could be extracted.",
-                contractOperationID: "rewrite",
-                wireOperation: "rewrite",
-                title: "Rephrase",
-                source: "Keep my original words."
-            )
+    func testUnsafePlainTextResultDoesNotBecomeReplacementText() {
+        let errorText = "Error: The model returned malformed JSON and no safe keyboard text could be extracted."
+        let result = KeyboardActionOperationResult(
+            operation: "rewrite",
+            items: [
+                KeyboardActionOperationResult.Item(
+                    id: "plain-text-result",
+                    type: "suggestion",
+                    title: "Rephrase",
+                    text: errorText,
+                    replacement: errorText
+                )
+            ],
+            correctedText: errorText
+        )
+
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "rewrite",
+                result: result,
+                sourceText: "Keep my original words."
+            ),
+            .noUsableResult
         )
     }
 
-    func testGrammarOperationCannotEnterStructuredWritingActionParser() {
+    func testGrammarPlainTextValidatorRejectsDeprecatedWritingEnvelope() {
         let payload = #"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#
 
         XCTAssertThrowsError(
-            try KeyboardActionOperationResult.parse(
-                payload,
-                operation: "fix_grammar",
-                fallbackText: "i has a apple"
-            )
-        ) { error in
-            XCTAssertEqual(error as? KeyboardActionOperationResultError, .invalidResponse)
-        }
-    }
-
-    func testStructuredOperationParsesCommonDisplayAliases() throws {
-        let scenarios: [(String, String, String)] = [
-            (#"{"operation":"rewrite","rewritten_text":"This is clearer."}"#, "summarize", "This is clearer."),
-            (#"{"operation":"rewrite","result":{"id":"rewrite-1","type":"suggestion","text":"Clearer text.","replacement":"Clearer text."}}"#, "summarize", "Clearer text."),
-            (#"{"operation":"rewrite","replacement":"Replacement text."}"#, "summarize", "Replacement text."),
-            (#"{"operation":"rewrite","text":"Top-level text."}"#, "summarize", "Top-level text."),
-            (#"{"operation":"rewrite","output":"Output text."}"#, "summarize", "Output text.")
-        ]
-
-        for (json, operation, expectedDisplayText) in scenarios {
-            let result = try KeyboardActionOperationResult.parse(json, operation: operation, fallbackText: "i has a apple")
-
-            XCTAssertEqual(result.displayText, expectedDisplayText)
-            XCTAssertTrue(result.isStructuredResponse)
-        }
-    }
-
-    func testStructuredRewriteWithOptionalMetadataIsRejected() throws {
-        let json = #"{"operation":"rewrite","results":[{"id":1,"type":"suggestion","title":"Rewrite","text":"Clear text","original":"unclear","replacement":"clear","range":{"start":"0","end":"7"},"confidence":"0.97"}],"summary":{"unexpected":true},"corrected_text":"clear text"}"#
-
-        XCTAssertThrowsError(
-            try KeyboardActionOperationResult.parse(json, operation: "rewrite", fallbackText: "unclear text")
+            try KeyboardActionOperationResult.plainTextGrammarResponse(payload, original: "i has a apple")
         )
     }
 
@@ -675,6 +680,53 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         let repeated = GrammarDiffService.edits(from: "teh note and teh reply", to: "the note and the reply")
         XCTAssertEqual(repeated.map(\.originalText), ["teh", "teh"])
         XCTAssertEqual(repeated.map(\.replacementText), ["the", "the"])
+    }
+
+    func testGrammarDiffTerminatesAndReconstructsPathologicalStructuralChanges() {
+        let cases = [
+            (
+                "Alpha beta gamma delta.",
+                "Gamma delta, then alpha beta."
+            ),
+            (
+                "The report is late.",
+                "Because the server is busy, the detailed report will arrive later than expected."
+            ),
+            (
+                "The very detailed report that we discussed yesterday is currently delayed.",
+                "Yesterday's report is delayed."
+            ),
+            (
+                "one two one two one two",
+                "two one two one two one"
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let edits = GrammarDiffService.edits(from: source, to: corrected)
+            XCTAssertFalse(edits.isEmpty, "Expected a bounded edit for \(source)")
+            XCTAssertLessThanOrEqual(edits.count, source.count + corrected.count + 1)
+
+            var session = GrammarCorrectionSession(
+                originalText: source,
+                correctedText: corrected,
+                documentRevision: 1
+            )
+            session.decideAll(.accepted)
+            XCTAssertEqual(session.renderedText, corrected)
+        }
+    }
+
+    func testGrammarDiffFallsBackToOneWholeTextEditBeforeUnboundedDifferenceWork() {
+        let source = Array(repeating: "alpha", count: 1_600).joined(separator: " ")
+        let corrected = Array(repeating: "beta", count: 1_600).joined(separator: " ")
+
+        let edits = GrammarDiffService.edits(from: source, to: corrected)
+
+        XCTAssertEqual(edits.count, 1)
+        XCTAssertEqual(edits.first?.range, KeyboardTextRange(start: 0, end: source.count))
+        XCTAssertEqual(edits.first?.originalText, source)
+        XCTAssertEqual(edits.first?.replacementText, corrected)
     }
 
     func testGrammarSessionMixedAcceptRejectAcceptAllAndRejectAllDoNotDriftOffsets() {
@@ -1050,6 +1102,97 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testGrammarResponseClassifierSeparatesSafeTextFromNarrowCorrectionPolicy() throws {
+        let narrowSource = "The report arrive tommorow."
+        let narrowCorrection = "The report arrives tomorrow."
+        let narrow = try GrammarCorrectionResponseValidator.classified(
+            narrowCorrection,
+            original: narrowSource
+        )
+        XCTAssertEqual(narrow.text, narrowCorrection)
+        XCTAssertEqual(narrow.disposition, .narrowCorrections)
+
+        let structuralSource = "First sentnce needs correction.\nSecond line stays here."
+        let structuralCorrection = "First sentence needs correction. Second line stays here."
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validatedSafePlainText(
+                structuralCorrection,
+                original: structuralSource
+            ),
+            structuralCorrection
+        )
+        let structural = try GrammarCorrectionResponseValidator.classified(
+            structuralCorrection,
+            original: structuralSource
+        )
+        XCTAssertEqual(structural.text, structuralCorrection)
+        XCTAssertEqual(structural.disposition, .wholeVersionProposal)
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                structuralCorrection,
+                original: structuralSource
+            )
+        )
+    }
+
+    func testSafeReorderedExpandedAndShortenedGrammarOutputsBecomeWholeVersionProposals() throws {
+        let cases = [
+            (
+                "First review the report, then send the corrected copy to the client after approval.",
+                "After approval, send the corrected copy to the client; first review the report."
+            ),
+            (
+                "The report is late because the server is busy.",
+                "Because the server is currently handling unusually high demand, the detailed report will arrive later than expected."
+            ),
+            (
+                "The detailed weekly report that our support team discussed yesterday is currently delayed because several account totals still require review before publication.",
+                "Yesterday's weekly report is delayed while the account totals are reviewed."
+            )
+        ]
+
+        for (source, proposed) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(proposed, original: source)
+            XCTAssertEqual(result.text, proposed)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal)
+        }
+    }
+
+    func testGrammarResponseBasicSafetyStillRejectsMalformedAndClearlyTruncatedText() {
+        let source = String(repeating: "The detailed account update remains important. ", count: 8)
+
+        for response in [
+            "",
+            "```\n\(source)\n```",
+            "Here is the corrected text: \(source)",
+            "A completely different short rewrite."
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.classified(response, original: source)
+            )
+        }
+    }
+
+    func testWholeVersionGrammarResultUsesDedicatedProductOutcome() throws {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let result = try KeyboardActionOperationResult.plainTextGrammarResponse(
+            proposed,
+            original: source
+        )
+
+        XCTAssertEqual(result.correctedText, proposed)
+        XCTAssertEqual(result.grammarPresentation, .wholeVersionProposal)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "fix_grammar",
+                result: result,
+                sourceText: source
+            ),
+            .showGrammarWholeVersionProposal(proposed)
+        )
+    }
+
     func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {
         let source = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
         let corrected = "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund."
@@ -1101,8 +1244,21 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks.allSatisfy { chunk in
-            chunk.range.end == text.count || chunk.text.hasSuffix("\n") || ".!?".contains(chunk.text.last ?? "x")
+            let content = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return chunk.range.end == text.count || ".!?".contains(content.last ?? "x")
         })
+    }
+
+    func testGrammarChunkerProcessesEverySentenceIndependentlyByDefault() {
+        let text = "Mr. Smith recieve the first note. The second sentence have an error. The final sentence is clean."
+        let chunks = GrammarTextChunker.chunks(in: text)
+
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.map(\.text).joined(), text)
+        XCTAssertEqual(chunks[0].text, "Mr. Smith recieve the first note. ")
+        XCTAssertEqual(chunks[1].text, "The second sentence have an error. ")
+        XCTAssertEqual(chunks[2].text, "The final sentence is clean.")
+        XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
     }
 
     func testGrammarChunkerIsolatesSubstantialMultiParagraphTextForLowWeightModels() {
@@ -1117,13 +1273,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         """
         let chunks = GrammarTextChunker.chunks(in: text)
 
-        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.count, 4)
         XCTAssertEqual(chunks.map(\.text).joined(), text)
         XCTAssertEqual(chunks.first?.range.start, 0)
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks[1].text.hasPrefix("This clean paragraph should remain unchanged. 😊\n\n"))
-        XCTAssertTrue(chunks[1].text.contains("please seperate the qustions"))
+        XCTAssertTrue(chunks[2].text.contains("please seperate the qustions"))
     }
 
     func testDenseDefiniteCorrectionsRemainValidWithoutDroppingCleanParagraphs() throws {

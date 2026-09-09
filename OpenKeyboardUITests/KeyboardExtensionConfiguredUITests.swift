@@ -438,6 +438,62 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         try captureRealKeyboardStep("04-real-keyboard-correction-detail")
     }
 
+    func testSeededRealKeyboardWholeVersionProposalRequiresExplicitUseAction() throws {
+        let sourceText = "We should of warnd the users that the repots are slower when the server is busy."
+        let proposedText = "We should warn users that the reports are slower when the server is busy."
+        let app = configuredContainingApp(extraArguments: [
+            "--keyboard-host-test",
+            "--keyboard-host-autofocus",
+            "--keyboard-host-prefer-openkeyboard",
+            "--keyboard-suggestion-state=grammarWholeVersionProposal",
+            "--keyboard-initial-panel=grammarWholeVersionProposal",
+            "--keyboard-host-text=\(sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText)"
+        ])
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Keyboard Extension Host"].waitForExistence(timeout: 5))
+
+        let input = app.textViews["keyboard_host_text_editor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 10))
+        XCTAssertEqual(input.value as? String, sourceText)
+        input.tap()
+
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        dismissKnownKeyboardDialogs(in: springboard)
+        let keyboardApp = XCUIApplication()
+        for _ in 0..<8 where !keyboardApp.otherElements["ai_grammar_proposal_panel"].exists {
+            dismissKnownKeyboardDialogs(in: springboard)
+            switchToOpenKeyboardIfPossible(keyboardApp: keyboardApp, hostInput: input)
+        }
+
+        let panel = keyboardApp.otherElements["ai_grammar_proposal_panel"]
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertEqual(panel.frame.height, KeyboardPanelLayout.actionPanelHeight, accuracy: 1)
+        XCTAssertEqual(keyboardApp.staticTexts["ai_grammar_proposal_text"].label, proposedText)
+        let reviewMessage = keyboardApp.staticTexts["ai_grammar_proposal_message"]
+        XCTAssertEqual(reviewMessage.label, GrammarWholeVersionProposalState.reviewMessage)
+        XCTAssertFalse(reviewMessage.label.localizedCaseInsensitiveContains("incompatible"))
+
+        for identifier in [
+            "ai_grammar_proposal_dismiss",
+            "ai_grammar_proposal_rerun",
+            "ai_grammar_proposal_copy",
+            "ai_grammar_proposal_back"
+        ] {
+            XCTAssertTrue(keyboardApp.buttons[identifier].waitForExistence(timeout: 2))
+        }
+
+        let use = keyboardApp.buttons["ai_grammar_proposal_use"]
+        XCTAssertTrue(use.waitForExistence(timeout: 2))
+        XCTAssertEqual(use.label, "Use this version")
+        XCTAssertEqual(input.value as? String, sourceText, "A proposal must never auto-apply")
+
+        use.tap()
+
+        expectation(for: NSPredicate(format: "value == %@", proposedText), evaluatedWith: input)
+        waitForExpectations(timeout: 5)
+        XCTAssertTrue(keyboardApp.staticTexts["Version applied"].waitForExistence(timeout: 5))
+    }
+
     func testRealKeyboardImproveReplacesTextWhenGatewayConfigured() throws {
         let app = configuredContainingApp(extraArguments: ["--keyboard-host-test", "--keyboard-host-autofocus", "--keyboard-host-prefer-openkeyboard"], requiresInjectedGatewayCredentials: true)
         app.launch()

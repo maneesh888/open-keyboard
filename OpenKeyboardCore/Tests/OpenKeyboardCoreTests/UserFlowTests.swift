@@ -43,11 +43,11 @@ final class UserFlowTests: XCTestCase {
         let flow = try await runWritingFlow(
             action: .continueWriting,
             typedText: "Once the keyboard connects",
-            modelResponse: ", it can suggest the next sentence.",
+            modelResponse: " and validates the next sentence.",
             replacementStrategy: .appendToCursor
         )
 
-        XCTAssertEqual(flow.finalText, "Once the keyboard connects, it can suggest the next sentence.")
+        XCTAssertEqual(flow.finalText, "Once the keyboard connects and validates the next sentence.")
     }
 
     private func runWritingFlow(
@@ -95,6 +95,7 @@ final class UserFlowTests: XCTestCase {
             file: file,
             line: line
         )
+        XCTAssertNil(json["response_format"], action.operationName, file: file, line: line)
         let messages = try XCTUnwrap(json["messages"] as? [[String: String]], file: file, line: line)
         let rendering = try XCTUnwrap(
             WritingPromptBuilder.rendering(for: action, text: typedText),

@@ -174,7 +174,9 @@ class NetworkManager {
                 userPrompt: grammarRendering.messages[1].content,
                 maxTokens: grammarRendering.maxTokens,
                 temperature: grammarRendering.temperature,
-                expectsStructuredResponse: false,
+                responseFormat: CanonicalGatewayResponseFormat(
+                    semanticType: grammarRendering.responseFormatType
+                ),
                 timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
             do {
@@ -224,7 +226,7 @@ class NetworkManager {
                 "settings-translation-dutch",
                 "Translation to Dutch",
                 Self.translationDiagnosticPresetID,
-                "Returned a schema-valid Dutch translation."
+                "Returned one complete validated Dutch translation."
             )
         ]
         for capability in capabilities {
@@ -272,7 +274,9 @@ class NetworkManager {
             userPrompt: rendering.messages[1].content,
             maxTokens: rendering.maxTokens,
             temperature: rendering.temperature,
-            expectsStructuredResponse: rendering.responseFormatType != nil,
+            responseFormat: CanonicalGatewayResponseFormat(
+                semanticType: rendering.responseFormatType
+            ),
             timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
         )
         do {
@@ -293,7 +297,12 @@ class NetworkManager {
             if presetID == Self.rewriteDiagnosticPresetID {
                 throw NetworkError.unusableCapability("Rewrite and Improve")
             }
-            let capability = preset.label.replacingOccurrences(of: "Structured operation · ", with: "")
+            if presetID == Self.translationDiagnosticPresetID {
+                throw NetworkError.unusableCapability("Dutch translation")
+            }
+            let capability = preset.label
+                .replacingOccurrences(of: "Plain-text operation · ", with: "")
+                .replacingOccurrences(of: "Plain-text grammar · ", with: "")
             throw NetworkError.unusableCapability(capability.lowercased())
         }
     }
@@ -413,7 +422,7 @@ class NetworkManager {
         userPrompt: String,
         maxTokens: Int,
         temperature: Double? = 0.1,
-        expectsStructuredResponse: Bool? = nil,
+        responseFormat: CanonicalGatewayResponseFormat? = nil,
         timeoutInterval: TimeInterval
     ) async throws -> String {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -435,7 +444,7 @@ class NetworkManager {
                     grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
                 ),
                 temperature: temperature,
-                expectsStructuredResponse: expectsStructuredResponse,
+                responseFormat: responseFormat,
                 timeoutInterval: timeoutInterval
             )
         } catch let error as NetworkError {

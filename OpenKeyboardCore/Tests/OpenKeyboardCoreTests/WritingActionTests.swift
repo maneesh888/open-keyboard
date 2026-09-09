@@ -5,7 +5,7 @@ import XCTest
 
 final class WritingActionTests: XCTestCase {
     func testSharedContractVersionIsPinned() {
-        XCTAssertEqual(WritingPromptBuilder.contractVersion, "4.1.0")
+        XCTAssertEqual(WritingPromptBuilder.contractVersion, "5.0.0")
     }
 
     func testBuiltInActionsHaveStableTitles() {
@@ -22,13 +22,6 @@ final class WritingActionTests: XCTestCase {
         XCTAssertEqual(WritingAction.summarize.operationName, "summarize")
         XCTAssertEqual(WritingAction.translate(language: "Arabic").operationName, "translate")
         XCTAssertEqual(WritingAction.custom(id: "friendly", title: "Make Friendly", promptTemplate: "{{text}}").operationName, "friendly")
-    }
-
-    func testStructuredSystemPromptComesFromSharedContract() {
-        XCTAssertEqual(
-            WritingPromptBuilder.structuredSystemPrompt,
-            SemanticPromptContract.writingSystemInstruction
-        )
     }
 
     func testEveryBuiltInPromptUsesExactSharedContractRendering() throws {
@@ -100,13 +93,26 @@ final class WritingActionTests: XCTestCase {
         XCTAssertEqual(WritingPromptBuilder.prompt(for: action, text: "No."), "Make this friendly:\nNo.")
     }
 
-    func testOnlyBuiltInActionsRequireStructuredJSON() {
-        XCTAssertFalse(WritingAction.fixGrammar.requiresStructuredJSON)
-        XCTAssertFalse(WritingAction.rewrite.requiresStructuredJSON)
-        XCTAssertTrue(WritingAction.summarize.requiresStructuredJSON)
-        XCTAssertTrue(WritingAction.translate(language: "Arabic").requiresStructuredJSON)
-        XCTAssertTrue(WritingAction.continueWriting.requiresStructuredJSON)
-        XCTAssertFalse(WritingAction.custom(id: "plain", title: "Plain", promptTemplate: "Plain").requiresStructuredJSON)
+    func testEveryBuiltInActionOmitsTransportResponseFormat() throws {
+        let scenarios: [(action: WritingAction, validationMode: String?)] = [
+            (.fixGrammar, nil),
+            (.rewrite, "complete_replacement"),
+            (.summarize, "summary"),
+            (.translate(language: "Arabic"), "translation"),
+            (.continueWriting, "continuation"),
+        ]
+
+        for scenario in scenarios {
+            let rendering = try XCTUnwrap(
+                WritingPromptBuilder.rendering(for: scenario.action, text: "Source text")
+            )
+            XCTAssertNil(rendering.responseFormatType, scenario.action.operationName)
+            XCTAssertEqual(
+                rendering.plainTextValidationPolicy?.mode,
+                scenario.validationMode,
+                scenario.action.operationName
+            )
+        }
     }
 
     func testCustomActionWithoutPlaceholderReturnsTemplateUnchanged() {

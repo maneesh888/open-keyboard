@@ -43,9 +43,10 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [ ] Rename the developer-facing `Fast plain-text grammar` diagnostic to `Grammar correction`;
   keep the short, one-attempt plain-text explanation in supporting copy.
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
-- [x] Structured suggestion/action result parsing exists.
+- [x] Structured keyboard-suggestion parsing exists; writing-action result objects are constructed
+  locally from validated plain text.
 - [x] Offline prompt/user-flow tests and opt-in live gateway tests exist.
-- [ ] Remove structured model responses from Summarize, Translate, and Continue Writing. Migrate
+- [x] Remove structured model responses from Summarize, Translate, and Continue Writing. Migrate
   their canonical response contracts to operation-specific validated plain text, omit
   `response_format` from every built-in writing-action request, and preserve safe input/parameter
   boundaries. Follow `docs/plans/plain-text-writing-responses.md`.
@@ -105,15 +106,19 @@ Why this is the smallest safe next step:
 
 Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
 
-## Planned compatibility migration
+## Plain-text response migration
 
 **Plain-text responses for all built-in writing actions**
 
 - Priority: high; removes an avoidable compatibility requirement for OpenAI-compatible gateways
   and smaller/local models.
-- Status: planned; no production implementation or live verification has been performed.
+- Status: implemented and deterministically verified. Publication remains gated on exact-head
+  low/high live-model evidence, normal Simulator runtime proof, independent review, and required
+  repository checks.
 - Scope: convert Summarize, Translate, and Continue Writing from the legacy JSON result envelope to
   operation-specific validated plain text. Grammar, Rewrite, and Improve are already plain text.
+- Compatibility: retain the old writing-response schema only as explicitly deprecated package
+  material; no active operation, preset, manifest entry, or generated adapter references it.
 - Connector dependency: complete this before Universal AI Connector adoption so the generic
   connector does not need an OpenKeyboard-specific `json_object` response mode; preserve the
   cross-repository ownership and parity requirements in the detailed plan.
