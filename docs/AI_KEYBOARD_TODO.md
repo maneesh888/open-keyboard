@@ -1,8 +1,10 @@
 # AI Keyboard Project - Current TODO
 
-**Last Updated:** 2026-07-03
+**Last Updated:** 2026-09-09
 
 **Migration entry added:** 2026-09-05
+
+**Connector sample staging updated:** 2026-09-09
 
 This file is a current-state guide for choosing the next OpenKeyboard implementation slice. It replaces the older April phase checklist; items are marked from repo/docs inspection only. Anything not proven by current docs/source is labeled **needs verification** rather than complete.
 
@@ -38,6 +40,8 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 - [x] Gateway client/config core exists (`GatewayClient`, `GatewayConfig`, `GatewayConfigStore`, `URLSessionHTTPClient`).
 - [x] Main app connection testing and model loading exist.
+- [ ] Rename the developer-facing `Fast plain-text grammar` diagnostic to `Grammar correction`;
+  keep the short, one-attempt plain-text explanation in supporting copy.
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
 - [x] Structured suggestion/action result parsing exists.
 - [x] Offline prompt/user-flow tests and opt-in live gateway tests exist.
@@ -48,6 +52,18 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [ ] Streaming/SSE responses — needs verification; do not assume complete.
 - [ ] Debounced suggestions while typing — pending.
 - [ ] Timeout/cancellation/network resilience coverage — next queue item, partially present in tests but needs current verification before marking complete.
+- [ ] Long-text Fix Grammar model differential and rate-limit-safe chunking — future work.
+  Proof-first live evaluation on `91315578e4211f7343ccd62995530bc5b74358b5` used one
+  synthetic 11,430-character document with 20 known errors: the low profile returned the complete
+  text unchanged (`0/20` corrections), while the high profile corrected all `20/20` errors in one
+  request and preserved all 21 paragraphs. The existing approximately 120-character production
+  strategy generated 104 chunks for the same document and received HTTP `429` on chunk 13 when
+  running two requests concurrently, so that chunked outcome remains live-unverified. Before
+  implementation, evaluate sentence/paragraph-aligned chunks around 1,500–2,000 characters,
+  initially processed sequentially; require exact-order reassembly, preserved whitespace and
+  paragraph structure, per-chunk validation, no partial application, and a permanent live-model
+  differential test where high-profile long correction is required and low-profile support is
+  diagnostic/optional.
 - [ ] Shared Keychain release hardening and privacy copy — in progress; see `docs/RELEASE_HARDENING.md` and `docs/TDD_STATUS.md`.
 
 ### Testing and verification
@@ -107,6 +123,55 @@ Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
   gates, exact-model gateway differential evidence, and normal simulator runtime proof for visible
   Translate behavior before publication/readiness.
 - Detailed plan: `docs/plans/plain-text-writing-responses.md`.
+
+**Universal AI Connector sample and migration staging**
+
+- Current boundary: OpenKeyboard already has host-owned Gateway configuration, connection testing,
+  model loading, and model-selection UI. Universal AI Connector already has deterministic iOS,
+  Android, and Kotlin/JVM console samples. The first missing workflow is live provider/Gateway
+  configuration, model loading, exact selection, and connection testing in the existing iOS
+  sample; do not replace or duplicate OpenKeyboard's settings UI while adding that workflow.
+- [ ] **Stage 1 — make the Universal AI Connector standalone sample a complete iOS integration
+  harness.** Keep provider/Gateway configuration host-owned and credentials in secure iOS storage.
+  Load models through the connector's existing `listModels` API and present loading, supported,
+  empty, unsupported-discovery, authentication, timeout, malformed-response, cancellation, retry,
+  and configuration-change states. Require exact model selection, with explicit manual model entry
+  only for providers that report unsupported discovery. Define **Test Connection** as exactly one
+  discovery request followed by one minimal `respond` request using the selected model. Never
+  silently fall back to generation for discovery or substitute a provider, endpoint, credential,
+  or model.
+  - Automated regression evidence: deterministic sample tests cover state transitions, retry and
+    cancellation, connector replacement after configuration changes, exact selection/manual-entry
+    rules, the two-call connection flow, and the no-fallback/no-substitution boundary.
+  - Live evidence: an opt-in route must exercise the actual iOS sample against at least two exact,
+    explicitly selected models and record discovery, transport, generation, and exact-model
+    identity separately. A mocked host or library-only harness does not satisfy this requirement.
+  - Runtime evidence: collect normal simulator runtime proof from the normally launched sample.
+    Separately, Stage 1 acceptance requires the exact signed sample build to install and launch on
+    a physical iPhone, visibly load models, select an exact model, and complete **Test Connection**
+    through the sample UI; collect physical-device proof for that interaction. Neither sample route
+    proves keyboard extension compatibility; retain a separate application-extension consumer
+    build and normal OpenKeyboard extension proof.
+- [ ] **Stage 2 — upgrade the existing Android sample.** After Stage 1 acceptance, add
+  provider/Gateway configuration plus model discovery/loading, exact selection, and the same
+  two-step **Test Connection** flow to the existing deterministic Android sample. Require
+  deterministic state/request tests and separate Android emulator and signed physical-device
+  lifecycle evidence for installation, launch, cancellation/backgrounding, model loading, and
+  connection validation.
+- [ ] **Stage 3 — extend Kotlin/JVM and add Compose desktop.** Add the same public discovery,
+  exact-model selection, and `respond` flow to the existing Kotlin/JVM console sample, then add a
+  Compose desktop sample on macOS, Windows, and Linux. Require shared deterministic contract tests
+  plus runtime evidence collected on each matching host; evidence from one desktop OS does not
+  stand in for another.
+- [ ] **Stage 4 — close shared cross-platform parity.** Across iOS, Android, Kotlin/JVM console,
+  and Compose desktop, verify equivalent supported/empty/unsupported/authentication/timeout/
+  malformed states, retry and cancellation, connector replacement after configuration changes,
+  exact requested/returned model identity, and no provider/model/endpoint/credential fallback or
+  substitution. Keep JavaScript, Wasm, and new native targets demand-driven and outside the current
+  supported-host plan.
+- OpenKeyboard extension adoption follows connector sample confidence. Preserve its independent
+  application-extension build, shared-configuration checks, resource measurements, and normal
+  extension runtime proof; connector sample parity cannot satisfy those requirements.
 
 ---
 
