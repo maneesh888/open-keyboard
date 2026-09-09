@@ -63,6 +63,15 @@ roadmap. The semantic-contract release and OpenKeyboard adoption in this plan mu
 the later connector migration can then consume the same plain-text behavior without an
 OpenKeyboard-specific response mode.
 
+Alignment status updated 2026-09-09: Universal AI Connector main at
+`c2257c35d5992940db15d2a95c17688adc7a3fb4` already exposes provider-neutral model discovery,
+including the Swift `async` `listModels` surface. OpenKeyboard already owns and presents Gateway
+configuration, connection testing, model loading, and model selection. The first missing product
+workflow is therefore live provider/Gateway configuration, model loading, exact selection, and
+connection testing in the connector's existing deterministic iOS sample, not model loading in
+OpenKeyboard or a new connector API. Connector main also already contains deterministic Android
+and Kotlin/JVM console samples; their later stages extend those hosts rather than create them.
+
 ### Ownership boundaries
 
 - `semantic-prompt-contract` remains the only owner of writing-operation identifiers, prompts,
@@ -86,11 +95,11 @@ OpenKeyboard-specific response mode.
   `KeyboardAIService`. Reuse one connector instance per gateway identity and close/replace it when
   the saved URL, credential, or provider profile changes; do not construct a connector for every
   action or grammar chunk.
-- Add provider-neutral `listModels(providerId)` behavior to the connector's Kotlin API and an
-  equivalent Swift `async` API for OpenAI, Anthropic, OpenRouter, and configured OpenAI-compatible
-  providers. Each provider adapter owns its endpoint, headers, pagination, deterministic ordering,
-  duplicate handling, bounds, cancellation, response translation, and typed
-  unsupported-discovery result.
+- Consume the connector's existing provider-neutral `listModels` behavior and Swift `async` API
+  from connector main `c2257c35d5992940db15d2a95c17688adc7a3fb4`; do not plan another discovery
+  API addition. Keep endpoint, headers, pagination, deterministic ordering, duplicate handling,
+  bounds, cancellation, response translation, and typed unsupported-discovery behavior in each
+  provider adapter.
 - Make one successful `listModels` call the connection/discovery phase. Do not require a universal
   `/health` endpoint and do not use generation as a silent discovery fallback. In OpenKeyboard,
   remove the current duplicate model-list request, populate/validate the model picker from that one
@@ -111,13 +120,77 @@ OpenKeyboard-specific response mode.
   priority than ARM64 consumer and connection-validation support unless OpenKeyboard's supported
   architecture policy makes it a release gate.
 
-### Follow-on parity and extension evidence
+### Staged sample rollout and extension evidence
 
-- Exercise equivalent provider configuration, timeout defaults, model discovery, model selection,
-  response, typed-error, cancellation, and cleanup behavior through the connector's JVM, Android,
-  and iOS sample apps using only public APIs and shared deterministic fixtures.
-- Keep a separate minimal iOS application-extension consumer build. An iOS app sample proves the
-  Swift façade but does not prove custom keyboard-extension compatibility.
+#### Stage 1: iOS sample and OpenKeyboard adoption
+
+- Make the Universal AI Connector standalone iOS sample the first complete public integration
+  harness. Provider/Gateway configuration remains host-owned, and credentials must use secure iOS
+  storage rather than connector-owned persistence or checked-in configuration.
+- Drive model loading through the existing `listModels` API. The sample UI must make loading,
+  supported results, empty results, unsupported discovery, authentication failure, timeout,
+  malformed response, cancellation, retry, and configuration-change replacement observable and
+  testable.
+- Require an exact selected model for generation. Permit explicit manual model entry only when the
+  provider reports unsupported discovery; an empty list, authentication failure, timeout, malformed
+  response, or cancellation must not unlock that fallback.
+- Define **Test Connection** as one model-discovery request followed by one minimal `respond`
+  request using the exact selected model. Do not repeat discovery, turn generation into a silent
+  discovery fallback, substitute a model/provider/endpoint/credential, or treat partial success as
+  a trusted configuration.
+- Add deterministic tests against public sample seams and shared connector fixtures for every UI
+  state, cancellation/retry behavior, configuration replacement, exact selection/manual fallback,
+  the two-call connection flow, and the no-fallback/no-substitution rules.
+- Add an opt-in live route that runs the actual iOS sample, not a library-only test harness, against
+  at least two exact explicitly selected models. Record model discovery, transport success,
+  generation acceptance, latency, and returned/requested model identity separately.
+- Collect normal simulator runtime proof using the normally launched sample with no seeded or
+  test-host state. This simulator proof is a separate Stage 1 evidence row.
+- Stage 1 acceptance also requires the exact signed sample build to install and launch on a
+  physical iPhone under explicit device authority. Through the visible sample UI, load the model
+  list, select an exact model, and complete **Test Connection**; collect physical-device proof of
+  the resulting states. Installation and process launch alone do not satisfy this requirement.
+- Keep a separate minimal iOS application-extension consumer build and OpenKeyboard extension
+  proof. A passing standalone iOS sample establishes the Swift façade and host-app flow only; it
+  does not establish custom keyboard-extension loading, shared configuration, memory/startup
+  limits, or end-to-end text replacement.
+
+#### Stage 2: Android sample
+
+- After Stage 1 acceptance, upgrade the existing deterministic Android sample with host-owned
+  provider/Gateway configuration, model discovery/loading, exact model selection, and the same
+  **Test Connection** contract: one discovery followed by one minimal `respond` using the
+  selection.
+- Reuse public connector APIs and shared fixtures. Add deterministic state/request coverage plus
+  separate Android emulator and signed physical-device lifecycle evidence for installation,
+  launch, cancellation/backgrounding, model loading, selection, and connection validation.
+
+#### Stage 3: Kotlin/JVM console and Compose desktop
+
+- Extend the existing Kotlin/JVM console sample with the same public discovery, exact-model
+  selection, and `respond` flow without reaching into adapter internals, then add a Compose desktop
+  sample over that public Kotlin/JVM boundary.
+- Exercise Compose desktop on macOS, Windows, and Linux. Require shared deterministic contract
+  tests and matching-host runtime evidence for each OS; success on one desktop host does not prove
+  another host's packaging, networking, credential handling, lifecycle, or UI.
+
+#### Stage 4: shared cross-platform parity and final connector acceptance
+
+- Across the iOS sample, Android sample, Kotlin/JVM console, and Compose desktop, verify equivalent
+  supported, empty, unsupported discovery, authentication, timeout, malformed-response, retry,
+  and cancellation behavior.
+- Verify connector replacement after configuration changes, exact requested/returned model
+  identity, and the absence of silent provider, model, endpoint, or credential fallback and
+  substitution on every supported host.
+- Bind deterministic and platform-runtime evidence to eligible connector revisions and record any
+  intentionally platform-specific behavior instead of calling it parity.
+- JavaScript, Wasm, and additional native targets remain demand-driven. They are not part of this
+  current supported-host plan or its final acceptance gate.
+
+#### OpenKeyboard migration evidence
+
+- Begin OpenKeyboard-specific connector adoption only after sufficient connector sample confidence
+  has been established. Sample acceptance does not waive OpenKeyboard's own integration gates.
 - Before removing OpenKeyboard's legacy chat transport, prove request/result parity for Settings
   smoke tests and keyboard actions, concurrent grammar chunks, connector replacement after config
   changes, invalid credentials, unavailable models, rate limits, timeout, cancellation, malformed
@@ -247,6 +320,48 @@ The follow-on connector integration is not required to merge this planning chang
 the plain-text response migration. When that later work is activated, its acceptance evidence must
 also satisfy the ownership, connection-validation, lifecycle, parity, distribution, architecture,
 and extension requirements recorded above.
+
+### Connector Stage 1 acceptance and evidence boundaries
+
+- **API acceptance:** the sample uses the existing Swift `listModels` and `respond` public APIs from
+  the pinned connector revision; it does not access provider adapters or transport internals.
+- **Configuration acceptance:** provider/Gateway fields remain host-owned, credentials are stored
+  securely, and configuration changes cancel/replace the prior connector without leaking the old
+  endpoint, credential, provider, or selection into a new request.
+- **Discovery acceptance:** every supported, empty, unsupported, authentication, timeout,
+  malformed, cancelled, retried, and changed-configuration state is distinct. Only explicit
+  unsupported discovery enables manual model entry.
+- **Connection acceptance:** **Test Connection** performs one discovery followed by one minimal
+  response on the exact selection. Both steps and model identity must succeed; no fallback or
+  substitution is accepted.
+- **Automated regression evidence:** deterministic iOS sample tests verify state transitions and
+  request counts. They do not prove network availability, semantic model behavior, visible normal
+  runtime, signing, or extension compatibility.
+- **Live evidence:** the opt-in actual-sample route must pass with at least two exact selected models
+  and report discovery, transport, response acceptance, latency, and model identity separately.
+  Live success does not by itself prove the visible UI or physical-device behavior.
+- **Normal simulator runtime proof:** direct, inspected evidence from the normally launched iOS
+  sample proves the visible host-app flow only. It does not prove a signed physical-iPhone build or
+  the keyboard extension.
+- **Physical-device proof:** Stage 1 requires the exact signed sample build to install and launch on
+  a physical iPhone under explicit device authority, then visibly load models and complete
+  **Test Connection** with an exact selected model. Installation/launch without the visible
+  interaction is insufficient. This proof is independent of normal simulator proof and does not
+  replace separate application-extension evidence.
+- **Extension evidence:** a dedicated extension consumer build plus OpenKeyboard's required normal
+  extension runtime route independently prove extension compatibility; sample-app evidence cannot
+  satisfy this boundary.
+- **Stage 2 boundary:** Android adds deterministic plus emulator and signed-device lifecycle
+  evidence for its discovery, selection, cancellation/backgrounding, and connection flow; iOS
+  evidence cannot satisfy it.
+- **Stage 3 boundary:** Kotlin/JVM console and Compose desktop require the same public discovery,
+  exact-model, and response flow, with separate matching-host runtime evidence on macOS, Windows,
+  and Linux.
+- **Stage 4 boundary:** final connector acceptance requires cross-platform parity for states,
+  errors, cancellation, configuration replacement, exact model identity, and no fallback or
+  substitution across all current supported hosts.
+- **Demand-driven boundary:** JavaScript, Wasm, and new native targets are not current supported-host
+  acceptance requirements.
 
 ## Risks and mitigations
 
