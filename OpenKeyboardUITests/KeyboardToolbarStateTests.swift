@@ -61,6 +61,13 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(capability.subtitle, KeyboardActionErrorState.modelCapabilityMessage)
         XCTAssertNotEqual(capability.title, "AI unavailable")
 
+        let invalidResponse = KeyboardToolbarState(kind: .error(
+            kind: .invalidResponse,
+            message: "Couldn't generate a usable suggestion. Try again."
+        ))
+        XCTAssertEqual(invalidResponse.title, "Couldn't use response")
+        XCTAssertEqual(invalidResponse.subtitle, "Couldn't generate a usable suggestion. Try again.")
+
         let grammarCapability = KeyboardToolbarState(kind: .error(
             kind: .grammarCapability,
             message: KeyboardActionErrorState.grammarCapabilityMessage

@@ -465,9 +465,30 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         viewModel.performAIAction(.fixGrammar)
         await waitUntil { viewModel.actionError != nil }
 
-        XCTAssertEqual(viewModel.actionError?.kind, .grammarCapability)
-        XCTAssertEqual(viewModel.actionError?.title, "Model couldn't correct this text")
-        XCTAssertEqual(viewModel.actionError?.message, KeyboardActionErrorState.grammarCapabilityMessage)
+        XCTAssertEqual(viewModel.actionError?.kind, .invalidResponse)
+        XCTAssertEqual(viewModel.actionError?.title, "Couldn't use response")
+        XCTAssertEqual(viewModel.actionError?.message, "Couldn't generate a usable suggestion. Try again.")
+        XCTAssertEqual(proxy.text, source)
+    }
+
+    func testInvalidGrammarResponseShowsRetryableErrorInsteadOfModelIncompatibility() async {
+        let source = "The report need correction."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: ThrowingKeyboardAIService(error: .invalidResponse),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.actionError != nil }
+
+        XCTAssertEqual(viewModel.actionError?.scope, .grammar)
+        XCTAssertEqual(viewModel.actionError?.kind, .invalidResponse)
+        XCTAssertEqual(viewModel.actionError?.title, "Couldn't use response")
+        XCTAssertEqual(viewModel.actionError?.message, "Couldn't generate a usable suggestion. Try again.")
+        XCTAssertNotEqual(viewModel.actionError?.title, "Model couldn't correct this text")
         XCTAssertEqual(proxy.text, source)
     }
 
@@ -2323,6 +2344,241 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "please make this better")
     }
 
+    func testSecureProfileReplacementAndClearCloseConnectorAndDiscardStaleResult() async throws {
+        let previousSecureStore = AppConfig.secureStore
+        let secureStore = ProfileChangeInMemorySecureStore()
+        let suiteName = "KeyboardViewModelActionErrorTests.profile-change.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+            AppConfig.secureStore = previousSecureStore
+        }
+        AppConfig.secureStore = secureStore
+
+        let originalConfig = AppConfig(
+            apiKey: "old-test-key",
+            gatewayURL: "https://old-provider.example.com/v1",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: .openAICompatible
+        )
+        XCTAssertTrue(originalConfig.save(to: defaults, validatedAt: Date()))
+
+        var loadedConfig = originalConfig
+        var loadedConnectionError: String?
+        let service = ProfileChangeIgnoringCancellationAIService(
+            result: Self.plainRewriteResult("A stale response from the old profile.")
+        )
+        let proxy = FakeTextDocumentProxy(text: "Keep the original text.")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { loadedConfig },
+            loadGatewayConnectionError: { loadedConnectionError },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { service.requestCount == 1 }
+
+        let replacementConfig = AppConfig(
+            apiKey: "new-test-key",
+            gatewayURL: "https://api.anthropic.com/v1",
+            selectedModel: "new-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: .anthropic
+        )
+        loadedConfig = replacementConfig
+        loadedConnectionError = #"Gateway failed {"api_key":"must-not-leak"}"#
+        XCTAssertTrue(replacementConfig.save(to: defaults, validatedAt: Date()))
+
+        await waitUntil {
+            service.closeCount == 1 && viewModel.config == replacementConfig
+        }
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertEqual(service.requestedConfigs, [originalConfig])
+        XCTAssertEqual(proxy.text, "Keep the original text.")
+        XCTAssertNil(viewModel.rewriteOptionsState)
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(viewModel.gatewayConnectionError, "Gateway returned an invalid response.")
+        XCTAssertFalse(viewModel.gatewayConnectionError?.contains("must-not-leak") ?? true)
+
+        loadedConfig = .default
+        loadedConnectionError = nil
+        XCTAssertTrue(AppConfig.default.save(to: defaults))
+        await waitUntil {
+            service.closeCount == 2 && viewModel.config == .default
+        }
+
+        XCTAssertNil(viewModel.gatewayConnectionError)
+        XCTAssertFalse(viewModel.canRunAIAction)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testInitializationRefreshClosesLoadBeforeObserverRegistrationWindow() {
+        let originalConfig = Self.configuredGateway
+        let replacementConfig = AppConfig(
+            apiKey: "registration-window-test-key",
+            gatewayURL: "https://api.openai.com/v1",
+            selectedModel: "registration-window-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: .openAI
+        )
+        var loadCount = 0
+        let service = ProfileChangeIgnoringCancellationAIService(
+            result: Self.plainRewriteResult()
+        )
+
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: "Keep the original text."),
+            aiService: service,
+            loadConfig: {
+                defer { loadCount += 1 }
+                return loadCount == 0 ? originalConfig : replacementConfig
+            },
+            loadGatewayConnectionError: { nil },
+            productionTestFullAccess: true
+        )
+
+        XCTAssertEqual(loadCount, 2)
+        XCTAssertEqual(viewModel.config, replacementConfig)
+        XCTAssertEqual(service.closeCount, 1)
+        XCTAssertEqual(viewModel.aiStatus, "AI ready · registration-window-model")
+    }
+
+    func testDuplicateProfileNotificationDoesNotCancelNewRequest() async {
+        let originalConfig = Self.configuredGateway
+        let replacementConfig = AppConfig(
+            apiKey: "replacement-test-key",
+            gatewayURL: "https://api.anthropic.com/v1",
+            selectedModel: "replacement-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: .anthropic
+        )
+        var loadedConfig = originalConfig
+        let service = ProfileChangeIgnoringCancellationAIService(
+            result: Self.plainRewriteResult("A response from the replacement profile.")
+        )
+        let proxy = FakeTextDocumentProxy(text: "Keep the original text.")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { loadedConfig },
+            loadGatewayConnectionError: { nil },
+            productionTestFullAccess: true
+        )
+
+        loadedConfig = replacementConfig
+        AppConfig.postActiveProfileDidChangeDarwinNotification()
+        await waitUntil {
+            service.closeCount == 1 && viewModel.config == replacementConfig
+        }
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { service.requestCount == 1 }
+
+        // This models a delayed/coalesced duplicate pulse for the already-applied replacement.
+        AppConfig.postActiveProfileDidChangeDarwinNotification()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(service.closeCount, 1)
+
+        await waitUntil {
+            viewModel.rewriteOptionsState?.selectedOption?.text
+                == "A response from the replacement profile."
+        }
+
+        XCTAssertEqual(service.closeCount, 1)
+        XCTAssertEqual(service.requestedConfigs, [replacementConfig])
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+    }
+
+    func testGatewayErrorOnlyNotificationCancelsActiveWorkAndBlocksActions() async {
+        var loadedConnectionError: String?
+        let service = ProfileChangeIgnoringCancellationAIService(
+            result: Self.plainRewriteResult("A stale response that must be discarded.")
+        )
+        let proxy = FakeTextDocumentProxy(text: "Keep the original text.")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            loadGatewayConnectionError: { loadedConnectionError },
+            productionTestFullAccess: true
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { service.requestCount == 1 }
+
+        loadedConnectionError = "Gateway timed out. Open the app to retry."
+        AppConfig.postActiveProfileDidChangeDarwinNotification()
+        await waitUntil {
+            service.closeCount == 1 && viewModel.gatewayConnectionError == loadedConnectionError
+        }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(viewModel.config, Self.configuredGateway)
+        XCTAssertEqual(proxy.text, "Keep the original text.")
+        XCTAssertNil(viewModel.rewriteOptionsState)
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertFalse(viewModel.canRunAIAction)
+        XCTAssertEqual(viewModel.toolbarState.title, "AI unavailable")
+        XCTAssertEqual(viewModel.toolbarState.subtitle, loadedConnectionError)
+    }
+
+    func testUpdateFullAccessDiscoversMissedProfileChangeAndDiscardsStaleCompletion() async {
+        let originalConfig = Self.configuredGateway
+        let replacementConfig = AppConfig(
+            apiKey: "foreground-refresh-test-key",
+            gatewayURL: "https://openrouter.ai/api/v1",
+            selectedModel: "foreground-refresh-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: .openRouter
+        )
+        var loadedConfig = originalConfig
+        let service = ProfileChangeIgnoringCancellationAIService(
+            result: Self.plainRewriteResult("A stale response from before foreground refresh.")
+        )
+        let proxy = FakeTextDocumentProxy(text: "Keep the original text.")
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { loadedConfig },
+            loadGatewayConnectionError: { nil },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 10_000_000_000
+        )
+
+        viewModel.performAIAction(.rewrite)
+        await waitUntil { service.requestCount == 1 }
+
+        // No Darwin pulse is posted: lifecycle refresh must still observe the persisted change.
+        loadedConfig = replacementConfig
+        viewModel.updateFullAccess(true)
+        XCTAssertEqual(service.closeCount, 1)
+        XCTAssertEqual(viewModel.config, replacementConfig)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(service.requestedConfigs, [originalConfig])
+        XCTAssertEqual(proxy.text, "Keep the original text.")
+        XCTAssertNil(viewModel.rewriteOptionsState)
+        XCTAssertNil(viewModel.suggestionState)
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
     func testConfiguredFlagWithoutCompleteRuntimeConfigBlocksKeyboardActions() {
         let incompleteConfig = AppConfig(
             apiKey: "",
@@ -2497,11 +2753,12 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         viewModel.applyCurrentCorrection()
         XCTAssertEqual(proxy.text, "i have a apple and this")
+        await waitUntil { viewModel.panelMode == .correctionComplete && !viewModel.isGrammarCorrectionLoading }
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
         XCTAssertNil(viewModel.suggestionState)
     }
 
-    func testGrammarCorrectionAfterCompletedCarouselUsesCurrentTextWhenDocumentContextIsStale() async {
+    func testAutomaticFollowUpAfterCompletedCarouselUsesCurrentTextWhenDocumentContextIsStale() async {
         let sourceText = "i has a apple and ths"
         let correctedText = "i have a apple and this"
         let proxy = FakeTextDocumentProxy(text: sourceText)
@@ -2520,19 +2777,15 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.panelMode == .correctionDetail && !viewModel.isGrammarCorrectionLoading }
 
         viewModel.applyCurrentCorrection()
-        viewModel.applyCurrentCorrection()
-
-        XCTAssertEqual(proxy.text, correctedText)
-        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
-
         proxy.documentContextBeforeInputOverride = sourceText
-        viewModel.showKeyboardPanel()
-        viewModel.openGrammarCorrection()
+        viewModel.applyCurrentCorrection()
 
         await waitUntil { service.requestedTexts.count == 2 && !viewModel.isGrammarCorrectionLoading }
 
+        XCTAssertEqual(proxy.text, correctedText)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
         XCTAssertEqual(service.requestedTexts, [sourceText, correctedText])
-        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
     }
 
     func testStaleArticleCorrectionIsFilteredBeforePresentation() async {
@@ -2554,7 +2807,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(proxy.text.contains("ann apple"))
     }
 
-    func testPlainGrammarMixedChoicesThenCheckAgainUsesOneNewRequestWithCurrentText() async {
+    func testPlainGrammarMixedChoicesRequireManualCheckAgainAfterDismissal() async {
         let source = "Our support team definately need clearer notes before they reply about the refnd."
         let corrected = "Our support team definitely needs clearer notes before they reply about the refund."
         let mixedResult = "Our support team definitely need clearer notes before they reply about the refund."
@@ -2578,12 +2831,197 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
 
         XCTAssertEqual(proxy.text, mixedResult)
         XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+        XCTAssertEqual(service.requestedTexts, [source])
 
         viewModel.checkGrammarAgain()
         await waitUntil { service.requestedTexts.count == 2 && !viewModel.isGrammarCorrectionLoading }
 
         XCTAssertEqual(service.requestedTexts, [source, mixedResult])
         XCTAssertEqual(viewModel.completionPanelState, .noIssues)
+    }
+
+    func testApplyingLastCorrectionChecksRemainingSentencesUntilDocumentIsClean() async {
+        let source = "He go home every day. They is ready for the meeting."
+        let afterFirstSentence = "He goes home every day. They is ready for the meeting."
+        let corrected = "He goes home every day. They are ready for the meeting."
+        let service = SequencedKeyboardAIService(results: [
+            Self.plainGrammarResult(afterFirstSentence),
+            Self.plainGrammarResult(corrected),
+            Self.noIssueGrammarResult()
+        ])
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.currentCorrection?.original == "go" && !viewModel.isGrammarCorrectionLoading }
+
+        viewModel.applyCurrentCorrection()
+        await waitUntil { service.requestedTexts.count == 2 && viewModel.currentCorrection?.original == "is" }
+
+        XCTAssertEqual(proxy.text, afterFirstSentence)
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+
+        viewModel.applyCurrentCorrection()
+        await waitUntil { service.requestedTexts.count == 3 && viewModel.panelMode == .correctionComplete }
+
+        XCTAssertEqual(proxy.text, corrected)
+        XCTAssertEqual(service.requestedTexts, [source, afterFirstSentence, corrected])
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+        XCTAssertEqual(viewModel.aiStatus, "No more suggestions")
+    }
+
+    func testAutomaticGrammarFollowUpStopsAfterBoundedPasses() async {
+        let source = "Ths sentnce has errr."
+        let passOne = "This sentnce has errr."
+        let passTwo = "This sentence has errr."
+        let passThree = "This sentence has error."
+        let service = SequencedKeyboardAIService(results: [
+            Self.plainGrammarResult(passOne),
+            Self.plainGrammarResult(passTwo),
+            Self.plainGrammarResult(passThree)
+        ])
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts.count == 1 && viewModel.currentCorrection != nil }
+        viewModel.applyCurrentCorrection()
+        await waitUntil { service.requestedTexts.count == 2 && viewModel.currentCorrection != nil }
+        viewModel.applyCurrentCorrection()
+        await waitUntil { service.requestedTexts.count == 3 && viewModel.currentCorrection != nil }
+        viewModel.applyCurrentCorrection()
+
+        XCTAssertEqual(proxy.text, passThree)
+        XCTAssertEqual(service.requestedTexts, [source, passOne, passTwo])
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+    }
+
+    func testWholeVersionGrammarProposalCanCopyNavigateBackAndDismissWithoutChangingText() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+        XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.originalText, source)
+        XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.proposedText, proposed)
+        XCTAssertEqual(
+            viewModel.grammarWholeVersionProposalState?.replacementDiff.highlightedReplacementSegments
+                .map(\.text).joined(),
+            proposed
+        )
+        XCTAssertEqual(proxy.text, source)
+
+        UIPasteboard.general.string = nil
+        viewModel.copyGrammarWholeVersionProposal()
+        XCTAssertEqual(UIPasteboard.general.string, proposed)
+
+        viewModel.showKeyboardPanel()
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertTrue(viewModel.canOpenAnalysisResult)
+        viewModel.showAnalysisResult()
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+
+        viewModel.dismissGrammarWholeVersionProposal()
+        XCTAssertEqual(proxy.text, source)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testUseWholeVersionGrammarProposalAppliesOnlyAfterExplicitReviewAction() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+        XCTAssertEqual(proxy.text, source)
+
+        viewModel.useGrammarWholeVersionProposal()
+        await waitUntil { viewModel.panelMode == .correctionComplete && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertEqual(proxy.text, proposed)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarVersionApplied)
+    }
+
+    func testStaleWholeVersionGrammarProposalNeverReplacesChangedDocument() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let edited = source + " New user text."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(
+                result: Self.wholeVersionGrammarResult(proposed)
+            ),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
+        proxy.replaceTextForTest(edited)
+
+        viewModel.useGrammarWholeVersionProposal()
+
+        XCTAssertEqual(proxy.text, edited)
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+    }
+
+    func testRerunWholeVersionGrammarProposalRequestsTheSameCapturedTextAgain() async {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let service = SequencedKeyboardAIService(results: [
+            Self.wholeVersionGrammarResult(proposed),
+            Self.wholeVersionGrammarResult(proposed)
+        ])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: FakeTextDocumentProxy(text: source),
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedTexts.count == 1 && viewModel.grammarWholeVersionProposalState != nil }
+        viewModel.rerunGrammarWholeVersionProposal()
+        await waitUntil { service.requestedTexts.count == 2 && viewModel.grammarWholeVersionProposalState != nil }
+
+        XCTAssertEqual(service.requestedTexts, [source, source])
+        XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
     }
 
     func testRejectAllKeepsOriginalAndManualDocumentEditInvalidatesGrammarSession() async {
@@ -2677,12 +3115,20 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
-    private static func plainGrammarResult(_ correctedText: String) -> KeyboardActionOperationResult {
+    private static func plainGrammarResult(
+        _ correctedText: String,
+        presentation: GrammarCorrectionPresentation? = nil
+    ) -> KeyboardActionOperationResult {
         KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
-            correctedText: correctedText
+            correctedText: correctedText,
+            grammarPresentation: presentation
         )
+    }
+
+    private static func wholeVersionGrammarResult(_ proposedText: String) -> KeyboardActionOperationResult {
+        plainGrammarResult(proposedText, presentation: .wholeVersionProposal)
     }
 
     private static func plainRewriteResult(
@@ -3188,6 +3634,82 @@ private final class CancellingKeyboardAIService: KeyboardAIServiceProviding {
     func performResult(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> KeyboardActionOperationResult {
         throw CancellationError()
     }
+}
+
+private final class ProfileChangeIgnoringCancellationAIService: KeyboardAIServiceProviding {
+    let result: KeyboardActionOperationResult
+    private(set) var requestCount = 0
+    private(set) var closeCount = 0
+    private(set) var requestedConfigs: [AppConfig] = []
+
+    init(result: KeyboardActionOperationResult) {
+        self.result = result
+    }
+
+    func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
+        let result = try await performResult(action: .fixGrammar, on: text, config: config)
+        return await MainActor.run { result.suggestionResponse() }
+    }
+
+    func perform(action: KeyboardAIAction, on text: String, config: AppConfig) async throws -> String {
+        try await performResult(action: action, on: text, config: config).displayText
+    }
+
+    func performResult(
+        action: KeyboardAIAction,
+        on text: String,
+        config: AppConfig
+    ) async throws -> KeyboardActionOperationResult {
+        requestCount += 1
+        requestedConfigs.append(config)
+        await Task.detached {
+            try? await Task.sleep(nanoseconds: 150_000_000)
+        }.value
+        return result
+    }
+
+    func closeConnector() {
+        closeCount += 1
+    }
+}
+
+private final class ProfileChangeInMemorySecureStore: AppConfigSecureStore {
+    private var profile: Data?
+    private var clearIntent: AppConfigSecureClearIntent?
+
+    func loadProfile() -> Data? {
+        profile
+    }
+
+    func saveProfile(_ profile: Data) -> Bool {
+        self.profile = profile
+        return true
+    }
+
+    func clearProfile() -> Bool {
+        profile = nil
+        return true
+    }
+
+    func loadClearIntentResult() -> AppConfigSecureStoreClearIntentReadResult {
+        clearIntent.map(AppConfigSecureStoreClearIntentReadResult.found) ?? .notFound
+    }
+    func saveClearIntent(_ intent: AppConfigSecureClearIntent) -> Bool {
+        clearIntent = intent
+        return true
+    }
+    func clearClearIntent() -> Bool {
+        clearIntent = nil
+        return true
+    }
+
+    func loadLegacyAPIKey() -> String? { nil }
+    func loadLegacyAPIKey(reference: String) -> String? { nil }
+    func loadLegacyAPIKeyResult() -> AppConfigSecureStoreStringReadResult { .notFound }
+    func loadLegacyAPIKeyResult(reference: String) -> AppConfigSecureStoreStringReadResult { .notFound }
+    func saveLegacyAPIKey(_ apiKey: String) -> Bool { true }
+    func clearLegacyAPIKey() -> Bool { true }
+    func clearLegacyAPIKey(reference: String) -> Bool { true }
 }
 
 private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {

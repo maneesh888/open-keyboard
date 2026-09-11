@@ -543,6 +543,30 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(tester.smokeModels.isEmpty)
     }
 
+    func testSameCredentialsCanSaveANewExplicitlySelectedExactModel() async {
+        let suiteName = "SettingsViewModelTests.same-credentials-model-change.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://existing.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["old-model", "new-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+
+        await viewModel.loadModels()
+        viewModel.updateSelectedModelInput("new-model")
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.selectedModel, "new-model")
+        XCTAssertEqual(tester.smokeModels, ["new-model"])
+    }
+
     func testSavedModelValidationIsCaseSensitiveAndDoesNotRewriteConnectorIdentifiers() async {
         let configured = AppConfig(
             apiKey: "existing-key",
@@ -1066,6 +1090,7 @@ final class SettingsViewModelTests: XCTestCase {
             ]
         )
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateProvider(.anthropic)
         viewModel.updateGatewayURLInput("gateway.example")
         viewModel.updateAPIKeyInput("test-key")
 
@@ -1077,12 +1102,33 @@ final class SettingsViewModelTests: XCTestCase {
 
         XCTAssertFalse(viewModel.isRunningDiagnostics)
         XCTAssertEqual(viewModel.diagnosticReport, tester.diagnosticReport)
+        XCTAssertEqual(tester.diagnosticProvider, .anthropic)
         XCTAssertEqual(tester.diagnosticGatewayURL, "https://gateway.example")
         XCTAssertEqual(tester.diagnosticAPIKey, "test-key")
         XCTAssertEqual(viewModel.connectionStatus, .unknown)
         XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
         XCTAssertFalse(viewModel.config.isConfigured)
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
+    }
+
+    func testGatewayDiagnosticUsesNewExactModelSelectedForSavedCredentials() async {
+        let configured = AppConfig(
+            apiKey: "working-key",
+            gatewayURL: "https://gateway.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(models: ["old-model", "new-model"])
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester)
+
+        await viewModel.loadModels()
+        viewModel.updateSelectedModelInput("new-model")
+        await viewModel.runDiagnostics()
+
+        XCTAssertEqual(tester.diagnosticPreferredModel, "new-model")
+        XCTAssertEqual(viewModel.config.selectedModel, "old-model")
     }
 
     func testCredentialEditDuringConnectionPreservesPreviousCommittedProfile() async {
@@ -1208,6 +1254,421 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertNotNil(viewModel.onboardingResetMessage)
     }
 
+    func testEveryProviderSuppliesAnEditableDefaultBaseURL() {
+        let expectations: [(OpenKeyboardAIProvider, String)] = [
+            (.openAI, "https://api.openai.com/v1"),
+            (.anthropic, "https://api.anthropic.com/v1"),
+            (.openRouter, "https://openrouter.ai/api/v1"),
+            (.openAICompatible, "https://")
+        ]
+
+        for (provider, expectedDefault) in expectations {
+            let viewModel = SettingsViewModel(config: .default, gatewayTester: FakeGatewayTester())
+
+            viewModel.updateProvider(provider)
+
+            XCTAssertEqual(viewModel.selectedProvider, provider)
+            XCTAssertEqual(viewModel.gatewayURLInput, expectedDefault)
+
+            let customBaseURL = "https://custom-\(provider.rawValue).example/provider/path"
+            viewModel.updateGatewayURLInput(customBaseURL)
+            XCTAssertEqual(viewModel.gatewayURLInput, customBaseURL)
+        }
+    }
+
+    func testProviderBaseURLTransportPolicyMatchesConnectorBoundary() throws {
+        for provider in [
+            OpenKeyboardAIProvider.openAI,
+            .anthropic,
+            .openRouter
+        ] {
+            XCTAssertThrowsError(
+                try NetworkManager.normalizedProviderBaseURLString(
+                    "http://provider.example/v1",
+                    provider: provider
+                )
+            ) { error in
+                guard let networkError = error as? NetworkError,
+                      case .invalidURL = networkError else {
+                    return XCTFail("Expected direct-provider HTTP to fail as an invalid URL.")
+                }
+            }
+            XCTAssertEqual(
+                try NetworkManager.normalizedProviderBaseURLString(
+                    "https://provider.example/prefix/",
+                    provider: provider
+                ),
+                "https://provider.example/prefix"
+            )
+        }
+
+        let acceptedCompatibleURLs = [
+            ("https://gateway.example/prefix/", "https://gateway.example/prefix"),
+            ("http://localhost:11434/v1", "http://localhost:11434"),
+            ("http://127.0.0.1:11434/v1/", "http://127.0.0.1:11434"),
+            ("http://127.255.255.255:11434/v1", "http://127.255.255.255:11434"),
+            ("http://[::1]:11434/v1", "http://[::1]:11434"),
+            ("http://[0:0:0:0:0:0:0:1]:11434/v1", "http://[0:0:0:0:0:0:0:1]:11434")
+        ]
+        for (input, expected) in acceptedCompatibleURLs {
+            XCTAssertEqual(
+                try NetworkManager.normalizedProviderBaseURLString(
+                    input,
+                    provider: .openAICompatible
+                ),
+                expected,
+                input
+            )
+        }
+
+        let rejectedCompatibleURLs = [
+            "http://gateway.local:11434/v1",
+            "http://192.168.1.10:11434/v1",
+            "http://example.com/v1",
+            "http://localhost.example/v1",
+            "http://localhost./v1",
+            "http://127.0.0.01/v1",
+            "http://127.0.0.1.example/v1",
+            "http://[::2]/v1",
+            "http://[::ffff:127.0.0.1]/v1",
+            "https://user@example.com/v1",
+            "https://user:password@example.com/v1",
+            "https://example.com:/v1",
+            "https://example.com:invalid/v1",
+            "https://2001:db8::1/v1",
+            "https://example.com/v1?mode=unsafe",
+            "https://example.com/v1#fragment",
+            "https://example.com/api//v1",
+            "https://example.com/api/../v1",
+            "https://example.com/api/%2e%2e/v1",
+            "https://example.com/api/%252e%252e/v1",
+            "https://example.com/api%2fv1",
+            "https://example.com/api%5cv1",
+            "https://example.com\\api",
+            "https://example.com/api/\u{202e}v1"
+        ]
+        for input in rejectedCompatibleURLs {
+            XCTAssertThrowsError(
+                try NetworkManager.normalizedProviderBaseURLString(
+                    input,
+                    provider: .openAICompatible
+                ),
+                input
+            ) { error in
+                guard let networkError = error as? NetworkError,
+                      case .invalidURL = networkError else {
+                    return XCTFail("Expected connector-incompatible base URL to fail validation.")
+                }
+            }
+        }
+    }
+
+    func testLoadModelsUsesProviderProfileAndPublishesExactCatalog() async {
+        let tester = FakeGatewayTester(models: ["Exact-Model", "second-model", "Exact-Model"])
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateProvider(.anthropic)
+        viewModel.updateGatewayURLInput("https://anthropic-proxy.example/v1")
+        viewModel.updateAPIKeyInput(" anthropic-key ")
+
+        await viewModel.loadModels()
+
+        XCTAssertEqual(viewModel.modelDiscoveryState, .loaded)
+        XCTAssertEqual(viewModel.availableModels, ["Exact-Model", "second-model"])
+        XCTAssertTrue(viewModel.shouldShowModelSelection)
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+        XCTAssertEqual(tester.modelFetches, 1)
+        XCTAssertEqual(tester.fetchedProfiles.count, 1)
+        XCTAssertEqual(tester.fetchedProfiles[0].provider, .anthropic)
+        XCTAssertEqual(tester.fetchedProfiles[0].baseURL, "https://anthropic-proxy.example/v1")
+        XCTAssertEqual(tester.fetchedProfiles[0].apiKey, "anthropic-key")
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+    }
+
+    func testLoadModelsTreatsEmptyCatalogAsFailureWithoutManualFallback() async {
+        let tester = FakeGatewayTester(models: [])
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.loadModels()
+
+        XCTAssertEqual(
+            viewModel.modelDiscoveryState,
+            .failed("No models were returned by this provider.")
+        )
+        XCTAssertEqual(viewModel.modelSelectionMessage, "No models were returned by this provider.")
+        XCTAssertTrue(viewModel.availableModels.isEmpty)
+        XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+        viewModel.updateSelectedModelInput("must-not-be-accepted")
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+    }
+
+    func testLoadModelsKeepsAuthenticationMalformedAndTimeoutFailuresOutOfManualMode() async {
+        let failures: [Error] = [
+            NetworkError.unauthorized,
+            FakeGatewayTestError.malformedCatalog,
+            NetworkError.timeout
+        ]
+
+        for failure in failures {
+            let tester = FakeGatewayTester(modelFetchFailure: failure)
+            let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+            viewModel.updateGatewayURLInput("https://gateway.example")
+            viewModel.updateAPIKeyInput("test-key")
+
+            await viewModel.loadModels()
+
+            guard case .failed(let message) = viewModel.modelDiscoveryState else {
+                XCTFail("Expected a failed discovery state for \(failure)")
+                continue
+            }
+            XCTAssertFalse(message.isEmpty)
+            XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+            XCTAssertTrue(viewModel.availableModels.isEmpty)
+            viewModel.updateSelectedModelInput("must-not-be-accepted")
+            XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        }
+    }
+
+    func testUnsupportedModelDiscoveryIsTheOnlyFailureThatEnablesManualModelEntry() async {
+        let suiteName = "SettingsViewModelTests.unsupported-discovery.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let tester = FakeGatewayTester(modelFetchFailure: NetworkError.unsupportedModelDiscovery)
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+        viewModel.updateProvider(.openRouter)
+        viewModel.updateAPIKeyInput("test-key")
+
+        viewModel.updateSelectedModelInput("manual-before-discovery")
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+
+        await viewModel.loadModels()
+
+        XCTAssertEqual(viewModel.modelDiscoveryState, .unsupported)
+        XCTAssertTrue(viewModel.shouldShowManualModelEntry)
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        viewModel.updateSelectedModelInput("vendor/Exact-Model")
+        XCTAssertEqual(viewModel.selectedModelInput, "vendor/Exact-Model")
+        XCTAssertFalse(viewModel.modelSelectionRequired)
+
+        let discoveryCountBeforeTest = tester.modelFetches
+        await viewModel.testConnection()
+
+        XCTAssertEqual(tester.modelFetches - discoveryCountBeforeTest, 1)
+        XCTAssertEqual(tester.smokeModels, ["vendor/Exact-Model"])
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.provider, .openRouter)
+        XCTAssertEqual(viewModel.config.selectedModel, "vendor/Exact-Model")
+
+        viewModel.updateGatewayURLInput("https://another-router.example/api/v1")
+        XCTAssertEqual(viewModel.modelDiscoveryState, .idle)
+        XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+    }
+
+    func testUnsupportedDiscoveryCanSaveANewManualModelForSavedCredentials() async {
+        let suiteName = "SettingsViewModelTests.unsupported-saved-model-change.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = AppConfig(
+            apiKey: "existing-key",
+            gatewayURL: "https://compatible.example",
+            selectedModel: "old-model",
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+        )
+        let tester = FakeGatewayTester(modelFetchFailure: NetworkError.unsupportedModelDiscovery)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+
+        await viewModel.loadModels()
+        XCTAssertTrue(viewModel.shouldShowManualModelEntry)
+        viewModel.updateSelectedModelInput("new-manual-model")
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.selectedModel, "new-manual-model")
+        XCTAssertEqual(tester.smokeModels, ["new-manual-model"])
+    }
+
+    func testRetryModelDiscoveryReplacesFailureWithFreshCatalog() async {
+        let tester = FakeGatewayTester(modelFetchFailure: NetworkError.timeout)
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        await viewModel.loadModels()
+        guard case .failed = viewModel.modelDiscoveryState else {
+            return XCTFail("The first model load should fail.")
+        }
+        XCTAssertTrue(viewModel.canRetryModelDiscovery)
+
+        tester.modelFetchFailure = nil
+        tester.models = ["retry-model"]
+        await viewModel.retryModelDiscovery()
+
+        XCTAssertEqual(tester.modelFetches, 2)
+        XCTAssertEqual(viewModel.modelDiscoveryState, .loaded)
+        XCTAssertEqual(viewModel.availableModels, ["retry-model"])
+        XCTAssertEqual(viewModel.selectedModelInput, "retry-model")
+        XCTAssertFalse(viewModel.canRetryModelDiscovery)
+    }
+
+    func testCancelModelDiscoveryClosesConnectorAndSuppressesDelayedResult() async {
+        let tester = FakeGatewayTester(models: ["late-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        let loadTask = Task { await viewModel.loadModels() }
+        for _ in 0..<100 where tester.modelFetches == 0 { await Task.yield() }
+        XCTAssertTrue(viewModel.canCancelModelDiscovery)
+        let closeCountBeforeCancellation = tester.closeConnectorCalls
+
+        viewModel.cancelModelDiscovery()
+        await loadTask.value
+
+        XCTAssertEqual(viewModel.modelDiscoveryState, .cancelled)
+        XCTAssertEqual(viewModel.modelSelectionMessage, "Model loading was cancelled.")
+        XCTAssertTrue(viewModel.availableModels.isEmpty)
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertEqual(tester.closeConnectorCalls, closeCountBeforeCancellation + 1)
+    }
+
+    func testProfileEditSuppressesStaleModelDiscoveryResult() async {
+        let tester = FakeGatewayTester(models: ["stale-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://first.example")
+        viewModel.updateAPIKeyInput("first-key")
+
+        let loadTask = Task { await viewModel.loadModels() }
+        for _ in 0..<100 where tester.modelFetches == 0 { await Task.yield() }
+        let closeCountBeforeEdit = tester.closeConnectorCalls
+        viewModel.updateGatewayURLInput("https://second.example")
+        await loadTask.value
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://second.example")
+        XCTAssertEqual(viewModel.modelDiscoveryState, .idle)
+        XCTAssertTrue(viewModel.availableModels.isEmpty)
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertEqual(tester.closeConnectorCalls, closeCountBeforeEdit + 1)
+    }
+
+    func testModelSelectionRequiresAnExactCaseSensitiveCatalogIdentifier() async {
+        let tester = FakeGatewayTester(models: ["Exact-Model", "another-model"])
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+        await viewModel.loadModels()
+
+        viewModel.updateSelectedModelInput("exact-model")
+
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+
+        viewModel.updateSelectedModelInput("Exact-Model")
+
+        XCTAssertEqual(viewModel.selectedModelInput, "Exact-Model")
+        XCTAssertFalse(viewModel.modelSelectionRequired)
+    }
+
+    func testExactModelSelectionKeepsReusableConnectorOpen() async {
+        let tester = FakeGatewayTester(models: ["Exact-Model", "another-model"])
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+        await viewModel.loadModels()
+        let closeCountBeforeSelection = tester.closeConnectorCalls
+
+        viewModel.updateSelectedModelInput("Exact-Model")
+
+        XCTAssertEqual(viewModel.selectedModelInput, "Exact-Model")
+        XCTAssertEqual(tester.closeConnectorCalls, closeCountBeforeSelection)
+    }
+
+    func testConnectionPerformsOneFreshDiscoveryAndOneExactGrammarRequestWithoutFallback() async {
+        let tester = FakeGatewayTester(
+            models: ["chosen-model", "fallback-model"],
+            failingSmokeModels: ["chosen-model"]
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+        await viewModel.loadModels()
+        viewModel.updateSelectedModelInput("chosen-model")
+        let discoveryCountBeforeTest = tester.modelFetches
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(tester.modelFetches - discoveryCountBeforeTest, 1)
+        XCTAssertEqual(tester.smokeModels, ["chosen-model"])
+        XCTAssertEqual(tester.smokeProfiles.count, 1)
+        XCTAssertEqual(tester.smokeProfiles[0].model, "chosen-model")
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertFalse(viewModel.config.isConfigured)
+    }
+
+    func testConnectionDoesNotSubstituteSoleReplacementForPreviouslySelectedExactModel() async {
+        let tester = FakeGatewayTester(
+            modelCatalogSequence: [
+                ["chosen-model", "other-model"],
+                ["replacement-model"]
+            ]
+        )
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+        await viewModel.loadModels()
+        viewModel.updateSelectedModelInput("chosen-model")
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(tester.modelFetches, 2)
+        XCTAssertEqual(viewModel.availableModels, ["replacement-model"])
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertEqual(viewModel.errorMessage, NetworkError.modelUnavailable.localizedDescription)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        XCTAssertFalse(tester.smokeModels.contains("replacement-model"))
+        XCTAssertFalse(viewModel.config.isConfigured)
+    }
+
+    func testConnectionSavesTheValidatedProviderForEverySupportedProvider() async {
+        let providers: [OpenKeyboardAIProvider] = [
+            .openAI,
+            .anthropic,
+            .openRouter,
+            .openAICompatible
+        ]
+
+        for provider in providers {
+            let suiteName = "SettingsViewModelTests.provider-save.\(provider.rawValue).\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+            let tester = FakeGatewayTester(models: ["exact-model"])
+            let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: defaults)
+            viewModel.updateProvider(provider)
+            if provider == .openAICompatible {
+                viewModel.updateGatewayURLInput("https://compatible.example/v1")
+            }
+            viewModel.updateAPIKeyInput("provider-key")
+
+            await viewModel.testConnection()
+
+            XCTAssertEqual(viewModel.connectionStatus, .success, "Provider: \(provider)")
+            XCTAssertEqual(viewModel.config.provider, provider)
+            XCTAssertEqual(AppConfig.load(from: defaults).provider, provider)
+            XCTAssertEqual(tester.modelFetches, 1)
+            XCTAssertEqual(tester.smokeModels, ["exact-model"])
+            XCTAssertEqual(tester.fetchedProfiles.first?.provider, provider)
+            XCTAssertEqual(tester.smokeProfiles.first?.provider, provider)
+        }
+    }
+
     func testEndpointConstructionNormalizesBaseURLAndAvoidsDuplicateV1() throws {
         XCTAssertEqual(try NetworkManager.normalizedGatewayBaseURLString("gateway.example/"), "https://gateway.example")
         XCTAssertEqual(try NetworkManager.normalizedGatewayBaseURLString("https://https://gateway.example/v1/"), "https://gateway.example")
@@ -1230,6 +1691,7 @@ private final class SettingsInMemorySecureStore: AppConfigSecureStore {
     private var profileData: Data?
     private var legacyAPIKey: String?
     private var referencedAPIKeys: [String: String] = [:]
+    private var clearIntent: AppConfigSecureClearIntent?
     var apiKey: String? {
         Self.apiKey(from: profileData) ?? legacyAPIKey
     }
@@ -1250,8 +1712,28 @@ private final class SettingsInMemorySecureStore: AppConfigSecureStore {
         return true
     }
 
+    func loadClearIntentResult() -> AppConfigSecureStoreClearIntentReadResult {
+        clearIntent.map(AppConfigSecureStoreClearIntentReadResult.found) ?? .notFound
+    }
+
+    func saveClearIntent(_ intent: AppConfigSecureClearIntent) -> Bool {
+        clearIntent = intent
+        return true
+    }
+
+    func clearClearIntent() -> Bool {
+        clearIntent = nil
+        return true
+    }
+
     func loadLegacyAPIKey() -> String? { legacyAPIKey }
     func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+    func loadLegacyAPIKeyResult() -> AppConfigSecureStoreStringReadResult {
+        legacyAPIKey.map(AppConfigSecureStoreStringReadResult.found) ?? .notFound
+    }
+    func loadLegacyAPIKeyResult(reference: String) -> AppConfigSecureStoreStringReadResult {
+        referencedAPIKeys[reference].map(AppConfigSecureStoreStringReadResult.found) ?? .notFound
+    }
 
     @discardableResult
     func saveLegacyAPIKey(_ apiKey: String) -> Bool {
@@ -1280,8 +1762,21 @@ private final class SettingsInMemorySecureStore: AppConfigSecureStore {
 }
 
 private final class FakeGatewayTester: GatewayConnectionTesting {
+    struct RecordedProfile {
+        let provider: OpenKeyboardAIProvider
+        let baseURL: String
+        let apiKey: String
+    }
+
+    struct RecordedSmokeProfile {
+        let provider: OpenKeyboardAIProvider
+        let baseURL: String
+        let model: String
+    }
+
     var healthSucceeds: Bool
     var models: [String]
+    var modelCatalogSequence: [[String]]
     var smokeSucceeds: Bool
     var failingSmokeModels: Set<String>
     var connectionFailure: Error?
@@ -1293,15 +1788,20 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     private(set) var smokeModels: [String] = []
     private(set) var testedGatewayURLs: [String] = []
     private(set) var modelFetches = 0
+    private(set) var fetchedProfiles: [RecordedProfile] = []
+    private(set) var smokeProfiles: [RecordedSmokeProfile] = []
+    private(set) var closeConnectorCalls = 0
     var diagnosticReport = GatewayDiagnosticReport(selectedModel: "gpt-oss:120b-cloud", checks: [])
     private(set) var diagnosticGatewayURL: String?
     private(set) var diagnosticAPIKey: String?
     private(set) var diagnosticPreferredModel: String?
+    private(set) var diagnosticProvider: OpenKeyboardAIProvider?
     var fetchedGatewayURL: String? { testedGatewayURLs.last }
 
     init(
         healthSucceeds: Bool = true,
         models: [String] = [],
+        modelCatalogSequence: [[String]] = [],
         smokeSucceeds: Bool = true,
         failingSmokeModels: Set<String> = [],
         connectionFailure: Error? = nil,
@@ -1310,6 +1810,7 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     ) {
         self.healthSucceeds = healthSucceeds
         self.models = models
+        self.modelCatalogSequence = modelCatalogSequence
         self.smokeSucceeds = smokeSucceeds
         self.failingSmokeModels = failingSmokeModels
         self.connectionFailure = connectionFailure
@@ -1326,13 +1827,38 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         if let connectionFailure { throw connectionFailure }
         if !healthSucceeds { throw FakeGatewayTestError.connectionFailed }
         if let modelFetchFailure { throw modelFetchFailure }
+        if !modelCatalogSequence.isEmpty {
+            return modelCatalogSequence.removeFirst()
+        }
         return models
+    }
+
+    func fetchModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        fetchedProfiles.append(
+            RecordedProfile(
+                provider: profile.provider,
+                baseURL: profile.baseURL,
+                apiKey: profile.apiKey
+            )
+        )
+        return try await fetchModels(gatewayURL: profile.baseURL, apiKey: profile.apiKey)
     }
 
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         smokeModel = model
         smokeModels.append(model)
         if !smokeSucceeds || failingSmokeModels.contains(model) { throw smokeFailure }
+    }
+
+    func testCorrectionSmoke(profile: OpenKeyboardGatewayProfile, model: String) async throws {
+        smokeProfiles.append(
+            RecordedSmokeProfile(
+                provider: profile.provider,
+                baseURL: profile.baseURL,
+                model: model
+            )
+        )
+        try await testCorrectionSmoke(gatewayURL: profile.baseURL, apiKey: profile.apiKey, model: model)
     }
 
     func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport {
@@ -1344,10 +1870,32 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
         }
         return diagnosticReport
     }
+
+    func runGatewayDiagnostics(
+        profile: OpenKeyboardGatewayProfile,
+        preferredModel: String
+    ) async -> GatewayDiagnosticReport {
+        diagnosticProvider = profile.provider
+        return await runGatewayDiagnostics(
+            gatewayURL: profile.baseURL,
+            apiKey: profile.apiKey,
+            preferredModel: preferredModel
+        )
+    }
+
+    func closeConnector() {
+        closeConnectorCalls += 1
+    }
 }
 
 private enum FakeGatewayTestError: LocalizedError {
     case connectionFailed
+    case malformedCatalog
 
-    var errorDescription: String? { "Connection failed" }
+    var errorDescription: String? {
+        switch self {
+        case .connectionFailed: "Connection failed"
+        case .malformedCatalog: "Malformed models response"
+        }
+    }
 }

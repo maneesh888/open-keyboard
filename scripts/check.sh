@@ -69,6 +69,7 @@ validate_all_whitespace() {
 run_script_policy_tests() {
   "$ROOT/scripts/tests/environment-preflight-test.sh"
   "$ROOT/scripts/tests/secret-scan-test.sh"
+  "$ROOT/scripts/tests/simulator-credential-bootstrap-policy-test.sh"
   "$ROOT/scripts/tests/universal-ai-connector-policy-test.sh"
   "$ROOT/scripts/tests/live-impact-test.sh"
   "$ROOT/scripts/tests/live-policy-bootstrap-test.sh"

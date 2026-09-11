@@ -6,6 +6,66 @@
 import SwiftUI
 import UIKit
 
+private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
+    private final class ObserverBox {
+        weak var viewModel: KeyboardViewModel?
+
+        init(viewModel: KeyboardViewModel) {
+            self.viewModel = viewModel
+        }
+    }
+
+    static let shared = KeyboardActiveProfileObserverRegistry()
+
+    private let lock = NSLock()
+    private var entries: [UInt: ObserverBox] = [:]
+    private var nextIdentifier: UInt = 1
+
+    func register(_ viewModel: KeyboardViewModel) -> UnsafeMutableRawPointer {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let identifier = nextAvailableIdentifier()
+        entries[identifier] = ObserverBox(viewModel: viewModel)
+        // The Darwin center treats this as an opaque identity and never dereferences it. A
+        // monotonically allocated identifier avoids tying callback safety to either object's
+        // lifetime or to allocator address reuse.
+        return UnsafeMutableRawPointer(bitPattern: identifier)!
+    }
+
+    func viewModel(for token: UnsafeMutableRawPointer) -> KeyboardViewModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[UInt(bitPattern: token)]?.viewModel
+    }
+
+    func unregister(_ token: UnsafeMutableRawPointer) {
+        lock.lock()
+        entries.removeValue(forKey: UInt(bitPattern: token))
+        lock.unlock()
+    }
+
+    private func nextAvailableIdentifier() -> UInt {
+        while nextIdentifier == 0 || entries[nextIdentifier] != nil {
+            nextIdentifier &+= 1
+        }
+        let identifier = nextIdentifier
+        nextIdentifier &+= 1
+        return identifier
+    }
+}
+
+private let keyboardActiveProfileDidChangeCallback: CFNotificationCallback = {
+    _, observer, _, _, _ in
+    guard let observer,
+          let viewModel = KeyboardActiveProfileObserverRegistry.shared.viewModel(for: observer) else {
+        return
+    }
+    Task { @MainActor [weak viewModel] in
+        viewModel?.handleActiveProfileDidChange()
+    }
+}
+
 enum KeyboardInputMode: Equatable {
     case letters
     case numbers
@@ -306,6 +366,7 @@ final class KeyboardViewModel: ObservableObject {
     private let typingPredictionsEnabled: Bool
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
+    private var activeProfileObserverToken: UnsafeMutableRawPointer?
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
@@ -317,6 +378,7 @@ final class KeyboardViewModel: ObservableObject {
     @Published private(set) var panelMode: KeyboardPanelMode = .keyboard
     @Published private(set) var actionPanelState: KeyboardActionPanelState?
     @Published private(set) var suggestionState: KeyboardSuggestionState?
+    @Published private(set) var grammarWholeVersionProposalState: GrammarWholeVersionProposalState?
     @Published private(set) var rewriteOptionsState: KeyboardRewriteOptionsState?
     @Published private(set) var actionError: KeyboardActionErrorState?
     @Published private(set) var automaticAnalysisWarning: KeyboardActionErrorState?
@@ -330,12 +392,25 @@ final class KeyboardViewModel: ObservableObject {
     private var grammarCorrectionRequestID: UUID?
     private var actionPanelTask: Task<Void, Never>?
     private var actionPanelRequestID: UUID?
+    private var manualActionTask: Task<Void, Never>?
+    private var manualActionRequestID: UUID?
+    private var activeProfileGeneration: UInt = 0
     private var shouldResumeAutomaticAnalysisOnKeyboardReturn = false
     private let automaticAnalysisDelayNanoseconds: UInt64
     private var lastAnalyzedText: String?
     private var lastKeyboardReplacementSourceText: String?
     private var lastKeyboardReplacementResultText: String?
     private var documentRevision = 0
+    private var grammarFollowUpPassCount = 0
+    private var grammarReviewSeenTexts: Set<String> = []
+    private var grammarReviewHasRejections = false
+    private var grammarFollowUpCompletionState = KeyboardCompletionPanelState.grammarReviewComplete
+    private var grammarFollowUpCompletionStatus = "No more suggestions"
+
+    private struct EffectiveGatewayState: Equatable {
+        let config: AppConfig
+        let connectionError: String?
+    }
 
     private enum Keys {
         static let composingBuffer = "keyboardExtension.composingBuffer"
@@ -349,6 +424,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private static let uiTestSeedMaximumAge: TimeInterval = 30
+    private static let maximumAutomaticGrammarFollowUpPasses = 2
+
+    private enum GrammarCorrectionRequestKind: Equatable {
+        case initial
+        case followUp
+    }
 
     var canRunAIAction: Bool {
         hasFullAccess
@@ -380,7 +461,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     var canOpenAnalysisResult: Bool {
-        currentCorrection != nil || hasNoIssueAnalysisResult
+        currentCorrection != nil || grammarWholeVersionProposalState != nil || hasNoIssueAnalysisResult
     }
 
     var canOpenGrammarCorrection: Bool {
@@ -406,6 +487,9 @@ final class KeyboardViewModel: ObservableObject {
         if let rewriteOptionsState {
             let status = rewriteOptionsState.intent.toolbarStatus(count: rewriteOptionsState.options.count)
             return KeyboardToolbarState(kind: .actions(status: status))
+        }
+        if grammarWholeVersionProposalState != nil {
+            return KeyboardToolbarState(kind: .actions(status: "Review proposed version"))
         }
         if let suggestionState,
            let correction = suggestionState.currentCorrection,
@@ -467,6 +551,7 @@ final class KeyboardViewModel: ObservableObject {
         self.composingBuffer = ""
         let seededSuggestionState = Self.loadSeededSuggestionState()
         self.suggestionState = seededSuggestionState?.suggestionState
+        self.grammarWholeVersionProposalState = seededSuggestionState?.grammarWholeVersionProposalState
         self.actionPanelState = seededSuggestionState?.actionPanelState
         self.rewriteOptionsState = seededSuggestionState?.rewriteOptionsState
         self.actionError = seededSuggestionState?.actionError
@@ -482,6 +567,24 @@ final class KeyboardViewModel: ObservableObject {
         }
         refreshTypingPredictions()
         recordConfigVisibilityProbe(context: "init")
+        registerForActiveProfileChanges()
+        // Close the load-before-registration window. If a payload-free Darwin pulse arrived
+        // during initialization, this catches the persisted state transition; when nothing
+        // changed it deliberately preserves any seeded presentation state.
+        _ = refreshEffectiveGatewayState()
+    }
+
+    deinit {
+        guard let activeProfileObserverToken else { return }
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            activeProfileObserverToken,
+            CFNotificationName(
+                rawValue: AppConfig.activeProfileDidChangeDarwinNotification as CFString
+            ),
+            nil
+        )
+        KeyboardActiveProfileObserverRegistry.shared.unregister(activeProfileObserverToken)
     }
 
     func insert(_ character: String) {
@@ -561,6 +664,7 @@ final class KeyboardViewModel: ObservableObject {
             isPerformingAIAction = false
         }
         rewriteOptionsState = nil
+        grammarWholeVersionProposalState = nil
         guard let replacementPlan = currentReplacementPlan() else {
             recordDebugEvent("action_panel_blocked_no_text")
             showAllDoneForEmptyText()
@@ -671,6 +775,7 @@ final class KeyboardViewModel: ObservableObject {
         actionPanelState = nil
         rewriteOptionsState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         hasNoIssueAnalysisResult = false
         lastAnalyzedText = nil
         shouldResumeAutomaticAnalysisOnKeyboardReturn = true
@@ -718,7 +823,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func showAnalysisResult() {
-        if currentCorrection != nil {
+        if grammarWholeVersionProposalState != nil {
+            panelMode = .grammarWholeVersionProposal
+        } else if currentCorrection != nil {
             panelMode = .correctionDetail
         } else if hasNoIssueAnalysisResult {
             completionPanelState = .noIssues
@@ -755,7 +862,10 @@ final class KeyboardViewModel: ObservableObject {
         rewriteOptionsState = nil
         isGrammarCorrectionLoading = false
 
-        if currentCorrection != nil {
+        if grammarWholeVersionProposalState != nil {
+            aiStatus = "Proposed version ready"
+            panelMode = .grammarWholeVersionProposal
+        } else if currentCorrection != nil {
             aiStatus = "Suggestions ready"
             panelMode = .correctionDetail
         } else {
@@ -819,7 +929,9 @@ final class KeyboardViewModel: ObservableObject {
         scheduleAutomaticAnalysisAfterTextChange()
     }
 
-    private func requestGrammarCorrectionForCurrentText() {
+    private func requestGrammarCorrectionForCurrentText(
+        kind: GrammarCorrectionRequestKind = .initial
+    ) {
         actionPanelTask?.cancel()
         actionPanelTask = nil
         grammarCorrectionTask?.cancel()
@@ -830,22 +942,30 @@ final class KeyboardViewModel: ObservableObject {
 
         let documentTextAtRequest = currentDocumentTextForAnalysis()
         let documentRevisionAtRequest = documentRevision
-        guard let sourceText = currentInputTextForAnalysis() else {
+        let knownStaleContextText = kind == .followUp ? documentTextAtRequest : nil
+        guard let sourceText = currentInputTextForAnalysis(
+            knownStaleContextText: knownStaleContextText
+        ) else {
             recordDebugEvent("grammar_correction_blocked_no_text")
             showAllDoneForEmptyText()
             return
+        }
+
+        if kind == .initial {
+            beginGrammarReviewSession(with: sourceText)
         }
 
         actionError = nil
         automaticAnalysisWarning = nil
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         completionPanelState = .allDone
         isGrammarCorrectionLoading = true
         isPerformingAIAction = true
-        aiStatus = "Checking grammar…"
+        aiStatus = kind == .followUp ? "Checking remaining text…" : "Checking grammar…"
         panelMode = .correctionDetail
 
         let currentConfig = config
@@ -873,7 +993,8 @@ final class KeyboardViewModel: ObservableObject {
                     applyGrammarCorrectionResult(
                         KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: sourceText),
                         sourceText: sourceText,
-                        documentRevision: documentRevisionAtRequest
+                        documentRevision: documentRevisionAtRequest,
+                        isFollowUp: kind == .followUp
                     )
                     recordDebugEvent("grammar_correction_request_success")
                 }
@@ -905,7 +1026,12 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
-    private func applyGrammarCorrectionResult(_ outcome: KeyboardActionProductOutcome, sourceText: String, documentRevision: Int) {
+    private func applyGrammarCorrectionResult(
+        _ outcome: KeyboardActionProductOutcome,
+        sourceText: String,
+        documentRevision: Int,
+        isFollowUp: Bool
+    ) {
         isGrammarCorrectionLoading = false
         isPerformingAIAction = false
         grammarCorrectionTask = nil
@@ -923,15 +1049,28 @@ final class KeyboardViewModel: ObservableObject {
             } else {
                 suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
             }
+            grammarWholeVersionProposalState = nil
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
             aiStatus = "Suggestions ready"
             panelMode = .correctionDetail
+        case .showGrammarWholeVersionProposal(let proposedText):
+            suggestionState = nil
+            grammarWholeVersionProposalState = GrammarWholeVersionProposalState(
+                originalText: sourceText,
+                proposedText: proposedText,
+                documentRevision: documentRevision
+            )
+            rewriteOptionsState = nil
+            hasNoIssueAnalysisResult = false
+            completionPanelState = .allDone
+            aiStatus = "Proposed version ready"
+            panelMode = .grammarWholeVersionProposal
         case .replaceText(let output):
             let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
             if replacement.isEmpty || replacement.caseInsensitiveCompare(sourceText.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame {
-                markGrammarCorrectionAllClear()
+                markGrammarCorrectionAllClear(afterFollowUp: isFollowUp)
             } else {
                 suggestionState = KeyboardSuggestionState(
                     response: KeyboardSuggestionResponse(
@@ -949,6 +1088,7 @@ final class KeyboardViewModel: ObservableObject {
                     ),
                     sourceContext: sourceText
                 )
+                grammarWholeVersionProposalState = nil
                 rewriteOptionsState = nil
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -956,9 +1096,11 @@ final class KeyboardViewModel: ObservableObject {
                 panelMode = .correctionDetail
             }
         case .noChanges:
-            markGrammarCorrectionAllClear()
-        case .showRewriteOptions, .noUsableResult:
+            markGrammarCorrectionAllClear(afterFollowUp: isFollowUp)
+        case .showRewriteOptions:
             showActionError(KeyboardAIError.modelCapability, scope: .grammar)
+        case .noUsableResult:
+            showActionError(KeyboardAIError.invalidResponse, scope: .grammar)
         }
     }
 
@@ -967,6 +1109,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarCorrectionRequestID = nil
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         completionPanelState = .allDone
@@ -990,13 +1133,14 @@ final class KeyboardViewModel: ObservableObject {
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
     }
 
-    private func markGrammarCorrectionAllClear() {
+    private func markGrammarCorrectionAllClear(afterFollowUp: Bool) {
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
-        hasNoIssueAnalysisResult = true
-        completionPanelState = .noIssues
-        aiStatus = "No issues found"
+        hasNoIssueAnalysisResult = !afterFollowUp
+        completionPanelState = afterFollowUp ? grammarFollowUpCompletionState : .noIssues
+        aiStatus = afterFollowUp ? grammarFollowUpCompletionStatus : "No issues found"
         panelMode = .correctionComplete
     }
 
@@ -1012,6 +1156,7 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisWarning = nil
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         completionPanelState = .allDone
@@ -1041,6 +1186,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarCorrectionRequestID = nil
         actionError = error
         actionPanelState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         aiStatus = error.message
         isGrammarCorrectionLoading = false
@@ -1065,6 +1211,7 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisTask = nil
         automaticAnalysisWarning = warning
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         aiStatus = warning.message
@@ -1081,17 +1228,24 @@ final class KeyboardViewModel: ObservableObject {
             }
             state.applyCurrentCorrection()
             guard let updatedText = state.renderedGrammarText else { return }
-            replaceEditableText(with: updatedText)
-            finishCorrectionStep(state)
+            let didApplyChange = updatedText != currentText
+            if didApplyChange {
+                replaceEditableText(with: updatedText)
+            }
+            finishCorrectionStep(state, continueAfterAppliedChange: didApplyChange)
             return
         }
-        guard let updatedText = state.textByApplyingCurrentCorrection(to: currentEditableText()) else {
+        let currentText = currentEditableText()
+        guard let updatedText = state.textByApplyingCurrentCorrection(to: currentText) else {
             dismissCurrentCorrection()
             return
         }
-        replaceEditableText(with: updatedText)
+        let didApplyChange = updatedText != currentText
+        if didApplyChange {
+            replaceEditableText(with: updatedText)
+        }
         state.applyCurrentCorrection()
-        finishCorrectionStep(state)
+        finishCorrectionStep(state, continueAfterAppliedChange: didApplyChange)
     }
 
     func dismissCurrentCorrection() {
@@ -1101,6 +1255,7 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         state.dismissCurrentCorrection()
+        grammarReviewHasRejections = true
         finishCorrectionStep(state)
     }
 
@@ -1112,10 +1267,14 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         state.acceptAllGrammarCorrections()
+        var didApplyChange = false
         if let finalText = state.renderedGrammarText {
-            replaceEditableText(with: finalText)
+            didApplyChange = finalText != currentText
+            if didApplyChange {
+                replaceEditableText(with: finalText)
+            }
         }
-        finishCorrectionStep(state)
+        finishCorrectionStep(state, continueAfterAppliedChange: didApplyChange)
     }
 
     func rejectAllGrammarCorrections() {
@@ -1125,7 +1284,58 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         state.rejectAllGrammarCorrections()
+        grammarReviewHasRejections = true
         finishCorrectionStep(state)
+    }
+
+    func useGrammarWholeVersionProposal() {
+        guard let state = grammarWholeVersionProposalState,
+              documentRevision == state.documentRevision,
+              currentInputTextForAnalysis() == state.originalText else {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
+        replaceEditableText(with: state.proposedText)
+        grammarWholeVersionProposalState = nil
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        lastAnalyzedText = nil
+        continueGrammarReviewAfterAppliedChange(
+            fallbackCompletionState: .grammarVersionApplied,
+            fallbackStatus: "Proposed version applied"
+        )
+    }
+
+    func dismissGrammarWholeVersionProposal() {
+        guard grammarWholeVersionProposalState != nil else { return }
+        grammarWholeVersionProposalState = nil
+        suggestionState = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        panelMode = .keyboard
+    }
+
+    func rerunGrammarWholeVersionProposal() {
+        guard let state = grammarWholeVersionProposalState,
+              documentRevision == state.documentRevision,
+              currentInputTextForAnalysis() == state.originalText else {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
+        grammarWholeVersionProposalState = nil
+        lastAnalyzedText = nil
+        requestGrammarCorrectionForCurrentText()
+    }
+
+    func copyGrammarWholeVersionProposal() {
+        guard let state = grammarWholeVersionProposalState,
+              documentRevision == state.documentRevision,
+              currentInputTextForAnalysis() == state.originalText else {
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
+        UIPasteboard.general.string = state.proposedText
     }
 
     func checkGrammarAgain() {
@@ -1143,6 +1353,12 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
         let currentAnalysisText = currentInputTextForAnalysis()
+        if let proposal = grammarWholeVersionProposalState {
+            guard currentAnalysisText != proposal.originalText else { return }
+            documentRevision += 1
+            invalidateGrammarSessionForDocumentEdit()
+            return
+        }
         guard currentAnalysisText != lastAnalyzedText else {
             return
         }
@@ -1239,10 +1455,20 @@ final class KeyboardViewModel: ObservableObject {
         panelMode = state.currentCorrection == nil ? .keyboard : .correctionDetail
     }
 
-    private func finishCorrectionStep(_ state: KeyboardSuggestionState) {
+    private func finishCorrectionStep(
+        _ state: KeyboardSuggestionState,
+        continueAfterAppliedChange: Bool = false
+    ) {
         suggestionState = state
         if state.isComplete {
             suggestionState = nil
+            if continueAfterAppliedChange {
+                continueGrammarReviewAfterAppliedChange(
+                    fallbackCompletionState: .grammarReviewComplete,
+                    fallbackStatus: "No more suggestions"
+                )
+                return
+            }
             hasNoIssueAnalysisResult = false
             completionPanelState = .grammarReviewComplete
             aiStatus = "No more suggestions"
@@ -1256,6 +1482,41 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
+    private func beginGrammarReviewSession(with sourceText: String) {
+        grammarFollowUpPassCount = 0
+        grammarReviewSeenTexts = [sourceText]
+        grammarReviewHasRejections = false
+        grammarFollowUpCompletionState = .grammarReviewComplete
+        grammarFollowUpCompletionStatus = "No more suggestions"
+    }
+
+    private func continueGrammarReviewAfterAppliedChange(
+        fallbackCompletionState: KeyboardCompletionPanelState,
+        fallbackStatus: String
+    ) {
+        suggestionState = nil
+        grammarWholeVersionProposalState = nil
+        hasNoIssueAnalysisResult = false
+        grammarFollowUpCompletionState = fallbackCompletionState
+        grammarFollowUpCompletionStatus = fallbackStatus
+        let sourceText = currentInputTextForAnalysis()
+        lastAnalyzedText = nil
+
+        guard !grammarReviewHasRejections,
+              grammarFollowUpPassCount < Self.maximumAutomaticGrammarFollowUpPasses,
+              let sourceText,
+              !grammarReviewSeenTexts.contains(sourceText) else {
+            completionPanelState = fallbackCompletionState
+            aiStatus = fallbackStatus
+            panelMode = .correctionComplete
+            return
+        }
+
+        grammarFollowUpPassCount += 1
+        grammarReviewSeenTexts.insert(sourceText)
+        requestGrammarCorrectionForCurrentText(kind: .followUp)
+    }
+
     func updateFullAccess(_ value: Bool) {
         hasFullAccess = value
         reloadConfig()
@@ -1263,8 +1524,37 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func reloadConfig() {
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        if refreshEffectiveGatewayState() {
+            return
+        }
+        updateAIStatusForEffectiveGatewayState()
+    }
+
+    private func loadEffectiveGatewayState() -> EffectiveGatewayState {
+        EffectiveGatewayState(
+            config: loadConfig(),
+            connectionError: Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        )
+    }
+
+    @discardableResult
+    private func refreshEffectiveGatewayState() -> Bool {
+        // Load the complete effective state before touching in-flight work. Darwin notifications
+        // are payload-free and may be delayed or coalesced, so only an observed state transition
+        // is allowed to invalidate requests and presentation state.
+        let latestState = loadEffectiveGatewayState()
+        guard latestState.config != config || latestState.connectionError != gatewayConnectionError else {
+            return false
+        }
+
+        invalidateForEffectiveGatewayStateChange()
+        config = latestState.config
+        gatewayConnectionError = latestState.connectionError
+        updateAIStatusForEffectiveGatewayState()
+        return true
+    }
+
+    private func updateAIStatusForEffectiveGatewayState() {
         if !hasFullAccess {
             aiStatus = "Enable Allow Full Access"
         } else if let gatewayConnectionError {
@@ -1274,6 +1564,63 @@ final class KeyboardViewModel: ObservableObject {
         }
     }
 
+    private func registerForActiveProfileChanges() {
+        let observerToken = KeyboardActiveProfileObserverRegistry.shared.register(self)
+        activeProfileObserverToken = observerToken
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            observerToken,
+            keyboardActiveProfileDidChangeCallback,
+            AppConfig.activeProfileDidChangeDarwinNotification as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    fileprivate func handleActiveProfileDidChange() {
+        guard refreshEffectiveGatewayState() else { return }
+        recordDebugEvent("active_profile_change_applied")
+    }
+
+    private func invalidateForEffectiveGatewayStateChange() {
+        // Invalidate request generations before cancellation. A provider implementation may
+        // complete despite cancellation, but no response created with the old profile can then
+        // mutate keyboard state.
+        activeProfileGeneration &+= 1
+        manualActionRequestID = nil
+        grammarCorrectionRequestID = nil
+        actionPanelRequestID = nil
+
+        manualActionTask?.cancel()
+        manualActionTask = nil
+        automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        aiService.closeConnector()
+
+        actionPanelState = nil
+        suggestionState = nil
+        grammarWholeVersionProposalState = nil
+        rewriteOptionsState = nil
+        actionError = nil
+        automaticAnalysisWarning = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        isGrammarCorrectionLoading = false
+        isPerformingAIAction = false
+        lastAnalyzedText = nil
+        lastKeyboardReplacementSourceText = nil
+        lastKeyboardReplacementResultText = nil
+        shouldResumeAutomaticAnalysisOnKeyboardReturn = false
+        grammarFollowUpPassCount = 0
+        grammarReviewSeenTexts = []
+        grammarReviewHasRejections = false
+        panelMode = .keyboard
+    }
+
     func startAutomaticAnalysis() {
         scheduleAutomaticAnalysis(delayNanoseconds: automaticAnalysisDelayNanoseconds)
     }
@@ -1281,6 +1628,13 @@ final class KeyboardViewModel: ObservableObject {
     func refreshSeededSuggestionStateForUITests() {
         guard let seededSuggestionState = Self.loadSeededSuggestionState() else { return }
         suggestionState = seededSuggestionState.suggestionState
+        grammarWholeVersionProposalState = seededSuggestionState.grammarWholeVersionProposalState.map {
+            GrammarWholeVersionProposalState(
+                originalText: $0.originalText,
+                proposedText: $0.proposedText,
+                documentRevision: documentRevision
+            )
+        }
         actionPanelState = seededSuggestionState.actionPanelState
         rewriteOptionsState = seededSuggestionState.rewriteOptionsState
         actionError = seededSuggestionState.actionError
@@ -1295,6 +1649,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         if seededSuggestionState.suggestionState != nil
             || seededSuggestionState.actionPanelState != nil
+            || seededSuggestionState.grammarWholeVersionProposalState != nil
             || seededSuggestionState.rewriteOptionsState != nil
             || seededSuggestionState.actionError != nil
             || seededSuggestionState.automaticAnalysisWarning != nil {
@@ -1326,8 +1681,7 @@ final class KeyboardViewModel: ObservableObject {
             recordDebugEvent("action_blocked_no_full_access")
             return
         }
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        reloadConfig()
         if let gatewayConnectionError {
             aiStatus = gatewayConnectionError
             recordDebugEvent("action_blocked_gateway_error")
@@ -1347,35 +1701,66 @@ final class KeyboardViewModel: ObservableObject {
             return
         }
 
+        if action == .fixGrammar {
+            beginGrammarReviewSession(with: replacementPlan.textForAI)
+        }
+
         let currentConfig = config
         actionError = nil
         if action == .fixGrammar {
             automaticAnalysisWarning = nil
         }
         actionPanelState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         panelMode = .keyboard
         isPerformingAIAction = true
         aiStatus = "\(action.title)…"
-        let sanitizedKey = currentConfig.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sanitizedURL = currentConfig.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        recordDebugEvent("action_request_start text=\(replacementPlan.textForAI.count) url=\(sanitizedURL) keyLength=\(sanitizedKey.count) model=\(currentConfig.selectedModel)")
+        let documentRevisionAtRequest = documentRevision
+        recordDebugEvent(
+            "action_request_start text=\(replacementPlan.textForAI.count) "
+                + "provider=\(currentConfig.provider.rawValue)"
+        )
+        let requestID = UUID()
+        let profileGenerationAtRequest = activeProfileGeneration
+        manualActionRequestID = requestID
 
-        Task {
+        manualActionTask = Task {
             do {
                 let result = try await aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
                     switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result, sourceText: replacementPlan.textForAI) {
                     case .showCorrections(let response):
                         suggestionState = KeyboardSuggestionState(response: response, sourceContext: replacementPlan.textForAI)
+                        grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
                         aiStatus = "Suggestions ready"
                         isPerformingAIAction = false
                         panelMode = .correctionDetail
+                    case .showGrammarWholeVersionProposal(let proposedText):
+                        suggestionState = nil
+                        grammarWholeVersionProposalState = GrammarWholeVersionProposalState(
+                            originalText: replacementPlan.textForAI,
+                            proposedText: proposedText,
+                            documentRevision: documentRevisionAtRequest
+                        )
+                        rewriteOptionsState = nil
+                        hasNoIssueAnalysisResult = false
+                        completionPanelState = .allDone
+                        aiStatus = "Proposed version ready"
+                        isPerformingAIAction = false
+                        panelMode = .grammarWholeVersionProposal
                     case .showRewriteOptions(let options):
                         suggestionState = nil
+                        grammarWholeVersionProposalState = nil
                         rewriteOptionsState = KeyboardRewriteOptionsState(
                             intent: action.rewriteOptionsIntent,
                             sourceText: replacementPlan.textForAI,
@@ -1389,6 +1774,7 @@ final class KeyboardViewModel: ObservableObject {
                         panelMode = .rewriteOptions
                     case .replaceText(let output):
                         replace(plan: replacementPlan, with: output)
+                        grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
                         lastAnalyzedText = nil
@@ -1399,6 +1785,7 @@ final class KeyboardViewModel: ObservableObject {
                         panelMode = .correctionComplete
                     case .noChanges:
                         suggestionState = nil
+                        grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = true
                         completionPanelState = .noIssues
@@ -1407,18 +1794,30 @@ final class KeyboardViewModel: ObservableObject {
                         panelMode = .correctionComplete
                     case .noUsableResult:
                         showActionError(
-                            KeyboardAIError.modelCapability,
+                            action == .fixGrammar ? KeyboardAIError.invalidResponse : KeyboardAIError.modelCapability,
                             scope: action == .fixGrammar ? .grammar : .writingAction
                         )
                     }
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     isPerformingAIAction = false
                     aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
                 }
             } catch {
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     recordDebugEvent("action_request_failed:\(Self.sanitizedErrorMessage(error))")
                     showActionError(
                         error,
@@ -1456,6 +1855,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = false
         isGrammarCorrectionLoading = false
@@ -1501,8 +1901,7 @@ final class KeyboardViewModel: ObservableObject {
             )
             return
         }
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        reloadConfig()
         if let gatewayConnectionError {
             showActionError(
                 KeyboardAIError.server(gatewayConnectionError),
@@ -1688,6 +2087,8 @@ final class KeyboardViewModel: ObservableObject {
                 ]
             }
             return []
+        case .showGrammarWholeVersionProposal:
+            return []
         case .noChanges, .noUsableResult:
             return []
         }
@@ -1748,15 +2149,21 @@ final class KeyboardViewModel: ObservableObject {
         if lastAnalyzedText == analysisText, canOpenAnalysisResult { return }
 
         let currentConfig = config
+        let profileGenerationAtRequest = activeProfileGeneration
         let documentTextAtRequest = currentDocumentTextForAnalysis()
         let documentRevisionAtRequest = documentRevision
+        beginGrammarReviewSession(with: analysisText)
         lastAnalyzedText = analysisText
         isPerformingAIAction = true
         aiStatus = "Analyzing…"
-        recordDebugEvent("automatic_analysis_start text=\(analysisText.count) model=\(currentConfig.selectedModel)")
+        recordDebugEvent("automatic_analysis_start text=\(analysisText.count) provider=\(currentConfig.provider.rawValue)")
 
         do {
             let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
+            // A profile/error transition already installed the correct replacement state. An
+            // old-generation completion must not run the ordinary document-change recovery path,
+            // because that path itself mutates loading state and schedules another request.
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             guard let currentAnalysisText = currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest),
                   currentAnalysisText == analysisText,
                   documentRevision == documentRevisionAtRequest else {
@@ -1783,6 +2190,7 @@ final class KeyboardViewModel: ObservableObject {
             )
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_cancelled")
             if lastAnalyzedText == analysisText, !isGrammarCorrectionLoading {
                 isPerformingAIAction = false
@@ -1790,6 +2198,7 @@ final class KeyboardViewModel: ObservableObject {
                 lastAnalyzedText = nil
             }
         } catch {
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_failed:\(Self.sanitizedErrorMessage(error))")
             guard !Task.isCancelled,
                   !isGrammarCorrectionLoading,
@@ -1817,12 +2226,25 @@ final class KeyboardViewModel: ObservableObject {
             } else {
                 suggestionState = KeyboardSuggestionState(response: response, sourceContext: sourceText)
             }
+            grammarWholeVersionProposalState = nil
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
             aiStatus = "Suggestions ready"
+        case .showGrammarWholeVersionProposal(let proposedText):
+            suggestionState = nil
+            grammarWholeVersionProposalState = GrammarWholeVersionProposalState(
+                originalText: sourceText,
+                proposedText: proposedText,
+                documentRevision: documentRevision
+            )
+            rewriteOptionsState = nil
+            hasNoIssueAnalysisResult = false
+            completionPanelState = .allDone
+            aiStatus = "Review proposed version"
         case .showRewriteOptions:
             suggestionState = nil
+            grammarWholeVersionProposalState = nil
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             aiStatus = "Ready"
@@ -1847,6 +2269,7 @@ final class KeyboardViewModel: ObservableObject {
                     ),
                     sourceContext: sourceText
                 )
+                grammarWholeVersionProposalState = nil
                 rewriteOptionsState = nil
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone
@@ -1856,9 +2279,10 @@ final class KeyboardViewModel: ObservableObject {
             markAutomaticAnalysisAllClear()
         case .noUsableResult:
             suggestionState = nil
+            grammarWholeVersionProposalState = nil
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
-            showAutomaticAnalysisWarning(KeyboardAIError.modelCapability)
+            showAutomaticAnalysisWarning(KeyboardAIError.invalidResponse)
         }
         isPerformingAIAction = false
         if panelMode != .correctionComplete {
@@ -1869,6 +2293,7 @@ final class KeyboardViewModel: ObservableObject {
     private func markAutomaticAnalysisAllClear() {
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         hasNoIssueAnalysisResult = true
         completionPanelState = .noIssues
@@ -1876,8 +2301,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func invalidateGrammarSessionForDocumentEdit() {
-        guard suggestionState?.grammarSession != nil else { return }
+        guard suggestionState?.grammarSession != nil || grammarWholeVersionProposalState != nil else { return }
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         hasNoIssueAnalysisResult = false
         lastAnalyzedText = nil
         completionPanelState = .allDone
@@ -1897,6 +2323,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarCorrectionRequestID = nil
         actionPanelState = nil
         suggestionState = nil
+        grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         automaticAnalysisWarning = nil
         hasNoIssueAnalysisResult = false
@@ -2049,6 +2476,12 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func currentInputTextForAnalysis(knownStaleContextText: String? = nil) -> String? {
+        currentGrammarReplacementPlan(knownStaleContextText: knownStaleContextText)?.textForAI
+    }
+
+    private func currentGrammarReplacementPlan(
+        knownStaleContextText: String? = nil
+    ) -> KeyboardReplacementPlan? {
         guard textDocumentProxy.hasText else { return nil }
 
         let contextBeforeInput = textDocumentProxy.documentContextBeforeInput
@@ -2065,20 +2498,17 @@ final class KeyboardViewModel: ObservableObject {
                    bufferPlan: bufferPlan,
                    knownStaleContextText: knownStaleContextText
                ) {
-                return bufferPlan.textForAI
+                return bufferPlan
             }
-            return contextPlan.textForAI
+            return contextPlan
         }
 
         guard contextBeforeInput == nil, contextAfterInput == nil else { return nil }
-        return bufferPlan?.textForAI
+        return bufferPlan
     }
 
     private func replaceEditableText(with replacement: String) {
-        if let plan = KeyboardReplacementPlanner.grammarPlan(
-            contextBeforeInput: textDocumentProxy.documentContextBeforeInput,
-            contextAfterInput: textDocumentProxy.documentContextAfterInput
-        ) {
+        if let plan = currentGrammarReplacementPlan() {
             replace(plan: plan, with: replacement)
             return
         }
@@ -2164,6 +2594,7 @@ final class KeyboardViewModel: ObservableObject {
         switch rawValue {
         case "rewriteOptions": return .rewriteOptions
         case "actions": return .actions
+        case "grammarWholeVersionProposal": return .grammarWholeVersionProposal
         case "correctionDetail", "correctionCarousel": return .correctionDetail
         case "correctionComplete": return .correctionComplete
         default: return .keyboard
@@ -2223,6 +2654,7 @@ final class KeyboardViewModel: ObservableObject {
         let panelMode: KeyboardPanelMode
         let suggestionState: KeyboardSuggestionState?
         let actionPanelState: KeyboardActionPanelState?
+        let grammarWholeVersionProposalState: GrammarWholeVersionProposalState?
         let rewriteOptionsState: KeyboardRewriteOptionsState?
         let actionError: KeyboardActionErrorState?
         let automaticAnalysisWarning: KeyboardActionErrorState?
@@ -2233,6 +2665,9 @@ final class KeyboardViewModel: ObservableObject {
 
         @MainActor
         init?(rawValue: String) {
+            grammarWholeVersionProposalState = rawValue == "grammarWholeVersionProposal"
+                ? Self.grammarWholeVersionProposalState
+                : nil
             automaticAnalysisWarning = rawValue == "automaticModelCapabilityWarning"
                 ? KeyboardActionErrorState(
                     kind: .modelCapability,
@@ -2241,6 +2676,16 @@ final class KeyboardViewModel: ObservableObject {
                 )
                 : nil
             switch rawValue {
+            case "grammarWholeVersionProposal":
+                panelMode = .grammarWholeVersionProposal
+                suggestionState = nil
+                actionPanelState = nil
+                rewriteOptionsState = nil
+                actionError = nil
+                aiStatus = "Proposed version ready"
+                isPerformingAIAction = false
+                hasNoIssueAnalysisResult = false
+                completionPanelState = .allDone
             case "rewriteOptions":
                 panelMode = .rewriteOptions
                 suggestionState = nil
@@ -2436,6 +2881,14 @@ final class KeyboardViewModel: ObservableObject {
             )
         }
 
+        private static var grammarWholeVersionProposalState: GrammarWholeVersionProposalState {
+            GrammarWholeVersionProposalState(
+                originalText: "We should of warnd the users that the repots are slower when the server is busy.",
+                proposedText: "We should warn users that the reports are slower when the server is busy.",
+                documentRevision: 0
+            )
+        }
+
         private static var improveActionPanelState: KeyboardActionPanelState {
             let sourceText = "Do you know that our test phrases are essentially meaningless, making them hard to rephrase? Technically, they are being rephrased, but not very effectively. Could you add a few longer, more meaningful sentences?"
             let improvedText = """
@@ -2581,7 +3034,7 @@ final class KeyboardViewModel: ObservableObject {
 
     private static func normalizedGatewayConnectionError(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        return trimmed.isEmpty ? nil : KeyboardActionErrorState.sanitized(trimmed)
     }
 }
 

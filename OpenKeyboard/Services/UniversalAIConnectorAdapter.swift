@@ -30,7 +30,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
     func listModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
         do {
             let runtime = try store.runtime(for: profile)
-            let providerId = UniversalAiProviderId(rawValue: OpenKeyboardGatewayProfile.providerID)
+            let providerId = UniversalAiProviderId(rawValue: profile.providerID)
             switch try await runtime.listModels(providerId: providerId) {
             case let .supported(returnedProviderId, models):
                 guard returnedProviderId == providerId,
@@ -55,7 +55,10 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
     ) async throws -> String {
         do {
             let runtime = try store.runtime(for: profile)
-            let connectorRequest = Self.connectorRequest(from: request)
+            let connectorRequest = Self.connectorRequest(
+                from: request,
+                providerID: profile.providerID
+            )
             let response = try await runtime.respond(to: connectorRequest)
             return try Self.plainText(
                 from: response,
@@ -71,10 +74,17 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
     }
 
     static func connectorRequest(from request: OpenKeyboardAIRequest) -> UniversalAiRequest {
+        connectorRequest(from: request, providerID: OpenKeyboardGatewayProfile.providerID)
+    }
+
+    static func connectorRequest(
+        from request: OpenKeyboardAIRequest,
+        providerID: String
+    ) -> UniversalAiRequest {
         UniversalAiRequest(
             target: UniversalAiTarget(
                 providerId: UniversalAiProviderId(
-                    rawValue: OpenKeyboardGatewayProfile.providerID
+                    rawValue: providerID
                 ),
                 modelId: UniversalAiModelId(rawValue: request.modelID)
             ),
@@ -192,7 +202,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         profile: OpenKeyboardGatewayProfile
     ) throws -> UniversalAIConnectorRuntime {
         let providerId = UniversalAiProviderId(
-            rawValue: OpenKeyboardGatewayProfile.providerID
+            rawValue: profile.providerID
         )
         let credential = profile.apiKey
         let provider = UniversalAiProviderConfiguration(
@@ -247,7 +257,7 @@ private final class RuntimeStore: @unchecked Sendable {
 
     func runtime(for profile: OpenKeyboardGatewayProfile) throws -> UniversalAIConnectorRuntime {
         let identity = Identity(
-            providerId: OpenKeyboardGatewayProfile.providerID,
+            providerId: profile.providerID,
             baseURL: profile.connectorBaseURL,
             credential: profile.apiKey
         )

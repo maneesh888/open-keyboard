@@ -682,6 +682,53 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(repeated.map(\.replacementText), ["the", "the"])
     }
 
+    func testGrammarDiffTerminatesAndReconstructsPathologicalStructuralChanges() {
+        let cases = [
+            (
+                "Alpha beta gamma delta.",
+                "Gamma delta, then alpha beta."
+            ),
+            (
+                "The report is late.",
+                "Because the server is busy, the detailed report will arrive later than expected."
+            ),
+            (
+                "The very detailed report that we discussed yesterday is currently delayed.",
+                "Yesterday's report is delayed."
+            ),
+            (
+                "one two one two one two",
+                "two one two one two one"
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let edits = GrammarDiffService.edits(from: source, to: corrected)
+            XCTAssertFalse(edits.isEmpty, "Expected a bounded edit for \(source)")
+            XCTAssertLessThanOrEqual(edits.count, source.count + corrected.count + 1)
+
+            var session = GrammarCorrectionSession(
+                originalText: source,
+                correctedText: corrected,
+                documentRevision: 1
+            )
+            session.decideAll(.accepted)
+            XCTAssertEqual(session.renderedText, corrected)
+        }
+    }
+
+    func testGrammarDiffFallsBackToOneWholeTextEditBeforeUnboundedDifferenceWork() {
+        let source = Array(repeating: "alpha", count: 1_600).joined(separator: " ")
+        let corrected = Array(repeating: "beta", count: 1_600).joined(separator: " ")
+
+        let edits = GrammarDiffService.edits(from: source, to: corrected)
+
+        XCTAssertEqual(edits.count, 1)
+        XCTAssertEqual(edits.first?.range, KeyboardTextRange(start: 0, end: source.count))
+        XCTAssertEqual(edits.first?.originalText, source)
+        XCTAssertEqual(edits.first?.replacementText, corrected)
+    }
+
     func testGrammarSessionMixedAcceptRejectAcceptAllAndRejectAllDoNotDriftOffsets() {
         let source = "i has a apple and teh pear."
         let corrected = "I have an apple and the pear."
@@ -1055,6 +1102,97 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testGrammarResponseClassifierSeparatesSafeTextFromNarrowCorrectionPolicy() throws {
+        let narrowSource = "The report arrive tommorow."
+        let narrowCorrection = "The report arrives tomorrow."
+        let narrow = try GrammarCorrectionResponseValidator.classified(
+            narrowCorrection,
+            original: narrowSource
+        )
+        XCTAssertEqual(narrow.text, narrowCorrection)
+        XCTAssertEqual(narrow.disposition, .narrowCorrections)
+
+        let structuralSource = "First sentnce needs correction.\nSecond line stays here."
+        let structuralCorrection = "First sentence needs correction. Second line stays here."
+        XCTAssertEqual(
+            try GrammarCorrectionResponseValidator.validatedSafePlainText(
+                structuralCorrection,
+                original: structuralSource
+            ),
+            structuralCorrection
+        )
+        let structural = try GrammarCorrectionResponseValidator.classified(
+            structuralCorrection,
+            original: structuralSource
+        )
+        XCTAssertEqual(structural.text, structuralCorrection)
+        XCTAssertEqual(structural.disposition, .wholeVersionProposal)
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.validated(
+                structuralCorrection,
+                original: structuralSource
+            )
+        )
+    }
+
+    func testSafeReorderedExpandedAndShortenedGrammarOutputsBecomeWholeVersionProposals() throws {
+        let cases = [
+            (
+                "First review the report, then send the corrected copy to the client after approval.",
+                "After approval, send the corrected copy to the client; first review the report."
+            ),
+            (
+                "The report is late because the server is busy.",
+                "Because the server is currently handling unusually high demand, the detailed report will arrive later than expected."
+            ),
+            (
+                "The detailed weekly report that our support team discussed yesterday is currently delayed because several account totals still require review before publication.",
+                "Yesterday's weekly report is delayed while the account totals are reviewed."
+            )
+        ]
+
+        for (source, proposed) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(proposed, original: source)
+            XCTAssertEqual(result.text, proposed)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal)
+        }
+    }
+
+    func testGrammarResponseBasicSafetyStillRejectsMalformedAndClearlyTruncatedText() {
+        let source = String(repeating: "The detailed account update remains important. ", count: 8)
+
+        for response in [
+            "",
+            "```\n\(source)\n```",
+            "Here is the corrected text: \(source)",
+            "A completely different short rewrite."
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.classified(response, original: source)
+            )
+        }
+    }
+
+    func testWholeVersionGrammarResultUsesDedicatedProductOutcome() throws {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "First sentence needs correction. Second line stays here."
+        let result = try KeyboardActionOperationResult.plainTextGrammarResponse(
+            proposed,
+            original: source
+        )
+
+        XCTAssertEqual(result.correctedText, proposed)
+        XCTAssertEqual(result.grammarPresentation, .wholeVersionProposal)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "fix_grammar",
+                result: result,
+                sourceText: source
+            ),
+            .showGrammarWholeVersionProposal(proposed)
+        )
+    }
+
     func testPlainTextGrammarResponseNormalizesGemmaTrailingSpace() throws {
         let source = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
         let corrected = "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund."
@@ -1106,8 +1244,21 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks.allSatisfy { chunk in
-            chunk.range.end == text.count || chunk.text.hasSuffix("\n") || ".!?".contains(chunk.text.last ?? "x")
+            let content = chunk.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return chunk.range.end == text.count || ".!?".contains(content.last ?? "x")
         })
+    }
+
+    func testGrammarChunkerProcessesEverySentenceIndependentlyByDefault() {
+        let text = "Mr. Smith recieve the first note. The second sentence have an error. The final sentence is clean."
+        let chunks = GrammarTextChunker.chunks(in: text)
+
+        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.map(\.text).joined(), text)
+        XCTAssertEqual(chunks[0].text, "Mr. Smith recieve the first note. ")
+        XCTAssertEqual(chunks[1].text, "The second sentence have an error. ")
+        XCTAssertEqual(chunks[2].text, "The final sentence is clean.")
+        XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
     }
 
     func testGrammarChunkerIsolatesSubstantialMultiParagraphTextForLowWeightModels() {
@@ -1122,13 +1273,13 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         """
         let chunks = GrammarTextChunker.chunks(in: text)
 
-        XCTAssertEqual(chunks.count, 3)
+        XCTAssertEqual(chunks.count, 4)
         XCTAssertEqual(chunks.map(\.text).joined(), text)
         XCTAssertEqual(chunks.first?.range.start, 0)
         XCTAssertEqual(chunks.last?.range.end, text.count)
         XCTAssertTrue(zip(chunks, chunks.dropFirst()).allSatisfy { $0.range.end == $1.range.start })
         XCTAssertTrue(chunks[1].text.hasPrefix("This clean paragraph should remain unchanged. 😊\n\n"))
-        XCTAssertTrue(chunks[1].text.contains("please seperate the qustions"))
+        XCTAssertTrue(chunks[2].text.contains("please seperate the qustions"))
     }
 
     func testDenseDefiniteCorrectionsRemainValidWithoutDroppingCleanParagraphs() throws {

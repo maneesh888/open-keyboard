@@ -9,7 +9,7 @@ import Foundation
 
 enum KeyboardDebugStatePolicy {
     static var isPersistenceAvailable: Bool {
-#if DEBUG
+#if DEBUG && targetEnvironment(simulator)
         return true
 #else
         return false

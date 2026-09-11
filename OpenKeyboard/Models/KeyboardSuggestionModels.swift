@@ -220,6 +220,8 @@ struct GrammarEdit: Equatable, Identifiable, Sendable {
 }
 
 struct GrammarDiffService {
+    private static let maximumTokenProduct = 2_000_000
+
     private enum TokenKind: Equatable {
         case word
         case whitespace
@@ -241,6 +243,9 @@ struct GrammarDiffService {
         guard original != corrected else { return [] }
         let source = tokenize(original)
         let target = tokenize(corrected)
+        guard source.count <= Self.maximumTokenProduct / max(target.count, 1) else {
+            return [wholeTextEdit(from: original, to: corrected)]
+        }
         let difference = target.difference(from: source)
         let removedOffsets = Set(difference.removals.compactMap { change -> Int? in
             guard case .remove(let offset, _, _) = change else { return nil }
@@ -275,7 +280,16 @@ struct GrammarDiffService {
             inserted = ""
         }
 
+        let maximumIterations = source.count + target.count + 1
+        var iterationCount = 0
         while sourceIndex < source.count || targetIndex < target.count {
+            iterationCount += 1
+            guard iterationCount <= maximumIterations else {
+                return [wholeTextEdit(from: original, to: corrected)]
+            }
+            let previousSourceIndex = sourceIndex
+            let previousTargetIndex = targetIndex
+
             if sourceIndex < source.count, targetIndex < target.count, source[sourceIndex] == target[targetIndex] {
                 appendHunk()
                 sourceIndex += 1
@@ -301,10 +315,31 @@ struct GrammarDiffService {
                 inserted += target[targetIndex].text
                 sourceIndex += 1
                 targetIndex += 1
+            } else if sourceIndex < source.count {
+                hunkStart = hunkStart ?? source[sourceIndex].start
+                hunkEnd = source[sourceIndex].end
+                removed += source[sourceIndex].text
+                sourceIndex += 1
+            } else if targetIndex < target.count {
+                hunkStart = hunkStart ?? original.count
+                inserted += target[targetIndex].text
+                targetIndex += 1
+            }
+
+            guard sourceIndex > previousSourceIndex || targetIndex > previousTargetIndex else {
+                return [wholeTextEdit(from: original, to: corrected)]
             }
         }
         appendHunk()
         return edits
+    }
+
+    private static func wholeTextEdit(from original: String, to corrected: String) -> GrammarEdit {
+        GrammarEdit(
+            range: KeyboardTextRange(start: 0, end: original.count),
+            originalText: original,
+            replacementText: corrected
+        )
     }
 
     private static func tokenize(_ text: String) -> [Token] {
@@ -465,6 +500,22 @@ struct KeyboardReplacementDiff: Equatable {
     }
 }
 
+struct GrammarWholeVersionProposalState: Equatable {
+    static let reviewMessage = "The model changed the wording. Review the full version before using it."
+
+    let originalText: String
+    let proposedText: String
+    let documentRevision: Int
+    let replacementDiff: KeyboardReplacementDiff
+
+    init(originalText: String, proposedText: String, documentRevision: Int) {
+        self.originalText = originalText
+        self.proposedText = proposedText
+        self.documentRevision = documentRevision
+        self.replacementDiff = KeyboardReplacementDiff(original: originalText, replacement: proposedText)
+    }
+}
+
 struct GrammarCorrectionSession: Equatable {
     let originalText: String
     let documentRevision: Int
@@ -536,9 +587,64 @@ enum GrammarCorrectionResponseError: Error, Equatable {
     case suspiciousRewrite
 }
 
+enum GrammarCorrectionResponseDisposition: Equatable, Sendable {
+    case narrowCorrections
+    case wholeVersionProposal
+}
+
+struct ValidatedGrammarCorrectionResponse: Equatable, Sendable {
+    let text: String
+    let disposition: GrammarCorrectionResponseDisposition
+}
+
 @MainActor
 struct GrammarCorrectionResponseValidator {
     static func validated(_ response: String, original: String) throws -> String {
+        let result = try classified(response, original: original)
+        guard result.disposition == .narrowCorrections else {
+            throw GrammarCorrectionResponseError.suspiciousRewrite
+        }
+        return result.text
+    }
+
+    static func classified(_ response: String, original: String) throws -> ValidatedGrammarCorrectionResponse {
+        let corrected = try validatedSafePlainText(response, original: original)
+        guard corrected != original else {
+            return ValidatedGrammarCorrectionResponse(text: corrected, disposition: .narrowCorrections)
+        }
+
+        let edits = GrammarDiffService.edits(from: original, to: corrected)
+        guard preservesNewlineStructure(original: original, corrected: corrected),
+              !hasSuspiciousBoundarySentenceSubstitution(original: original, corrected: corrected) else {
+            return ValidatedGrammarCorrectionResponse(text: corrected, disposition: .wholeVersionProposal)
+        }
+
+        let changedCharacters = edits.reduce(0) {
+            $0 + max($1.originalText.count, $1.replacementText.count)
+        }
+        let sourceWords = original.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
+        let changedWords = edits.reduce(0) {
+            $0 + max(
+                $1.originalText.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count,
+                $1.replacementText.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
+            )
+        }
+        let originalWords = words(in: original)
+        let responseWords = words(in: corrected)
+        let approximatelyPreservedWords = originalWords.filter { sourceWord in
+            responseWords.contains { candidate in
+                wordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
+            }
+        }.count
+        guard changedCharacters <= max(64, original.count * 65 / 100),
+              changedWords <= max(12, sourceWords * 70 / 100),
+              approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
+            return ValidatedGrammarCorrectionResponse(text: corrected, disposition: .wholeVersionProposal)
+        }
+        return ValidatedGrammarCorrectionResponse(text: corrected, disposition: .narrowCorrections)
+    }
+
+    static func validatedSafePlainText(_ response: String, original: String) throws -> String {
         guard !response.isEmpty else { throw GrammarCorrectionResponseError.empty }
         guard !response.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
             throw GrammarCorrectionResponseError.malformedUnicode
@@ -568,45 +674,9 @@ struct GrammarCorrectionResponseValidator {
         }
         guard !introducesStructuredPrefix else { throw GrammarCorrectionResponseError.commentary }
         let corrected = restoringOriginalBoundaryWhitespace(in: response, original: original)
-        guard preservesNewlineStructure(original: original, corrected: corrected) else {
-            throw GrammarCorrectionResponseError.truncated
-        }
         if corrected == original { return corrected }
-        if original.count >= 80, corrected.count < original.count * 3 / 5 {
+        if original.count >= 160, corrected.count < max(24, original.count / 5) {
             throw GrammarCorrectionResponseError.truncated
-        }
-
-        let edits = GrammarDiffService.edits(from: original, to: corrected)
-        guard !edits.contains(where: { isSuspiciousOmission($0, original: original) }) else {
-            throw GrammarCorrectionResponseError.truncated
-        }
-        guard !edits.contains(where: { isSuspiciousBoundaryCommentary($0, original: original) }) else {
-            throw GrammarCorrectionResponseError.commentary
-        }
-        guard !hasSuspiciousBoundarySentenceSubstitution(original: original, corrected: corrected) else {
-            throw GrammarCorrectionResponseError.commentary
-        }
-        let changedCharacters = edits.reduce(0) {
-            $0 + max($1.originalText.count, $1.replacementText.count)
-        }
-        let sourceWords = original.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
-        let changedWords = edits.reduce(0) {
-            $0 + max(
-                $1.originalText.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count,
-                $1.replacementText.split(whereSeparator: { $0.isWhitespace || $0.isPunctuation }).count
-            )
-        }
-        let originalWords = words(in: original)
-        let responseWords = words(in: corrected)
-        let approximatelyPreservedWords = originalWords.filter { sourceWord in
-            responseWords.contains { candidate in
-                wordEditDistance(sourceWord, candidate) <= max(2, max(sourceWord.count, candidate.count) / 3)
-            }
-        }.count
-        guard changedCharacters <= max(64, original.count * 65 / 100),
-              changedWords <= max(12, sourceWords * 70 / 100),
-              approximatelyPreservedWords >= max(1, min(originalWords.count, responseWords.count) / 2) else {
-            throw GrammarCorrectionResponseError.suspiciousRewrite
         }
         return corrected
     }
@@ -633,29 +703,6 @@ struct GrammarCorrectionResponseValidator {
                 boundaryQuotes.contains($0) || ($0.isPunctuation && !sentenceTerminals.contains($0)) ? $0 : nil
             }
         )
-    }
-
-    private static func isSuspiciousOmission(_ edit: GrammarEdit, original: String) -> Bool {
-        let removedWords = words(in: edit.originalText).count
-        let replacementWords = words(in: edit.replacementText).count
-        guard removedWords > 0, replacementWords == 0 else { return false }
-        let originalCharacters = Array(original)
-        let beforeEdit = String(originalCharacters.prefix(edit.range.start))
-        let afterEdit = String(originalCharacters.dropFirst(edit.range.end))
-        let removesDocumentBoundary = words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty
-        return removesDocumentBoundary || removedWords >= 3
-    }
-
-    private static func isSuspiciousBoundaryCommentary(_ edit: GrammarEdit, original: String) -> Bool {
-        guard edit.originalText.isEmpty else { return false }
-        let inserted = edit.replacementText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let insertedWords = words(in: inserted)
-        guard !insertedWords.isEmpty else { return false }
-        let originalCharacters = Array(original)
-        let beforeEdit = String(originalCharacters.prefix(edit.range.start))
-        let afterEdit = String(originalCharacters.dropFirst(edit.range.start))
-        guard words(in: beforeEdit).isEmpty || words(in: afterEdit).isEmpty else { return false }
-        return true
     }
 
     private struct WordOccurrence {
@@ -1674,6 +1721,7 @@ private extension Character {
 
 enum KeyboardActionErrorKind: Equatable {
     case gatewayUnavailable
+    case invalidResponse
     case timeout
     case authentication
     case modelUnavailable
@@ -1684,6 +1732,7 @@ enum KeyboardActionErrorKind: Equatable {
     var title: String {
         switch self {
         case .gatewayUnavailable: return "AI unavailable"
+        case .invalidResponse: return "Couldn't use response"
         case .timeout: return "Request timed out"
         case .authentication: return "Invalid API key"
         case .modelUnavailable: return "Model unavailable"
@@ -1717,12 +1766,13 @@ struct KeyboardActionErrorState: Equatable {
             ? KeyboardActionErrorKind.grammarCapability
             : kind
         self.kind = resolvedKind
-        let isActionCapabilityIssue = [
+        let preservesRequestedScope = [
+            KeyboardActionErrorKind.invalidResponse,
             KeyboardActionErrorKind.modelCapability,
             .grammarCapability,
             .translationCapability
         ].contains(resolvedKind)
-        self.scope = isActionCapabilityIssue ? scope : .global
+        self.scope = preservesRequestedScope ? scope : .global
         switch resolvedKind {
         case .modelCapability:
             self.message = Self.modelCapabilityMessage
@@ -1763,25 +1813,33 @@ struct KeyboardRewriteOption: Equatable, Identifiable {
     let text: String
 }
 
+enum GrammarCorrectionPresentation: Equatable, Sendable {
+    case correctionCards
+    case wholeVersionProposal
+}
+
 struct KeyboardActionOperationResult: Equatable {
     let operation: String
     let items: [Item]
     let summary: String?
     let correctedText: String?
     let isNoChangeResult: Bool
+    let grammarPresentation: GrammarCorrectionPresentation?
 
     init(
         operation: String,
         items: [Item],
         summary: String? = nil,
         correctedText: String? = nil,
-        isNoChangeResult: Bool = false
+        isNoChangeResult: Bool = false,
+        grammarPresentation: GrammarCorrectionPresentation? = nil
     ) {
         self.operation = operation
         self.items = items
         self.summary = summary
         self.correctedText = correctedText
         self.isNoChangeResult = isNoChangeResult
+        self.grammarPresentation = grammarPresentation
     }
 
     @MainActor
@@ -1825,12 +1883,26 @@ struct KeyboardActionOperationResult: Equatable {
 
     @MainActor
     static func plainTextGrammarResponse(_ content: String, original: String) throws -> KeyboardActionOperationResult {
-        let corrected = try GrammarCorrectionResponseValidator.validated(content, original: original)
+        let validated = try GrammarCorrectionResponseValidator.classified(content, original: original)
+        return plainTextGrammarResponse(validated, original: original)
+    }
+
+    static func plainTextGrammarResponse(
+        _ validated: ValidatedGrammarCorrectionResponse,
+        original: String,
+        forceWholeVersionProposal: Bool = false
+    ) -> KeyboardActionOperationResult {
+        let corrected = validated.text
+        let presentation: GrammarCorrectionPresentation = forceWholeVersionProposal
+            || validated.disposition == .wholeVersionProposal
+            ? .wholeVersionProposal
+            : .correctionCards
         return KeyboardActionOperationResult(
             operation: "fix_grammar",
             items: [],
             correctedText: corrected,
-            isNoChangeResult: corrected == original
+            isNoChangeResult: corrected == original,
+            grammarPresentation: presentation
         )
     }
 
@@ -1943,6 +2015,7 @@ struct KeyboardActionOperationResult: Equatable {
 
 enum KeyboardActionProductOutcome: Equatable {
     case showCorrections(KeyboardSuggestionResponse)
+    case showGrammarWholeVersionProposal(String)
     case showRewriteOptions([KeyboardRewriteOption])
     case replaceText(String)
     case noChanges
@@ -1958,6 +2031,9 @@ enum KeyboardActionResultHandler {
             }
             let edits = GrammarDiffService.edits(from: sourceText, to: correctedText)
             guard !edits.isEmpty else { return .noChanges }
+            if result.grammarPresentation == .wholeVersionProposal {
+                return .showGrammarWholeVersionProposal(correctedText)
+            }
             return .showCorrections(KeyboardSuggestionResponse(
                 corrections: edits.map(\.suggestion),
                 predictions: [],

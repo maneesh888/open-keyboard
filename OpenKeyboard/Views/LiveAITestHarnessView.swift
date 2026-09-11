@@ -1,4 +1,5 @@
-#if DEBUG
+#if DEBUG && targetEnvironment(simulator)
+import Darwin
 import SwiftUI
 
 struct LiveAITestHarnessView: View {
@@ -6,8 +7,11 @@ struct LiveAITestHarnessView: View {
     @State private var statusText = "Ready"
     @State private var isLoading = false
 
-    private let environment = ProcessInfo.processInfo.environment
-    private let arguments = ProcessInfo.processInfo.arguments
+    private let configuration: SimulatorLiveAIConfiguration?
+
+    init(configuration: SimulatorLiveAIConfiguration?) {
+        self.configuration = configuration
+    }
 
     var body: some View {
         NavigationView {
@@ -92,28 +96,22 @@ struct LiveAITestHarnessView: View {
     }
 
     private func performLiveAction(action: String, text: String) async throws -> String {
-        guard let gatewayURLString = environment["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
-              let model = environment["OPEN_KEYBOARD_LIVE_MODEL"],
-              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let configuration else {
             throw LiveAITestHarnessError.missingConfiguration
         }
 
-        var apiKey = environment["OPEN_KEYBOARD_LIVE_API_KEY"] ?? ""
-        if arguments.contains("--live-ai-invalid-key") {
-            apiKey = "invalid-open-keyboard-ui-test-key"
-        }
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw LiveAITestHarnessError.missingConfiguration
-        }
+        let apiKey = configuration.usesInvalidKey
+            ? "invalid-open-keyboard-ui-test-key"
+            : configuration.apiKey
 
         let rendering = KeyboardGatewayActionContract.rendering(operation: action, text: text)
         let profile = try OpenKeyboardGatewayProfile(
-            gatewayURL: gatewayURLString,
+            gatewayURL: configuration.gatewayURL,
             apiKey: apiKey
         )
         let request = try OpenKeyboardAIRequest.writing(
             rendering: rendering,
-            modelID: model,
+            modelID: configuration.model,
             timeoutInterval: 90
         )
         let response = try await OpenKeyboardRequestDeadline.value(timeoutInterval: 90) {
@@ -161,6 +159,56 @@ struct LiveAITestHarnessView: View {
             }
         }
         return "Gateway request failed"
+    }
+}
+
+struct SimulatorLiveAIConfiguration {
+    let gatewayURL: String
+    let apiKey: String
+    let model: String
+    let usesInvalidKey: Bool
+
+    private static let environmentKeys = [
+        "OPEN_KEYBOARD_LIVE_GATEWAY_URL",
+        "OPEN_KEYBOARD_LIVE_API_KEY",
+        "OPEN_KEYBOARD_LIVE_MODEL"
+    ]
+
+    static func capture(arguments: [String]) -> SimulatorLiveAIConfiguration? {
+        let isAuthorized = arguments.contains("--uitesting")
+            && arguments.contains("--live-ai-test-harness")
+        let captured: (gatewayURL: String?, apiKey: String?, model: String?)?
+        if isAuthorized {
+            let environment = ProcessInfo.processInfo.environment
+            captured = (
+                environment["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
+                environment["OPEN_KEYBOARD_LIVE_API_KEY"],
+                environment["OPEN_KEYBOARD_LIVE_MODEL"]
+            )
+        } else {
+            captured = nil
+        }
+
+        environmentKeys.forEach { name in
+            name.withCString { _ = unsetenv($0) }
+        }
+
+        guard let captured,
+              let gatewayURL = captured.gatewayURL,
+              !gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let apiKey = captured.apiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let model = captured.model,
+              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        return SimulatorLiveAIConfiguration(
+            gatewayURL: gatewayURL,
+            apiKey: apiKey,
+            model: model,
+            usesInvalidKey: arguments.contains("--live-ai-invalid-key")
+        )
     }
 }
 

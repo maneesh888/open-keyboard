@@ -10,7 +10,9 @@ struct KeyboardView: View {
     let onNextKeyboard: () -> Void
 
     var body: some View {
-        let showsToolbar = viewModel.panelMode != .actions && viewModel.panelMode != .rewriteOptions
+        let showsToolbar = viewModel.panelMode != .actions
+            && viewModel.panelMode != .rewriteOptions
+            && viewModel.panelMode != .grammarWholeVersionProposal
         let viewportHeight = KeyboardPanelLayout.keyboardHeight(
             for: viewModel.panelMode,
             actionPanelState: viewModel.actionPanelState
@@ -73,6 +75,19 @@ struct KeyboardView: View {
                         onCopy: { viewModel.copySelectedRewriteOption() },
                         onApply: { viewModel.applySelectedRewriteOption() },
                         onBack: { viewModel.dismissRewriteOptions() }
+                    )
+                } else {
+                    keyGrid
+                }
+            case .grammarWholeVersionProposal:
+                if let state = viewModel.grammarWholeVersionProposalState {
+                    GrammarWholeVersionProposalPanel(
+                        state: state,
+                        onUse: { viewModel.useGrammarWholeVersionProposal() },
+                        onDismiss: { viewModel.dismissGrammarWholeVersionProposal() },
+                        onRerun: { viewModel.rerunGrammarWholeVersionProposal() },
+                        onCopy: { viewModel.copyGrammarWholeVersionProposal() },
+                        onBackToKeyboard: { viewModel.showKeyboardPanel() }
                     )
                 } else {
                     keyGrid
@@ -1102,7 +1117,7 @@ private struct KeyboardActionErrorPanel: View {
 
             HStack(spacing: 10) {
                 Button(action: onBackToTyping) {
-                    Text("Back to Typing")
+                    Text(error.kind == .invalidResponse ? "Try again" : "Back to Typing")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 42)
                 }
@@ -1138,6 +1153,150 @@ private struct KeyboardActionErrorPanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ai_error_panel")
+    }
+}
+
+private struct GrammarWholeVersionProposalPanel: View {
+    let state: GrammarWholeVersionProposalState
+    let onUse: () -> Void
+    let onDismiss: () -> Void
+    let onRerun: () -> Void
+    let onCopy: () -> Void
+    let onBackToKeyboard: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 9) {
+                OpenKeyboardBrandMark(size: 30, symbolSize: 13)
+                Text("Proposed version")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                headerButton(
+                    systemImage: "arrow.clockwise",
+                    accessibilityLabel: "Run grammar check again",
+                    identifier: "ai_grammar_proposal_rerun",
+                    action: onRerun
+                )
+                headerButton(
+                    systemImage: "doc.on.doc",
+                    accessibilityLabel: "Copy proposed version",
+                    identifier: "ai_grammar_proposal_copy",
+                    action: onCopy
+                )
+                headerButton(
+                    systemImage: "keyboard",
+                    accessibilityLabel: "Back to keyboard",
+                    identifier: "ai_grammar_proposal_back",
+                    action: onBackToKeyboard
+                )
+            }
+
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+                .padding(.top, 8)
+
+            ScrollView(.vertical, showsIndicators: true) {
+                highlightedProposalText
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(OpenKeyboardTheme.Text.primary)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(state.proposedText)
+                    .accessibilityIdentifier("ai_grammar_proposal_text")
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.vertical, 10)
+            .accessibilityIdentifier("ai_grammar_proposal_scroll")
+
+            Text(GrammarWholeVersionProposalState.reviewMessage)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("ai_grammar_proposal_message")
+
+            Divider()
+                .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
+
+            HStack(spacing: 12) {
+                Button(action: onDismiss) {
+                    Text("Dismiss")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(minWidth: 72, minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .accessibilityIdentifier("ai_grammar_proposal_dismiss")
+
+                Spacer(minLength: 0)
+
+                Button(action: onUse) {
+                    Text("Use this version")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                        .padding(.horizontal, 18)
+                        .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
+                        .background(OpenKeyboardTheme.Semantic.primaryAction, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ai_grammar_proposal_use")
+            }
+            .padding(.top, 4)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: KeyboardPanelLayout.actionPanelHeight,
+            maxHeight: KeyboardPanelLayout.actionPanelHeight,
+            alignment: .topLeading
+        )
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
+            .fill(KeyboardColors.overlayBackground)
+            .shadow(color: OpenKeyboardTheme.Shadow.overlay, radius: 16, x: 0, y: 6)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ai_grammar_proposal_panel")
+    }
+
+    private var highlightedProposalText: Text {
+        state.replacementDiff.highlightedReplacementSegments.reduce(Text("")) { output, segment in
+            let next = Text(segment.text).foregroundColor(OpenKeyboardTheme.Text.primary)
+            if segment.kind == .inserted {
+                return output + next.underline(true, color: OpenKeyboardTheme.Semantic.success)
+            }
+            return output + next
+        }
+    }
+
+    private func headerButton(
+        systemImage: String,
+        accessibilityLabel: String,
+        identifier: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 38, height: 38)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(OpenKeyboardTheme.Text.primary)
+        .background(KeyboardColors.panelBackground.opacity(0.92), in: Circle())
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(identifier)
     }
 }
 

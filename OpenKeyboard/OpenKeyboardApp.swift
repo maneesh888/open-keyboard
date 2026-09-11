@@ -7,17 +7,35 @@
 
 import SwiftUI
 
+#if DEBUG && targetEnvironment(simulator)
+import Darwin
+#endif
+
 @main
 struct OpenKeyboardApp: App {
     @StateObject private var settingsViewModel = SettingsViewModel()
     @AppStorage("hasCompletedOnboarding", store: UserDefaults(suiteName: "group.com.maneesh.openkeyboard"))
     private var hasCompletedOnboarding = false
+
+    #if DEBUG && targetEnvironment(simulator)
+    private let simulatorLiveAIConfiguration: SimulatorLiveAIConfiguration?
+    #endif
     
     init() {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
+        let arguments = ProcessInfo.processInfo.arguments
+        self.simulatorLiveAIConfiguration = SimulatorLiveAIConfiguration.capture(arguments: arguments)
+        let gatewayEnvironment = Self.captureUITestGatewayEnvironment(arguments: arguments)
+
         Self.clearStaleUITestKeyboardStateAtLaunchIfNeeded()
-        Self.clearUITestConfigAtLaunchIfNeeded()
-        Self.seedUITestGatewayConfigAtLaunchIfNeeded()
+        Self.clearUITestConfigAtLaunchIfNeeded(
+            arguments: arguments,
+            replacementEnvironmentFlag: gatewayEnvironment?.replacementEnvironmentFlag
+        )
+        Self.seedUITestGatewayConfigAtLaunchIfNeeded(
+            arguments: arguments,
+            environment: gatewayEnvironment
+        )
         Self.seedUITestGatewayErrorAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
         Self.seedUITestKeyboardSuggestionStateAtLaunchIfNeeded()
@@ -29,7 +47,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var isUITesting: Bool {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         return launchArguments.contains("--uitesting")
         #else
         return false
@@ -37,7 +55,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowLiveAITestHarness: Bool {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         return isUITesting && launchArguments.contains("--live-ai-test-harness")
         #else
         return false
@@ -45,7 +63,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowKeyboardHostTest: Bool {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         return isUITesting && launchArguments.contains("--keyboard-host-test")
         #else
         return false
@@ -53,7 +71,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowPlaygroundDirectly: Bool {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         return isUITesting && (launchArguments.contains("--playground-all-good-regression-proof") || launchArguments.contains("--playground-direct"))
         #else
         return false
@@ -61,7 +79,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var shouldShowSettingsDirectly: Bool {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         return isUITesting && launchArguments.contains("--settings-direct")
         #else
         return false
@@ -69,7 +87,7 @@ struct OpenKeyboardApp: App {
     }
 
     private var productionKeyboardState: String? {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         guard isUITesting,
               let argument = launchArguments.first(where: { $0.hasPrefix("--production-keyboard-state=") }) else {
             return nil
@@ -80,7 +98,7 @@ struct OpenKeyboardApp: App {
         #endif
     }
 
-    #if DEBUG
+    #if DEBUG && targetEnvironment(simulator)
     private static func clearStaleUITestKeyboardStateAtLaunchIfNeeded() {
         guard !ProcessInfo.processInfo.arguments.contains("--uitesting"),
               let sharedDefaults = AppConfig.sharedDefaults() else {
@@ -124,15 +142,59 @@ struct OpenKeyboardApp: App {
         return min(max(value, 0), 3)
     }
 
-    #if DEBUG
-    private static func clearUITestConfigAtLaunchIfNeeded() {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("--uitesting"), arguments.contains("--clear-gateway-config") else { return }
+    #if DEBUG && targetEnvironment(simulator)
+    private struct UITestGatewayEnvironment {
+        let apiKey: String?
+        let gatewayURL: String?
+        let selectedModel: String?
+        let replacementEnvironmentFlag: String?
+    }
+
+    private static let uiTestGatewayEnvironmentKeys = [
+        "OPEN_KEYBOARD_TEST_API_KEY",
+        "OPEN_KEYBOARD_TEST_GATEWAY_URL",
+        "OPEN_KEYBOARD_TEST_MODEL",
+        "OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG"
+    ]
+
+    private static func captureUITestGatewayEnvironment(
+        arguments: [String]
+    ) -> UITestGatewayEnvironment? {
+        let isAuthorized = arguments.contains("--uitesting")
+            && (arguments.contains("--seed-gateway-config")
+                || arguments.contains("--seed-functional-gateway-config"))
+        let captured: UITestGatewayEnvironment?
+        if isAuthorized {
+            let environment = ProcessInfo.processInfo.environment
+            captured = UITestGatewayEnvironment(
+                apiKey: environment["OPEN_KEYBOARD_TEST_API_KEY"],
+                gatewayURL: environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"],
+                selectedModel: environment["OPEN_KEYBOARD_TEST_MODEL"],
+                replacementEnvironmentFlag: environment["OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG"]
+            )
+        } else {
+            captured = nil
+        }
+
+        uiTestGatewayEnvironmentKeys.forEach { name in
+            name.withCString { _ = unsetenv($0) }
+        }
+        return captured
+    }
+
+    private static func clearUITestConfigAtLaunchIfNeeded(
+        arguments: [String],
+        replacementEnvironmentFlag: String?
+    ) {
+        guard arguments.contains("--uitesting"),
+              arguments.contains("--clear-gateway-config"),
+              !arguments.contains("--seed-gateway-config"),
+              !arguments.contains("--seed-functional-gateway-config") else { return }
         guard let sharedDefaults = AppConfig.sharedDefaults() else { return }
 
         let replacementRequested = isUITestConfigReplacementRequested(
             arguments: arguments,
-            environment: ProcessInfo.processInfo.environment
+            replacementEnvironmentFlag: replacementEnvironmentFlag
         )
         guard replacementRequested || !AppConfig.hasExistingRealConfig(in: sharedDefaults) else { return }
 
@@ -141,30 +203,33 @@ struct OpenKeyboardApp: App {
 
     private static func isUITestConfigReplacementRequested(
         arguments: [String],
-        environment: [String: String]
+        replacementEnvironmentFlag: String?
     ) -> Bool {
         arguments.contains("--replace-existing-config")
-            || environment["OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG"] == "1"
+            || replacementEnvironmentFlag == "1"
     }
 
-    private static func seedUITestGatewayConfigAtLaunchIfNeeded() {
-        let arguments = ProcessInfo.processInfo.arguments
-        guard arguments.contains("--uitesting"), arguments.contains("--seed-gateway-config") || arguments.contains("--seed-functional-gateway-config") else { return }
+    private static func seedUITestGatewayConfigAtLaunchIfNeeded(
+        arguments: [String],
+        environment: UITestGatewayEnvironment?
+    ) {
+        guard arguments.contains("--uitesting"),
+              arguments.contains("--seed-gateway-config")
+                || arguments.contains("--seed-functional-gateway-config"),
+              let environment else {
+            return
+        }
 
-        let environment = ProcessInfo.processInfo.environment
-        let apiKey = environment["OPEN_KEYBOARD_TEST_API_KEY"]
-        let gatewayURL = environment["OPEN_KEYBOARD_TEST_GATEWAY_URL"]
-        let selectedModel = environment["OPEN_KEYBOARD_TEST_MODEL"]
         let replacementRequested = isUITestConfigReplacementRequested(
             arguments: arguments,
-            environment: environment
+            replacementEnvironmentFlag: environment.replacementEnvironmentFlag
         )
         let shouldMirrorAPIKeyToDefaults = arguments.contains("--seed-gateway-config")
             && !arguments.contains("--seed-functional-gateway-config")
 
-        guard let apiKey, !apiKey.isEmpty,
-              let gatewayURL, !gatewayURL.isEmpty,
-              let selectedModel, !selectedModel.isEmpty else {
+        guard let apiKey = environment.apiKey, !apiKey.isEmpty,
+              let gatewayURL = environment.gatewayURL, !gatewayURL.isEmpty,
+              let selectedModel = environment.selectedModel, !selectedModel.isEmpty else {
             return
         }
 
@@ -178,20 +243,11 @@ struct OpenKeyboardApp: App {
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
         if let sharedDefaults = AppConfig.sharedDefaults() {
-            let didSeed = config.saveTestSeed(
+            _ = config.saveTestSeed(
                 to: sharedDefaults,
                 overwriteExistingRealConfig: replacementRequested,
                 mirrorAPIKeyToDefaultsForUITest: shouldMirrorAPIKeyToDefaults
             )
-            if didSeed {
-                // Keep UI-test seeded config visible to the keyboard extension even when
-                // the simulator proof configuration does not define DEBUG for the app target.
-                sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
-                if !hasVerifiedGrammarCorrection {
-                    AppConfig.saveGatewayConnectionLastTestedAt(to: sharedDefaults)
-                }
-                sharedDefaults.synchronize()
-            }
         }
     }
 
@@ -237,7 +293,7 @@ struct OpenKeyboardApp: App {
         }
 
         let state = stateArgument.replacingOccurrences(of: "--keyboard-suggestion-state=", with: "")
-        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "rewriteOptions", "improvePanel", "actionLoadingPanel", "rephraseComparisonPanel", "actionCarouselPanel", "translatePanel", "translationWarning", "allGood", "analysisFailed", "analyzing", "modelCapabilityError", "automaticModelCapabilityWarning"]
+        let allowedStates = ["correctionCard", "correctionOnly", "correctionComplete", "correctionDetail", "correctionCarousel", "grammarWholeVersionProposal", "rewriteOptions", "improvePanel", "actionLoadingPanel", "rephraseComparisonPanel", "actionCarouselPanel", "translatePanel", "translationWarning", "allGood", "analysisFailed", "analyzing", "modelCapabilityError", "automaticModelCapabilityWarning"]
         if allowedStates.contains(state) {
             sharedDefaults.set(true, forKey: "keyboardExtension.uiTestDebugStateEnabled")
             sharedDefaults.set(state, forKey: "keyboardExtension.suggestionState")
@@ -265,7 +321,7 @@ struct OpenKeyboardApp: App {
     #endif
 
     private func refreshUITestGatewayConfigIfNeeded() {
-        #if DEBUG
+        #if DEBUG && targetEnvironment(simulator)
         guard isUITesting, launchArguments.contains("--seed-gateway-config") || launchArguments.contains("--seed-functional-gateway-config") else { return }
 
         settingsViewModel.applyConfig(AppConfig.load())
@@ -276,13 +332,13 @@ struct OpenKeyboardApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                #if DEBUG
+                #if DEBUG && targetEnvironment(simulator)
                 if let editorHostPreviewState {
                     KeyboardEditorHostPreviewView(state: editorHostPreviewState)
                 } else if let keyboardPreviewPanel {
                     KeyboardVisualPreviewView(panel: keyboardPreviewPanel)
                 } else if shouldShowLiveAITestHarness {
-                    LiveAITestHarnessView()
+                    LiveAITestHarnessView(configuration: simulatorLiveAIConfiguration)
                 } else if let productionKeyboardState {
                     ProductionKeyboardStateHostView(state: productionKeyboardState)
                 } else if shouldShowKeyboardHostTest {

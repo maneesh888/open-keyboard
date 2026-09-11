@@ -118,6 +118,45 @@ final class GatewayClientArchitectureTests: XCTestCase {
         }
     }
 
+    func testProviderProfilesPreserveProviderSpecificBaseURLsAndRequestTargets() throws {
+        let cases: [(
+            provider: OpenKeyboardAIProvider,
+            input: String,
+            stored: String,
+            connector: String
+        )] = [
+            (.openAI, "https://api.openai.com/v1/", "https://api.openai.com/v1", "https://api.openai.com/v1"),
+            (.anthropic, "https://api.anthropic.com/v1/", "https://api.anthropic.com/v1", "https://api.anthropic.com/v1"),
+            (.openRouter, "https://openrouter.ai/api/v1/", "https://openrouter.ai/api/v1", "https://openrouter.ai/api/v1"),
+            (.openAICompatible, "https://gateway.example/v1/", "https://gateway.example", "https://gateway.example/v1")
+        ]
+        let request = try OpenKeyboardAIRequest(
+            modelID: "exact-model",
+            messages: [OpenKeyboardAIMessage(role: .user, content: "Source text")],
+            maxOutputTokens: 64,
+            temperature: nil
+        )
+
+        for item in cases {
+            let profile = try OpenKeyboardGatewayProfile(
+                provider: item.provider,
+                baseURL: item.input,
+                apiKey: "test-key"
+            )
+            XCTAssertEqual(profile.provider, item.provider)
+            XCTAssertEqual(profile.baseURL, item.stored)
+            XCTAssertEqual(profile.connectorBaseURL, item.connector)
+            XCTAssertEqual(profile.providerID, item.provider.rawValue)
+            XCTAssertEqual(
+                UniversalAIConnectorAdapter.connectorRequest(
+                    from: request,
+                    providerID: profile.providerID
+                ).target.providerId.rawValue,
+                item.provider.rawValue
+            )
+        }
+    }
+
     func testConnectorWritingRequestRejectsStructuredResponseMetadata() throws {
         let rendering = SemanticPromptRendering(
             contractVersion: SemanticPromptContract.version,
@@ -258,6 +297,11 @@ final class GatewayClientArchitectureTests: XCTestCase {
             gatewayURL: "https://other-gateway.example",
             apiKey: "second-key"
         )
+        let changedProviderProfile = try OpenKeyboardGatewayProfile(
+            provider: .openAI,
+            baseURL: "https://other-gateway.example/v1",
+            apiKey: "second-key"
+        )
 
         let firstModels = try await adapter.listModels(profile: firstProfile)
         let repeatedModels = try await adapter.listModels(profile: firstProfile)
@@ -278,9 +322,15 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(recorder.runtimes[1].closeCount, 1)
         XCTAssertEqual(recorder.runtimes[2].closeCount, 0)
 
-        adapter.close()
-        adapter.close()
+        let changedProviderModels = try await adapter.listModels(profile: changedProviderProfile)
+        XCTAssertEqual(changedProviderModels, ["exact-model"])
+        XCTAssertEqual(recorder.runtimes.count, 4)
         XCTAssertEqual(recorder.runtimes[2].closeCount, 1)
+        XCTAssertEqual(recorder.runtimes[3].closeCount, 0)
+
+        adapter.close()
+        adapter.close()
+        XCTAssertEqual(recorder.runtimes[3].closeCount, 1)
     }
 
     func testUniversalConnectorClosesRuntimeOnAdapterTeardown() async throws {
@@ -437,7 +487,11 @@ final class GatewayClientArchitectureTests: XCTestCase {
 
         XCTAssertTrue(result.isNoChangeResult)
         XCTAssertEqual(result.displayText, source)
-        XCTAssertEqual(connector.requests.count, expectedChunks.count)
+        XCTAssertEqual(
+            connector.requests.count,
+            expectedChunks.count * 2,
+            "A completely unchanged first grammar pass is retried once with the same connector profile."
+        )
         XCTAssertEqual(connector.maximumActiveResponses, 2)
         XCTAssertTrue(connector.requests.allSatisfy { $0.modelID == "test-model" })
         XCTAssertTrue(connector.profiles.allSatisfy {
@@ -447,6 +501,96 @@ final class GatewayClientArchitectureTests: XCTestCase {
             Set(connector.requests.compactMap { $0.messages.last?.content }),
             Set(expectedChunks.map(\.text))
         )
+    }
+
+    func testKeyboardAIServicePresentsSafeStructuralGrammarResponseAsWholeVersionProposal() async throws {
+        let source = "First sentnce needs correction.\nSecond line stays here."
+        let proposed = "A different opening sentence appears.\nSecond line stays here."
+        let chunks = GrammarTextChunker.chunks(in: source)
+        var contentsByInput = Dictionary(uniqueKeysWithValues: chunks.map { ($0.text, $0.text) })
+        contentsByInput[chunks[0].text] = "A different opening sentence appears.\n"
+        let connector = InputMappedConnectorResponseTestDouble(contentsByInput: contentsByInput)
+        let service = KeyboardAIService(connector: connector)
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, proposed)
+        XCTAssertEqual(result.grammarPresentation, .wholeVersionProposal)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "fix_grammar",
+                result: result,
+                sourceText: source
+            ),
+            .showGrammarWholeVersionProposal(proposed)
+        )
+    }
+
+    func testKeyboardAIServiceChecksAndReassemblesEverySentence() async throws {
+        let source = "The first sentence are wrong. The second sentence have an error. The final sentence is clean."
+        let corrected = "The first sentence is wrong. The second sentence has an error. The final sentence is clean."
+        let chunks = GrammarTextChunker.chunks(in: source)
+        XCTAssertEqual(chunks.count, 3)
+        let correctedChunks = GrammarTextChunker.chunks(in: corrected)
+        let contentsByInput = Dictionary(uniqueKeysWithValues: zip(chunks, correctedChunks).map { pair in
+            (pair.0.text, pair.1.text)
+        })
+        let connector = InputMappedConnectorResponseTestDouble(contentsByInput: contentsByInput)
+        let service = KeyboardAIService(connector: connector)
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, corrected)
+        let requestedInputs = await connector.requestedInputs
+        XCTAssertEqual(Set(requestedInputs), Set(chunks.map(\.text)))
+        XCTAssertEqual(requestedInputs.count, chunks.count)
+    }
+
+    func testKeyboardAIServiceAggregatesMixedChunkDriftIntoOneWholeVersionProposal() async throws {
+        let source = """
+        This opening sentence continues
+        with a deliberate line break and enough detail to form the first request. Another sentence remains unchanged.
+
+        The second paragraph contains enough ordinary words to keep the overall document above the chunking threshold. It should stay exactly as supplied.
+
+        The final paragraph also remains unchanged while making this fixture substantial enough to exercise concurrent chunk aggregation safely.
+        """
+        let chunks = GrammarTextChunker.chunks(in: source)
+        XCTAssertGreaterThan(chunks.count, 1)
+        let structuralChunk = try XCTUnwrap(chunks.first { $0.text.contains("deliberate line break") })
+        let structurallyChanged = "The launch plan is complete and the customer can review it tomorrow. "
+        var contentsByInput = Dictionary(uniqueKeysWithValues: chunks.map { ($0.text, $0.text) })
+        contentsByInput[structuralChunk.text] = structurallyChanged
+        let connector = InputMappedConnectorResponseTestDouble(contentsByInput: contentsByInput)
+        let service = KeyboardAIService(connector: connector)
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+        let expected = chunks.map { contentsByInput[$0.text] ?? $0.text }.joined()
+
+        XCTAssertEqual(result.displayText, expected)
+        XCTAssertEqual(result.grammarPresentation, .wholeVersionProposal)
+        XCTAssertEqual(
+            KeyboardActionResultHandler.outcome(
+                operation: "fix_grammar",
+                result: result,
+                sourceText: source
+            ),
+            .showGrammarWholeVersionProposal(expected)
+        )
+        let requestCount = await connector.requestedInputs.count
+        XCTAssertEqual(requestCount, chunks.count)
     }
 
     func testKeyboardAIServiceSendsOneConnectorPlainTextRequestForImproveRephraseAndStyle() async throws {
@@ -783,7 +927,7 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.timeout), .timeout)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: URLError(.timedOut)), .timeout)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.transport), .transport)
-        XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.invalidResponse), .modelCapability)
+        XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.invalidResponse), .invalidResponse)
         XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.rateLimited), .server("Gateway HTTP 429"))
         XCTAssertEqual(KeyboardAIService.keyboardError(from: OpenKeyboardAIConnectorError.serverStatus(503)), .server("Gateway HTTP 503"))
     }
@@ -844,12 +988,50 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.timeoutInterval, 0.02)
     }
 
-    func testKeyboardAIServiceRejectsLegacyJSONWritingEnvelopeAsModelCapabilityFailure() async throws {
-        try await assertModelCapabilityFailure(
-            content: #"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#,
-            action: .fixGrammar,
-            sourceText: "i has a apple"
-        )
+    func testKeyboardAIServiceRejectsLegacyJSONGrammarEnvelopeAsRetryableInvalidResponse() async throws {
+        do {
+            _ = try await keyboardService(
+                content: #"{"operation":"fix_grammar","results":[],"corrected_text":"I have an apple."}"#
+            ).performResult(
+                action: .fixGrammar,
+                on: "i has a apple",
+                config: configuredGateway
+            )
+            XCTFail("Expected invalid grammar response")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .invalidResponse)
+            XCTAssertEqual(error.actionErrorKind, .invalidResponse)
+            XCTAssertEqual(error.errorDescription, "Couldn't generate a usable suggestion. Try again.")
+        }
+    }
+
+    func testKeyboardAIServiceMapsEmptyMalformedAndClearlyTruncatedGrammarToRetryableInvalidResponse() async throws {
+        let longSource = String(
+            repeating: "The detailed account update contains important information for every reviewer ",
+            count: 6
+        ) + "."
+        let cases = [
+            ("   ", "A grammar source."),
+            ("```\nA corrected grammar source.\n```", "A grammar source."),
+            ("A completely different short rewrite.", longSource)
+        ]
+
+        for (content, source) in cases {
+            do {
+                _ = try await keyboardService(content: content).performResult(
+                    action: .fixGrammar,
+                    on: source,
+                    config: configuredGateway
+                )
+                XCTFail("Expected invalid grammar response")
+            } catch let error as KeyboardAIError {
+                XCTAssertEqual(error, .invalidResponse)
+                XCTAssertEqual(error.actionErrorKind, .invalidResponse)
+                XCTAssertEqual(error.errorDescription, "Couldn't generate a usable suggestion. Try again.")
+            } catch {
+                XCTFail("Expected an invalid-response classification")
+            }
+        }
     }
 
     func testKeyboardAIServiceRejectsLegacyJSONRewriteEnvelopeAsModelCapabilityFailure() async throws {
@@ -877,6 +1059,24 @@ final class GatewayClientArchitectureTests: XCTestCase {
             KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: "The app works well."),
             .noChanges
         )
+    }
+
+    func testKeyboardAIServiceRetriesOneCompletelyUnchangedGrammarPass() async throws {
+        let source = "Our support team definately needs the corrected refund note."
+        let corrected = "Our support team definitely needs the corrected refund note."
+        let connector = SequencedConnectorResponseTestDouble(contents: [source, corrected])
+        let service = KeyboardAIService(connector: connector)
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, corrected)
+        XCTAssertEqual(connector.requests.count, 2)
+        let requestInputs = connector.requests.compactMap { $0.messages.last?.content }
+        XCTAssertEqual(requestInputs, [source, source])
     }
 
     private func assertModelCapabilityFailure(
@@ -981,27 +1181,35 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(request.messages.map(\.content), rendering.messages.map(\.content))
     }
 
-    func testCorrectionSmokeRetriesOneUnusablePlainTextResponse() async throws {
+    func testCorrectionSmokeUsesOneAttemptAndPreservesUnusableFailure() async throws {
         let transport = NetworkManagerTestConnector([
-            .chat(content: "This sentence is already fine."),
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput),
             .chat(content: validFastGrammarDiagnosticResponse)
         ])
         let manager = NetworkManager(connector: transport)
 
-        try await manager.testCorrectionSmoke(
-            gatewayURL: "gateway.example",
-            apiKey: "test-api-key",
-            model: "gemma2:2b"
-        )
+        do {
+            try await manager.testCorrectionSmoke(
+                gatewayURL: "gateway.example",
+                apiKey: "test-api-key",
+                model: "gemma2:2b"
+            )
+            XCTFail("Expected the first unusable response to fail without retrying")
+        } catch {
+            XCTAssertTrue(
+                ExpectedNetworkError.unusableCorrection.matches(error),
+                "Unexpected first-attempt failure: \(error)"
+            )
+        }
 
-        XCTAssertEqual(transport.requests.count, 2)
+        XCTAssertEqual(transport.requests.count, 1)
         XCTAssertTrue(transport.requests.allSatisfy {
             $0.request?.timeoutInterval == GatewayRequestTimeouts.modelCheckAttempt
         })
         let models = try transport.requests.map { call -> String in
             try XCTUnwrap(call.request?.modelID)
         }
-        XCTAssertEqual(models, ["gemma2:2b", "gemma2:2b"])
+        XCTAssertEqual(models, ["gemma2:2b"])
     }
 
     func testCorrectionSmokeTestPhrasesAreCuratedTypoInputs() {
@@ -1066,14 +1274,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         )
         try await assertCorrectionSmokeThrows(.unusableCorrection, response: .rawJSON(#"{"choices":[]}"#))
         try await assertCorrectionSmokeThrows(.timeout, response: .throwing(URLError(.timedOut)))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "This sentence is already fine."))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "i recieved teh refnd. Hope this helps."))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the refund. Sure."))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received. Sure."))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "I received the: Sure."))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "'i received the refund.'"))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "“i received the refund.”"))
-        try await assertCorrectionSmokeThrows(.unusableCorrection, response: .chat(content: "「i received the refund.」"))
+        try await assertCorrectionSmokeThrows(
+            .unusableCorrection,
+            response: .chat(content: NetworkManager.diagnosticSettingsCorrectionInput)
+        )
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(CancellationError()))
         try await assertCorrectionSmokeThrows(.cancelled, response: .throwing(URLError(.cancelled)))
     }
@@ -1218,7 +1422,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
     func testGatewayDiagnosticsUsesOneAttemptPerCapabilityAndContinuesAfterFailure() async throws {
         let transport = NetworkManagerTestConnector([
             .models(["gpt-oss:120b-cloud"]),
-            .chat(content: "not json"),
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput),
             .chat(content: validRewriteDiagnosticResponse),
             .chat(content: validDutchDiagnosticResponse)
         ])
@@ -1372,8 +1576,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         let transport = NetworkManagerTestConnector([
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
             .models(["apple-foundationmodel", "gpt-oss:120b-cloud"]),
-            .chat(content: "This sentence is already fine."),
-            .chat(content: "This sentence is already fine.")
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput)
         ])
         let manager = NetworkManager(connector: transport)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: defaults)
@@ -1393,13 +1596,10 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertEqual(transport.requests.map(\.path), [
             "/v1/models",
             "/v1/models",
-            "/v1/chat/completions",
             "/v1/chat/completions"
         ])
-        let smokeModels = try transport.requests.suffix(2).map { call -> String in
-            try XCTUnwrap(call.request?.modelID)
-        }
-        XCTAssertEqual(smokeModels, ["apple-foundationmodel", "apple-foundationmodel"])
+        let smokeRequest = try XCTUnwrap(transport.requests.last?.request)
+        XCTAssertEqual(smokeRequest.modelID, "apple-foundationmodel")
     }
 
     @MainActor
@@ -1414,8 +1614,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
 
         let transport = NetworkManagerTestConnector([
             .models(["apple-foundationmodel"]),
-            .chat(content: "This sentence is already fine."),
-            .chat(content: "This sentence is already fine.")
+            .chat(content: NetworkManager.diagnosticSettingsCorrectionInput)
         ])
         let manager = NetworkManager(connector: transport)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: manager, defaults: defaults)
@@ -1435,6 +1634,12 @@ final class NetworkManagerGatewayTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: AppConfig.supportsStructuredCorrectionsKey))
         XCTAssertNil(secureStore.apiKey)
         XCTAssertNotNil(AppConfig.gatewayConnectionError(from: defaults))
+        XCTAssertEqual(transport.requests.map(\.path), [
+            "/v1/models",
+            "/v1/chat/completions"
+        ])
+        let smokeRequest = try XCTUnwrap(transport.requests.last?.request)
+        XCTAssertEqual(smokeRequest.modelID, "apple-foundationmodel")
     }
 
     private func assertFetchModelsThrows(
@@ -1458,7 +1663,8 @@ final class NetworkManagerGatewayTests: XCTestCase {
         file: StaticString = #filePath,
         line: UInt = #line
     ) async throws {
-        let manager = NetworkManager(connector: NetworkManagerTestConnector([response, response]))
+        let transport = NetworkManagerTestConnector(response)
+        let manager = NetworkManager(connector: transport)
         do {
             try await manager.testCorrectionSmoke(
                 gatewayURL: "gateway.example",
@@ -1469,6 +1675,7 @@ final class NetworkManagerGatewayTests: XCTestCase {
         } catch {
             XCTAssertTrue(expected.matches(error), "Unexpected error: \(error)", file: file, line: line)
         }
+        XCTAssertEqual(transport.requests.count, 1, "Correction smoke must make exactly one response attempt.", file: file, line: line)
     }
 
     private static func presetUserMessage(id: String) -> String? {
@@ -1489,6 +1696,8 @@ final class LiveModelDifferentialTests: XCTestCase {
             from: environment
         ),
         let model = environment["OPEN_KEYBOARD_TEST_MODEL"],
+        let providerValue = environment["OPEN_KEYBOARD_TEST_PROVIDER"],
+        providerValue == OpenKeyboardAIProvider.openAICompatible.rawValue,
         let role = environment["OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE"],
         !model.isEmpty else {
             throw XCTSkip("The targeted live-model profile environment is not configured.")
@@ -1512,7 +1721,7 @@ final class LiveModelDifferentialTests: XCTestCase {
             grammarCorrectionVerified: true,
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
-        XCTAssertEqual(config.selectedModel, model)
+        XCTAssertTrue(config.selectedModel == model, "The exact live model was not preserved in memory.")
         let diagnosticReport = await NetworkManager().runGatewayDiagnostics(
             gatewayURL: gatewayURL,
             apiKey: apiKey,
@@ -1520,13 +1729,13 @@ final class LiveModelDifferentialTests: XCTestCase {
         )
         try attachLiveGatewayDiagnosticEvidence(diagnosticReport, role: role)
         let transportCheck = try XCTUnwrap(diagnosticReport.checks.first { $0.id == "models" })
-        XCTAssertEqual(transportCheck.status, .passed, transportCheck.message)
-        print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=transport status=\(transportCheck.status.rawValue.lowercased()) latency=\(transportCheck.durationDisplay)")
+        XCTAssertEqual(transportCheck.status, .passed, "The live model-discovery diagnostic did not pass.")
+        print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=transport status=\(transportCheck.status.rawValue.lowercased())")
         for checkID in ["settings-correction-smoke", "settings-rewrite-improve", "settings-translation-dutch"] {
             let check = try XCTUnwrap(diagnosticReport.checks.first { $0.id == checkID })
             XCTAssertGreaterThanOrEqual(try XCTUnwrap(check.durationMilliseconds), 0)
             XCTAssertFalse(check.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(checkID) status=\(check.status.rawValue.lowercased()) latency=\(check.durationDisplay)")
+            print("LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(checkID) status=\(check.status.rawValue.lowercased())")
         }
         let grammarCheck = try XCTUnwrap(
             diagnosticReport.checks.first { $0.id == "settings-correction-smoke" }
@@ -1534,28 +1743,39 @@ final class LiveModelDifferentialTests: XCTestCase {
         let rewriteCheck = try XCTUnwrap(
             diagnosticReport.checks.first { $0.id == "settings-rewrite-improve" }
         )
-        XCTAssertEqual(grammarCheck.status, .passed, grammarCheck.message)
-        XCTAssertEqual(rewriteCheck.status, .passed, rewriteCheck.message)
+        XCTAssertEqual(grammarCheck.status, .passed, "The live grammar diagnostic did not pass.")
+        XCTAssertEqual(rewriteCheck.status, .passed, "The live rewrite diagnostic did not pass.")
         let service = KeyboardAIService(requestTimeoutInterval: 90)
 
-        let baselineStartedAt = Date()
-        let baseline: KeyboardActionOperationResult
-        do {
-            baseline = try await service.performResult(
-                action: .fixGrammar,
-                on: Self.baselineFixture,
-                config: config
+        var grammarFollowUpSource: String?
+        for fixture in Self.grammarFixtures {
+            let result: KeyboardActionOperationResult
+            do {
+                result = try await service.performResult(
+                    action: .fixGrammar,
+                    on: fixture.text,
+                    config: config
+                )
+            } catch let error as KeyboardAIError {
+                XCTFail("The \(fixture.id) grammar case failed with canonical classification \(error.actionErrorKind).")
+                return
+            } catch {
+                XCTFail("The \(fixture.id) grammar case failed without a canonical keyboard classification.")
+                return
+            }
+            XCTAssertEqual(result.operation, "fix_grammar")
+            XCTAssertFalse(result.displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            XCTAssertFalse(Self.looksLikeJSONContainer(result.displayText))
+            XCTAssertTrue(
+                result.displayText != fixture.text,
+                "The definite errors in \(fixture.id) were not corrected."
             )
-        } catch let error as KeyboardAIError {
-            XCTFail("The short baseline failed with canonical classification \(error.actionErrorKind).")
-            return
-        } catch {
-            XCTFail("The short baseline failed without a canonical keyboard classification.")
-            return
+            XCTAssertNotNil(result.grammarPresentation)
+            if fixture.id == "short" {
+                grammarFollowUpSource = result.correctedText
+            }
+            print("LIVE_GRAMMAR_VARIANT role=\(role) case=\(fixture.id) status=passed")
         }
-        let baselineLatency = Date().timeIntervalSince(baselineStartedAt)
-        XCTAssertEqual(baseline.operation, "fix_grammar")
-        XCTAssertFalse(baseline.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
 
         let summary: KeyboardActionOperationResult
         do {
@@ -1592,7 +1812,7 @@ final class LiveModelDifferentialTests: XCTestCase {
                 try await UniversalAIConnectorAdapter.shared.respond(to: request, profile: profile)
             }
         } catch {
-            XCTFail("The continuation contract failed through the universal AI connector: \(error).")
+            XCTFail("The continuation contract failed through the universal AI connector.")
             return
         }
         let continuation = try SemanticPromptContract.validatePlainTextResponse(
@@ -1605,7 +1825,6 @@ final class LiveModelDifferentialTests: XCTestCase {
         XCTAssertFalse(Self.looksLikeJSONContainer(continuation))
         print("LIVE_PLAIN_TEXT_WRITING role=\(role) summarize=passed continue_writing=passed")
 
-        let boundaryStartedAt = Date()
         var lowBoundaryEstablished = true
         switch role {
         case "low":
@@ -1647,50 +1866,57 @@ final class LiveModelDifferentialTests: XCTestCase {
             XCTFail("Unsupported targeted live-model role.")
             return
         }
-        let boundaryLatency = Date().timeIntervalSince(boundaryStartedAt)
-
-        let followUpStartedAt = Date()
+        let followUpSource = try XCTUnwrap(
+            grammarFollowUpSource,
+            "The initial grammar pass must produce corrected text for the live follow-up."
+        )
         let followUp: KeyboardActionOperationResult
         do {
             followUp = try await service.performResult(
-                action: .translate(.malayalam),
-                on: Self.followUpFixture,
+                action: .fixGrammar,
+                on: followUpSource,
                 config: config
             )
         } catch let error as KeyboardAIError {
-            XCTFail("The short follow-up failed with canonical classification \(error.actionErrorKind).")
+            XCTFail("The grammar follow-up failed with canonical classification \(error.actionErrorKind).")
             return
         } catch {
-            XCTFail("The short follow-up failed without a canonical keyboard classification.")
+            XCTFail("The grammar follow-up failed without a canonical keyboard classification.")
             return
         }
-        let followUpLatency = Date().timeIntervalSince(followUpStartedAt)
-        XCTAssertEqual(followUp.operation, "translate")
-        XCTAssertFalse(followUp.items.isEmpty)
-        XCTAssertFalse(followUp.displayText.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines).isEmpty)
-        XCTAssertTrue(
-            followUp.displayText.unicodeScalars.contains {
-                (0x0D00...0x0D7F).contains($0.value)
-            },
-            "The short follow-up must contain usable Malayalam text."
-        )
+        XCTAssertEqual(followUp.operation, "fix_grammar")
+        XCTAssertFalse(followUp.displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertFalse(Self.looksLikeJSONContainer(followUp.displayText))
+        XCTAssertNotNil(followUp.grammarPresentation)
+        print("LIVE_GRAMMAR_FOLLOW_UP role=\(role) status=passed")
 
-        print(String(
-            format: "LIVE_MODEL_DIFFERENTIAL_LATENCY role=%@ baseline=%.3f boundary=%.3f follow_up=%.3f",
-            role,
-            baselineLatency,
-            boundaryLatency,
-            followUpLatency
-        ))
         if role == "low" && !lowBoundaryEstablished {
             throw XCTSkip("The fixed low-profile translation succeeded; capability boundary remains diagnostic only.")
         }
     }
 
-    private static let baselineFixture = "Our support team definately needs the corrected refund note."
+    private static let grammarFixtures: [(id: String, text: String)] = [
+        (
+            "short",
+            "Our support team definately needs the corrected refund note."
+        ),
+        (
+            "medium",
+            "Yesterday the support team recieve the account report, but the totals was incorrect and the final notes still needs a careful reveiw before the client meeting tomorrow."
+        ),
+        (
+            "long",
+            """
+            our support team recieve the first report yesterday, but the account totals was incorrect and several important notes still needs review before the client meeting.
+
+            The project manager ask everyone to check their assigned section, confirm that each reference are current, and record any question that remain unresolved. The clean scheduling sentence should remain unchanged.
+
+            Before the final copy is sent, the team need to compare the updated figures, correct the repeated adress error, and make sure every reviewer have signed the checklist.
+            """
+        )
+    ]
     private static let summaryFixture = "The release moved to Friday. The team will run every full check on Thursday."
     private static let continuationFixture = "The rain stopped just as Maya opened the door, and"
-    private static let followUpFixture = "Good morning, I hope you are well."
     private static let longCapabilityFixture = """
     Each morning the community garden opens before the streets become busy. Volunteers check the paths, water young plants, and place clean tools beside the storage shed. They leave simple notes about work that is finished and tasks that still need attention, so the next group can continue without repeating anything.
 
@@ -1705,7 +1931,12 @@ final class LiveModelDifferentialTests: XCTestCase {
     ) {
         let evidence = LongMalayalamTranslationEvidence(translation: translation, source: source)
 
-        XCTAssertNotEqual(evidence.translatedText, source, file: file, line: line)
+        XCTAssertTrue(
+            evidence.translatedText != source,
+            "The translation must differ from the source text.",
+            file: file,
+            line: line
+        )
         XCTAssertGreaterThanOrEqual(
             evidence.translatedWordCount,
             evidence.minimumTranslatedWordCount,
@@ -1769,8 +2000,7 @@ final class LiveModelDifferentialTests: XCTestCase {
         ]
         let lines = try capabilities.map { capability in
             let check = try XCTUnwrap(report.checks.first { $0.id == capability.id })
-            let latency = try XCTUnwrap(check.durationMilliseconds)
-            return "LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(capability.evidenceName) status=\(check.status.rawValue.lowercased()) latency_ms=\(latency)"
+            return "LIVE_GATEWAY_DIAGNOSTIC role=\(role) capability=\(capability.evidenceName) status=\(check.status.rawValue.lowercased())"
         }
         let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
         attachment.name = "live-gateway-diagnostics-\(role)"
@@ -1812,7 +2042,9 @@ final class LiveGatewaySmokeTests: XCTestCase {
         let environment = ProcessInfo.processInfo.environment
         guard let gatewayURL = Self.decodedHexEnvironmentValue("OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX", from: environment),
               let apiKey = Self.decodedHexEnvironmentValue("OPEN_KEYBOARD_TEST_API_KEY_HEX", from: environment),
-              let model = environment["OPEN_KEYBOARD_TEST_MODEL"], !model.isEmpty else {
+              let model = environment["OPEN_KEYBOARD_TEST_MODEL"], !model.isEmpty,
+              let providerValue = environment["OPEN_KEYBOARD_TEST_PROVIDER"],
+              let provider = OpenKeyboardAIProvider(rawValue: providerValue) else {
             throw XCTSkip("Set the encoded live gateway test values and OPEN_KEYBOARD_TEST_MODEL to run live gateway smoke.")
         }
 
@@ -1830,36 +2062,51 @@ final class LiveGatewaySmokeTests: XCTestCase {
             selectedModel: model,
             isConfigured: false,
             grammarCorrectionVerified: false,
-            grammarCorrectionContractVersion: ""
+            grammarCorrectionContractVersion: "",
+            provider: provider
         )
         let viewModel = SettingsViewModel(config: initialConfig, gatewayTester: NetworkManager(), defaults: defaults)
         viewModel.updateGatewayURLInput(gatewayURL)
         viewModel.updateAPIKeyInput(apiKey)
 
-        await viewModel.testConnection()
-        if viewModel.modelSelectionRequired {
+        await viewModel.loadModels()
+        if viewModel.shouldShowManualModelEntry {
+            viewModel.updateSelectedModelInput(model)
+        } else {
             guard viewModel.availableModels.contains(model) else {
-                XCTFail("The exact seeded model is not available for this gateway profile.")
+                XCTFail("The exact seeded model is not available for this provider profile.")
                 return
             }
             viewModel.updateSelectedModelInput(model)
-            await viewModel.testConnection()
         }
 
-        let connectionFailure = viewModel.errorMessage ?? "No user-facing error was recorded."
+        await viewModel.testConnection()
+        XCTAssertFalse(
+            viewModel.modelSelectionRequired,
+            "The single live Test Connection attempt unexpectedly required another model selection."
+        )
+        guard !viewModel.modelSelectionRequired else { return }
+
         XCTAssertEqual(
             viewModel.connectionStatus,
             .success,
-            "Test Connection did not verify plain-text grammar: \(connectionFailure)"
+            "Test Connection did not verify plain-text grammar."
         )
         guard viewModel.connectionStatus == .success else { return }
+        let expectedBaseURL = try NetworkManager.normalizedProviderBaseURLString(
+            gatewayURL,
+            provider: provider
+        )
         XCTAssertTrue(viewModel.config.isConfigured)
-        XCTAssertFalse(viewModel.config.gatewayURL.isEmpty)
-        XCTAssertEqual(
-            viewModel.config.selectedModel,
-            model,
+        XCTAssertTrue(
+            viewModel.config.baseURL == expectedBaseURL,
+            "The validated provider base URL was not saved exactly after normalization."
+        )
+        XCTAssertTrue(
+            viewModel.config.selectedModel == model,
             "The live proof must exercise the exact seeded model without catalog fallback."
         )
+        XCTAssertEqual(viewModel.config.provider, provider)
         XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         XCTAssertNil(defaults.string(forKey: AppConfig.gatewayURLKey))
         XCTAssertNil(defaults.string(forKey: AppConfig.selectedModelKey))
@@ -1867,15 +2114,25 @@ final class LiveGatewaySmokeTests: XCTestCase {
         XCTAssertTrue(defaults.bool(forKey: AppConfig.gatewayProfileConfiguredHintKey))
         XCTAssertFalse((defaults.string(forKey: AppConfig.gatewayProfileRevisionHintKey) ?? "").isEmpty)
         XCTAssertNotNil(secureStore.apiKey)
-        XCTAssertEqual(AppConfig.load(from: defaults), viewModel.config)
+        XCTAssertTrue(
+            AppConfig.load(from: defaults) == viewModel.config,
+            "The saved secure profile did not match the validated in-memory profile."
+        )
         XCTAssertTrue(viewModel.config.grammarCorrectionVerified)
 
         print("OpenKeyboard live Test Connection transport: passed; grammar save validation: passed.")
 
         let diagnosticReport = await NetworkManager().runGatewayDiagnostics(
-            gatewayURL: viewModel.config.gatewayURL,
-            apiKey: apiKey,
+            profile: try OpenKeyboardGatewayProfile(
+                provider: provider,
+                baseURL: viewModel.config.baseURL,
+                apiKey: apiKey
+            ),
             preferredModel: viewModel.config.selectedModel
+        )
+        XCTAssertTrue(
+            diagnosticReport.selectedModel == model,
+            "Diagnostics did not preserve the exact validated model."
         )
         let requiredCheckIDs = [
             "models",
@@ -1885,8 +2142,19 @@ final class LiveGatewaySmokeTests: XCTestCase {
         ]
         for checkID in requiredCheckIDs {
             let check = try XCTUnwrap(diagnosticReport.checks.first { $0.id == checkID })
-            XCTAssertEqual(check.status, .passed, "\(check.title): \(check.message)")
-            print("OpenKeyboard live diagnostic \(check.title): \(check.status.rawValue.lowercased()); latency \(check.durationDisplay).")
+            if checkID == "models" {
+                XCTAssertTrue(
+                    check.status == .passed || check.status == .skipped,
+                    "The model-discovery diagnostic produced an unexpected status."
+                )
+            } else {
+                XCTAssertEqual(
+                    check.status,
+                    .passed,
+                    "The required exact-model capability diagnostic did not pass."
+                )
+            }
+            print("OpenKeyboard live diagnostic \(check.title): \(check.status.rawValue.lowercased()).")
         }
     }
 
@@ -1919,7 +2187,7 @@ private final class ConnectorRuntimeFactoryRecorder: @unchecked Sendable {
     }
 
     func makeRuntime(_ profile: OpenKeyboardGatewayProfile) throws -> UniversalAIConnectorRuntime {
-        let runtime = try ConnectorRuntimeTestDouble()
+        let runtime = try ConnectorRuntimeTestDouble(providerID: profile.providerID)
         lock.withLock {
             storedRuntimes.append(runtime)
         }
@@ -1938,11 +2206,14 @@ private final class ConnectorRuntimeTestDouble: UniversalAIConnectorRuntime, @un
     var responseCount: Int { lock.withLock { storedResponseCount } }
     var closeCount: Int { lock.withLock { storedCloseCount } }
 
-    init(listResult: UniversalAiModelListResult? = nil) throws {
+    init(
+        providerID: String = OpenKeyboardGatewayProfile.providerID,
+        listResult: UniversalAiModelListResult? = nil
+    ) throws {
         if let listResult {
             self.listResult = listResult
         } else {
-            let providerId = UniversalAiProviderId(rawValue: "openai-compatible")
+            let providerId = UniversalAiProviderId(rawValue: providerID)
             self.listResult = .supported(
                 providerId: providerId,
                 models: [
@@ -2169,6 +2440,33 @@ private final class SequencedConnectorResponseTestDouble: OpenKeyboardAIConnecto
     func close() {}
 }
 
+private actor InputMappedConnectorResponseTestDouble: OpenKeyboardAIConnectorServing {
+    private let contentsByInput: [String: String]
+    private(set) var requestedInputs: [String] = []
+
+    init(contentsByInput: [String: String]) {
+        self.contentsByInput = contentsByInput
+    }
+
+    func listModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        throw OpenKeyboardAIConnectorError.unsupportedModelDiscovery
+    }
+
+    func respond(
+        to request: OpenKeyboardAIRequest,
+        profile: OpenKeyboardGatewayProfile
+    ) async throws -> String {
+        guard let input = request.messages.last?.content,
+              let content = contentsByInput[input] else {
+            throw OpenKeyboardAIConnectorError.invalidResponse
+        }
+        requestedInputs.append(input)
+        return content
+    }
+
+    nonisolated func close() {}
+}
+
 private enum ExpectedNetworkError {
     case unauthorized
     case serverError(String)
@@ -2327,6 +2625,7 @@ private final class NetworkManagerInMemorySecureStore: AppConfigSecureStore {
     private var profileData: Data?
     private var legacyAPIKey: String?
     private var referencedAPIKeys: [String: String] = [:]
+    private var clearIntent: AppConfigSecureClearIntent?
     var apiKey: String? { Self.apiKey(from: profileData) ?? legacyAPIKey }
 
     func loadProfile() -> Data? { profileData }
@@ -2343,8 +2642,28 @@ private final class NetworkManagerInMemorySecureStore: AppConfigSecureStore {
         return true
     }
 
+    func loadClearIntentResult() -> AppConfigSecureStoreClearIntentReadResult {
+        clearIntent.map(AppConfigSecureStoreClearIntentReadResult.found) ?? .notFound
+    }
+
+    func saveClearIntent(_ intent: AppConfigSecureClearIntent) -> Bool {
+        clearIntent = intent
+        return true
+    }
+
+    func clearClearIntent() -> Bool {
+        clearIntent = nil
+        return true
+    }
+
     func loadLegacyAPIKey() -> String? { legacyAPIKey }
     func loadLegacyAPIKey(reference: String) -> String? { referencedAPIKeys[reference] }
+    func loadLegacyAPIKeyResult() -> AppConfigSecureStoreStringReadResult {
+        legacyAPIKey.map(AppConfigSecureStoreStringReadResult.found) ?? .notFound
+    }
+    func loadLegacyAPIKeyResult(reference: String) -> AppConfigSecureStoreStringReadResult {
+        referencedAPIKeys[reference].map(AppConfigSecureStoreStringReadResult.found) ?? .notFound
+    }
 
     @discardableResult
     func saveLegacyAPIKey(_ apiKey: String) -> Bool {

@@ -1,8 +1,10 @@
 # AI Keyboard Project - Current TODO
 
-**Last Updated:** 2026-09-08
+**Last Updated:** 2026-09-10
 
 **Migration entry added:** 2026-09-05
+
+**Connector sample staging updated:** 2026-09-09
 
 This file is a current-state guide for choosing the next OpenKeyboard implementation slice. It replaces the older April phase checklist; items are marked from repo/docs inspection only. Anything not proven by current docs/source is labeled **needs verification** rather than complete.
 
@@ -14,10 +16,10 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 - [x] Xcode project exists with main app and keyboard extension targets.
 - [x] Main SwiftUI app shell exists (`OpenKeyboardApp`, `ContentView`, `SettingsView`, `OnboardingView`).
-- [x] Gateway settings screen exists with gateway URL/API-key entry, connection test, model loading, onboarding reset, and setup/status copy.
+- [x] Provider-aware Settings supports OpenAI, Anthropic, OpenRouter, and OpenAI-compatible Gateway with editable base URL, masked API key, exact-model discovery/selection, connection testing, onboarding reset, and setup/status copy.
 - [x] Onboarding flow exists with UI-test launch arguments and stable accessibility identifiers.
 - [x] App Group entitlements are present for app and extension.
-- [x] Gateway config moved toward shared Keychain/App Group storage; legacy App Group API-key fallback is tracked for compatibility.
+- [x] The complete versioned provider profile is stored atomically in the shared Keychain, including secure test-origin metadata; App Group defaults retain only credential-free revision-bound hints. Legacy split profiles migrate add-only, and schema-v2 secure profiles stay read-compatible until the next explicit validated save upgrades them to provider-aware v3.
 - [ ] App icon / release media — needs verification.
 - [ ] App Store bundle/license/release metadata — needs verification.
 
@@ -43,6 +45,8 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 - [x] App and keyboard actions use the connector's public Swift package product with process-local
   reuse, typed failures, cancellation, and close-on-profile-change behavior. The private bridge is
   not imported by OpenKeyboard.
+- [x] Provider/base URL/key changes cancel Settings work immediately and publish a credential-free
+  App Group notification so the keyboard-extension process invalidates stale work and connector state.
 - [ ] Rename the developer-facing `Fast plain-text grammar` diagnostic to `Grammar correction`;
   keep the short, one-attempt plain-text explanation in supporting copy.
 - [x] Keyboard AI service supports Fix Grammar, Rewrite, and Summarize requests.
@@ -69,7 +73,7 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
   paragraph structure, per-chunk validation, no partial application, and a permanent live-model
   differential test where high-profile long correction is required and low-profile support is
   diagnostic/optional.
-- [ ] Shared Keychain release hardening and privacy copy — in progress; see `docs/RELEASE_HARDENING.md` and `docs/TDD_STATUS.md`.
+- [ ] Shared Keychain release hardening and privacy copy — deterministic transaction/race coverage and generic-iOS Release exclusion are complete on the connector branch; exact-head live and normal Simulator proof remain before publication. See `docs/RELEASE_HARDENING.md` and `docs/TDD_STATUS.md`.
 
 ### Testing and verification
 
@@ -95,15 +99,16 @@ This file is a current-state guide for choosing the next OpenKeyboard implementa
 
 ## Current next recommended slice
 
-**Next slice: complete exact-head live differential and normal simulator runtime proof for the
-Universal AI Connector cutover, then perform independent review.**
+**Next slice: complete exact-head four-provider live verification and normal simulator runtime
+proof for the Universal AI Connector cutover, then perform independent review.**
 
 Why this is the smallest safe next step:
 
 - The connector is integrated and deterministic request, response, model-discovery, lifecycle,
   cancellation, extension-link, and transport-boundary tests pass locally.
-- Gateway and semantic behavior still require the exact-head two-profile live gate; deterministic
-  results cannot substitute for that evidence.
+- Provider transport and semantic behavior still require the exact-head four-provider Settings
+  matrix plus the classifier-selected two-profile live gate; deterministic results cannot
+  substitute for that evidence.
 - Visible Settings and real keyboard actions still require the normal host-app runtime route with
   no UI-test launch state, injected result panel, or test host.
 
@@ -118,8 +123,10 @@ Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
   repository iOS routes run the guarded bootstrap automatically.
 - Production boundary: Settings discovery and every keyboard/live-harness generation request go
   through `UniversalAiConnector`; no production OpenKeyboard target owns `URLSession` transport.
-- Required remaining proof: exact-head `./scripts/check.sh --full`, classifier-selected
-  `./scripts/check-live.sh gateway-differential`, automated real-extension coverage, normal
+- Required remaining proof: exact-head `./scripts/check.sh --full`,
+  `./scripts/ios/test.sh live-provider-matrix`, classifier-selected
+  `./scripts/check-live.sh gateway-differential`, `./scripts/ios/test.sh release-exclusion`,
+  automated real-extension coverage, normal
   simulator Settings plus visible Improve/Rephrase/Translate actions with Apply/Back/Rerun as
   applicable, linked-size/startup/memory measurements, and independent exact-head review.
 - Architecture reference: `docs/UNIVERSAL_AI_CONNECTOR.md`.
@@ -146,6 +153,59 @@ Reference plan: `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
   gates, exact-model gateway differential evidence, and normal simulator runtime proof for visible
   Translate behavior before publication/readiness.
 - Detailed plan: `docs/plans/plain-text-writing-responses.md`.
+
+**Universal AI Connector sample and migration staging**
+
+This is a separate cross-repository connector-sample roadmap retained for follow-on work. The
+OpenKeyboard host adoption does not compile or copy the connector sample `ContentView` into the
+product, and completion of the app work does not claim completion of these sample stages.
+
+- Current boundary: OpenKeyboard already has host-owned Gateway configuration, connection testing,
+  model loading, and model-selection UI. Universal AI Connector already has deterministic iOS,
+  Android, and Kotlin/JVM console samples. The first missing workflow is live provider/Gateway
+  configuration, model loading, exact selection, and connection testing in the existing iOS
+  sample; do not replace or duplicate OpenKeyboard's settings UI while adding that workflow.
+- [ ] **Stage 1 — make the Universal AI Connector standalone sample a complete iOS integration
+  harness.** Keep provider/Gateway configuration host-owned and credentials in secure iOS storage.
+  Load models through the connector's existing `listModels` API and present loading, supported,
+  empty, unsupported-discovery, authentication, timeout, malformed-response, cancellation, retry,
+  and configuration-change states. Require exact model selection, with explicit manual model entry
+  only for providers that report unsupported discovery. Define **Test Connection** as exactly one
+  discovery request followed by one minimal `respond` request using the selected model. Never
+  silently fall back to generation for discovery or substitute a provider, endpoint, credential,
+  or model.
+  - Automated regression evidence: deterministic sample tests cover state transitions, retry and
+    cancellation, connector replacement after configuration changes, exact selection/manual-entry
+    rules, the two-call connection flow, and the no-fallback/no-substitution boundary.
+  - Live evidence: an opt-in route must exercise the actual iOS sample against at least two exact,
+    explicitly selected models and record discovery, transport, generation, and exact-model
+    identity separately. A mocked host or library-only harness does not satisfy this requirement.
+  - Runtime evidence: collect normal simulator runtime proof from the normally launched sample.
+    Separately, Stage 1 acceptance requires the exact signed sample build to install and launch on
+    a physical iPhone, visibly load models, select an exact model, and complete **Test Connection**
+    through the sample UI; collect physical-device proof for that interaction. Neither sample route
+    proves keyboard extension compatibility; retain a separate application-extension consumer
+    build and normal OpenKeyboard extension proof.
+- [ ] **Stage 2 — upgrade the existing Android sample.** After Stage 1 acceptance, add
+  provider/Gateway configuration plus model discovery/loading, exact selection, and the same
+  two-step **Test Connection** flow to the existing deterministic Android sample. Require
+  deterministic state/request tests and separate Android emulator and signed physical-device
+  lifecycle evidence for installation, launch, cancellation/backgrounding, model loading, and
+  connection validation.
+- [ ] **Stage 3 — extend Kotlin/JVM and add Compose desktop.** Add the same public discovery,
+  exact-model selection, and `respond` flow to the existing Kotlin/JVM console sample, then add a
+  Compose desktop sample on macOS, Windows, and Linux. Require shared deterministic contract tests
+  plus runtime evidence collected on each matching host; evidence from one desktop OS does not
+  stand in for another.
+- [ ] **Stage 4 — close shared cross-platform parity.** Across iOS, Android, Kotlin/JVM console,
+  and Compose desktop, verify equivalent supported/empty/unsupported/authentication/timeout/
+  malformed states, retry and cancellation, connector replacement after configuration changes,
+  exact requested/returned model identity, and no provider/model/endpoint/credential fallback or
+  substitution. Keep JavaScript, Wasm, and new native targets demand-driven and outside the current
+  supported-host plan.
+- OpenKeyboard extension adoption follows connector sample confidence. Preserve its independent
+  application-extension build, shared-configuration checks, resource measurements, and normal
+  extension runtime proof; connector sample parity cannot satisfy those requirements.
 
 ---
 

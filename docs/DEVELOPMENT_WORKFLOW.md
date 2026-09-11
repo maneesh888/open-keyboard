@@ -180,6 +180,15 @@ unsafe model IDs, missing differential roles, identical role models, reversed ma
 substitution are rejected without printing values. Ordinary checks use the high profile when it is
 configured and otherwise use the legacy fallback; they never silently use the low profile.
 
+The exact-head gateway gate also runs the four-provider Settings/connector matrix from the pinned
+connector's guarded ignored live seed. OpenAI, Anthropic, OpenRouter, and OpenAI-compatible Gateway
+must each preserve their exact provider/model binding and pass Test Connection plus diagnostics.
+Private provider values and model identities exist only in the local process, mode-600 temporary
+`.xctestrun`/evidence state, and disposable result bundles, all of which are cleaned on exit. The
+retained PR record contains only canonical binding/match booleans, requirement class,
+no-substitution state, required outcomes, and exact head. GitHub validates those non-sensitive
+assertions; local execution attests the comparisons against the private seeds.
+
 The targeted differential runner performs automated deterministic prerequisites and
 `build-for-testing` once, then reuses the compiled `.xctestrun` for isolated low and high disposable
 simulators. It runs one small baseline/boundary/follow-up test per role and removes both simulators,
@@ -190,7 +199,7 @@ zero but must report `LIVE_UNVERIFIED` and `diagnostic run complete`, never gree
 success. A low-model success at the candidate boundary is retained as
 `diagnostic-boundary-not-established`, not promoted to passing evidence.
 Before cleanup, the runner exports one sanitized text attachment per role and requires separate
-transport, grammar, rewrite, and translation status and latency rows in canonical order. The
+transport, grammar, rewrite, and translation status rows in canonical order. The
 attachment grammar rejects extra content so credentials and response bodies cannot enter the
 retained summary.
 
@@ -371,24 +380,35 @@ hidden by a newer same-name check.
 
 `.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
 runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
-exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
-tested, and that no substitution occurred. Exact model requirements must match the tested-model
-list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
-must still record the actual tested model. Exact-model runs set
-`OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id>`. Every exact-model or model-agnostic run must verify
-the seeded model through the production plain-text grammar flow; a connected-but-unverified
-`.limited` result is not passing live evidence. Every live-evidence body event creates the stable
-`Required live verification` root job. It rejects duplicate, contradictory, fallback, and
-wrong-model fields in both the immutable event body and the current exact-head body. Local execution
-is contributor-attested; GitHub never receives the credential or gateway response.
+exact-tested-SHA fields. Exact provider and model identities are compared only inside the local
+live-gate process against ignored mode-600 seeds. The retained body records the model requirement
+class, exact-identity match booleans, role distinctness, no-substitution result, and the canonical
+four-provider binding/Test Connection/diagnostic outcomes; it never records raw model identifiers,
+private base URLs, credentials, or opaque commitments. Exact-model runs pass the private requirement
+through `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL` or `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS`. Every exact-model
+or model-agnostic run must verify the seeded model through the production plain-text grammar flow;
+a connected-but-unverified `.limited` result is not passing live evidence. Every live-evidence body
+event creates the stable `Required live verification` root job. It rejects duplicate,
+contradictory, reordered, missing, false, fallback, and wrong-binding fields in both the immutable
+event body and the current exact-head body. Local execution attests the secret-backed comparisons;
+GitHub receives only the non-sensitive assertions.
 
-For `gateway-differential`, retained model fields use canonical
-`low=<exact-id>, high=<exact-id>` order. Separate canonical fields record baseline outcomes,
-long-text differential outcomes, follow-up outcomes, operation-scoped warning verification, and
-per-profile latency. The validator rejects missing roles, stale heads, duplicates, reversed or
-malformed mappings, substitutions, low success presented as a capability boundary, high failure,
-unverified scenarios, and contradictory evidence. GitHub still receives no credentials or response
+For `gateway-differential`, retained identity evidence uses canonical `low=true, high=true` order
+and separately records that the private role-bound identifiers were distinct. Separate canonical
+fields record baseline outcomes, long-text differential outcomes, follow-up outcomes,
+and operation-scoped warning verification. The validator rejects missing
+roles, stale heads, duplicates, reversed or malformed mappings, substitutions, low success
+presented as a capability boundary, high failure, unverified scenarios, and contradictory
+evidence. GitHub still receives no credentials, model identifiers, private URLs, or response
 bodies.
+
+During the one pull request that introduces this schema, an older trusted/base validator still
+requires its retired profile-latency field. The bootstrap supplies fixed zero placeholders only in
+a mode-600 temporary compatibility projection, never in terminal or pull-request evidence, and
+trap-cleans that projection. The shim is skipped automatically after the trusted validator exposes
+the redacted-schema marker. The candidate side always requires the stricter differential record
+through this one-time bridge and rejects target downgrades or latency fields in actual evidence;
+only the trusted-side projection may narrow that record to the old ordinary-gateway schema.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a

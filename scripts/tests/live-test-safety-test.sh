@@ -613,7 +613,33 @@ openkeyboard_unset_simulator_gateway_profiles
 assert_simulator_profiles_unset
 
 openkeyboard_require_exact_live_model 'low-test-model:2b' 'low-test-model:2b'
-openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'model-agnostic'
+openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'model-agnostic' true
+if openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'model-agnostic' >/dev/null 2>&1; then
+  echo "An explicit exact-model requirement accepted the reserved model-agnostic sentinel." >&2
+  exit 1
+fi
+if openkeyboard_require_exact_live_model 'low-test-model:2b' 'model-agnostic' >/dev/null 2>&1 ||
+    openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'model-agnostic' >/dev/null 2>&1; then
+  echo "A differential role accepted the reserved model-agnostic sentinel as an exact requirement." >&2
+  exit 1
+fi
+openkeyboard_require_compatible_live_model_inputs gateway false false
+openkeyboard_require_compatible_live_model_inputs gateway true false
+openkeyboard_require_compatible_live_model_inputs gateway-differential false false
+openkeyboard_require_compatible_live_model_inputs gateway-differential false true
+if openkeyboard_require_compatible_live_model_inputs gateway true true >/dev/null 2>&1 ||
+    openkeyboard_require_compatible_live_model_inputs gateway-differential true true >/dev/null 2>&1; then
+  echo "Live target requirement validation accepted both input forms." >&2
+  exit 1
+fi
+if openkeyboard_require_compatible_live_model_inputs gateway false true >/dev/null 2>&1; then
+  echo "Ordinary gateway verification accepted a differential required-model mapping." >&2
+  exit 1
+fi
+if openkeyboard_require_compatible_live_model_inputs gateway-differential true false >/dev/null 2>&1; then
+  echo "Differential gateway verification accepted a single required model." >&2
+  exit 1
+fi
 if openkeyboard_require_exact_live_model 'high-test-model:120b-cloud' 'low-test-model:2b' >/dev/null 2>&1; then
   echo "A different live model was accepted as exact Gemma proof." >&2
   exit 1
@@ -657,6 +683,18 @@ if openkeyboard_require_local_seed_file \
   exit 1
 fi
 assert_output_excludes_secret "$PERMISSIVE_OUTPUT" "Permission rejection"
+
+READ_ONLY_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/read-only.env"
+write_valid_seed "$READ_ONLY_SEED"
+chmod 400 "$READ_ONLY_SEED"
+READ_ONLY_OUTPUT="$FIXTURE/read-only-output.log"
+if openkeyboard_require_local_seed_file \
+  "$PRIMARY_CHECKOUT" \
+  '.agent/local-seeds/read-only.env' > "$READ_ONLY_OUTPUT" 2>&1; then
+  echo "A read-only seed that was not exact mode 600 was accepted." >&2
+  exit 1
+fi
+assert_output_excludes_secret "$READ_ONLY_OUTPUT" "Exact mode-600 rejection"
 
 ACL_SEED="$PRIMARY_CHECKOUT/.agent/local-seeds/acl.env"
 write_valid_seed "$ACL_SEED"
@@ -926,14 +964,12 @@ fi
 
 VALID_DIAGNOSTIC_ATTACHMENT="$FIXTURE/live-gateway-diagnostics-low.txt"
 printf '%s\n' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed latency_ms=12' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=failed latency_ms=34' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed latency_ms=56' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=failed latency_ms=78' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=failed' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=failed' \
   > "$VALID_DIAGNOSTIC_ATTACHMENT"
-expected_diagnostic_evidence="$(printf '%s\n' \
-  'diagnostic_outcomes_low=transport=passed, grammar=failed, rewrite=passed, translation=failed' \
-  'diagnostic_latencies_low=transport=12ms, grammar=34ms, rewrite=56ms, translation=78ms')"
+expected_diagnostic_evidence='diagnostic_outcomes_low=transport=passed, grammar=failed, rewrite=passed, translation=failed'
 actual_diagnostic_evidence="$(
   openkeyboard_format_live_diagnostic_attachment low "$VALID_DIAGNOSTIC_ATTACHMENT"
 )"
@@ -948,13 +984,287 @@ fi
 
 INVALID_DIAGNOSTIC_ATTACHMENT="$FIXTURE/live-gateway-diagnostics-invalid.txt"
 printf '%s\n' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed latency_ms=12' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=passed latency_ms=34' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed latency_ms=56 secret=value' \
-  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=passed latency_ms=78' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=passed' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed secret=value' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=passed' \
   > "$INVALID_DIAGNOSTIC_ATTACHMENT"
 if openkeyboard_format_live_diagnostic_attachment low "$INVALID_DIAGNOSTIC_ATTACHMENT" >/dev/null 2>&1; then
   echo "Malformed live diagnostic evidence was accepted." >&2
+  exit 1
+fi
+
+printf '%s\n' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=transport status=passed latency_ms=12' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=grammar status=passed latency_ms=34' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=rewrite status=passed latency_ms=56' \
+  'LIVE_GATEWAY_DIAGNOSTIC role=low capability=translation status=passed latency_ms=78' \
+  > "$INVALID_DIAGNOSTIC_ATTACHMENT"
+if openkeyboard_format_live_diagnostic_attachment low "$INVALID_DIAGNOSTIC_ATTACHMENT" >/dev/null 2>&1; then
+  echo "A legacy diagnostic timing field was accepted as retained evidence." >&2
+  exit 1
+fi
+
+PRIVATE_MODEL_SENTINEL='private-model-identity-must-never-be-logged'
+CHECK_LIVE_TRACE_OUTPUT="$FIXTURE/check-live-trace.log"
+set +e
+OPEN_KEYBOARD_LIVE_REQUIRED_MODEL="$PRIVATE_MODEL_SENTINEL" \
+  bash -ax "$ROOT/scripts/check-live.sh" invalid > "$CHECK_LIVE_TRACE_OUTPUT" 2>&1
+check_live_trace_status=$?
+set -e
+if [[ "$check_live_trace_status" -ne 2 ]]; then
+  echo "The traced exact-head live gate did not reject an invalid target." >&2
+  exit 1
+fi
+if grep -Fq -- "$PRIVATE_MODEL_SENTINEL" "$CHECK_LIVE_TRACE_OUTPUT" || \
+    grep -Fq -- "$SECRET_SENTINEL" "$CHECK_LIVE_TRACE_OUTPUT"; then
+  echo "Inherited shell tracing disclosed a private live input." >&2
+  exit 1
+fi
+
+CHECK_LIVE_CLEANUP_FUNCTIONS="$FIXTURE/check-live-cleanup-functions.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  %w[
+    openkeyboard_unset_ambient_private_live_values
+    remove_live_evidence_files
+    clear_private_live_state
+    cleanup_live_gate
+  ].each do |name|
+    definition = source.match(/^#{Regexp.escape(name)}\(\) \{\n.*?^\}\n/m)
+    abort "Missing check-live cleanup function: #{name}" unless definition
+    puts definition[0]
+  end
+' "$ROOT/scripts/check-live.sh" > "$CHECK_LIVE_CLEANUP_FUNCTIONS"
+PROVIDER_CLEANUP_EVIDENCE="$FIXTURE/provider-cleanup-evidence.txt"
+DIFFERENTIAL_CLEANUP_EVIDENCE="$FIXTURE/differential-cleanup-evidence.txt"
+printf 'provider_exact_bindings=all-safe\n' > "$PROVIDER_CLEANUP_EVIDENCE"
+printf 'profile_model_bindings=all-safe\n' > "$DIFFERENTIAL_CLEANUP_EVIDENCE"
+chmod 600 "$PROVIDER_CLEANUP_EVIDENCE" "$DIFFERENTIAL_CLEANUP_EVIDENCE"
+if [[ "$(openkeyboard_path_mode "$PROVIDER_CLEANUP_EVIDENCE")" != "600" ||
+      "$(openkeyboard_path_mode "$DIFFERENTIAL_CLEANUP_EVIDENCE")" != "600" ]]; then
+  echo "The cleanup regression fixture did not create mode-600 evidence files." >&2
+  exit 1
+fi
+set +e
+(
+  set -euo pipefail
+  # shellcheck source=/dev/null
+  source "$CHECK_LIVE_CLEANUP_FUNCTIONS"
+  provider_evidence_file="$PROVIDER_CLEANUP_EVIDENCE"
+  differential_evidence_file="$DIFFERENTIAL_CLEANUP_EVIDENCE"
+  trap cleanup_live_gate EXIT
+
+  # This is the successful check-live ordering: private seed state is cleared before retained
+  # output, and the EXIT trap must still retain both paths long enough to delete their files.
+  clear_private_live_state
+  [[ "$provider_evidence_file" == "$PROVIDER_CLEANUP_EVIDENCE" ]]
+  [[ "$differential_evidence_file" == "$DIFFERENTIAL_CLEANUP_EVIDENCE" ]]
+)
+check_live_cleanup_status=$?
+set -e
+if [[ "$check_live_cleanup_status" -ne 0 ||
+      -e "$PROVIDER_CLEANUP_EVIDENCE" ||
+      -e "$DIFFERENTIAL_CLEANUP_EVIDENCE" ]]; then
+  echo "The successful exact-head live gate did not remove both private evidence files." >&2
+  exit 1
+fi
+
+IOS_TRACE_OUTPUT="$FIXTURE/ios-live-trace.log"
+set +e
+OPEN_KEYBOARD_SIMULATOR_MODEL="$PRIVATE_MODEL_SENTINEL" \
+  bash -ax "$ROOT/scripts/ios/test.sh" invalid > "$IOS_TRACE_OUTPUT" 2>&1
+ios_trace_status=$?
+set -e
+if [[ "$ios_trace_status" -eq 0 ]]; then
+  echo "The traced iOS runner accepted an invalid target." >&2
+  exit 1
+fi
+if grep -Fq -- "$PRIVATE_MODEL_SENTINEL" "$IOS_TRACE_OUTPUT" || \
+    grep -Fq -- "$SECRET_SENTINEL" "$IOS_TRACE_OUTPUT"; then
+  echo "Inherited iOS-runner tracing disclosed a private live input." >&2
+  exit 1
+fi
+
+PRELOCK_PROBE_BIN="$FIXTURE/prelock-probe-bin"
+PRELOCK_PROBE_OUTPUT="$FIXTURE/prelock-child-environment.log"
+mkdir -p "$PRELOCK_PROBE_BIN"
+cat > "$PRELOCK_PROBE_BIN/dirname" <<'MOCK_DIRNAME'
+#!/usr/bin/env bash
+for private_name in \
+  OPENAI_API_KEY OPENAI_LIVE_MODEL GATEWAY_LIVE_BASE_URL GATEWAY_API_KEY GATEWAY_LIVE_MODEL \
+  OPEN_KEYBOARD_LIVE_GATEWAY_URL OPEN_KEYBOARD_LIVE_API_KEY OPEN_KEYBOARD_LIVE_MODEL \
+  OPEN_KEYBOARD_TEST_GATEWAY_URL OPEN_KEYBOARD_TEST_API_KEY OPEN_KEYBOARD_TEST_MODEL \
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL OPEN_KEYBOARD_SIMULATOR_API_KEY OPEN_KEYBOARD_SIMULATOR_MODEL \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
+  model_id tested_model required_model low_model high_model gateway_url_hex api_key_hex \
+  requested_screenshot_dir requested_screenshot_phrase; do
+  if [[ "${!private_name+x}" == "x" ]]; then
+    printf 'leaked:%s\n' "$private_name" >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+    exit 90
+  fi
+done
+printf '%s\n' dirname-ok >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+/usr/bin/dirname "$@"
+MOCK_DIRNAME
+cat > "$PRELOCK_PROBE_BIN/git" <<'MOCK_GIT'
+#!/usr/bin/env bash
+for private_name in \
+  OPENAI_API_KEY OPENAI_LIVE_MODEL GATEWAY_LIVE_BASE_URL GATEWAY_API_KEY GATEWAY_LIVE_MODEL \
+  OPEN_KEYBOARD_LIVE_GATEWAY_URL OPEN_KEYBOARD_LIVE_API_KEY OPEN_KEYBOARD_LIVE_MODEL \
+  OPEN_KEYBOARD_TEST_GATEWAY_URL OPEN_KEYBOARD_TEST_API_KEY OPEN_KEYBOARD_TEST_MODEL \
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL OPEN_KEYBOARD_SIMULATOR_API_KEY OPEN_KEYBOARD_SIMULATOR_MODEL \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
+  model_id tested_model required_model low_model high_model gateway_url_hex api_key_hex \
+  requested_screenshot_dir requested_screenshot_phrase; do
+  if [[ "${!private_name+x}" == "x" ]]; then
+    printf 'leaked:%s\n' "$private_name" >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+    exit 90
+  fi
+done
+printf '%s\n' git-ok >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+if [[ " $* " == *' --local-env-vars '* ]]; then
+  exit 0
+fi
+printf '%s\n' "$MOCK_PRELOCK_GIT_DIR"
+MOCK_GIT
+cat > "$PRELOCK_PROBE_BIN/ruby" <<'MOCK_RUBY'
+#!/usr/bin/env bash
+for private_name in \
+  OPENAI_API_KEY OPENAI_LIVE_MODEL GATEWAY_LIVE_BASE_URL GATEWAY_API_KEY GATEWAY_LIVE_MODEL \
+  OPEN_KEYBOARD_LIVE_GATEWAY_URL OPEN_KEYBOARD_LIVE_API_KEY OPEN_KEYBOARD_LIVE_MODEL \
+  OPEN_KEYBOARD_TEST_GATEWAY_URL OPEN_KEYBOARD_TEST_API_KEY OPEN_KEYBOARD_TEST_MODEL \
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL OPEN_KEYBOARD_SIMULATOR_API_KEY OPEN_KEYBOARD_SIMULATOR_MODEL \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
+  model_id tested_model required_model low_model high_model gateway_url_hex api_key_hex \
+  requested_screenshot_dir requested_screenshot_phrase; do
+  if [[ "${!private_name+x}" == "x" ]]; then
+    printf 'leaked:%s\n' "$private_name" >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+    exit 90
+  fi
+done
+printf '%s\n' ruby-ok >> "$MOCK_PRELOCK_PROBE_OUTPUT"
+exit 0
+MOCK_RUBY
+chmod +x "$PRELOCK_PROBE_BIN/dirname" "$PRELOCK_PROBE_BIN/git" "$PRELOCK_PROBE_BIN/ruby"
+mkdir -p "$FIXTURE/prelock-git"
+PRIVATE_CHILD_SENTINEL='private-child-value-must-be-scrubbed'
+PATH="$PRELOCK_PROBE_BIN:$PATH" \
+MOCK_PRELOCK_GIT_DIR="$FIXTURE/prelock-git" \
+MOCK_PRELOCK_PROBE_OUTPUT="$PRELOCK_PROBE_OUTPUT" \
+OPENAI_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+OPENAI_LIVE_MODEL="$PRIVATE_CHILD_SENTINEL" \
+GATEWAY_LIVE_BASE_URL="$PRIVATE_CHILD_SENTINEL" \
+GATEWAY_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+GATEWAY_LIVE_MODEL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_LIVE_GATEWAY_URL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_LIVE_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_LIVE_MODEL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_TEST_GATEWAY_URL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_TEST_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_TEST_MODEL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_SIMULATOR_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+OPEN_KEYBOARD_SIMULATOR_MODEL="$PRIVATE_CHILD_SENTINEL" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL="$PRIVATE_CHILD_SENTINEL" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY="$PRIVATE_CHILD_SENTINEL" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL="$PRIVATE_CHILD_SENTINEL" \
+SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG=1 \
+model_id="$PRIVATE_CHILD_SENTINEL" \
+tested_model="$PRIVATE_CHILD_SENTINEL" \
+required_model="$PRIVATE_CHILD_SENTINEL" \
+low_model="$PRIVATE_CHILD_SENTINEL" \
+high_model="$PRIVATE_CHILD_SENTINEL" \
+gateway_url_hex="$PRIVATE_CHILD_SENTINEL" \
+api_key_hex="$PRIVATE_CHILD_SENTINEL" \
+requested_screenshot_dir="$PRIVATE_CHILD_SENTINEL" \
+requested_screenshot_phrase="$PRIVATE_CHILD_SENTINEL" \
+  bash -a "$ROOT/scripts/ios/test.sh" live-gateway-smoke >/dev/null 2>&1
+if grep -Fq -- 'leaked:' "$PRELOCK_PROBE_OUTPUT" || \
+    ! grep -Fq -- 'dirname-ok' "$PRELOCK_PROBE_OUTPUT" || \
+    ! grep -Fq -- 'git-ok' "$PRELOCK_PROBE_OUTPUT" || \
+    ! grep -Fq -- 'ruby-ok' "$PRELOCK_PROBE_OUTPUT"; then
+  echo "A seed-backed iOS route passed a raw ambient live value to a preflight child." >&2
+  exit 1
+fi
+
+if rg --quiet 'MODEL_COMMITMENT|model_commitment|commit_live_model_identity|hmac-sha256' \
+    "$ROOT/scripts/check-live.sh"; then
+  echo "The exact-head live gate retained the removed opaque model-commitment path." >&2
+  exit 1
+fi
+
+SEED_TRACE_REPO="$FIXTURE/seed-trace-repo"
+SEED_TRACE_BIN="$FIXTURE/seed-trace-bin"
+mkdir -p "$SEED_TRACE_REPO/scripts/ios" "$SEED_TRACE_REPO/.agent/local-seeds" "$SEED_TRACE_BIN"
+cp "$ROOT/scripts/ios/live-test-safety.sh" "$SEED_TRACE_REPO/scripts/ios/live-test-safety.sh"
+cp "$ROOT/scripts/ios/seed-simulator-gateway-config.sh" "$SEED_TRACE_REPO/scripts/ios/seed-simulator-gateway-config.sh"
+printf '%s\n' '.agent/' > "$SEED_TRACE_REPO/.gitignore"
+git -C "$SEED_TRACE_REPO" init -q
+git -C "$SEED_TRACE_REPO" add .gitignore scripts/ios/live-test-safety.sh scripts/ios/seed-simulator-gateway-config.sh
+SEED_TRACE_FILE="$SEED_TRACE_REPO/.agent/local-seeds/openkeyboard-gateway.env"
+SEED_TRACE_URL='https://private-trace-gateway.invalid/v1'
+SEED_TRACE_KEY='private-trace-api-key-value'
+SEED_TRACE_MODEL='private-trace-model-id'
+printf '%s\n' \
+  "OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL=$SEED_TRACE_URL" \
+  "OPEN_KEYBOARD_SIMULATOR_API_KEY=$SEED_TRACE_KEY" \
+  "OPEN_KEYBOARD_SIMULATOR_MODEL=$SEED_TRACE_MODEL" \
+  > "$SEED_TRACE_FILE"
+chmod 600 "$SEED_TRACE_FILE"
+cat > "$SEED_TRACE_BIN/xcrun" <<'MOCK_XCRUN'
+#!/usr/bin/env bash
+for source_name in \
+  OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+  OPEN_KEYBOARD_SIMULATOR_API_KEY \
+  OPEN_KEYBOARD_SIMULATOR_MODEL; do
+  if [[ "${!source_name+x}" == "x" ]]; then
+    echo "seed-source-variable-reached-child-environment" >&2
+    exit 90
+  fi
+done
+for child_name in \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
+  SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL \
+  SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG; do
+  if [[ "${!child_name:-}" == "$MOCK_STALE_SIMCTL_VALUE" ]]; then
+    echo "ambient-simctl-child-value-survived" >&2
+    exit 91
+  fi
+done
+exit 0
+MOCK_XCRUN
+chmod +x "$SEED_TRACE_BIN/xcrun"
+SEED_TRACE_OUTPUT="$FIXTURE/seed-simulator-trace.log"
+STALE_SIMCTL_VALUE='stale-private-simctl-child-value'
+PATH="$SEED_TRACE_BIN:$PATH" \
+MOCK_STALE_SIMCTL_VALUE="$STALE_SIMCTL_VALUE" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL="$STALE_SIMCTL_VALUE" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY="$STALE_SIMCTL_VALUE" \
+SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL="$STALE_SIMCTL_VALUE" \
+SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG="$STALE_SIMCTL_VALUE" \
+  bash -ax \
+  "$SEED_TRACE_REPO/scripts/ios/seed-simulator-gateway-config.sh" \
+  --seed-file .agent/local-seeds/openkeyboard-gateway.env \
+  --simulator 00000000-0000-0000-0000-000000000000 \
+  > "$SEED_TRACE_OUTPUT" 2>&1
+for private_value in "$SEED_TRACE_URL" "$SEED_TRACE_KEY" "$SEED_TRACE_MODEL"; do
+  if grep -Fq -- "$private_value" "$SEED_TRACE_OUTPUT"; then
+    echo "The traced simulator seed launcher disclosed a guarded seed value." >&2
+    exit 1
+  fi
+done
+if grep -Fq -- 'seed-source-variable-reached-child-environment' "$SEED_TRACE_OUTPUT"; then
+  echo "Inherited automatic export passed seed-source values to the simulator tool environment." >&2
+  exit 1
+fi
+if grep -Fq -- "$STALE_SIMCTL_VALUE" "$SEED_TRACE_OUTPUT" || \
+    grep -Fq -- 'ambient-simctl-child-value-survived' "$SEED_TRACE_OUTPUT"; then
+  echo "The simulator seed launcher retained or traced an ambient SIMCTL_CHILD live value." >&2
   exit 1
 fi
 

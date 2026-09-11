@@ -203,8 +203,8 @@ openkeyboard_require_private_seed_permissions() {
     echo "Live verification requires the local seed file to be owned by the current user." >&2
     return 1
   fi
-  if (( (8#$file_mode & 077) != 0 || (8#$file_mode & 0400) == 0 || (8#$file_mode & 0111) != 0 )); then
-    echo "Live verification requires local seed permissions to block group and other access (for example, chmod 600)." >&2
+  if (( 8#$file_mode != 0600 )); then
+    echo "Live verification requires local seed permissions to be exactly mode 600 (chmod 600)." >&2
     return 1
   fi
   openkeyboard_require_no_extended_acl "$seed_file"
@@ -347,6 +347,16 @@ openkeyboard_trim_seed_value() {
 openkeyboard_require_exact_live_model() {
   local tested_model="$1"
   local required_model="$2"
+  local allow_model_agnostic="${3:-false}"
+  export -n tested_model required_model allow_model_agnostic
+
+  case "$allow_model_agnostic" in
+    true|false) ;;
+    *)
+      echo "Live model requirement mode is invalid." >&2
+      return 2
+      ;;
+  esac
 
   if ! openkeyboard_is_safe_model_id "$tested_model"; then
     echo "Live verification requires one safe, non-empty seed model ID." >&2
@@ -356,10 +366,54 @@ openkeyboard_require_exact_live_model() {
     echo "The required live model must be one safe, non-empty model ID." >&2
     return 1
   fi
-  if [[ "$required_model" != "model-agnostic" && "$tested_model" != "$required_model" ]]; then
+  if [[ "$required_model" == "model-agnostic" ]]; then
+    if [[ "$allow_model_agnostic" != "true" ]]; then
+      echo "An explicit exact-model requirement cannot use the reserved model-agnostic sentinel." >&2
+      return 1
+    fi
+    return 0
+  fi
+  if [[ "$tested_model" != "$required_model" ]]; then
     echo "The seeded live model does not match the exact required model." >&2
     return 1
   fi
+}
+
+openkeyboard_require_compatible_live_model_inputs() {
+  local live_mode="$1"
+  local single_requirement_set="$2"
+  local differential_requirements_set="$3"
+
+  case "$single_requirement_set:$differential_requirements_set" in
+    false:false|true:false|false:true) ;;
+    true:true)
+      echo "Live verification accepts only one required-model input form." >&2
+      return 1
+      ;;
+    *)
+      echo "Live model requirement input state is invalid." >&2
+      return 2
+      ;;
+  esac
+
+  case "$live_mode" in
+    gateway)
+      if [[ "$differential_requirements_set" == "true" ]]; then
+        echo "Ordinary gateway verification cannot use a differential required-model mapping." >&2
+        return 1
+      fi
+      ;;
+    gateway-differential)
+      if [[ "$single_requirement_set" == "true" ]]; then
+        echo "Differential gateway verification cannot use a single required model." >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "Live model requirement validation received an unsupported target." >&2
+      return 2
+      ;;
+  esac
 }
 
 openkeyboard_is_safe_model_id() {
@@ -370,6 +424,25 @@ openkeyboard_is_safe_model_id() {
 
 openkeyboard_unset_simulator_gateway_profiles() {
   unset \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LOW_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE \
+    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE
+}
+
+openkeyboard_unexport_simulator_gateway_profiles() {
+  export -n \
+    OPEN_KEYBOARD_SIMULATOR_PROVIDER \
     OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
     OPEN_KEYBOARD_SIMULATOR_API_KEY \
     OPEN_KEYBOARD_SIMULATOR_MODEL \
@@ -422,6 +495,7 @@ openkeyboard_simulator_gateway_profile_state() {
 
 openkeyboard_validate_simulator_gateway_profiles() {
   local profile state prefix model_name model_id complete_count=0
+  export -n model_id
 
   for profile in legacy low high; do
     state="$(openkeyboard_simulator_gateway_profile_state "$profile")" || return 2
@@ -497,6 +571,7 @@ openkeyboard_select_simulator_gateway_profile() {
   printf -v OPEN_KEYBOARD_SIMULATOR_API_KEY '%s' "${!api_key_name}"
   printf -v OPEN_KEYBOARD_SIMULATOR_MODEL '%s' "${!model_name}"
   OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE="$profile"
+  openkeyboard_unexport_simulator_gateway_profiles
 }
 
 openkeyboard_select_reference_simulator_gateway_profile() {
@@ -536,6 +611,7 @@ openkeyboard_is_allowed_simulator_seed_key() {
 openkeyboard_load_simulator_gateway_seed() {
   local seed_file="$1"
   local line line_number key value seen_keys legacy_state
+  export -n line value
   line_number=0
   seen_keys=$'\n'
 
@@ -588,6 +664,7 @@ openkeyboard_load_simulator_gateway_seed() {
     fi
 
     printf -v "$key" '%s' "$value"
+    export -n "$key"
   done < "$seed_file"
 
   if ! openkeyboard_validate_simulator_gateway_profiles; then
@@ -605,6 +682,7 @@ openkeyboard_load_simulator_gateway_seed() {
     OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY="$OPEN_KEYBOARD_SIMULATOR_API_KEY"
     OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
   fi
+  openkeyboard_unexport_simulator_gateway_profiles
 }
 
 openkeyboard_assert_single_passing_test_summary() {
@@ -780,20 +858,18 @@ role = ARGV.fetch(0)
 path = ARGV.fetch(1)
 expected_capabilities = %w[transport grammar rewrite translation]
 rows = File.readlines(path, chomp: true).map do |line|
-  match = line.match(
-    /\ALIVE_GATEWAY_DIAGNOSTIC role=(low|high) capability=(transport|grammar|rewrite|translation) status=(passed|failed) latency_ms=([0-9]+)\z/
-  )
+    match = line.match(
+    /\ALIVE_GATEWAY_DIAGNOSTIC role=(low|high) capability=(transport|grammar|rewrite|translation) status=(passed|failed)\z/
+    )
   abort "Live diagnostic attachment contains malformed or unsafe evidence." unless match
   abort "Live diagnostic attachment contains the wrong profile role." unless match[1] == role
-  [match[2], match[3], Integer(match[4], 10)]
+  [match[2], match[3]]
 end
 abort "Live diagnostic attachment must contain exactly four capability rows." unless rows.length == 4
 abort "Live diagnostic attachment capabilities are missing, duplicated, or reordered." unless rows.map(&:first) == expected_capabilities
 
-outcomes = rows.map { |capability, status, _| "#{capability}=#{status}" }.join(", ")
-latencies = rows.map { |capability, _, latency| "#{capability}=#{latency}ms" }.join(", ")
+outcomes = rows.map { |capability, status| "#{capability}=#{status}" }.join(", ")
 puts "diagnostic_outcomes_#{role}=#{outcomes}"
-puts "diagnostic_latencies_#{role}=#{latencies}"
 RUBY
 }
 

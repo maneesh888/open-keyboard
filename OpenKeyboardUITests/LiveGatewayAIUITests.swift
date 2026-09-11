@@ -23,18 +23,23 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
         editor.tap()
         editor.typeText(source)
 
-        let requestStartedAt = Date()
         app.buttons["live_ai_fix_grammar_button"].tap()
 
         let status = app.staticTexts["live_ai_status"]
         XCTAssertTrue(status.waitForText("Success", timeout: 90))
-        print("OpenKeyboard live grammar request latency: \(Date().timeIntervalSince(requestStartedAt)) seconds")
 
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        XCTAssertEqual(value, "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund.")
-        XCTAssertTrue(value.contains("reply"), "Grammar correction must not rewrite reply: \(value)")
-        XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
+        XCTAssertTrue(
+            value == "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund.",
+            "Live grammar output did not match the expected fixture."
+        )
+        XCTAssertTrue(value.contains("reply"), "Grammar correction rewrote an unrelated word.")
+        XCTAssertFalse(
+            value.localizedCaseInsensitiveContains("as an ai"),
+            "Live grammar output included model meta commentary."
+        )
+        print("OpenKeyboard live grammar request status=passed")
     }
 
     func testImproveWithRealGatewayUsesPlainTextReplacementContract() throws {
@@ -50,9 +55,18 @@ final class LiveGatewayAIUITests: BaseOpenKeyboardUITestCase {
 
         let value = (editor.value as? String) ?? ""
         XCTAssertFalse(value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        XCTAssertNotEqual(value, "this message sound rough and unclear")
-        XCTAssertFalse(value.contains("{\"operation\""), "Output should be one plain-text replacement, not structured JSON: \(value)")
-        XCTAssertFalse(value.localizedCaseInsensitiveContains("as an ai"), "Output should not include model meta commentary: \(value)")
+        XCTAssertTrue(
+            value != "this message sound rough and unclear",
+            "Live improve output did not change the source fixture."
+        )
+        XCTAssertFalse(
+            value.contains("{\"operation\""),
+            "Live improve output used a structured envelope instead of plain text."
+        )
+        XCTAssertFalse(
+            value.localizedCaseInsensitiveContains("as an ai"),
+            "Live improve output included model meta commentary."
+        )
     }
 
     func testInvalidAPIKeyShowsErrorAndPreservesTypedText() throws {

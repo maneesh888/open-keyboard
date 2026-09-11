@@ -24,20 +24,36 @@ enum OpenKeyboardAIConnectorError: Error, Equatable {
 }
 
 struct OpenKeyboardGatewayProfile: Sendable {
+    /// Compatibility identifier used by legacy gateway-only tests and callers.
     static let providerID = "openai-compatible"
 
-    let gatewayURL: String
+    let provider: OpenKeyboardAIProvider
+    let baseURL: String
     let connectorBaseURL: String
     let apiKey: String
 
-    init(gatewayURL: String, apiKey: String) throws {
+    var providerID: String { provider.rawValue }
+    var gatewayURL: String { baseURL }
+
+    init(provider: OpenKeyboardAIProvider, baseURL: String, apiKey: String) throws {
         let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedKey.isEmpty else {
             throw OpenKeyboardAIConnectorError.unauthorized
         }
-        self.gatewayURL = try GatewayURLNormalizer.normalizedStoredBaseURLString(gatewayURL)
-        self.connectorBaseURL = try GatewayURLNormalizer.connectorBaseURLString(gatewayURL)
+        self.provider = provider
+        self.baseURL = try GatewayURLNormalizer.normalizedStoredBaseURLString(
+            baseURL,
+            provider: provider
+        )
+        self.connectorBaseURL = try GatewayURLNormalizer.connectorBaseURLString(
+            baseURL,
+            provider: provider
+        )
         self.apiKey = trimmedKey
+    }
+
+    init(gatewayURL: String, apiKey: String) throws {
+        try self.init(provider: .openAICompatible, baseURL: gatewayURL, apiKey: apiKey)
     }
 }
 
@@ -227,6 +243,13 @@ private final class OpenKeyboardAsyncRace<Value: Sendable>: @unchecked Sendable 
 
 enum GatewayURLNormalizer {
     static func normalizedStoredBaseURLString(_ value: String) throws -> String {
+        try normalizedStoredBaseURLString(value, provider: .openAICompatible)
+    }
+
+    static func normalizedStoredBaseURLString(
+        _ value: String,
+        provider: OpenKeyboardAIProvider
+    ) throws -> String {
         var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw OpenKeyboardAIConnectorError.invalidURL }
         while trimmed.localizedCaseInsensitiveContains("https://https://") {
@@ -252,11 +275,24 @@ enum GatewayURLNormalizer {
         if !trimmed.localizedCaseInsensitiveContains("://") {
             trimmed = "https://" + trimmed
         }
+        guard !containsUnsafeTransportCharacter(trimmed),
+              !trimmed.contains("\\"),
+              hasValidAuthorityShape(trimmed) else {
+            throw OpenKeyboardAIConnectorError.invalidURL
+        }
         guard var components = URLComponents(string: trimmed),
               let scheme = components.scheme?.lowercased(),
               ["https", "http"].contains(scheme),
               let host = components.host,
-              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              components.user == nil,
+              components.password == nil,
+              components.percentEncodedQuery == nil,
+              components.percentEncodedFragment == nil,
+              !hasAmbiguousPath(components.percentEncodedPath),
+              scheme == "https" || (
+                provider == .openAICompatible && isExactLoopbackHost(host)
+              ) else {
             throw OpenKeyboardAIConnectorError.invalidURL
         }
         components.scheme = scheme
@@ -265,7 +301,8 @@ enum GatewayURLNormalizer {
             with: "",
             options: .regularExpression
         )
-        if components.path.caseInsensitiveCompare("/v1") == .orderedSame {
+        if provider == .openAICompatible,
+           components.path.caseInsensitiveCompare("/v1") == .orderedSame {
             components.path = ""
         }
         components.query = nil
@@ -279,7 +316,15 @@ enum GatewayURLNormalizer {
     }
 
     static func connectorBaseURLString(_ value: String) throws -> String {
-        let storedBase = try normalizedStoredBaseURLString(value)
+        try connectorBaseURLString(value, provider: .openAICompatible)
+    }
+
+    static func connectorBaseURLString(
+        _ value: String,
+        provider: OpenKeyboardAIProvider
+    ) throws -> String {
+        let storedBase = try normalizedStoredBaseURLString(value, provider: provider)
+        guard provider == .openAICompatible else { return storedBase }
         guard var components = URLComponents(string: storedBase) else {
             throw OpenKeyboardAIConnectorError.invalidURL
         }
@@ -297,5 +342,141 @@ enum GatewayURLNormalizer {
             throw OpenKeyboardAIConnectorError.invalidURL
         }
         return normalized
+    }
+
+    private static func containsUnsafeTransportCharacter(_ value: String) -> Bool {
+        value.unicodeScalars.contains { scalar in
+            let code = scalar.value
+            return code <= 0x20
+                || code == 0x7f
+                || (0x80...0x9f).contains(code)
+                || code == 0x2028
+                || code == 0x2029
+                || (0x202a...0x202e).contains(code)
+                || (0x2066...0x2069).contains(code)
+        }
+    }
+
+    private static func hasValidAuthorityShape(_ value: String) -> Bool {
+        guard let schemeRange = value.range(of: "://") else { return false }
+        let authorityStart = schemeRange.upperBound
+        let authorityEnd = value[authorityStart...].firstIndex(where: { character in
+            character == "/" || character == "?" || character == "#"
+        }) ?? value.endIndex
+        let authority = value[authorityStart..<authorityEnd]
+        guard !authority.isEmpty, !authority.contains("@") else { return false }
+
+        if authority.first == "[" {
+            guard let closingBracket = authority.firstIndex(of: "]"),
+                  closingBracket > authority.startIndex else { return false }
+            let suffix = authority[authority.index(after: closingBracket)...]
+            return suffix.isEmpty
+                || (suffix.first == ":"
+                    && suffix.count > 1
+                    && suffix.dropFirst().allSatisfy(isASCIIDigit))
+        }
+
+        guard authority.filter({ $0 == ":" }).count <= 1 else { return false }
+        guard let portSeparator = authority.lastIndex(of: ":") else { return true }
+        let host = authority[..<portSeparator]
+        let port = authority[authority.index(after: portSeparator)...]
+        return !host.isEmpty && !port.isEmpty && port.allSatisfy(isASCIIDigit)
+    }
+
+    private static func isExactLoopbackHost(_ value: String) -> Bool {
+        var host = value.lowercased()
+        if host.first == "[", host.last == "]" {
+            host.removeFirst()
+            host.removeLast()
+        }
+        return host == "localhost"
+            || isCanonicalIPv4Loopback(host)
+            || isIPv6Loopback(host)
+    }
+
+    private static func isCanonicalIPv4Loopback(_ value: String) -> Bool {
+        let octets = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard octets.count == 4 else { return false }
+        let numbers = octets.compactMap { octet -> Int? in
+            guard !octet.isEmpty,
+                  octet.count <= 3,
+                  octet.allSatisfy(isASCIIDigit),
+                  !(octet.count > 1 && octet.first == "0"),
+                  let number = Int(octet),
+                  (0...255).contains(number) else {
+                return nil
+            }
+            return number
+        }
+        return numbers.count == 4 && numbers[0] == 127
+    }
+
+    private static func isIPv6Loopback(_ value: String) -> Bool {
+        func parseGroups(_ part: Substring) -> [Int]? {
+            guard !part.isEmpty else { return [] }
+            let groups = part.split(separator: ":", omittingEmptySubsequences: false)
+            guard groups.allSatisfy({ group in
+                (1...4).contains(group.count) && group.allSatisfy(isASCIIHexDigit)
+            }) else { return nil }
+            return groups.compactMap { Int($0, radix: 16) }
+        }
+
+        guard value.allSatisfy({ $0 == ":" || isASCIIHexDigit($0) }) else { return false }
+        let parts = value.components(separatedBy: "::")
+        let groups: [Int]
+        if parts.count == 1 {
+            guard let parsed = parseGroups(value[...]) else { return false }
+            groups = parsed
+        } else if parts.count == 2 {
+            guard let leading = parseGroups(parts[0][...]),
+                  let trailing = parseGroups(parts[1][...]) else { return false }
+            let omittedCount = 8 - leading.count - trailing.count
+            guard omittedCount >= 1 else { return false }
+            groups = leading + Array(repeating: 0, count: omittedCount) + trailing
+        } else {
+            return false
+        }
+        return groups.count == 8
+            && groups.dropLast().allSatisfy { $0 == 0 }
+            && groups.last == 1
+    }
+
+    private static func hasAmbiguousPath(_ encodedPath: String) -> Bool {
+        guard !encodedPath.isEmpty else { return false }
+        let segments = encodedPath.split(separator: "/", omittingEmptySubsequences: false)
+        let firstContentIndex = encodedPath.hasPrefix("/") ? 1 : 0
+        let lastContentIndex = segments.lastIndex(where: { !$0.isEmpty }) ?? -1
+        if lastContentIndex >= firstContentIndex,
+           segments[firstContentIndex...lastContentIndex].contains(where: \.isEmpty) {
+            return true
+        }
+        return segments.contains { hasUnsafeDecodedPathSegment(String($0)) }
+    }
+
+    private static func hasUnsafeDecodedPathSegment(_ value: String) -> Bool {
+        var decoded = value
+        for _ in 0..<8 {
+            if decoded == "." || decoded == ".." || decoded.contains("/") || decoded.contains("\\") {
+                return true
+            }
+            guard let next = decoded.removingPercentEncoding else { return true }
+            if next == decoded { return false }
+            decoded = next
+        }
+        return true
+    }
+
+    private static func isASCIIDigit(_ character: Character) -> Bool {
+        character.unicodeScalars.count == 1
+            && character.unicodeScalars.first.map { (0x30...0x39).contains($0.value) } == true
+    }
+
+    private static func isASCIIHexDigit(_ character: Character) -> Bool {
+        character.unicodeScalars.count == 1
+            && character.unicodeScalars.first.map { scalar in
+                (0x30...0x39).contains(scalar.value)
+                    || (0x41...0x46).contains(scalar.value)
+                    || (0x61...0x66).contains(scalar.value)
+            } == true
     }
 }
