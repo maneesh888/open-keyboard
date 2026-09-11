@@ -83,8 +83,8 @@ struct KeyboardCompletionPanelState: Equatable {
     )
 
     static let grammarVersionApplied = KeyboardCompletionPanelState(
-        title: "Version applied",
-        message: "The reviewed version replaced the original text.",
+        title: "Changes applied",
+        message: "The suggested changes replaced the original text.",
         allowsGrammarCheckAgain: true
     )
 
@@ -113,14 +113,19 @@ struct KeyboardToolbarState: Equatable {
         case actions(status: String)
         case loading(title: String)
         case correctionPreview(count: Int, explanation: String, replacement: String, original: String)
+        case grammarWholeVersionProposal
         case error(kind: KeyboardActionErrorKind, message: String)
     }
 
     let kind: Kind
 
     var isActionEnabled: Bool {
-        if case .actions = kind { return true }
-        return false
+        switch kind {
+        case .actions, .grammarWholeVersionProposal:
+            return true
+        default:
+            return false
+        }
     }
 
     var issueCount: Int {
@@ -137,9 +142,14 @@ struct KeyboardToolbarState: Equatable {
         issueCount > 0
     }
 
+    var showsReviewAttention: Bool {
+        if case .grammarWholeVersionProposal = kind { return true }
+        return false
+    }
+
     var leadingSystemImage: String {
         switch kind {
-        case .fullAccessRequired, .notConfigured, .error:
+        case .fullAccessRequired, .notConfigured, .grammarWholeVersionProposal, .error:
             return "exclamationmark.triangle.fill"
         case .actions:
             return "keyboard"
@@ -160,6 +170,8 @@ struct KeyboardToolbarState: Equatable {
             return title
         case .correctionPreview(let count, _, _, _):
             return count == 1 ? "1 writing suggestion" : "\(count) writing suggestions"
+        case .grammarWholeVersionProposal:
+            return "View suggestions"
         case .error(let kind, _):
             return kind.title
         }
@@ -179,6 +191,8 @@ struct KeyboardToolbarState: Equatable {
             if !explanation.isEmpty { return explanation }
             if !replacement.isEmpty, !original.isEmpty { return "\(original) → \(replacement)" }
             return "Tap to apply"
+        case .grammarWholeVersionProposal:
+            return "Review changes"
         case .error(_, let message):
             return message
         }

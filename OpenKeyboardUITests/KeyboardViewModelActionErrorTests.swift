@@ -2605,6 +2605,42 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.completionPanelState, .noIssues)
     }
 
+    func testContextualGrammarCardsSupportMixedAcceptAndRejectWithoutOffsetDrift() async {
+        let source = "We should of warnd the users that the repot are slower when the server is busy."
+        let corrected = "We should have warnd the users that the report is slower when the server is busy."
+        let proxy = FakeTextDocumentProxy(text: source)
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: SuccessfulKeyboardAIService(result: Self.plainGrammarResult(corrected)),
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true
+        )
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { viewModel.suggestionState?.correctionCount == 3 && !viewModel.isGrammarCorrectionLoading }
+
+        XCTAssertNil(viewModel.grammarWholeVersionProposalState)
+        XCTAssertEqual(viewModel.panelMode, .correctionDetail)
+        XCTAssertEqual(viewModel.currentCorrection?.original, "of")
+        XCTAssertEqual(viewModel.currentCorrection?.replacement, "have")
+        viewModel.applyCurrentCorrection()
+
+        XCTAssertEqual(viewModel.currentCorrection?.original, "repot")
+        XCTAssertEqual(viewModel.currentCorrection?.replacement, "report")
+        viewModel.dismissCurrentCorrection()
+
+        XCTAssertEqual(viewModel.currentCorrection?.original, "are")
+        XCTAssertEqual(viewModel.currentCorrection?.replacement, "is")
+        viewModel.applyCurrentCorrection()
+
+        XCTAssertEqual(
+            proxy.text,
+            "We should have warnd the users that the repot is slower when the server is busy."
+        )
+        XCTAssertEqual(viewModel.panelMode, .correctionComplete)
+        XCTAssertEqual(viewModel.completionPanelState, .grammarReviewComplete)
+    }
+
     func testApplyingLastCorrectionChecksRemainingSentencesUntilDocumentIsClean() async {
         let source = "He go home every day. They is ready for the meeting."
         let afterFirstSentence = "He goes home every day. They is ready for the meeting."
@@ -2689,6 +2725,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
 
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+        XCTAssertEqual(viewModel.toolbarState.kind, .grammarWholeVersionProposal)
+        XCTAssertTrue(viewModel.toolbarState.showsReviewAttention)
+        XCTAssertFalse(viewModel.toolbarState.showsIssueCount)
         XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.originalText, source)
         XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.proposedText, proposed)
         XCTAssertEqual(
@@ -2706,6 +2745,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .keyboard)
         XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertTrue(viewModel.canOpenAnalysisResult)
+        XCTAssertEqual(viewModel.toolbarState.title, "View suggestions")
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "Review changes")
         viewModel.showAnalysisResult()
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
 
@@ -2739,6 +2780,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
         XCTAssertEqual(viewModel.completionPanelState, .grammarVersionApplied)
+        XCTAssertEqual(viewModel.completionPanelState.title, "Changes applied")
+        XCTAssertEqual(
+            viewModel.completionPanelState.message,
+            "The suggested changes replaced the original text."
+        )
     }
 
     func testStaleWholeVersionGrammarProposalNeverReplacesChangedDocument() async {
