@@ -1,0 +1,4 @@
+interface:
+  display_name: "Audit OpenKeyboard UI"
+  short_description: "Find source-evidenced UI and journey risks"
+  default_prompt: "Use $audit-openkeyboard-ui to audit this OpenKeyboard screen or journey without claiming runtime acceptance from source alone."

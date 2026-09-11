@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write OpenKeyboard Product Copy"
+  short_description: "Shape clear, consistent copy across product flows"
+  default_prompt: "Use $write-openkeyboard-product-copy to audit and improve the user-visible copy for this OpenKeyboard screen or journey."
