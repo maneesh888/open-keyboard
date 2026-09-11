@@ -250,6 +250,41 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
+    func testKeyboardAIServiceKeepsBoundedContextualCorrectionInIndividualReviewFlow() async throws {
+        let source = "We should of warnd the users that the repot are slower when the server is busy."
+        let corrected = "We should have warnd the users that the report is slower when the server is busy."
+        let responseBody = try JSONSerialization.data(withJSONObject: [
+            "choices": [
+                [
+                    "message": [
+                        "role": "assistant",
+                        "content": corrected
+                    ]
+                ]
+            ]
+        ])
+        let transport = CanonicalGatewayClientTestTransport(data: responseBody, statusCode: 200)
+        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+
+        let result = try await service.performResult(
+            action: .fixGrammar,
+            on: source,
+            config: configuredGateway
+        )
+
+        XCTAssertEqual(result.displayText, corrected)
+        XCTAssertEqual(result.grammarPresentation, .correctionCards)
+        guard case .showCorrections(let response) = KeyboardActionResultHandler.outcome(
+            operation: "fix_grammar",
+            result: result,
+            sourceText: source
+        ) else {
+            return XCTFail("Expected individual grammar correction cards")
+        }
+        XCTAssertEqual(response.corrections.map(\.original), ["of", "repot", "are"])
+        XCTAssertEqual(response.corrections.map(\.replacement), ["have", "report", "is"])
+    }
+
     func testKeyboardAIServicePresentsSafeStructuralGrammarResponseAsWholeVersionProposal() async throws {
         let source = "First sentnce needs correction.\nSecond line stays here."
         let proposed = "A different opening sentence appears.\nSecond line stays here."

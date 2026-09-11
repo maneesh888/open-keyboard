@@ -1135,6 +1135,447 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         )
     }
 
+    func testGrammarClassifierOffersIndividualCardsForBoundedContextualAndMechanicalEdits() throws {
+        let source = "We should of warnd the users that the repot are slower when the server is busy."
+        let corrected = "We should have warnd the users that the report is slower when the server is busy."
+
+        let classified = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+        XCTAssertEqual(classified.text, corrected)
+        XCTAssertEqual(classified.disposition, .narrowCorrections)
+
+        let result = KeyboardActionOperationResult.plainTextGrammarResponse(classified, original: source)
+        XCTAssertEqual(result.grammarPresentation, .correctionCards)
+        XCTAssertTrue(result.items.isEmpty, "Grammar cards must come from the local diff, not model offsets.")
+
+        guard case .showCorrections(let response) = KeyboardActionResultHandler.outcome(
+            operation: "fix_grammar",
+            result: result,
+            sourceText: source
+        ) else {
+            return XCTFail("Expected individual grammar correction cards")
+        }
+        XCTAssertEqual(response.corrections.map(\.original), ["of", "repot", "are"])
+        XCTAssertEqual(response.corrections.map(\.replacement), ["have", "report", "is"])
+        XCTAssertEqual(
+            response.corrections.map(\.range),
+            [
+                KeyboardTextRange(start: 10, end: 12),
+                KeyboardTextRange(start: 38, end: 43),
+                KeyboardTextRange(start: 44, end: 47)
+            ]
+        )
+        XCTAssertEqual(response.correctedText, corrected)
+        XCTAssertFalse(response.corrections.contains { $0.original.contains("warnd") })
+
+        var partialSession = GrammarCorrectionSession(
+            originalText: source,
+            correctedText: corrected,
+            documentRevision: 4
+        )
+        partialSession.decideCurrent(.rejected)
+        partialSession.decideCurrent(.accepted)
+        partialSession.decideCurrent(.rejected)
+        XCTAssertEqual(
+            partialSession.renderedText,
+            "We should of warnd the users that the report are slower when the server is busy."
+        )
+    }
+
+    func testContextualModalHaveRuleDoesNotAuthorizeUnrelatedWordChanges() throws {
+        let cases = [
+            (
+                "We should of course warn users.",
+                "We should have course warn users."
+            ),
+            (
+                "A cup of tea is ready for the team.",
+                "A cup have tea is ready for the team."
+            ),
+            (
+                "They repot the plants every spring.",
+                "They report the plants every spring."
+            ),
+            (
+                "We should of course warn teh users that the notes are ready.",
+                "We should have course warn the users that the notes is ready."
+            ),
+            (
+                "We should of went home already.",
+                "We should have went home already."
+            ),
+            (
+                "We should of feed the dog before leaving.",
+                "We should have feed the dog before leaving."
+            ),
+            (
+                "We should of made updates.",
+                "We should have mades updates."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal, "Unexpected cards for: \(source)")
+        }
+    }
+
+    func testContextualGrammarRulesStayInsideUninterruptedPhrases() throws {
+        let cases = [
+            (
+                "We should. of filed the report.",
+                "We should. have filed the report."
+            ),
+            (
+                "We should\nof filed the report.",
+                "We should\nhave filed the report."
+            ),
+            (
+                "Keep “we should of written this” as the verbatim fixture.",
+                "Keep “we should have written this” as the verbatim fixture."
+            ),
+            (
+                "Keep `we should of written this` as the exact code fixture.",
+                "Keep `we should have written this` as the exact code fixture."
+            ),
+            (
+                "```\nKeep `we should of written this` literal.\n```",
+                "```\nKeep `we should have written this` literal.\n```"
+            ),
+            (
+                "Keep <code>we should of written this</code> literal.",
+                "Keep <code>we should have written this</code> literal."
+            ),
+            (
+                "    we should of written this",
+                "    we should have written this"
+            ),
+            (
+                "Expected string = we should of written this",
+                "Expected string = we should have written this"
+            ),
+            (
+                "value = we should of written this",
+                "value = we should have written this"
+            ),
+            (
+                "/we should of written/",
+                "/we should have written/"
+            ),
+            (
+                "Example:\nWe should of written this.",
+                "Example:\nWe should have written this."
+            ),
+            (
+                "Do not edit: we should of written this.",
+                "Do not edit: we should have written this."
+            ),
+            (
+                "The phrase should of written appears in the fixture.",
+                "The phrase should have written appears in the fixture."
+            ),
+            (
+                "Keep the literal text the repot are slow when the server is busy unchanged.",
+                "Keep the literal text the report is slow when the server is busy unchanged."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal, "Unexpected cards for: \(source)")
+        }
+    }
+
+    func testContextualReportRuleRequiresLowercaseNounAndCoupledAgreementCorrection() throws {
+        let cases = [
+            (
+                "Every repot is stressful for the plant.",
+                "Every report is stressful for the plant."
+            ),
+            (
+                "The Repot is a plant-care app.",
+                "The Report is a plant-care app."
+            ),
+            (
+                "The repot are stressful for the plant.",
+                "The report are stressful for the plant."
+            ),
+            (
+                "The repot are stressful for young orchids.",
+                "The report is stressful for young orchids."
+            ),
+            (
+                "The repot are logged in this file.",
+                "The report is logged in this file."
+            ),
+            (
+                "The repot are slow according to the email.",
+                "The report is slow according to the email."
+            ),
+            (
+                "For my orchid, the repot are slower when the server is busy.",
+                "For my orchid, the report is slower when the server is busy."
+            ),
+            (
+                "For the cactus, the repot are slower when the server is busy.",
+                "For the cactus, the report is slower when the server is busy."
+            ),
+            (
+                "For the flower, the repot are slower when the server is busy.",
+                "For the flower, the report is slower when the server is busy."
+            ),
+            (
+                "This concerns an orchid. The repot are slower when the server is busy.",
+                "This concerns an orchid. The report is slower when the server is busy."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal, "Unexpected cards for: \(source)")
+        }
+    }
+
+    func testContextualReportRuleUsesASeparateBoundedCueScanOnEachSide() throws {
+        let source = "Note: the repot are slower when the backup server stalls."
+        let corrected = "Note: the report is slower when the backup server stalls."
+
+        let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+
+        XCTAssertEqual(result.disposition, .narrowCorrections)
+    }
+
+    func testContextualModalHaveRuleAllowsPlainProseCorrections() throws {
+        let cases = [
+            (
+                "We should of fixed the issue yesterday.",
+                "We should have fixed the issue yesterday."
+            ),
+            (
+                "They might of filed the report already.",
+                "They might have filed the report already."
+            ),
+            (
+                "We would of planned better.",
+                "We would have planned better."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .narrowCorrections, "Expected cards for: \(source)")
+        }
+    }
+
+    func testContextualModalHaveRuleSupportsCoordinatedParticipleCorrection() throws {
+        let cases = [
+            (
+                "We should of wrote the report yesterday.",
+                "We should have written the report yesterday.",
+                ["of", "wrote"],
+                ["have", "written"]
+            ),
+            (
+                "We should Of filed the report yesterday.",
+                "We should have filed the report yesterday.",
+                ["Of"],
+                ["have"]
+            )
+        ]
+
+        for (source, corrected, originals, replacements) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .narrowCorrections)
+            let edits = GrammarDiffService.edits(from: source, to: corrected)
+            XCTAssertEqual(edits.map(\.originalText), originals)
+            XCTAssertEqual(edits.map(\.replacementText), replacements)
+        }
+    }
+
+    func testIndividualGrammarClassificationPreservesRepeatedWordsUnicodeAndMixedDecisions() throws {
+        let source = "Cafe\u{301} 🙂 We should of filed teh report; later, we should of filed teh reply. 👩🏽‍💻"
+        let corrected = "Cafe\u{301} 🙂 We should have filed the report; later, we should have filed the reply. 👩🏽‍💻"
+        let classified = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+
+        XCTAssertEqual(classified.disposition, .narrowCorrections)
+        var session = GrammarCorrectionSession(
+            originalText: source,
+            correctedText: classified.text,
+            documentRevision: 9
+        )
+        XCTAssertEqual(session.edits.map(\.originalText), ["of", "teh", "of", "teh"])
+        XCTAssertEqual(session.edits.map(\.replacementText), ["have", "the", "have", "the"])
+        XCTAssertEqual(Set(session.edits.map(\.id)).count, 4)
+        XCTAssertTrue(zip(session.edits, session.edits.dropFirst()).allSatisfy {
+            $0.range.end <= $1.range.start
+        })
+        let sourceCharacters = Array(source)
+        XCTAssertEqual(session.edits.map {
+            String(sourceCharacters[$0.range.start..<$0.range.end])
+        }, session.edits.map(\.originalText))
+
+        session.decideCurrent(.accepted)
+        session.decideCurrent(.rejected)
+        session.decideCurrent(.accepted)
+        session.decideCurrent(.rejected)
+
+        XCTAssertTrue(session.isComplete)
+        XCTAssertEqual(
+            session.renderedText,
+            "Cafe\u{301} 🙂 We should have filed teh report; later, we should have filed teh reply. 👩🏽‍💻"
+        )
+    }
+
+    func testRepeatedWordDeletionStaysLocalToItsPhrase() throws {
+        let local = try GrammarCorrectionResponseValidator.classified(
+            "This is very clear.",
+            original: "This is very very clear."
+        )
+        XCTAssertEqual(local.disposition, .narrowCorrections)
+
+        let repeatedWell = try GrammarCorrectionResponseValidator.classified(
+            "If it goes well, we'll celebrate.",
+            original: "If it goes well well, we'll celebrate."
+        )
+        XCTAssertEqual(repeatedWell.disposition, .narrowCorrections)
+
+        let repeatedWithoutContraction = try GrammarCorrectionResponseValidator.classified(
+            "If it goes well, they celebrate.",
+            original: "If it goes well well, they celebrate."
+        )
+        XCTAssertEqual(repeatedWithoutContraction.disposition, .narrowCorrections)
+
+        let ambiguousFunctionWord = try GrammarCorrectionResponseValidator.classified(
+            "I know that is true.",
+            original: "I know that that is true."
+        )
+        XCTAssertEqual(ambiguousFunctionWord.disposition, .wholeVersionProposal)
+
+        let crossLine = try GrammarCorrectionResponseValidator.classified(
+            "Go\nnow.",
+            original: "Go\nGo now."
+        )
+        XCTAssertEqual(crossLine.disposition, .wholeVersionProposal)
+
+        for (source, corrected) in [
+            ("Go. Go now.", "Go now."),
+            ("Go, Go now.", "Go now."),
+            ("We should. to go.", "We should go."),
+            ("We teh. report.", "We the report."),
+            ("Go. Go now.", "Go Go. now."),
+            ("Go. Go now.", "Go Go! now."),
+            ("Go. Go now.", "Go Go; now."),
+            ("A. B, C.", "A, B. C."),
+            ("Wait. Go.", "Wait, Go."),
+            ("Wait. Go.", "Wait Go."),
+            ("Wait Go.", "Wait. Go."),
+            ("Wait！ Go.", "Wait Go."),
+            ("Wait。 Go.", "Wait Go."),
+            ("Read. Report now.", "Read the. Report now."),
+            ("I saw apple. Wait. Go.", "I saw an apple. Wait Go."),
+            (
+                "Go. Go now very very today before dusk.",
+                "Go Go! now very today before dusk."
+            ),
+            ("If it goes well we'll celebrate.", "If it goes we'll celebrate.")
+        ] {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal, "Unexpected cards for: \(source)")
+        }
+
+        for (source, corrected) in [
+            ("Wait. Go.", "Wait! Go."),
+            ("Hello world.", "Hello, world."),
+            (
+                "Go. Go now very very today before dusk.",
+                "Go! Go now very today before dusk."
+            )
+        ] {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .narrowCorrections, "Expected cards for: \(source)")
+        }
+
+        XCTAssertThrowsError(
+            try GrammarCorrectionResponseValidator.classified(
+                "“Go now.”",
+                original: "“Go” Go now."
+            )
+        )
+    }
+
+    func testSymbolSeparatedWordMovementUsesTheSameLexicalBoundariesAsEditValidation() throws {
+        let cases = [
+            ("We saw the+report today.", "We saw report+the today."),
+            ("We saw the$report today.", "We saw report$the today."),
+            ("We saw the🙂report today.", "We saw report🙂the today."),
+            ("a report arrived.", "report a arrived."),
+            ("I saw adress  the today.", "I saw an address today."),
+            (
+                "I bought the apple and saw orange.",
+                "I bought apple and saw an orange."
+            ),
+            (
+                "I saw a red dog and old owls.",
+                "I saw red dogs and an old owl."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .wholeVersionProposal, "Unexpected cards for: \(source)")
+        }
+    }
+
+    func testBalancedIndependentGrammarReplacementsAreNotMistakenForMovement() throws {
+        let cases = [
+            (
+                "A apple and an banana arrived.",
+                "An apple and a banana arrived."
+            ),
+            (
+                "The notes is ready and the report are late.",
+                "The notes are ready and the report is late."
+            )
+        ]
+
+        for (source, corrected) in cases {
+            let result = try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            XCTAssertEqual(result.disposition, .narrowCorrections, "Expected independent cards for: \(source)")
+        }
+    }
+
+    func testAmbiguousAndLargerPhraseHunksStayInWholeVersionReview() throws {
+        let ambiguousLocalRanges = try GrammarCorrectionResponseValidator.classified(
+            "We saw the client today.",
+            original: "We saw teh  cliant today."
+        )
+        XCTAssertEqual(ambiguousLocalRanges.disposition, .wholeVersionProposal)
+
+        let larger = try GrammarCorrectionResponseValidator.classified(
+            "We saw the client timeline today.",
+            original: "We saw teh  cliant  timline today."
+        )
+        XCTAssertEqual(larger.disposition, .wholeVersionProposal)
+
+        let majorCasing = try GrammarCorrectionResponseValidator.classified(
+            "ONE TWO THREE FOUR FIVE SIX SEVEN EIGHT NINE TEN.",
+            original: "one two three four five six seven eight nine ten."
+        )
+        XCTAssertEqual(majorCasing.disposition, .wholeVersionProposal)
+    }
+
+    func testGrammarSafetyRejectsIntroducedUnicodeControlsAndFormats() {
+        let source = "The report is ready."
+
+        for corrected in [
+            "The report\u{202E} is ready.",
+            "The report\u{200B} is ready."
+        ] {
+            XCTAssertThrowsError(
+                try GrammarCorrectionResponseValidator.classified(corrected, original: source)
+            )
+        }
+    }
+
     func testSafeReorderedExpandedAndShortenedGrammarOutputsBecomeWholeVersionProposals() throws {
         let cases = [
             (
