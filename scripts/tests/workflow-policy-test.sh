@@ -16,6 +16,8 @@ DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
 PRODUCT_COPY_SKILL="$ROOT/.agents/skills/write-openkeyboard-product-copy/SKILL.md"
 PRODUCT_COPY_INTERFACE="$ROOT/.agents/skills/write-openkeyboard-product-copy/agents/openai.yaml"
+UI_AUDIT_SKILL="$ROOT/.agents/skills/audit-openkeyboard-ui/SKILL.md"
+UI_AUDIT_INTERFACE="$ROOT/.agents/skills/audit-openkeyboard-ui/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
@@ -55,6 +57,8 @@ for required_file in \
   "$DEVELOP_INTERFACE" \
   "$PRODUCT_COPY_SKILL" \
   "$PRODUCT_COPY_INTERFACE" \
+  "$UI_AUDIT_SKILL" \
+  "$UI_AUDIT_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
   "$MILESTONE_PLAN_SKILL" \
@@ -351,6 +355,156 @@ ruby -e '
     end
   end
 ' "$PRODUCT_COPY_SKILL" "$PRODUCT_COPY_INTERFACE" "$ROOT/AGENTS.md" "$DEVELOP_SKILL" "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
+rg --quiet '^name: audit-openkeyboard-ui$' "$UI_AUDIT_SKILL"
+ruby -e '
+  require "yaml"
+
+  normalize = ->(text) { text.gsub(/\s+/, " ").strip }
+  require_match = lambda do |label, text, pattern|
+    abort "The UI-audit policy is missing #{label}." unless text.match?(pattern)
+  end
+
+  skill_source = File.read(ARGV.fetch(0))
+  interface_path = ARGV.fetch(1)
+  agents = normalize.call(File.read(ARGV.fetch(2)))
+  develop = normalize.call(File.read(ARGV.fetch(3)))
+  workflow = normalize.call(File.read(ARGV.fetch(4)))
+
+  frontmatter_match = skill_source.match(/\A---\s*\n(?<yaml>.*?)\n---\s*\n/m)
+  abort "The UI-audit skill is missing YAML frontmatter." unless frontmatter_match
+  frontmatter = YAML.safe_load(frontmatter_match[:yaml], aliases: false)
+  abort "The UI-audit skill frontmatter must be a mapping." unless frontmatter.is_a?(Hash)
+  abort "The UI-audit skill has the wrong canonical name." unless frontmatter["name"] == "audit-openkeyboard-ui"
+  description = frontmatter["description"]
+  unless description.is_a?(String) &&
+      description.match?(/Audit OpenKeyboard SwiftUI screens and end-to-end journeys/) &&
+      description.match?(/route wording-only analysis to the product-copy skill/) &&
+      description.match?(/authorized fixes to the development skill/)
+    abort "The UI-audit skill description must advertise journey-aware audits and its copy/fix handoffs."
+  end
+
+  interface = YAML.load_file(interface_path)
+  abort "The UI-audit interface metadata must be a mapping." unless interface.is_a?(Hash)
+  interface_values = interface["interface"]
+  abort "The UI-audit interface metadata is missing interface values." unless interface_values.is_a?(Hash)
+  default_prompt = interface_values["default_prompt"]
+  unless default_prompt.is_a?(String) &&
+      default_prompt.match?(/\AUse \$audit-openkeyboard-ui(?:\s|[.,:;])/)
+    abort "The UI-audit interface default prompt must explicitly invoke $audit-openkeyboard-ui."
+  end
+  policy = interface["policy"]
+  unless policy.nil?
+    abort "The UI-audit interface policy must be a mapping when present." unless policy.is_a?(Hash)
+    if policy.key?("allow_implicit_invocation")
+      value = policy["allow_implicit_invocation"]
+      implicit_allowed = value == true || (value.is_a?(String) && value.casecmp("true").zero?)
+      abort "The UI-audit skill must remain available for implicit workflow routing." unless implicit_allowed
+    end
+  end
+
+  skill = normalize.call(skill_source)
+  skill_requirements = {
+    "read-only audit authority" =>
+      /Treat audit, review, diagnosis, and recommendation requests as read-only\..*Do not edit tracked files, stage, commit, publish, or change a PR during an audit\./,
+    "production reachability before UI judgment" =>
+      /Find the production app or extension entry point and the reachable call site.*Separate shipping paths from previews, component hosts, debug launch states, test-only routes, and dead or unreachable declarations\./,
+    "control-to-behavior tracing" =>
+      /Trace every material control to its production action and observable state transition\..*button-shaped view, accessibility identifier, or test fixture does not prove that a production action works\./,
+    "state-producer tracing" =>
+      /Enumerate reachable states from the real state producers, including applicable default, empty, loading, disabled, stale, success, partial, permission-needed, offline, authentication, timeout, cancellation, destructive, and recovery states\./,
+    "layout, hierarchy, and adaptive presentation review" =>
+      /Check reading order, visual priority, grouping, spacing, alignment, safe areas, scrolling, overlays.*Inspect fixed widths and heights.*Dynamic Type.*localization expansion\./,
+    "tap-target review" =>
+      /Check actual interactive bounds, padding, overlap, `contentShape`, and enabled state for tap targets\..*visible symbol size alone\./,
+    "control, CTA, and state-behavior review" =>
+      /Verify that every control.s affordance, enabled\/disabled appearance, loading behavior, action, success state, and retry path agree\./,
+    "accessibility semantics and operation review" =>
+      /Check accessible names, values, traits, hints, grouping, focus order, and state announcements\..*`accessibilityIdentifier` supports automation but is not a VoiceOver label\./,
+    "theme and MVVM review" =>
+      /Compare colors, typography, surfaces, strokes, shadows, radii, and semantic states with `OpenKeyboardTheme`\..*Views present data.*ViewModels own UI state and actions; services own networking, persistence, App Group, Keychain, gateway, and file I\/O\./,
+    "source-only evidence ceiling" =>
+      /Source, previews, fixtures, debug hosts, tests, accessibility metadata, and XCTest attachments are useful evidence, but none proves the normally rendered or operated product\..*Never claim visual, interaction, or runtime acceptance from source inspection alone\./,
+    "adjacent-screen continuity without scope expansion" =>
+      /For an isolated-screen request, inspect adjacent screens only far enough to detect broken entry, exit, terminology, state, or interaction continuity\..*Do not expand the requested deliverable or later fix scope without the user.s authorization\./,
+    "wording-specialist delegation" =>
+      /Use `\$write-openkeyboard-product-copy` for wording-specific analysis: titles, labels, explanatory text, claims, terminology, tone, and the semantic accuracy of CTA language\..*This skill retains ownership of control behavior, action reachability, placement, hierarchy, layout fit, accessibility behavior, navigation, and state transitions\./,
+    "authorized-fix handoff" =>
+      /After an explicit implementation request, use `\$develop-openkeyboard` and preserve the agreed finding IDs as the work boundary\..*Fix only the authorized target surfaces/
+  }
+  skill_requirements.each do |label, pattern|
+    require_match.call(label, skill, pattern)
+  end
+
+  classification_section = skill_source.match(
+    /^## Classify every finding\s*$\n(?<body>.*?)(?=^## |\z)/m
+  )&.[](:body)
+  abort "The UI-audit skill is missing its finding-classification section." unless classification_section
+  classification_rules = classification_section.split(/\nUse these severities consistently:/, 2).first
+  classifications = classification_rules.scan(/^- \*\*(.+?)\*\* —/).flatten
+  expected_classifications = [
+    "confirmed from code",
+    "likely visual risk",
+    "requires simulator verification"
+  ]
+  unless classifications == expected_classifications &&
+      classification_rules.include?("Use exactly one of these classifications for every reported finding")
+    abort "Every UI-audit finding must use exactly the three canonical evidence classifications."
+  end
+
+  finding_header = skill_source.lines.find { |line| line.start_with?("| ID | Severity | Classification |") }
+  abort "The UI-audit report is missing its findings table." unless finding_header
+  finding_fields = finding_header.strip.split("|").map(&:strip).reject(&:empty?)
+  expected_fields = [
+    "ID",
+    "Severity",
+    "Classification",
+    "Surface / state",
+    "Exact source evidence",
+    "User impact",
+    "Recommendation",
+    "Required verification"
+  ]
+  abort "UI-audit findings must report severity, source evidence, impact, recommendation, and verification." unless
+    finding_fields == expected_fields
+
+  routing_requirements = {
+    "AGENTS.md read-only audit route" => [
+      agents,
+      /Route a read-only UI audit through `\$audit-openkeyboard-ui`\./
+    ],
+    "AGENTS.md authorized-fix route" => [
+      agents,
+      /For authorized UI fixes, use that skill within `\$develop-openkeyboard`.*review adjacent-screen continuity without expanding the edit scope\./
+    ],
+    "AGENTS.md evidence and wording ownership" => [
+      agents,
+      /[Dd]elegate wording-specific analysis to `\$write-openkeyboard-product-copy`\..*Source inspection may establish code findings and visual risks, but never rendered or runtime acceptance\./
+    ],
+    "development-skill read-only and authorized-fix routes" => [
+      develop,
+      /Route UI audit requests through the read-only `\$audit-openkeyboard-ui`\..*When UI fixes are authorized, use it inside this implementation loop to trace SwiftUI controls and visible states through navigation, ViewModels, production behavior, and relevant tests before editing\./
+    ],
+    "development-skill scope and specialist boundaries" => [
+      develop,
+      /Review adjacent screens for journey continuity without adding them to the edit scope\..*delegate wording-specific analysis to `\$write-openkeyboard-product-copy`\..*never present source inspection as rendered or runtime acceptance\./
+    ],
+    "documented read-only audit route" => [
+      workflow,
+      /UI audit requests route to the read-only `\$audit-openkeyboard-ui`\..*without silently expanding the edit scope\./
+    ],
+    "documented specialist and evidence boundaries" => [
+      workflow,
+      /It owns layout, behavior, accessibility, and interaction findings while delegating wording-specific analysis to `\$write-openkeyboard-product-copy`\..*Source-only results must use `confirmed from code`, `likely visual risk`, or `requires simulator verification`; they never establish rendered or runtime acceptance\./
+    ],
+    "documented authorized-fix route" => [
+      workflow,
+      /When fixes are authorized, use the audit inside `\$develop-openkeyboard` and apply the normal implementation and proof gates\./
+    ]
+  }
+  routing_requirements.each do |label, (source, pattern)|
+    require_match.call(label, source, pattern)
+  end
+' "$UI_AUDIT_SKILL" "$UI_AUDIT_INTERFACE" "$ROOT/AGENTS.md" "$DEVELOP_SKILL" "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"

@@ -37,20 +37,28 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 1. Preserve unrelated work and keep edits inside the work order.
 2. Follow the repository's MVVM, theme, App Group, Keychain, extension-lifecycle, gateway, semantic
    contract, and secret boundaries.
-3. For work centered on user-visible app or keyboard wording, use
+3. Route UI audit requests through the read-only `$audit-openkeyboard-ui`. When UI fixes are
+   authorized, use it inside this implementation loop to trace SwiftUI controls and visible states
+   through navigation, ViewModels, production behavior, and relevant tests before editing. Review
+   adjacent screens for journey continuity without adding them to the edit scope. Keep ownership of
+   layout, behavior, accessibility, and interaction findings in the UI audit; delegate
+   wording-specific analysis to `$write-openkeyboard-product-copy`. Classify source-only findings
+   as `confirmed from code`, `likely visual risk`, or `requires simulator verification`, and never
+   present source inspection as rendered or runtime acceptance.
+4. For work centered on user-visible app or keyboard wording, use
    `$write-openkeyboard-product-copy` to review the target screen, incoming and outgoing journey,
    product claims, terminology, reachable states, and accessibility labels before editing.
-4. Add or update focused automated regression coverage for changed behavior.
-5. Run affected tests while iterating, then select the final gate:
+5. Add or update focused automated regression coverage for changed behavior.
+6. Run affected tests while iterating, then select the final gate:
    - **Fast/local policy:** affected tests plus `./scripts/check.sh --hygiene`.
    - **Standard completed work:** `./scripts/check.sh --quick`.
    - **Release/publish:** exact-head `./scripts/check.sh --full`, classifier-selected live gate,
      required runtime proof, GitHub checks, and independent review.
-6. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
+7. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
    changes. Use `gateway-differential` only for the classifier-selected low/high surfaces or
    pre-release verification; preserve exact role/model identity and treat an unstable low boundary
    as diagnostic/`UNVERIFIED`.
-7. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
+8. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
    plus content before committing.
 
 In proof-first mode, use existing routes or temporary non-repository harnesses and report results

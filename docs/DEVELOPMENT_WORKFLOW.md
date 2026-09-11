@@ -21,9 +21,9 @@ when a task needs route selection, hooks, CI, signing, deployment, or proof deta
 
 Repository automation is split across `$develop-openkeyboard`, the read-only compact
 `$plan-openkeyboard-work-package` route, the read-only phased
-`$plan-openkeyboard-major-milestone` route, the product-language specialist
-`$write-openkeyboard-product-copy`, and `$review-verify-merge-pr`. These skills route work but do
-not weaken the proof requirements below.
+`$plan-openkeyboard-major-milestone` route, the UI-audit specialist `$audit-openkeyboard-ui`, the
+product-language specialist `$write-openkeyboard-product-copy`, and `$review-verify-merge-pr`.
+These skills route work but do not weaken the proof requirements below.
 
 ## Authority and proof-first mode
 
@@ -461,6 +461,15 @@ the protected `app-store-connect` environment.
 `$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release
 mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
 change to the repository scripts above.
+
+UI audit requests route to the read-only `$audit-openkeyboard-ui`. It traces SwiftUI controls,
+visible states, navigation, ViewModels, production behavior, and relevant tests across the requested
+screen and adjacent journey, without silently expanding the edit scope. It owns layout, behavior,
+accessibility, and interaction findings while delegating wording-specific analysis to
+`$write-openkeyboard-product-copy`. Source-only results must use `confirmed from code`, `likely
+visual risk`, or `requires simulator verification`; they never establish rendered or runtime
+acceptance. When fixes are authorized, use the audit inside `$develop-openkeyboard` and apply the
+normal implementation and proof gates.
 
 For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs
 inside the development route. It reviews the requested screen together with its incoming and
