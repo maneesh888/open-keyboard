@@ -278,12 +278,79 @@ rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
 rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
 rg --quiet '^name: write-openkeyboard-product-copy$' "$PRODUCT_COPY_SKILL"
 rg --fixed-strings --quiet 'predecessor to target to successor' "$PRODUCT_COPY_SKILL"
-rg --fixed-strings --quiet 'Vendor/semantic-prompt-contract' "$PRODUCT_COPY_SKILL"
-rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$PRODUCT_COPY_INTERFACE"
-if rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PRODUCT_COPY_INTERFACE"; then
-  echo "The product-copy skill must remain available for implicit workflow routing." >&2
-  exit 1
-fi
+ruby -e '
+  require "yaml"
+
+  normalize = ->(path) { File.read(path).gsub(/\s+/, " ").strip }
+  skill = normalize.call(ARGV.fetch(0))
+  interface_path = ARGV.fetch(1)
+  agents = normalize.call(ARGV.fetch(2))
+  develop = normalize.call(ARGV.fetch(3))
+  workflow = normalize.call(ARGV.fetch(4))
+
+  expected_agents_route =
+    "For work centered on user-visible app or keyboard wording, use " \
+    "`$write-openkeyboard-product-copy` within `$develop-openkeyboard` to shape the target screen " \
+    "and its connected journey before editing."
+  abort "AGENTS.md must route copy-centered implementation through the product-copy specialist inside the development route." unless
+    agents.include?(expected_agents_route)
+
+  expected_develop_route =
+    "For work centered on user-visible app or keyboard wording, use " \
+    "`$write-openkeyboard-product-copy` to review the target screen, incoming and outgoing journey, " \
+    "product claims, terminology, reachable states, and accessibility labels before editing."
+  abort "The development skill must apply the product-copy specialist to screen, journey, claim, state, and accessibility decisions before editing." unless
+    develop.include?(expected_develop_route)
+
+  workflow_requirements = {
+    "development route" =>
+      "For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs inside the development route.",
+    "screen-to-journey review" =>
+      "It reviews the requested screen together with its incoming and outgoing journey, balances interface clarity with truthful product positioning, checks reachable states and accessibility language, and protects shared terminology.",
+    "read-only audit boundary" =>
+      "A copy audit remains read-only unless implementation is already authorized.",
+    "semantic prompt boundary" =>
+      "The skill never edits canonical semantic prompts or generated user content",
+    "UI proof boundary" =>
+      "an implemented UI-copy change still requires the normal UI proof route."
+  }
+  workflow_requirements.each do |label, requirement|
+    abort "The development workflow is missing the product-copy #{label}." unless workflow.include?(requirement)
+  end
+
+  semantic_scope =
+    "Keep semantic operation identifiers, model instructions, prompt wording, response schemas, " \
+    "and generated response content in the pinned `Vendor/semantic-prompt-contract`. This skill owns " \
+    "product-interface language, not model prompts or the user\u0027s generated writing."
+  abort "The product-copy specialist must exclude canonical model prompts and generated user content from its scope." unless
+    skill.include?(semantic_scope)
+
+  runtime_boundary =
+    "User-visible copy changes are UI changes, so follow `AGENTS.md` for automated regression " \
+    "evidence and normal simulator runtime proof before push."
+  abort "The product-copy specialist must require normal simulator runtime proof for implemented UI copy." unless
+    skill.include?(runtime_boundary)
+
+  interface = YAML.load_file(interface_path)
+  abort "The product-copy interface metadata must be a mapping." unless interface.is_a?(Hash)
+  interface_values = interface["interface"]
+  abort "The product-copy interface metadata is missing interface values." unless interface_values.is_a?(Hash)
+  default_prompt = interface_values["default_prompt"]
+  unless default_prompt.is_a?(String) &&
+      default_prompt.match?(/\AUse \$write-openkeyboard-product-copy(?:\s|[.,:;])/)
+    abort "The product-copy interface default prompt must explicitly invoke $write-openkeyboard-product-copy."
+  end
+
+  policy = interface["policy"]
+  unless policy.nil?
+    abort "The product-copy interface policy must be a mapping when present." unless policy.is_a?(Hash)
+    if policy.key?("allow_implicit_invocation")
+      value = policy["allow_implicit_invocation"]
+      implicit_allowed = value == true || (value.is_a?(String) && value.casecmp("true").zero?)
+      abort "The product-copy skill must remain available for implicit workflow routing." unless implicit_allowed
+    end
+  end
+' "$PRODUCT_COPY_SKILL" "$PRODUCT_COPY_INTERFACE" "$ROOT/AGENTS.md" "$DEVELOP_SKILL" "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
@@ -295,8 +362,6 @@ rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
 rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
 rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
-rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$ROOT/AGENTS.md"
-rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
