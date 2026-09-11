@@ -2745,7 +2745,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .keyboard)
         XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertTrue(viewModel.canOpenAnalysisResult)
-        XCTAssertEqual(viewModel.toolbarState.title, "Proposed version")
+        XCTAssertEqual(viewModel.toolbarState.title, "Suggested version")
         XCTAssertEqual(viewModel.toolbarState.subtitle, "Review changes")
         viewModel.showAnalysisResult()
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)

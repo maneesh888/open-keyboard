@@ -346,7 +346,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
     func testWholeVersionProposalUsesReviewAttentionInsteadOfInventingIssueCount() {
         let state = KeyboardToolbarState(kind: .grammarWholeVersionProposal)
 
-        XCTAssertEqual(state.title, "Proposed version")
+        XCTAssertEqual(state.title, "Suggested version")
         XCTAssertEqual(state.subtitle, "Review changes")
         XCTAssertTrue(state.isActionEnabled)
         XCTAssertTrue(state.showsReviewAttention)

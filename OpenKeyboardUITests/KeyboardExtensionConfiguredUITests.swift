@@ -485,9 +485,9 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         keyboardApp.buttons["ai_grammar_proposal_back"].tap()
         let reviewBadge = keyboardApp.buttons["keyboard_review_required_badge"]
         XCTAssertTrue(reviewBadge.waitForExistence(timeout: 2))
-        XCTAssertEqual(reviewBadge.label, "Proposed version needs review")
+        XCTAssertEqual(reviewBadge.label, "Suggested version needs review")
         XCTAssertFalse(keyboardApp.buttons["keyboard_issue_count_badge"].exists)
-        XCTAssertTrue(keyboardApp.staticTexts["Proposed version"].exists)
+        XCTAssertTrue(keyboardApp.staticTexts["Suggested version"].exists)
         XCTAssertTrue(keyboardApp.staticTexts["Review changes"].exists)
 
         reviewBadge.tap()

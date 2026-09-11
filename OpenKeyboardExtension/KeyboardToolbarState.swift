@@ -171,7 +171,7 @@ struct KeyboardToolbarState: Equatable {
         case .correctionPreview(let count, _, _, _):
             return count == 1 ? "1 writing suggestion" : "\(count) writing suggestions"
         case .grammarWholeVersionProposal:
-            return "Proposed version"
+            return "Suggested version"
         case .error(let kind, _):
             return kind.title
         }

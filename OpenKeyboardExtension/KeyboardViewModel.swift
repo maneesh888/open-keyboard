@@ -781,7 +781,7 @@ final class KeyboardViewModel: ObservableObject {
         isGrammarCorrectionLoading = false
 
         if grammarWholeVersionProposalState != nil {
-            aiStatus = "Proposed version ready"
+            aiStatus = "Suggested version ready"
             panelMode = .grammarWholeVersionProposal
         } else if currentCorrection != nil {
             aiStatus = "Suggestions ready"
@@ -983,7 +983,7 @@ final class KeyboardViewModel: ObservableObject {
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
-            aiStatus = "Proposed version ready"
+            aiStatus = "Suggested version ready"
             panelMode = .grammarWholeVersionProposal
         case .replaceText(let output):
             let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1220,7 +1220,7 @@ final class KeyboardViewModel: ObservableObject {
         lastAnalyzedText = nil
         continueGrammarReviewAfterAppliedChange(
             fallbackCompletionState: .grammarVersionApplied,
-            fallbackStatus: "Proposed version applied"
+            fallbackStatus: "Suggested version applied"
         )
     }
 
@@ -1578,7 +1578,7 @@ final class KeyboardViewModel: ObservableObject {
                         rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
                         completionPanelState = .allDone
-                        aiStatus = "Proposed version ready"
+                        aiStatus = "Suggested version ready"
                         isPerformingAIAction = false
                         panelMode = .grammarWholeVersionProposal
                     case .showRewriteOptions(let options):
@@ -2487,7 +2487,7 @@ final class KeyboardViewModel: ObservableObject {
                 actionPanelState = nil
                 rewriteOptionsState = nil
                 actionError = nil
-                aiStatus = "Proposed version ready"
+                aiStatus = "Suggested version ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone

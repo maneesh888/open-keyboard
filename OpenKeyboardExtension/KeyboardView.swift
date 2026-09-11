@@ -338,7 +338,7 @@ private struct KeyboardAIToolbar: View {
 
     private var statusIconAccessibilityLabel: String {
         if state.showsIssueCount { return "\(state.issueCount) writing suggestions" }
-        if state.showsReviewAttention { return "Proposed version needs review" }
+        if state.showsReviewAttention { return "Suggested version needs review" }
         return "Open Keyboard status"
     }
 
@@ -1186,7 +1186,7 @@ private struct GrammarWholeVersionProposalPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 9) {
                 OpenKeyboardBrandMark(size: 30, symbolSize: 13)
-                Text("Proposed version")
+                Text("Suggested version")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.primary)
                     .lineLimit(1)
