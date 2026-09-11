@@ -81,7 +81,12 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         from request: OpenKeyboardAIRequest,
         providerID: String
     ) -> UniversalAiRequest {
-        UniversalAiRequest(
+        let sampling = samplingParameters(
+            providerID: providerID,
+            temperature: request.temperature,
+            topP: request.topP
+        )
+        return UniversalAiRequest(
             target: UniversalAiTarget(
                 providerId: UniversalAiProviderId(
                     rawValue: providerID
@@ -97,11 +102,30 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
             responseFormat: .plainText,
             generation: UniversalAiGenerationParameters(
                 maxOutputTokens: request.maxOutputTokens,
-                temperature: request.temperature,
-                topP: request.topP,
+                temperature: sampling.temperature,
+                topP: sampling.topP,
                 stopSequences: request.stopSequences
             )
         )
+    }
+
+    /// Sampling controls are semantic preferences, but they are not portable across every
+    /// provider/model pair. Anthropic's connector adapter rejects explicit sampling controls,
+    /// while some OpenAI Responses models reject non-default temperature or top-p values. Let
+    /// those providers select their supported defaults while preserving the canonical prompt,
+    /// token limit, and explicit sampling controls for OpenRouter and compatible gateways.
+    private static func samplingParameters(
+        providerID: String,
+        temperature: Double?,
+        topP: Double?
+    ) -> (temperature: Double?, topP: Double?) {
+        switch providerID {
+        case OpenKeyboardAIProvider.openAI.rawValue,
+             OpenKeyboardAIProvider.anthropic.rawValue:
+            return (nil, nil)
+        default:
+            return (temperature, topP)
+        }
     }
 
     static func plainText(

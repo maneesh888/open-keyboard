@@ -17,6 +17,41 @@ set -euo pipefail
 
 MODE="${1:-}"
 
+# Capture non-exported route controls before the pre-child scrub removes their ambient names.
+# Credential values are never captured here; seed files remain the only source of live secrets.
+initial_seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-}"
+initial_live_profile="${OPEN_KEYBOARD_LIVE_PROFILE:-}"
+initial_uac_checkout="${OPEN_KEYBOARD_UAC_LIVE_CHECKOUT:-}"
+initial_provider_evidence_output="${OPEN_KEYBOARD_LIVE_PROVIDER_EVIDENCE_OUTPUT:-}"
+initial_differential_evidence_output="${OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT:-}"
+initial_live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-}"
+initial_simulator_template="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-}"
+initial_screenshot_dir="${OPEN_KEYBOARD_REAL_SCREENSHOT_DIR:-}"
+initial_screenshot_phrase="${OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE:-}"
+export -n \
+  initial_seed_file \
+  initial_live_profile \
+  initial_uac_checkout \
+  initial_provider_evidence_output \
+  initial_differential_evidence_output \
+  initial_live_test_identifier \
+  initial_simulator_template \
+  initial_screenshot_dir \
+  initial_screenshot_phrase
+
+openkeyboard_unset_initial_route_controls() {
+  unset \
+    initial_seed_file \
+    initial_live_profile \
+    initial_uac_checkout \
+    initial_provider_evidence_output \
+    initial_differential_evidence_output \
+    initial_live_test_identifier \
+    initial_simulator_template \
+    initial_screenshot_dir \
+    initial_screenshot_phrase
+}
+
 openkeyboard_unset_ambient_private_live_values() {
   unset \
     OPENAI_API_KEY \
@@ -716,10 +751,11 @@ case "$MODE" in
     ;;
 
   live-gateway-smoke)
-    requested_seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
-    requested_live_profile="${OPEN_KEYBOARD_LIVE_PROFILE:-reference}"
-    export -n requested_seed_file requested_live_profile
     openkeyboard_unset_seed_backed_live_ambient_inputs
+    requested_seed_file="${initial_seed_file:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+    requested_live_profile="${initial_live_profile:-reference}"
+    export -n requested_seed_file requested_live_profile
+    openkeyboard_unset_initial_route_controls
     echo -e "${YELLOW}Running opt-in live gateway Test Connection smoke on iPhone 16...${NC}"
     require_xcodebuild
     begin_sensitive_live_workspace live-gateway-smoke
@@ -766,12 +802,13 @@ case "$MODE" in
     ;;
 
   live-provider-matrix)
-    requested_uac_checkout="${OPEN_KEYBOARD_UAC_LIVE_CHECKOUT:-}"
-    requested_provider_evidence_output="${OPEN_KEYBOARD_LIVE_PROVIDER_EVIDENCE_OUTPUT:-}"
-    export -n requested_uac_checkout requested_provider_evidence_output
     # This route is seed-only. Remove every ambient provider/test credential before even the
     # toolchain preflight or build can inherit it; each row reloads only its guarded seed values.
     openkeyboard_unset_seed_backed_live_ambient_inputs
+    requested_uac_checkout="$initial_uac_checkout"
+    requested_provider_evidence_output="$initial_provider_evidence_output"
+    export -n requested_uac_checkout requested_provider_evidence_output
+    openkeyboard_unset_initial_route_controls
     echo -e "${YELLOW}Running the opt-in four-provider Settings/connector live matrix...${NC}"
     require_xcodebuild
     begin_sensitive_live_workspace live-provider-matrix
@@ -884,10 +921,11 @@ case "$MODE" in
     ;;
 
   live-model-differential)
-    requested_seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
-    requested_differential_evidence_output="${OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT:-}"
-    export -n requested_seed_file requested_differential_evidence_output
     openkeyboard_unset_seed_backed_live_ambient_inputs
+    requested_seed_file="${initial_seed_file:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+    requested_differential_evidence_output="$initial_differential_evidence_output"
+    export -n requested_seed_file requested_differential_evidence_output
+    openkeyboard_unset_initial_route_controls
     echo -e "${YELLOW}Running targeted two-profile live-model differential ${LIVE_DIFFERENTIAL_EXECUTION_MODE}...${NC}"
     require_xcodebuild
     begin_sensitive_live_workspace live-model-differential
@@ -1058,12 +1096,13 @@ case "$MODE" in
     ;;
 
   real-keyboard-live)
-    requested_seed_file="${OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
-    requested_live_profile="${OPEN_KEYBOARD_LIVE_PROFILE:-reference}"
-    requested_live_test_identifier="${OPEN_KEYBOARD_REAL_KEYBOARD_LIVE_TEST:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
-    requested_simulator_template="${OPEN_KEYBOARD_REAL_KEYBOARD_SIMULATOR:-$DEFAULT_REAL_KEYBOARD_SIMULATOR}"
-    requested_screenshot_dir="${OPEN_KEYBOARD_REAL_SCREENSHOT_DIR:-}"
-    requested_screenshot_phrase="${OPEN_KEYBOARD_REAL_SCREENSHOT_PHRASE:-}"
+    openkeyboard_unset_seed_backed_live_ambient_inputs
+    requested_seed_file="${initial_seed_file:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
+    requested_live_profile="${initial_live_profile:-reference}"
+    requested_live_test_identifier="${initial_live_test_identifier:-OpenKeyboardUITests/KeyboardExtensionConfiguredUITests/testRealKeyboardImproveReplacesTextWhenGatewayConfigured}"
+    requested_simulator_template="${initial_simulator_template:-$DEFAULT_REAL_KEYBOARD_SIMULATOR}"
+    requested_screenshot_dir="$initial_screenshot_dir"
+    requested_screenshot_phrase="$initial_screenshot_phrase"
     export -n \
       requested_seed_file \
       requested_live_profile \
@@ -1071,7 +1110,7 @@ case "$MODE" in
       requested_simulator_template \
       requested_screenshot_dir \
       requested_screenshot_phrase
-    openkeyboard_unset_seed_backed_live_ambient_inputs
+    openkeyboard_unset_initial_route_controls
     echo -e "${YELLOW}Running automated real-extension regression test with seeded live gateway configuration...${NC}"
     echo "Evidence boundary: XCTest/XCUITest regression only; not normal simulator or device proof."
     require_xcodebuild

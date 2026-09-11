@@ -939,15 +939,64 @@ ruby -e '
   source = File.read(ARGV.fetch(0))
   body = source.match(/^  real-keyboard-live\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The real-keyboard live mode is missing." unless body
-  capture = body.index(%q{requested_screenshot_phrase=})
+  capture = source.index(%q{initial_screenshot_phrase=})
+  capture_start = source.index(%q{initial_seed_file=})
   scrub = body.index("openkeyboard_unset_seed_backed_live_ambient_inputs")
-  abort "Real-keyboard live controls must be captured before the complete scrub." unless
-    capture && scrub && capture < scrub
-  unexport_block = body[capture...scrub]
-  unless unexport_block.include?("export -n") &&
-      unexport_block.include?("requested_screenshot_dir") &&
-      unexport_block.include?("requested_screenshot_phrase")
+  restore = body.index(%q{requested_screenshot_phrase="$initial_screenshot_phrase"})
+  unexport = body.index("export -n", restore || 0)
+  unless capture && scrub && restore && unexport && scrub < restore && restore < unexport
+    abort "Real-keyboard live controls must be captured before and restored after the complete scrub."
+  end
+  capture_end = source.index("openkeyboard_unset_ambient_private_live_values()")
+  initial_capture_block = source[capture_start...capture_end]
+  unless initial_capture_block.include?("export -n") &&
+      initial_capture_block.include?("initial_screenshot_dir") &&
+      initial_capture_block.include?("initial_screenshot_phrase") &&
+      body[scrub...unexport].include?("requested_screenshot_dir")
     abort "Real-keyboard live controls must not retain inherited export attributes."
+  end
+' "$ROOT/scripts/ios/test.sh"
+ruby -e '
+  source = File.read(ARGV.fetch(0))
+  requirements = {
+    "live-gateway-smoke" => [
+      ["requested_seed_file", "initial_seed_file"],
+      ["requested_live_profile", "initial_live_profile"]
+    ],
+    "live-provider-matrix" => [
+      ["requested_uac_checkout", "initial_uac_checkout"],
+      ["requested_provider_evidence_output", "initial_provider_evidence_output"]
+    ],
+    "live-model-differential" => [
+      ["requested_seed_file", "initial_seed_file"],
+      ["requested_differential_evidence_output", "initial_differential_evidence_output"]
+    ],
+    "real-keyboard-live" => [
+      ["requested_seed_file", "initial_seed_file"],
+      ["requested_live_profile", "initial_live_profile"],
+      ["requested_live_test_identifier", "initial_live_test_identifier"],
+      ["requested_simulator_template", "initial_simulator_template"],
+      ["requested_screenshot_dir", "initial_screenshot_dir"],
+      ["requested_screenshot_phrase", "initial_screenshot_phrase"]
+    ]
+  }
+  root_resolution = source.index(%q{REPO_ROOT="$(})
+  requirements.each do |mode, variables|
+    body = source.match(/^  #{Regexp.escape(mode)}\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
+    abort "Missing seed-backed mode #{mode}." unless body
+    scrub = body.index("openkeyboard_unset_seed_backed_live_ambient_inputs")
+    preflight = body.index("require_xcodebuild")
+    variables.each do |requested, initial|
+      capture = source.index("#{initial}=")
+      restore = body.index("#{requested}=")
+      unexport = body.index("export -n", restore || 0)
+      restore_block = restore && unexport ? body[restore...unexport] : ""
+      unless capture && root_resolution && capture < root_resolution && scrub && restore &&
+          unexport && preflight && scrub < restore && restore < unexport && unexport < preflight &&
+          restore_block.include?(initial)
+        abort "#{mode} must capture, scrub, restore, and unexport #{requested} before preflight."
+      end
+    end
   end
 ' "$ROOT/scripts/ios/test.sh"
 if rg --fixed-strings --quiet 'clean-validated.\\(UUID().uuidString)' "$ROOT/OpenKeyboardUITests/SettingsViewModelTests.swift"; then

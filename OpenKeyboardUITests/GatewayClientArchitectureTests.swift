@@ -209,6 +209,43 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(connectorRequest.generation.stopSequences, ["END"])
     }
 
+    func testUniversalConnectorAdaptsSamplingToProviderCompatibility() throws {
+        let localRequest = try OpenKeyboardAIRequest(
+            modelID: "exact-model",
+            messages: [
+                OpenKeyboardAIMessage(role: .system, content: "System instruction"),
+                OpenKeyboardAIMessage(role: .user, content: "Source text")
+            ],
+            maxOutputTokens: 321,
+            temperature: 0.25,
+            topP: 0.75,
+            stopSequences: [],
+            timeoutInterval: 7
+        )
+
+        for provider in [OpenKeyboardAIProvider.openAI, .anthropic] {
+            let connectorRequest = UniversalAIConnectorAdapter.connectorRequest(
+                from: localRequest,
+                providerID: provider.rawValue
+            )
+
+            XCTAssertNil(connectorRequest.generation.temperature, provider.rawValue)
+            XCTAssertNil(connectorRequest.generation.topP, provider.rawValue)
+            XCTAssertEqual(connectorRequest.generation.maxOutputTokens, 321, provider.rawValue)
+        }
+
+        for provider in [OpenKeyboardAIProvider.openRouter, .openAICompatible] {
+            let connectorRequest = UniversalAIConnectorAdapter.connectorRequest(
+                from: localRequest,
+                providerID: provider.rawValue
+            )
+
+            XCTAssertEqual(connectorRequest.generation.temperature, 0.25, provider.rawValue)
+            XCTAssertEqual(connectorRequest.generation.topP, 0.75, provider.rawValue)
+            XCTAssertEqual(connectorRequest.generation.maxOutputTokens, 321, provider.rawValue)
+        }
+    }
+
     func testUniversalConnectorPlainTextResponseIsStrictAndPreservesContent() throws {
         let target = UniversalAiTarget(
             providerId: UniversalAiProviderId(rawValue: "openai-compatible"),
