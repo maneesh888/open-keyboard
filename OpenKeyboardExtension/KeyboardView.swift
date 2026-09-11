@@ -306,6 +306,12 @@ private struct KeyboardAIToolbar: View {
                     Text("\(state.issueCount)")
                         .font(.system(size: 15, weight: .bold, design: .rounded))
                         .foregroundColor(OpenKeyboardTheme.Text.inverse)
+                } else if state.showsReviewAttention {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(OpenKeyboardTheme.Surface.warningBackground)
+                    Text("!")
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(OpenKeyboardTheme.Semantic.warning)
                 } else if state.showsBrandMark && actionsEnabled {
                     OpenKeyboardBrandMark(size: KeyboardPanelLayout.toolbarControlSize, symbolSize: 15)
                 } else {
@@ -320,8 +326,20 @@ private struct KeyboardAIToolbar: View {
         }
         .buttonStyle(.plain)
         .disabled(!statusActionEnabled)
-        .accessibilityIdentifier(state.showsIssueCount ? "keyboard_issue_count_badge" : "keyboard_openkeyboard_icon")
-        .accessibilityLabel(state.showsIssueCount ? "\(state.issueCount) writing suggestions" : "Open Keyboard status")
+        .accessibilityIdentifier(statusIconIdentifier)
+        .accessibilityLabel(statusIconAccessibilityLabel)
+    }
+
+    private var statusIconIdentifier: String {
+        if state.showsIssueCount { return "keyboard_issue_count_badge" }
+        if state.showsReviewAttention { return "keyboard_review_required_badge" }
+        return "keyboard_openkeyboard_icon"
+    }
+
+    private var statusIconAccessibilityLabel: String {
+        if state.showsIssueCount { return "\(state.issueCount) writing suggestions" }
+        if state.showsReviewAttention { return "Proposed version needs review" }
+        return "Open Keyboard status"
     }
 
     private var predictionStrip: some View {

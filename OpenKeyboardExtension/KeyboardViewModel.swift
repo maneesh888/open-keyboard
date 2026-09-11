@@ -420,7 +420,7 @@ final class KeyboardViewModel: ObservableObject {
             return KeyboardToolbarState(kind: .actions(status: status))
         }
         if grammarWholeVersionProposalState != nil {
-            return KeyboardToolbarState(kind: .actions(status: "Review proposed version"))
+            return KeyboardToolbarState(kind: .grammarWholeVersionProposal)
         }
         if let suggestionState,
            let correction = suggestionState.currentCorrection,
@@ -616,6 +616,11 @@ final class KeyboardViewModel: ObservableObject {
         }
         actionPanelState = nil
         rewriteOptionsState = nil
+        if previousPanelMode == .grammarWholeVersionProposal,
+           let proposal = grammarWholeVersionProposalState,
+           currentInputTextForAnalysis() == proposal.originalText {
+            lastAnalyzedText = proposal.originalText
+        }
         panelMode = .keyboard
         let shouldResumeAnalysis = shouldResumeAutomaticAnalysisOnKeyboardReturn
             || previousPanelMode == .actions

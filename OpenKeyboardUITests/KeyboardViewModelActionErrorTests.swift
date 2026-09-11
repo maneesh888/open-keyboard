@@ -2725,6 +2725,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.grammarWholeVersionProposalState != nil }
 
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
+        XCTAssertEqual(viewModel.toolbarState.kind, .grammarWholeVersionProposal)
+        XCTAssertTrue(viewModel.toolbarState.showsReviewAttention)
+        XCTAssertFalse(viewModel.toolbarState.showsIssueCount)
         XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.originalText, source)
         XCTAssertEqual(viewModel.grammarWholeVersionProposalState?.proposedText, proposed)
         XCTAssertEqual(
@@ -2742,6 +2745,8 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .keyboard)
         XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertTrue(viewModel.canOpenAnalysisResult)
+        XCTAssertEqual(viewModel.toolbarState.title, "Proposed version")
+        XCTAssertEqual(viewModel.toolbarState.subtitle, "Review changes")
         viewModel.showAnalysisResult()
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
 
