@@ -26,9 +26,11 @@ it.
    `$plan-openkeyboard-major-milestone`. Route one bounded plan or a concise "what next" request to
    the read-only `work-package-planner` through `$plan-openkeyboard-work-package`. For a clear
    implementation request, use `$develop-openkeyboard` without adding either planning gate.
-5. **Implement narrowly.** Read only the sources and focused plans needed for the task. Reuse local
-   patterns, add focused regression coverage for changed behavior, and preserve files outside the
-   work order.
+5. **Implement narrowly.** Read only the sources and focused plans needed for the task. For work
+   centered on user-visible app or keyboard wording, use `$write-openkeyboard-product-copy` within
+   `$develop-openkeyboard` to shape the target screen and its connected journey before editing.
+   Reuse local patterns, add focused regression coverage for changed behavior, and preserve files
+   outside the work order.
 6. **Verify and commit only when authorized.** Run affected tests, `git diff --check`, and the
    proportional repository gate below. Recheck the authority ledger before staging and again
    before committing. Install hooks with `./scripts/install-hooks.sh`; never use `--no-verify`.

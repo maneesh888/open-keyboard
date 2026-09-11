@@ -14,6 +14,8 @@ REVIEW_SKILL="$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md"
 REVIEW_INTERFACE="$ROOT/.agents/skills/review-verify-merge-pr/agents/openai.yaml"
 DEVELOP_SKILL="$ROOT/.agents/skills/develop-openkeyboard/SKILL.md"
 DEVELOP_INTERFACE="$ROOT/.agents/skills/develop-openkeyboard/agents/openai.yaml"
+PRODUCT_COPY_SKILL="$ROOT/.agents/skills/write-openkeyboard-product-copy/SKILL.md"
+PRODUCT_COPY_INTERFACE="$ROOT/.agents/skills/write-openkeyboard-product-copy/agents/openai.yaml"
 PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-work-package/SKILL.md"
 PLAN_INTERFACE="$ROOT/.agents/skills/plan-openkeyboard-work-package/agents/openai.yaml"
 MILESTONE_PLAN_SKILL="$ROOT/.agents/skills/plan-openkeyboard-major-milestone/SKILL.md"
@@ -51,6 +53,8 @@ for required_file in \
   "$REVIEW_INTERFACE" \
   "$DEVELOP_SKILL" \
   "$DEVELOP_INTERFACE" \
+  "$PRODUCT_COPY_SKILL" \
+  "$PRODUCT_COPY_INTERFACE" \
   "$PLAN_SKILL" \
   "$PLAN_INTERFACE" \
   "$MILESTONE_PLAN_SKILL" \
@@ -267,10 +271,19 @@ rg --quiet 'gh pr merge <number> --auto --squash --match-head-commit <reviewed-h
 rg --quiet 'Never leave queued auto-merge active' "$REVIEW_SKILL"
 rg --quiet '^name: develop-openkeyboard$' "$DEVELOP_SKILL"
 rg --fixed-strings --quiet 'Use `AGENTS.md` as the canonical execution policy.' "$DEVELOP_SKILL"
+rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-work-package' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-major-milestone' "$DEVELOP_SKILL"
 rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
 rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
+rg --quiet '^name: write-openkeyboard-product-copy$' "$PRODUCT_COPY_SKILL"
+rg --fixed-strings --quiet 'predecessor to target to successor' "$PRODUCT_COPY_SKILL"
+rg --fixed-strings --quiet 'Vendor/semantic-prompt-contract' "$PRODUCT_COPY_SKILL"
+rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$PRODUCT_COPY_INTERFACE"
+if rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PRODUCT_COPY_INTERFACE"; then
+  echo "The product-copy skill must remain available for implicit workflow routing." >&2
+  exit 1
+fi
 rg --quiet '^name: plan-openkeyboard-work-package$' "$PLAN_SKILL"
 rg --quiet 'git hash-object' "$PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$PLAN_INTERFACE"
@@ -282,6 +295,8 @@ rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
 rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
 rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$ROOT/AGENTS.md"
+rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"

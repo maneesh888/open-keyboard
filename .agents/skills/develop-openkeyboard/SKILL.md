@@ -37,17 +37,20 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
 1. Preserve unrelated work and keep edits inside the work order.
 2. Follow the repository's MVVM, theme, App Group, Keychain, extension-lifecycle, gateway, semantic
    contract, and secret boundaries.
-3. Add or update focused automated regression coverage for changed behavior.
-4. Run affected tests while iterating, then select the final gate:
+3. For work centered on user-visible app or keyboard wording, use
+   `$write-openkeyboard-product-copy` to review the target screen, incoming and outgoing journey,
+   product claims, terminology, reachable states, and accessibility labels before editing.
+4. Add or update focused automated regression coverage for changed behavior.
+5. Run affected tests while iterating, then select the final gate:
    - **Fast/local policy:** affected tests plus `./scripts/check.sh --hygiene`.
    - **Standard completed work:** `./scripts/check.sh --quick`.
    - **Release/publish:** exact-head `./scripts/check.sh --full`, classifier-selected live gate,
      required runtime proof, GitHub checks, and independent review.
-5. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
+6. Run `./scripts/check-semantic-prompt-contract.sh` for contract/gitlink/schema/fixture/adapter
    changes. Use `gateway-differential` only for the classifier-selected low/high surfaces or
    pre-release verification; preserve exact role/model identity and treat an unstable low boundary
    as diagnostic/`UNVERIFIED`.
-6. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
+7. Run `git diff --check`, install and honor hooks, stage only task files, and inspect staged names
    plus content before committing.
 
 In proof-first mode, use existing routes or temporary non-repository harnesses and report results

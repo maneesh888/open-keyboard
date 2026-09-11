@@ -21,8 +21,9 @@ when a task needs route selection, hooks, CI, signing, deployment, or proof deta
 
 Repository automation is split across `$develop-openkeyboard`, the read-only compact
 `$plan-openkeyboard-work-package` route, the read-only phased
-`$plan-openkeyboard-major-milestone` route, and `$review-verify-merge-pr`. These skills route work
-but do not weaken the proof requirements below.
+`$plan-openkeyboard-major-milestone` route, the product-language specialist
+`$write-openkeyboard-product-copy`, and `$review-verify-merge-pr`. These skills route work but do
+not weaken the proof requirements below.
 
 ## Authority and proof-first mode
 
@@ -460,6 +461,13 @@ the protected `app-store-connect` environment.
 `$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release
 mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
 change to the repository scripts above.
+
+For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs
+inside the development route. It reviews the requested screen together with its incoming and
+outgoing journey, balances interface clarity with truthful product positioning, checks reachable
+states and accessibility language, and protects shared terminology. A copy audit remains read-only
+unless implementation is already authorized. The skill never edits canonical semantic prompts or
+generated user content, and an implemented UI-copy change still requires the normal UI proof route.
 
 For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
 `$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
