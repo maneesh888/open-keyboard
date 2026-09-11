@@ -83,8 +83,8 @@ struct KeyboardCompletionPanelState: Equatable {
     )
 
     static let grammarVersionApplied = KeyboardCompletionPanelState(
-        title: "Version applied",
-        message: "The reviewed version replaced the original text.",
+        title: "Changes applied",
+        message: "The suggested changes replaced the original text.",
         allowsGrammarCheckAgain: true
     )
 
@@ -171,7 +171,7 @@ struct KeyboardToolbarState: Equatable {
         case .correctionPreview(let count, _, _, _):
             return count == 1 ? "1 writing suggestion" : "\(count) writing suggestions"
         case .grammarWholeVersionProposal:
-            return "Suggested version"
+            return "View suggestions"
         case .error(let kind, _):
             return kind.title
         }

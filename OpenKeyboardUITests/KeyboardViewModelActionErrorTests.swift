@@ -2745,7 +2745,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.panelMode, .keyboard)
         XCTAssertNotNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertTrue(viewModel.canOpenAnalysisResult)
-        XCTAssertEqual(viewModel.toolbarState.title, "Suggested version")
+        XCTAssertEqual(viewModel.toolbarState.title, "View suggestions")
         XCTAssertEqual(viewModel.toolbarState.subtitle, "Review changes")
         viewModel.showAnalysisResult()
         XCTAssertEqual(viewModel.panelMode, .grammarWholeVersionProposal)
@@ -2780,6 +2780,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNil(viewModel.grammarWholeVersionProposalState)
         XCTAssertEqual(viewModel.panelMode, .correctionComplete)
         XCTAssertEqual(viewModel.completionPanelState, .grammarVersionApplied)
+        XCTAssertEqual(viewModel.completionPanelState.title, "Changes applied")
+        XCTAssertEqual(
+            viewModel.completionPanelState.message,
+            "The suggested changes replaced the original text."
+        )
     }
 
     func testStaleWholeVersionGrammarProposalNeverReplacesChangedDocument() async {

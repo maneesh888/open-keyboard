@@ -501,7 +501,7 @@ struct KeyboardReplacementDiff: Equatable {
 }
 
 struct GrammarWholeVersionProposalState: Equatable {
-    static let reviewMessage = "The model changed the wording. Review the full version before using it."
+    static let reviewMessage = "Some wording changed. Review the full text before using it."
 
     let originalText: String
     let proposedText: String

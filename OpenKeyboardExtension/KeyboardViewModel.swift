@@ -781,7 +781,7 @@ final class KeyboardViewModel: ObservableObject {
         isGrammarCorrectionLoading = false
 
         if grammarWholeVersionProposalState != nil {
-            aiStatus = "Suggested version ready"
+            aiStatus = "Suggestions ready"
             panelMode = .grammarWholeVersionProposal
         } else if currentCorrection != nil {
             aiStatus = "Suggestions ready"
@@ -983,7 +983,7 @@ final class KeyboardViewModel: ObservableObject {
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
-            aiStatus = "Suggested version ready"
+            aiStatus = "Suggestions ready"
             panelMode = .grammarWholeVersionProposal
         case .replaceText(let output):
             let replacement = output.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1220,7 +1220,7 @@ final class KeyboardViewModel: ObservableObject {
         lastAnalyzedText = nil
         continueGrammarReviewAfterAppliedChange(
             fallbackCompletionState: .grammarVersionApplied,
-            fallbackStatus: "Suggested version applied"
+            fallbackStatus: "Changes applied"
         )
     }
 
@@ -1578,7 +1578,7 @@ final class KeyboardViewModel: ObservableObject {
                         rewriteOptionsState = nil
                         hasNoIssueAnalysisResult = false
                         completionPanelState = .allDone
-                        aiStatus = "Suggested version ready"
+                        aiStatus = "Suggestions ready"
                         isPerformingAIAction = false
                         panelMode = .grammarWholeVersionProposal
                     case .showRewriteOptions(let options):
@@ -2046,7 +2046,7 @@ final class KeyboardViewModel: ObservableObject {
             rewriteOptionsState = nil
             hasNoIssueAnalysisResult = false
             completionPanelState = .allDone
-            aiStatus = "Review proposed version"
+            aiStatus = "View suggestions"
         case .showRewriteOptions:
             suggestionState = nil
             grammarWholeVersionProposalState = nil
@@ -2487,7 +2487,7 @@ final class KeyboardViewModel: ObservableObject {
                 actionPanelState = nil
                 rewriteOptionsState = nil
                 actionError = nil
-                aiStatus = "Suggested version ready"
+                aiStatus = "Suggestions ready"
                 isPerformingAIAction = false
                 hasNoIssueAnalysisResult = false
                 completionPanelState = .allDone

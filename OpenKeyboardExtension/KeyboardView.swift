@@ -338,7 +338,7 @@ private struct KeyboardAIToolbar: View {
 
     private var statusIconAccessibilityLabel: String {
         if state.showsIssueCount { return "\(state.issueCount) writing suggestions" }
-        if state.showsReviewAttention { return "Suggested version needs review" }
+        if state.showsReviewAttention { return "View suggestions" }
         return "Open Keyboard status"
     }
 
@@ -1186,7 +1186,7 @@ private struct GrammarWholeVersionProposalPanel: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 9) {
                 OpenKeyboardBrandMark(size: 30, symbolSize: 13)
-                Text("Suggested version")
+                Text("Suggested Changes")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(OpenKeyboardTheme.Text.primary)
                     .lineLimit(1)
@@ -1201,7 +1201,7 @@ private struct GrammarWholeVersionProposalPanel: View {
                 )
                 headerButton(
                     systemImage: "doc.on.doc",
-                    accessibilityLabel: "Copy proposed version",
+                    accessibilityLabel: "Copy suggested changes",
                     identifier: "ai_grammar_proposal_copy",
                     action: onCopy
                 )
@@ -1253,7 +1253,7 @@ private struct GrammarWholeVersionProposalPanel: View {
                 Spacer(minLength: 0)
 
                 Button(action: onUse) {
-                    Text("Use this version")
+                    Text("Use changes")
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(OpenKeyboardTheme.Text.inverse)
                         .padding(.horizontal, 18)
