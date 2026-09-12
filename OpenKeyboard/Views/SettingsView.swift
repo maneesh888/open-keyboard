@@ -84,7 +84,7 @@ struct SettingsView: View {
                                     ProgressView()
                                         .padding(.trailing, 8)
                                 }
-                                Text(modelDiscoveryButtonTitle)
+                                Text(viewModel.modelDiscoveryActionTitle)
                             }
                         }
                         .disabled(!viewModel.canLoadModels)
@@ -164,6 +164,7 @@ struct SettingsView: View {
                             }
                         }
                         .disabled(!viewModel.canTestConnection)
+                        .accessibilityIdentifier("settings_test_connection_save")
                     }
 
                     Text("Test Connection always rechecks the authenticated catalog and probes the exact selected model without substituting another model.")
@@ -178,6 +179,7 @@ struct SettingsView: View {
                                 .foregroundColor(viewModel.trustedModelLoaded ? .primary : .secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
+                                .accessibilityIdentifier("settings_validated_model")
                         }
 
                         HStack(alignment: .firstTextBaseline) {
@@ -325,7 +327,7 @@ struct SettingsView: View {
         }
         .onAppear {
             viewModel.applyConfig(viewModel.config)
-            #if DEBUG
+            #if DEBUG && targetEnvironment(simulator)
             viewModel.applyUITestSettingsStateIfNeeded()
             #endif
         }
@@ -356,6 +358,11 @@ struct SettingsView: View {
     private func startModelDiscovery() {
         dismissKeyboard()
         modelDiscoveryTask?.cancel()
+        #if DEBUG && targetEnvironment(simulator)
+        if viewModel.applyUITestModelDiscoveryActionIfNeeded() {
+            return
+        }
+        #endif
         modelDiscoveryTask = Task {
             if viewModel.canRetryModelDiscovery {
                 await viewModel.retryModelDiscovery()
@@ -363,12 +370,6 @@ struct SettingsView: View {
                 await viewModel.loadModels()
             }
         }
-    }
-
-    private var modelDiscoveryButtonTitle: String {
-        if viewModel.isLoadingModels { return "Loading Models..." }
-        if viewModel.canRetryModelDiscovery { return "Retry Models" }
-        return "Load Models"
     }
 
     private var modelDiscoveryStatusMessage: String? {

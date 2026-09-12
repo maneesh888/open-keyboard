@@ -22,6 +22,23 @@ final class SettingsViewModelTests: XCTestCase {
         super.tearDown()
     }
 
+    private func savedGatewayConfig(
+        provider: OpenKeyboardAIProvider = .openAICompatible,
+        baseURL: String = "https://existing.example",
+        apiKey: String = "existing-key",
+        model: String = "old-model"
+    ) -> AppConfig {
+        AppConfig(
+            apiKey: apiKey,
+            gatewayURL: baseURL,
+            selectedModel: model,
+            isConfigured: true,
+            grammarCorrectionVerified: true,
+            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion,
+            provider: provider
+        )
+    }
+
 
 
 
@@ -547,6 +564,140 @@ final class SettingsViewModelTests: XCTestCase {
         let suiteName = "SettingsViewModelTests.same-credentials-model-change.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = savedGatewayConfig(
+            provider: .openRouter,
+            baseURL: "https://openrouter.ai/api/v1"
+        )
+        XCTAssertTrue(configured.save(to: defaults))
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let tester = FakeGatewayTester(models: ["old-model", "new-model"], smokeSucceeds: true)
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
+        await viewModel.loadModels()
+
+        XCTAssertEqual(tester.fetchedProfiles.count, 1)
+        XCTAssertEqual(tester.fetchedProfiles[0].provider, .openRouter)
+        XCTAssertEqual(tester.fetchedProfiles[0].baseURL, configured.baseURL)
+        XCTAssertEqual(tester.fetchedProfiles[0].apiKey, configured.apiKey)
+        XCTAssertTrue(viewModel.shouldShowModelSelection)
+        XCTAssertEqual(viewModel.selectedModelInput, "old-model")
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
+
+        viewModel.updateSelectedModelInput("new-model")
+
+        XCTAssertEqual(viewModel.selectedProvider, configured.provider)
+        XCTAssertEqual(viewModel.gatewayURLInput, configured.baseURL)
+        XCTAssertEqual(viewModel.apiKeyInput, configured.apiKey)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(AppConfig.load(from: defaults), configured)
+        XCTAssertTrue(viewModel.isEditingGatewayDraft)
+        XCTAssertTrue(viewModel.shouldShowConnectionActions)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .success)
+        XCTAssertEqual(viewModel.config.selectedModel, "new-model")
+        XCTAssertEqual(tester.smokeModels, ["new-model"])
+        XCTAssertFalse(viewModel.shouldShowModelSelection)
+        XCTAssertTrue(viewModel.availableModels.isEmpty)
+        XCTAssertEqual(viewModel.modelDiscoveryState, .idle)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
+        XCTAssertEqual(AppConfig.load(from: defaults).selectedModel, "new-model")
+    }
+
+    func testModelDiscoveryActionTitleTracksLoadLoadingAndRetryStates() async {
+        let tester = FakeGatewayTester(models: ["late-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: .default, gatewayTester: tester, defaults: nil)
+        viewModel.updateGatewayURLInput("https://gateway.example")
+        viewModel.updateAPIKeyInput("test-key")
+
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Load Models")
+
+        let loadTask = Task { await viewModel.loadModels() }
+        for _ in 0..<100 where tester.modelFetches == 0 { await Task.yield() }
+
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Loading Models...")
+
+        viewModel.cancelModelDiscovery()
+        await loadTask.value
+
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Retry Models")
+    }
+
+    func testChangeModelDoesNotSilentlySelectASoleReplacementForMissingSavedModel() async {
+        let suiteName = "SettingsViewModelTests.change-missing-saved-model.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = savedGatewayConfig()
+        XCTAssertTrue(configured.save(to: defaults))
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
+        let tester = FakeGatewayTester(models: ["replacement-model"])
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+
+        await viewModel.loadModels()
+
+        XCTAssertTrue(viewModel.shouldShowModelSelection)
+        XCTAssertTrue(viewModel.modelSelectionRequired)
+        XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
+        XCTAssertEqual(viewModel.availableModels, ["replacement-model"])
+        XCTAssertNotNil(viewModel.modelSelectionMessage)
+        XCTAssertFalse(viewModel.canTestConnection)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(AppConfig.load(from: defaults), configured)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+
+        viewModel.updateSelectedModelInput("replacement-model")
+
+        XCTAssertEqual(viewModel.selectedModelInput, "replacement-model")
+        XCTAssertFalse(viewModel.modelSelectionRequired)
+        XCTAssertTrue(viewModel.canTestConnection)
+        XCTAssertEqual(viewModel.config, configured)
+    }
+
+    func testFailedReplacementModelPreservesCommittedProfileValidationAndGlobalErrorState() async {
+        let suiteName = "SettingsViewModelTests.failed-model-replacement.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = savedGatewayConfig()
+        XCTAssertTrue(configured.save(to: defaults))
+        let previousValidationDate = Date().addingTimeInterval(-120)
+        AppConfig.saveGatewayConnectionLastTestedAt(previousValidationDate, to: defaults)
+        let tester = FakeGatewayTester(
+            models: ["old-model", "failing-model"],
+            failingSmokeModels: ["failing-model"]
+        )
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+
+        await viewModel.loadModels()
+        viewModel.updateSelectedModelInput("failing-model")
+        await viewModel.testConnection()
+
+        XCTAssertEqual(viewModel.connectionStatus, .failure)
+        XCTAssertNotNil(viewModel.errorMessage)
+        XCTAssertEqual(tester.smokeModels, ["failing-model"])
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(AppConfig.load(from: defaults), configured)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        guard let retainedValidationDate = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else {
+            return XCTFail("The previous model validation timestamp should be preserved.")
+        }
+        XCTAssertEqual(
+            retainedValidationDate.timeIntervalSince1970,
+            previousValidationDate.timeIntervalSince1970,
+            accuracy: 0.001
+        )
+    }
+
+    func testStaleReplacementSmokeFailureCannotPoisonSavedModelAfterSelectionChanges() async {
+        let suiteName = "SettingsViewModelTests.stale-model-replacement.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let configured = AppConfig(
             apiKey: "existing-key",
             gatewayURL: "https://existing.example",
@@ -555,16 +706,41 @@ final class SettingsViewModelTests: XCTestCase {
             grammarCorrectionVerified: true,
             grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
         )
-        let tester = FakeGatewayTester(models: ["old-model", "new-model"], smokeSucceeds: true)
+        XCTAssertTrue(configured.save(to: defaults))
+        let previousValidationDate = Date().addingTimeInterval(-120)
+        AppConfig.saveGatewayConnectionLastTestedAt(previousValidationDate, to: defaults)
+        let tester = FakeGatewayTester(
+            models: ["old-model", "failing-model"],
+            failingSmokeModels: ["failing-model"]
+        )
+        tester.smokeDelayNanoseconds = 50_000_000
+        tester.ignoresSmokeCancellation = true
         let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
 
         await viewModel.loadModels()
-        viewModel.updateSelectedModelInput("new-model")
-        await viewModel.testConnection()
+        viewModel.updateSelectedModelInput("failing-model")
+        let connectionTask = Task { await viewModel.testConnection() }
+        for _ in 0..<100 where tester.smokeModels.isEmpty { await Task.yield() }
+        XCTAssertEqual(tester.smokeModels, ["failing-model"])
 
-        XCTAssertEqual(viewModel.connectionStatus, .success)
-        XCTAssertEqual(viewModel.config.selectedModel, "new-model")
-        XCTAssertEqual(tester.smokeModels, ["new-model"])
+        connectionTask.cancel()
+        viewModel.updateSelectedModelInput("old-model")
+        await connectionTask.value
+
+        XCTAssertEqual(viewModel.selectedModelInput, "old-model")
+        XCTAssertEqual(viewModel.connectionStatus, .unknown)
+        XCTAssertNil(viewModel.errorMessage)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(AppConfig.load(from: defaults), configured)
+        XCTAssertNil(AppConfig.gatewayConnectionError(from: defaults))
+        guard let retainedValidationDate = AppConfig.gatewayConnectionLastTestedAt(from: defaults) else {
+            return XCTFail("The saved model validation timestamp should survive a stale failure.")
+        }
+        XCTAssertEqual(
+            retainedValidationDate.timeIntervalSince1970,
+            previousValidationDate.timeIntervalSince1970,
+            accuracy: 0.001
+        )
     }
 
     func testSavedModelValidationIsCaseSensitiveAndDoesNotRewriteConnectorIdentifiers() async {
@@ -1404,6 +1580,69 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertTrue(viewModel.selectedModelInput.isEmpty)
     }
 
+    func testChangeModelEmptyCatalogPreservesCommittedModelAndCredentials() async {
+        let configured = savedGatewayConfig()
+        let viewModel = SettingsViewModel(
+            config: configured,
+            gatewayTester: FakeGatewayTester(models: []),
+            defaults: nil
+        )
+
+        await viewModel.loadModels()
+
+        XCTAssertEqual(
+            viewModel.modelDiscoveryState,
+            .failed("No models were returned by this provider.")
+        )
+        XCTAssertEqual(viewModel.selectedProvider, configured.provider)
+        XCTAssertEqual(viewModel.gatewayURLInput, configured.baseURL)
+        XCTAssertEqual(viewModel.apiKeyInput, configured.apiKey)
+        XCTAssertEqual(viewModel.selectedModelInput, configured.selectedModel)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Retry Models")
+    }
+
+    func testChangeModelFetchFailurePreservesCommittedModelAndCredentials() async {
+        let configured = savedGatewayConfig()
+        let viewModel = SettingsViewModel(
+            config: configured,
+            gatewayTester: FakeGatewayTester(modelFetchFailure: NetworkError.timeout),
+            defaults: nil
+        )
+
+        await viewModel.loadModels()
+
+        guard case .failed = viewModel.modelDiscoveryState else {
+            return XCTFail("Change Model should expose a retryable discovery failure.")
+        }
+        XCTAssertEqual(viewModel.selectedProvider, configured.provider)
+        XCTAssertEqual(viewModel.gatewayURLInput, configured.baseURL)
+        XCTAssertEqual(viewModel.apiKeyInput, configured.apiKey)
+        XCTAssertEqual(viewModel.selectedModelInput, configured.selectedModel)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Retry Models")
+    }
+
+    func testCancellingChangeModelPreservesCommittedModelAndCredentials() async {
+        let configured = savedGatewayConfig()
+        let tester = FakeGatewayTester(models: ["old-model", "late-model"])
+        tester.connectionDelayNanoseconds = 50_000_000
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: nil)
+
+        let loadTask = Task { await viewModel.loadModels() }
+        for _ in 0..<100 where tester.modelFetches == 0 { await Task.yield() }
+        viewModel.cancelModelDiscovery()
+        await loadTask.value
+
+        XCTAssertEqual(viewModel.modelDiscoveryState, .cancelled)
+        XCTAssertEqual(viewModel.selectedProvider, configured.provider)
+        XCTAssertEqual(viewModel.gatewayURLInput, configured.baseURL)
+        XCTAssertEqual(viewModel.apiKeyInput, configured.apiKey)
+        XCTAssertEqual(viewModel.selectedModelInput, configured.selectedModel)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Retry Models")
+    }
+
     func testLoadModelsKeepsAuthenticationMalformedAndTimeoutFailuresOutOfManualMode() async {
         let failures: [Error] = [
             NetworkError.unauthorized,
@@ -1472,25 +1711,36 @@ final class SettingsViewModelTests: XCTestCase {
         let suiteName = "SettingsViewModelTests.unsupported-saved-model-change.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let configured = AppConfig(
-            apiKey: "existing-key",
-            gatewayURL: "https://compatible.example",
-            selectedModel: "old-model",
-            isConfigured: true,
-            grammarCorrectionVerified: true,
-            grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
-        )
+        let configured = savedGatewayConfig(baseURL: "https://compatible.example")
+        XCTAssertTrue(configured.save(to: defaults))
+        AppConfig.saveGatewayConnectionLastTestedAt(Date(), to: defaults)
         let tester = FakeGatewayTester(modelFetchFailure: NetworkError.unsupportedModelDiscovery)
         let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
 
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
+        XCTAssertTrue(viewModel.showsValidatedGatewayDetails)
         await viewModel.loadModels()
+
         XCTAssertTrue(viewModel.shouldShowManualModelEntry)
+        XCTAssertEqual(viewModel.selectedModelInput, configured.selectedModel)
+        XCTAssertEqual(viewModel.gatewayURLInput, configured.baseURL)
+        XCTAssertEqual(viewModel.apiKeyInput, configured.apiKey)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
+
         viewModel.updateSelectedModelInput("new-manual-model")
+
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertFalse(viewModel.showsValidatedGatewayDetails)
+
         await viewModel.testConnection()
 
         XCTAssertEqual(viewModel.connectionStatus, .success)
         XCTAssertEqual(viewModel.config.selectedModel, "new-manual-model")
         XCTAssertEqual(tester.smokeModels, ["new-manual-model"])
+        XCTAssertFalse(viewModel.shouldShowManualModelEntry)
+        XCTAssertEqual(viewModel.modelDiscoveryState, .idle)
+        XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
     }
 
     func testRetryModelDiscoveryReplacesFailureWithFreshCatalog() async {
@@ -1783,6 +2033,8 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var modelFetchFailure: Error?
     var smokeFailure: Error
     var connectionDelayNanoseconds: UInt64 = 0
+    var smokeDelayNanoseconds: UInt64 = 0
+    var ignoresSmokeCancellation = false
     var diagnosticDelayNanoseconds: UInt64 = 0
     private(set) var smokeModel: String?
     private(set) var smokeModels: [String] = []
@@ -1847,6 +2099,13 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
         smokeModel = model
         smokeModels.append(model)
+        if smokeDelayNanoseconds > 0 {
+            if ignoresSmokeCancellation {
+                try? await Task.sleep(nanoseconds: smokeDelayNanoseconds)
+            } else {
+                try await Task.sleep(nanoseconds: smokeDelayNanoseconds)
+            }
+        }
         if !smokeSucceeds || failingSmokeModels.contains(model) { throw smokeFailure }
     }
 

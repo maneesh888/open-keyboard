@@ -81,6 +81,53 @@ final class GatewayStatusUITests: XCTestCase {
         XCTAssertTrue(testConnection.isEnabled)
     }
 
+    func testSavedSettingsOfferChangeModelWithoutLeavingThePickerOpen() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--settings-direct",
+            "--seed-settings-saved-model",
+            "--skip-onboarding"
+        ]
+        app.launch()
+
+        let modelAction = app.buttons["settings_load_models"]
+        let baseURL = app.descendants(matching: .any)["settings_provider_base_url"]
+        let apiKey = app.descendants(matching: .any)["settings_provider_api_key"]
+        XCTAssertTrue(modelAction.waitForExistence(timeout: 5))
+        XCTAssertEqual(modelAction.label, "Change Model")
+        XCTAssertTrue(modelAction.isEnabled)
+        XCTAssertFalse(app.buttons["Load Models"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["settings_gateway_model_picker"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["settings_validated_model"].exists)
+        XCTAssertTrue(baseURL.exists)
+        XCTAssertTrue(apiKey.exists)
+        let savedBaseURLValue = baseURL.value as? String
+        let savedAPIKeyValue = apiKey.value as? String
+
+        modelAction.tap()
+
+        let picker = app.descendants(matching: .any)["settings_gateway_model_picker"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 2))
+        XCTAssertEqual(baseURL.value as? String, savedBaseURLValue)
+        XCTAssertEqual(apiKey.value as? String, savedAPIKeyValue)
+
+        picker.tap()
+        let replacement = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == %@", "model-b"))
+            .firstMatch
+        XCTAssertTrue(replacement.waitForExistence(timeout: 2))
+        replacement.tap()
+
+        XCTAssertFalse(app.descendants(matching: .any)["settings_validated_model"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["settings_connection_success"].exists)
+        let saveReplacement = app.buttons["settings_test_connection_save"]
+        XCTAssertTrue(saveReplacement.waitForExistence(timeout: 2))
+        XCTAssertTrue(saveReplacement.isEnabled)
+        XCTAssertEqual(baseURL.value as? String, savedBaseURLValue)
+        XCTAssertEqual(apiKey.value as? String, savedAPIKeyValue)
+    }
+
     func testSettingsRendersAllDiagnosticRowsAfterPartialFailures() {
         let app = XCUIApplication()
         app.launchArguments = [

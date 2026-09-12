@@ -211,6 +211,15 @@ class SettingsViewModel: ObservableObject {
         return modelDiscoveryState == .cancelled && canLoadModels
     }
 
+    var modelDiscoveryActionTitle: String {
+        if isLoadingModels { return "Loading Models..." }
+        if canRetryModelDiscovery { return "Retry Models" }
+        if hasSavedGatewayConfig, currentDraftIdentity == savedGatewayIdentity {
+            return "Change Model"
+        }
+        return "Load Models"
+    }
+
     var shouldShowManualModelEntry: Bool {
         modelDiscoveryIdentity == currentDraftIdentity && modelDiscoveryState == .unsupported
     }
@@ -273,17 +282,16 @@ class SettingsViewModel: ObservableObject {
         let exactModel = Self.exactModel(trimmed, in: availableModels)
         let replacement = shouldShowManualModelEntry ? trimmed : (exactModel ?? "")
         guard selectedModelInput != replacement else { return }
+        let wasCheckingConnection = isTestingConnection || connectionStatus == .checking
         invalidateGatewayOperationsForModelChange()
         selectedModelInput = replacement
+        if wasCheckingConnection {
+            connectionStatus = .unknown
+            errorMessage = nil
+        }
         guard exactModel != nil || shouldShowManualModelEntry else { return }
         modelSelectionMessage = nil
-        if currentDraftIdentity != savedGatewayIdentity || replacement != config.selectedModel {
-            showsValidatedGatewayDetails = false
-            diagnosticReport = nil
-            if connectionStatus == .success || connectionStatus == .limited || connectionStatus == .checking {
-                connectionStatus = .unknown
-            }
-        }
+        resetValidatedDisplayIfModelChanged()
     }
 
     func normalizeGatewayURLInputForEditing() {
@@ -381,6 +389,19 @@ class SettingsViewModel: ObservableObject {
         if connectionStatus == .success || connectionStatus == .limited || connectionStatus == .checking { connectionStatus = .unknown }
     }
 
+    private func resetValidatedDisplayIfModelChanged() {
+        let draftModel = selectedModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard currentDraftIdentity != savedGatewayIdentity || draftModel != savedModel else {
+            return
+        }
+        showsValidatedGatewayDetails = false
+        diagnosticReport = nil
+        if connectionStatus == .success || connectionStatus == .limited || connectionStatus == .checking {
+            connectionStatus = .unknown
+        }
+    }
+
     private func resetModelDiscovery() {
         modelDiscoveryIdentity = nil
         modelDiscoveryState = .idle
@@ -428,7 +449,7 @@ class SettingsViewModel: ObservableObject {
         availableModels = Self.normalizedModelChoices(models)
         modelDiscoveryIdentity = identity
         guard !availableModels.isEmpty else {
-            selectedModelInput = ""
+            selectedModelInput = identity == savedGatewayIdentity ? config.selectedModel : ""
             let message = "No models were returned by this provider."
             modelDiscoveryState = .failed(message)
             modelSelectionMessage = message
@@ -443,6 +464,10 @@ class SettingsViewModel: ObservableObject {
                   let exactModel = Self.exactModel(config.selectedModel, in: availableModels) {
             selectedModelInput = exactModel
             modelSelectionMessage = nil
+        } else if identity == savedGatewayIdentity {
+            selectedModelInput = ""
+            modelSelectionMessage = "The saved model is no longer available. Choose an exact model for this provider profile."
+            resetValidatedDisplayIfModelChanged()
         } else if availableModels.count == 1 {
             selectedModelInput = availableModels[0]
             modelSelectionMessage = nil
@@ -549,6 +574,7 @@ class SettingsViewModel: ObservableObject {
         guard !isTestingConnection, !isRunningDiagnostics else { return }
         let operationGeneration = beginGatewayOperation()
         var operationIdentity: GatewayDraftIdentity?
+        let initialAttemptedModel = selectedModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
         showsValidatedGatewayDetails = false
         diagnosticReport = nil
         isTestingConnection = true
@@ -585,7 +611,11 @@ class SettingsViewModel: ObservableObject {
                     // exact model does not rebuild the connector. Validate the current draft
                     // selection, which is the saved model until the user explicitly changes it.
                     guard let exactModel = Self.exactModel(previousDraftModel, in: availableModels) else {
-                        failConnection(with: NetworkError.modelUnavailable.localizedDescription)
+                        failConnection(
+                            with: NetworkError.modelUnavailable.localizedDescription,
+                            attemptedIdentity: draftIdentity,
+                            attemptedModel: previousDraftModel
+                        )
                         return
                     }
                     gatewayModel = exactModel
@@ -594,14 +624,22 @@ class SettingsViewModel: ObservableObject {
                     selectedModelInput = ""
                     modelSelectionMessage = nil
                     modelDiscoveryState = .failed("No models were returned by this provider.")
-                    failConnection(with: "No models were returned by this provider.")
+                    failConnection(
+                        with: "No models were returned by this provider.",
+                        attemptedIdentity: draftIdentity,
+                        attemptedModel: previousDraftModel
+                    )
                     return
                 } else if previousDiscoveryIdentity == draftIdentity,
                           !previousDraftModel.isEmpty {
                     guard let exactModel = Self.exactModel(previousDraftModel, in: availableModels) else {
                         selectedModelInput = ""
                         modelSelectionMessage = "The previously selected model is no longer available. Choose an exact model for this provider profile."
-                        failConnection(with: NetworkError.modelUnavailable.localizedDescription)
+                        failConnection(
+                            with: NetworkError.modelUnavailable.localizedDescription,
+                            attemptedIdentity: draftIdentity,
+                            attemptedModel: previousDraftModel
+                        )
                         return
                     }
                     gatewayModel = exactModel
@@ -665,7 +703,11 @@ class SettingsViewModel: ObservableObject {
                     validatedAt: validatedAt,
                     notifyActiveProfileChange: false
                 ) else {
-                    failConnection(with: "Could not save gateway configuration. Check Keychain access and try again.")
+                    failConnection(
+                        with: "Could not save gateway configuration. Check Keychain access and try again.",
+                        attemptedIdentity: draftIdentity,
+                        attemptedModel: gatewayModel
+                    )
                     return
                 }
                 AppConfig.clearGatewayConnectionError(
@@ -677,16 +719,24 @@ class SettingsViewModel: ObservableObject {
                 AppConfig.postActiveProfileDidChangeDarwinNotification()
 
                 config = validatedConfig
+                selectedModelInput = validatedConfig.selectedModel
+                resetModelDiscovery()
                 connectionStatus = .success
                 errorMessage = nil
-                modelSelectionMessage = nil
                 showsValidatedGatewayDetails = true
                 return
             } catch {
                 if Self.isCancellation(error) {
                     throw NetworkError.cancelled
                 }
-                failConnection(with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel))
+                guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else {
+                    return
+                }
+                failConnection(
+                    with: NetworkManager.userFacingSmokeErrorMessage(for: error, model: gatewayModel),
+                    attemptedIdentity: draftIdentity,
+                    attemptedModel: gatewayModel
+                )
             }
         } catch {
             guard operationGeneration == gatewayOperationGeneration,
@@ -701,9 +751,17 @@ class SettingsViewModel: ObservableObject {
                 return
             }
             if let networkError = error as? NetworkError {
-                failConnection(with: networkError.localizedDescription)
+                failConnection(
+                    with: networkError.localizedDescription,
+                    attemptedIdentity: operationIdentity,
+                    attemptedModel: initialAttemptedModel
+                )
             } else {
-                failConnection(with: NetworkManager.diagnosticMessage(for: error))
+                failConnection(
+                    with: NetworkManager.diagnosticMessage(for: error),
+                    attemptedIdentity: operationIdentity,
+                    attemptedModel: initialAttemptedModel
+                )
             }
         }
 
@@ -809,7 +867,11 @@ class SettingsViewModel: ObservableObject {
         return choices.first { $0 == trimmed }
     }
 
-    private func failConnection(with message: String) {
+    private func failConnection(
+        with message: String,
+        attemptedIdentity: GatewayDraftIdentity?,
+        attemptedModel: String
+    ) {
         let sanitizedMessage = KeyboardActionErrorState.sanitized(message)
         connectionStatus = .failure
         errorMessage = sanitizedMessage
@@ -817,7 +879,11 @@ class SettingsViewModel: ObservableObject {
         // A failed replacement draft must not poison the still-persisted working profile.
         // Publish runtime failure metadata only when validating that saved identity, or when
         // no complete profile exists yet.
-        if savedGatewayIdentity == nil || currentDraftIdentity == savedGatewayIdentity {
+        let normalizedAttemptedModel = attemptedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let savedModel = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isTestingPersistedProfile = attemptedIdentity == savedGatewayIdentity
+            && normalizedAttemptedModel == savedModel
+        if savedGatewayIdentity == nil || isTestingPersistedProfile {
             AppConfig.saveGatewayConnectionError(sanitizedMessage, to: defaults)
             AppConfig.clearGatewayConnectionLastTestedAt(from: defaults)
         }
@@ -855,10 +921,49 @@ class SettingsViewModel: ObservableObject {
         return elapsed >= 0 && elapsed < AppConfig.gatewayConnectionRetestInterval
     }
 
-    #if DEBUG
+    #if DEBUG && targetEnvironment(simulator)
+    @discardableResult
+    func applyUITestModelDiscoveryActionIfNeeded() -> Bool {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              arguments.contains("--seed-settings-saved-model") else {
+            return false
+        }
+
+        availableModels = ["model-a", "model-b"]
+        selectedModelInput = config.selectedModel
+        modelDiscoveryIdentity = currentDraftIdentity
+        modelDiscoveryState = .loaded
+        modelSelectionMessage = nil
+        return true
+    }
+
     func applyUITestSettingsStateIfNeeded() {
         let arguments = ProcessInfo.processInfo.arguments
         guard arguments.contains("--uitesting") else { return }
+
+        if arguments.contains("--seed-settings-saved-model") {
+            let savedConfig = AppConfig(
+                apiKey: "ui-saved-key",
+                gatewayURL: "https://saved-selection.local",
+                selectedModel: "model-a",
+                isConfigured: true,
+                grammarCorrectionVerified: true,
+                grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
+            )
+            config = savedConfig
+            selectedProvider = savedConfig.provider
+            gatewayURLInput = savedConfig.baseURL
+            apiKeyInput = savedConfig.apiKey
+            selectedModelInput = savedConfig.selectedModel
+            availableModels = []
+            modelDiscoveryIdentity = nil
+            modelDiscoveryState = .idle
+            modelSelectionMessage = nil
+            connectionStatus = .success
+            errorMessage = nil
+            showsValidatedGatewayDetails = true
+        }
 
         if arguments.contains("--seed-settings-model-selection") {
             gatewayURLInput = "https://selection.local"
