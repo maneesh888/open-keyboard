@@ -553,8 +553,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 ]
             ]
         ])
-        let transport = CanonicalGatewayClientTestTransport(data: responseBody, statusCode: 200)
-        let service = KeyboardAIService(gatewayClient: CanonicalGatewayClient(transport: transport))
+        let connector = ConnectorResponseTestDouble(data: responseBody, statusCode: 200)
+        let service = KeyboardAIService(connector: connector)
 
         let result = try await service.performResult(
             action: .fixGrammar,
