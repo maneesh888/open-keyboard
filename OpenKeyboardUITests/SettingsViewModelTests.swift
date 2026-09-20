@@ -1743,6 +1743,84 @@ final class SettingsViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.modelDiscoveryActionTitle, "Change Model")
     }
 
+    func testStaleUnsupportedConnectionCannotReplaceNewerCredentialCatalog() async {
+        let suiteName = "SettingsViewModelTests.stale-unsupported.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let configured = savedGatewayConfig()
+        XCTAssertTrue(configured.save(to: defaults))
+        let tester = FakeGatewayTester(models: ["new-profile-model"])
+        let discoveryStarted = expectation(description: "old profile discovery started")
+        var pendingDiscovery: CheckedContinuation<[String], Error>?
+        tester.modelFetchOverride = {
+            try await withCheckedThrowingContinuation { continuation in
+                pendingDiscovery = continuation
+                discoveryStarted.fulfill()
+            }
+        }
+        let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+        let connectionTask = Task { await viewModel.testConnection() }
+        await fulfillment(of: [discoveryStarted], timeout: 1)
+
+        viewModel.updateGatewayURLInput("https://new-profile.example")
+        viewModel.updateAPIKeyInput("new-profile-key")
+        tester.modelFetchOverride = nil
+        await viewModel.loadModels()
+        pendingDiscovery?.resume(throwing: NetworkError.unsupportedModelDiscovery)
+        await connectionTask.value
+
+        XCTAssertEqual(viewModel.gatewayURLInput, "https://new-profile.example")
+        XCTAssertEqual(viewModel.apiKeyInput, "new-profile-key")
+        XCTAssertEqual(viewModel.modelDiscoveryState, .loaded)
+        XCTAssertEqual(viewModel.availableModels, ["new-profile-model"])
+        XCTAssertEqual(viewModel.selectedModelInput, "new-profile-model")
+        XCTAssertNil(viewModel.modelSelectionMessage)
+        XCTAssertTrue(tester.smokeModels.isEmpty)
+        XCTAssertEqual(viewModel.config, configured)
+        XCTAssertEqual(AppConfig.load(from: defaults), configured)
+    }
+
+    func testCancelledUnsupportedConnectionDoesNotRestartSmokeOrManualEntry() async {
+        for cancelTask in [false, true] {
+            let suiteName = "SettingsViewModelTests.cancelled-unsupported.\(UUID().uuidString)"
+            let defaults = UserDefaults(suiteName: suiteName)!
+            defer { defaults.removePersistentDomain(forName: suiteName) }
+            let configured = savedGatewayConfig()
+            XCTAssertTrue(configured.save(to: defaults))
+            let tester = FakeGatewayTester()
+            let discoveryStarted = expectation(description: "cancelled discovery started")
+            var pendingDiscovery: CheckedContinuation<[String], Error>?
+            // Deliberately finish with unsupported discovery even after cancellation, as a
+            // transport result can already have won its race before the MainActor resumes.
+            tester.modelFetchOverride = {
+                try await withCheckedThrowingContinuation { continuation in
+                    pendingDiscovery = continuation
+                    discoveryStarted.fulfill()
+                }
+            }
+            let viewModel = SettingsViewModel(config: configured, gatewayTester: tester, defaults: defaults)
+            let connectionTask = Task { await viewModel.testConnection() }
+            await fulfillment(of: [discoveryStarted], timeout: 1)
+
+            if cancelTask {
+                connectionTask.cancel()
+            } else {
+                viewModel.cancelInFlightGatewayOperations()
+            }
+            pendingDiscovery?.resume(throwing: NetworkError.unsupportedModelDiscovery)
+            await connectionTask.value
+
+            XCTAssertEqual(viewModel.modelDiscoveryState, .idle)
+            XCTAssertTrue(viewModel.availableModels.isEmpty)
+            XCTAssertEqual(viewModel.selectedModelInput, configured.selectedModel)
+            XCTAssertNil(viewModel.modelSelectionMessage)
+            XCTAssertFalse(viewModel.isTestingConnection)
+            XCTAssertTrue(tester.smokeModels.isEmpty)
+            XCTAssertEqual(viewModel.config, configured)
+            XCTAssertEqual(AppConfig.load(from: defaults), configured)
+        }
+    }
+
     func testRetryModelDiscoveryReplacesFailureWithFreshCatalog() async {
         let tester = FakeGatewayTester(modelFetchFailure: NetworkError.timeout)
         let viewModel = SettingsViewModel(config: .default, gatewayTester: tester)
@@ -2031,6 +2109,7 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     var failingSmokeModels: Set<String>
     var connectionFailure: Error?
     var modelFetchFailure: Error?
+    var modelFetchOverride: (() async throws -> [String])?
     var smokeFailure: Error
     var connectionDelayNanoseconds: UInt64 = 0
     var smokeDelayNanoseconds: UInt64 = 0
@@ -2073,6 +2152,9 @@ private final class FakeGatewayTester: GatewayConnectionTesting {
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
         modelFetches += 1
         testedGatewayURLs.append(gatewayURL)
+        if let modelFetchOverride {
+            return try await modelFetchOverride()
+        }
         if connectionDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: connectionDelayNanoseconds)
         }

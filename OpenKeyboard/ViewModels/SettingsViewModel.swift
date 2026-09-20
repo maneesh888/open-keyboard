@@ -659,6 +659,7 @@ class SettingsViewModel: ObservableObject {
                 }
             } catch {
                 guard Self.isUnsupportedModelDiscovery(error) else { throw error }
+                guard isCurrentGatewayOperation(operationGeneration, draftIdentity: draftIdentity) else { return }
                 availableModels = []
                 modelDiscoveryIdentity = draftIdentity
                 modelDiscoveryState = .unsupported
