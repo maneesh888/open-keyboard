@@ -302,6 +302,7 @@ struct KeyboardActionPanelState: Equatable {
 final class KeyboardViewModel: ObservableObject {
     private let textDocumentProxy: UITextDocumentProxy
     private let aiService: KeyboardAIServiceProviding
+    private let hapticFeedback: KeyboardHapticFeedbackProviding
     private let nextTextPredictor: NextTextPredicting
     private let typingPredictionsEnabled: Bool
     private let loadConfig: () -> AppConfig
@@ -460,6 +461,7 @@ final class KeyboardViewModel: ObservableObject {
     init(
         textDocumentProxy: UITextDocumentProxy,
         aiService: KeyboardAIServiceProviding = KeyboardAIService(),
+        hapticFeedback: KeyboardHapticFeedbackProviding? = nil,
         nextTextPredictor: NextTextPredicting = AppleNaturalLanguageNextTextPredictor(),
         typingPredictionsEnabled: Bool = false,
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
@@ -469,6 +471,7 @@ final class KeyboardViewModel: ObservableObject {
     ) {
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
+        self.hapticFeedback = hapticFeedback ?? KeyboardHapticFeedback()
         self.nextTextPredictor = nextTextPredictor
         self.typingPredictionsEnabled = typingPredictionsEnabled
         self.loadConfig = loadConfig
@@ -501,6 +504,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insert(_ character: String) {
+        hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         let output = isShiftEnabled ? character.uppercased() : character
@@ -516,6 +520,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insertSpace() {
+        hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText(" ")
@@ -526,6 +531,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insertReturn() {
+        hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.insertText("\n")
@@ -540,6 +546,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func deleteBackward() {
+        hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
         textDocumentProxy.deleteBackward()
@@ -552,17 +559,25 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func toggleShift() {
+        hapticFeedback.keyTapped()
         isShiftEnabled.toggle()
     }
 
     func toggleNumbers() {
+        hapticFeedback.keyTapped()
         inputMode = inputMode.togglingNumbers
         isShiftEnabled = false
     }
 
     func toggleSymbols() {
+        hapticFeedback.keyTapped()
         inputMode = inputMode.togglingSymbols
         isShiftEnabled = false
+    }
+
+    func nextKeyboard(using advance: () -> Void) {
+        hapticFeedback.keyTapped()
+        advance()
     }
 
     func showActionPanel() {
