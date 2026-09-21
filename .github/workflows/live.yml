@@ -40,7 +40,7 @@ jobs:
             exit 0
           fi
           if ! jq -e --argjson owner "$OWNER_ID" '
-            .name == "live-policy-migration" and
+            .name == "live-policy-migration" and (.id | type == "number") and
             ([.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] |
              length == 1 and .[0].type == "User" and .[0].reviewer.id == $owner)
           ' "$RUNNER_TEMP/migration-environment.json" >/dev/null; then
@@ -78,7 +78,7 @@ jobs:
           fi
           gh api "repos/$GITHUB_REPOSITORY/environments/live-policy-migration" > "$RUNNER_TEMP/migration-environment.json"
           jq -e --argjson owner "$OWNER_ID" '
-            .name == "live-policy-migration" and
+            .name == "live-policy-migration" and (.id | type == "number") and
             ([.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] |
              length == 1 and .[0].type == "User" and .[0].reviewer.id == $owner)
           ' "$RUNNER_TEMP/migration-environment.json" >/dev/null
@@ -86,9 +86,12 @@ jobs:
           jq -e --arg head "$PR_HEAD_SHA" '.head_sha == $head and .event == "pull_request"' \
             "$RUNNER_TEMP/migration-run.json" >/dev/null
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/migration-approvals.json"
-          jq -e --argjson owner "$OWNER_ID" '
-            any(.[]; .state == "approved" and .user.id == $owner and
-                any(.environments[]; .name == "live-policy-migration"))
+          environment_id="$(jq -er '.id | numbers' "$RUNNER_TEMP/migration-environment.json")"
+          jq -e --argjson owner "$OWNER_ID" --argjson environment_id "$environment_id" '
+            all(.[]; all(.environments[];
+              .name != "live-policy-migration" or .id == $environment_id)) and
+            ([.[] | select(any(.environments[]; .id == $environment_id))] |
+              length > 0 and all(.[]; .state == "approved" and .user.id == $owner))
           ' "$RUNNER_TEMP/migration-approvals.json" >/dev/null
           echo "Owner-approved migration run $GITHUB_RUN_ID for exact head $PR_HEAD_SHA."
 

@@ -23,19 +23,21 @@ case "$2" in
   */environments/live-policy-migration)
     [[ "$SCENARIO" != missing ]] || exit 1
     if [[ "$SCENARIO" == unprotected ]]; then
-      echo '{"name":"live-policy-migration","protection_rules":[]}'
+      echo '{"id":201,"name":"live-policy-migration","protection_rules":[]}'
     elif [[ "$SCENARIO" == wrong-reviewer ]]; then
-      echo '{"name":"live-policy-migration","protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":2}}]}]}'
+      echo '{"id":201,"name":"live-policy-migration","protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":2}}]}]}'
     else
-      echo '{"name":"live-policy-migration","protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":1}}]}]}'
+      echo '{"id":201,"name":"live-policy-migration","protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":1}}]}]}'
     fi ;;
   */approvals)
     case "$SCENARIO" in
       no-approval) echo '[]' ;;
-      wrong-approver) echo '[{"state":"approved","user":{"id":2},"environments":[{"name":"live-policy-migration"}]}]' ;;
-      rejected) echo '[{"state":"rejected","user":{"id":1},"environments":[{"name":"live-policy-migration"}]}]' ;;
+      conflicting) echo '[{"state":"approved","user":{"id":1},"environments":[{"id":201,"name":"live-policy-migration"}]},{"state":"rejected","user":{"id":1},"environments":[{"id":201,"name":"live-policy-migration"}]}]' ;;
+      recreated) echo '[{"state":"approved","user":{"id":1},"environments":[{"id":200,"name":"live-policy-migration"}]}]' ;;
+      wrong-approver) echo '[{"state":"approved","user":{"id":2},"environments":[{"id":201,"name":"live-policy-migration"}]}]' ;;
+      rejected) echo '[{"state":"rejected","user":{"id":1},"environments":[{"id":201,"name":"live-policy-migration"}]}]' ;;
       wrong-environment) echo '[{"state":"approved","user":{"id":1},"environments":[{"name":"live-policy"}]}]' ;;
-      *) echo '[{"state":"approved","user":{"id":1},"environments":[{"name":"live-policy-migration"}]}]' ;;
+      *) echo '[{"state":"approved","user":{"id":1},"environments":[{"id":201,"name":"live-policy-migration"}]}]' ;;
     esac ;;
   */actions/runs/10)
     if [[ "$SCENARIO" == wrong-head ]]; then
@@ -51,7 +53,7 @@ export PATH="$FIXTURE/bin:$PATH" RUNNER_TEMP="$FIXTURE" GITHUB_OUTPUT="$FIXTURE/
 export GITHUB_REPOSITORY=fixture/repo GITHUB_RUN_ID=10 OWNER_ID=1 ROUTING_RESULT=success
 export PR_BASE_SHA=6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6
 export PR_HEAD_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-for scenario in valid missing unprotected wrong-reviewer no-approval wrong-approver rejected wrong-environment wrong-head; do
+for scenario in valid missing unprotected wrong-reviewer no-approval wrong-approver rejected wrong-environment wrong-head conflicting recreated; do
   export SCENARIO="$scenario"
   : > "$GITHUB_OUTPUT"
   bash -e -o pipefail "$FIXTURE/route.sh" > "$FIXTURE/output" 2>&1

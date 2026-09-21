@@ -59,7 +59,9 @@ cannot be hidden by cancellation of a dependency. During migration it fails unti
 recorded. After the owner approves the separate environment job, rerun the failed required job in
 that same exact-head run; its approval history is then available. No polling or check waiver is used. This prevents GitHub from implicitly creating an unprotected
 migration environment. The guard requires real approval history by the owner, for this environment
-and workflow run, whose head matches the exact PR head. Codex must not manufacture this approval.
+numeric environment ID and workflow run, whose head matches the exact PR head. Conflicting or
+rejected history and deleted/recreated environments fail closed; do not infer ordering from an
+approval list without timestamps. After a rejection, obtain approval in a fresh run. Codex must not manufacture this approval.
 External environment setup requires explicit owner authorization; it is not part of a normal code
 commit. A new candidate head needs fresh run approval. The live workflow runs on opened,
 synchronize, reopened, and body-edited events; draft/readiness changes alone do not alter live
