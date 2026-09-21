@@ -169,6 +169,15 @@ elif [[ "$#" -gt 1 ]]; then
 fi
 
 run_xcodebuild() {
+  if [[ -n "${SENSITIVE_LIVE_WORKSPACE:-}" ]]; then
+    # XCTest may echo request/configuration values on failure. Never forward raw live output.
+    local live_log="$SENSITIVE_LIVE_WORKSPACE/xcodebuild.log"
+    (umask 077; "$@" > "$live_log" 2>&1) || {
+      echo "Sensitive live test command failed; raw output was withheld." >&2
+      return 1
+    }
+    return 0
+  fi
   if command -v xcpretty >/dev/null 2>&1; then
     "$@" | xcpretty
   else
@@ -739,11 +748,16 @@ case "$MODE" in
       echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_GATEWAY_URL, OPEN_KEYBOARD_LIVE_API_KEY, and OPEN_KEYBOARD_LIVE_MODEL are required for live-ui.${NC}"
       exit 1
     fi
+    begin_sensitive_live_workspace live-ui
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
     run_xcodebuild xcodebuild test \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
+      -derivedDataPath "$SENSITIVE_LIVE_WORKSPACE/DerivedData" \
+      -resultBundlePath "$SENSITIVE_LIVE_WORKSPACE/live-ui.xcresult" \
       -only-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO

@@ -136,4 +136,40 @@ if grep -q PRIVATE_KEY_SENTINEL "$FIXTURE/output"; then
 fi
 assert_private
 
+# Execute the real live-ui branch and output wrapper with only Xcode/Simulator setup mocked.
+python3 - "$ROOT/scripts/ios/test.sh" "$FIXTURE/live-ui.sh" <<'PY_UI'
+import pathlib, sys
+s = pathlib.Path(sys.argv[1]).read_text()
+wrapper = s[s.index('run_xcodebuild() {'):s.index('require_xcodebuild() {')]
+branch = s[s.index('  live-ui)') + len('  live-ui)'):s.index('  live-gateway-smoke)')]
+branch = branch[:branch.rindex('    ;;')]
+setup = r"""#!/bin/bash
+set -euo pipefail
+RED= GREEN= YELLOW= NC= PROJECT=fixture SCHEME=fixture
+OPEN_KEYBOARD_LIVE_GATEWAY_URL=private-endpoint-sentinel
+OPEN_KEYBOARD_LIVE_API_KEY=private-credential-sentinel
+OPEN_KEYBOARD_LIVE_MODEL=private-model-sentinel
+require_xcodebuild() { :; }
+begin_sensitive_live_workspace() { SENSITIVE_LIVE_WORKSPACE="$UI_FIXTURE/sensitive"; mkdir -p "$SENSITIVE_LIVE_WORKSPACE"; }
+create_sensitive_live_simulator() { SENSITIVE_LIVE_SIMULATOR=fixture-owned-simulator; }
+simulator_destination() { printf 'platform=iOS Simulator,id=%s' "$1"; }
+xcodebuild() {
+  printf '%s\n' "$@" > "$UI_FIXTURE/arguments"
+  echo private-response-sentinel
+  echo private-timing-sentinel >&2
+  return "$MOCK_XCODE_STATUS"
+}
+"""
+pathlib.Path(sys.argv[2]).write_text(setup + wrapper + branch)
+PY_UI
+for status in 0 1; do
+  ui_status=0
+  UI_FIXTURE="$FIXTURE" MOCK_XCODE_STATUS="$status" bash "$FIXTURE/live-ui.sh" > "$FIXTURE/ui-output" 2>&1 || ui_status=$?
+  [[ "$ui_status" == "$status" ]] || { echo "Live UI command status was lost." >&2; exit 1; }
+  if grep -q sentinel "$FIXTURE/ui-output"; then echo "Live UI raw output escaped." >&2; exit 1; fi
+  grep -q 'platform=iOS Simulator,id=fixture-owned-simulator' "$FIXTURE/arguments"
+  grep -q "$FIXTURE/sensitive/DerivedData" "$FIXTURE/arguments"
+  grep -q "$FIXTURE/sensitive/live-ui.xcresult" "$FIXTURE/arguments"
+done
+
 echo "Private live-runner regression tests passed (mock XCTest)."
