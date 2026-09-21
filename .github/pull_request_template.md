@@ -79,13 +79,14 @@
 - Human-approved head: pending
 - Human approval evidence: pending
 
-## Live gateway evidence
-
 <!-- For no gateway impact, write "Local live verification: not required". -->
 <!-- For gateway impact, check-live first runs the four-provider Settings/connector matrix, then the classifier-selected gateway target on exact HEAD. -->
 <!-- Exact provider/model identities are compared locally against ignored mode-600 seeds and are deliberately not retained in the PR, logs, or artifacts. -->
 <!-- Use model-agnostic only when no requirement names a model. Exact tasks still pass the private ID through OPEN_KEYBOARD_LIVE_REQUIRED_MODEL(S), but record only the requirement class and match booleans below. -->
 <!-- Differential role attestations must stay in canonical low/high order. Provider attestations must stay in canonical openai/anthropic/openrouter/gateway order. -->
+
+## Live gateway evidence
+
 - Local live verification: not required
 - Live verification target: not required
 - Exact live-tested head: not required

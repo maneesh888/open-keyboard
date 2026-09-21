@@ -347,4 +347,10 @@ $payload" "Unknown/private payload in evidence section" "$impact"
 - Trust boundary: privacy-sentinel" "Extra malformed trust boundary" "$impact"
 done
 
+if ! run_policy "$(cat "$ROOT/.github/pull_request_template.md")" none; then
+  cat "$OUTPUT" >&2
+  echo "The repository PR template violates the private evidence schema." >&2
+  exit 1
+fi
+
 echo "Live-evidence policy regression tests passed."

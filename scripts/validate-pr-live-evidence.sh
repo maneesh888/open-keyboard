@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Marker consumed by live-policy-bootstrap.sh when a pull request changes the retained evidence
-# schema before the trusted base validator has learned it.
+# Marker required by live.yml when loading the validator from the exact trusted base.
 readonly OPEN_KEYBOARD_REDACTED_LIVE_EVIDENCE_SCHEMA=1
 
 HEAD_SHA="${HEAD_SHA:-}"
