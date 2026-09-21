@@ -526,8 +526,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(result.displayText, source)
         XCTAssertEqual(
             connector.requests.count,
-            expectedChunks.count * 2,
-            "A completely unchanged first grammar pass is retried once with the same connector profile."
+            expectedChunks.count,
+            "A valid unchanged grammar response completes without another connector pass."
         )
         XCTAssertEqual(connector.maximumActiveResponses, 2)
         XCTAssertTrue(connector.requests.allSatisfy { $0.modelID == "test-model" })
@@ -1133,10 +1133,11 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
-    func testKeyboardAIServiceRetriesOneCompletelyUnchangedGrammarPass() async throws {
+    func testKeyboardAIServiceAcceptsValidUnchangedGrammarWithoutRetrying() async throws {
         let source = "Our support team definately needs the corrected refund note."
-        let corrected = "Our support team definitely needs the corrected refund note."
-        let connector = SequencedConnectorResponseTestDouble(contents: [source, corrected])
+        let connector = SequencedConnectorResponseTestDouble(
+            contents: [source, "Certainly: \(source)"]
+        )
         let service = KeyboardAIService(connector: connector)
 
         let result = try await service.performResult(
@@ -1145,10 +1146,11 @@ final class GatewayClientArchitectureTests: XCTestCase {
             config: configuredGateway
         )
 
-        XCTAssertEqual(result.displayText, corrected)
-        XCTAssertEqual(connector.requests.count, 2)
+        XCTAssertTrue(result.isNoChangeResult)
+        XCTAssertEqual(result.displayText, source)
+        XCTAssertEqual(connector.requests.count, 1)
         let requestInputs = connector.requests.compactMap { $0.messages.last?.content }
-        XCTAssertEqual(requestInputs, [source, source])
+        XCTAssertEqual(requestInputs, [source])
     }
 
     private func assertModelCapabilityFailure(
