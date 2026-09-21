@@ -169,6 +169,15 @@ elif [[ "$#" -gt 1 ]]; then
 fi
 
 run_xcodebuild() {
+  if [[ -n "${SENSITIVE_LIVE_WORKSPACE:-}" ]]; then
+    # XCTest may echo request/configuration values on failure. Never forward raw live output.
+    local live_log="$SENSITIVE_LIVE_WORKSPACE/xcodebuild.log"
+    (umask 077; "$@" > "$live_log" 2>&1) || {
+      echo "Sensitive live test command failed; raw output was withheld." >&2
+      return 1
+    }
+    return 0
+  fi
   if command -v xcpretty >/dev/null 2>&1; then
     "$@" | xcpretty
   else
@@ -739,11 +748,16 @@ case "$MODE" in
       echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_GATEWAY_URL, OPEN_KEYBOARD_LIVE_API_KEY, and OPEN_KEYBOARD_LIVE_MODEL are required for live-ui.${NC}"
       exit 1
     fi
+    begin_sensitive_live_workspace live-ui
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
     run_xcodebuild xcodebuild test \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
+      -derivedDataPath "$SENSITIVE_LIVE_WORKSPACE/DerivedData" \
+      -resultBundlePath "$SENSITIVE_LIVE_WORKSPACE/live-ui.xcresult" \
       -only-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
@@ -754,7 +768,8 @@ case "$MODE" in
     openkeyboard_unset_seed_backed_live_ambient_inputs
     requested_seed_file="${initial_seed_file:-$DEFAULT_SIMULATOR_GATEWAY_SEED_FILE}"
     requested_live_profile="${initial_live_profile:-reference}"
-    export -n requested_seed_file requested_live_profile
+    requested_differential_evidence_output="$initial_differential_evidence_output"
+    export -n requested_seed_file requested_live_profile requested_differential_evidence_output
     openkeyboard_unset_initial_route_controls
     echo -e "${YELLOW}Running opt-in live gateway Test Connection smoke on iPhone 16...${NC}"
     require_xcodebuild
@@ -789,6 +804,8 @@ case "$MODE" in
     fi
     chmod 600 "$xctestrun"
 
+    reference_model="$OPEN_KEYBOARD_SIMULATOR_MODEL"
+    export -n reference_model
     inject_xctestrun_live_smoke_env "$xctestrun"
     openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
@@ -797,6 +814,11 @@ case "$MODE" in
       -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
+    if [[ -n "$requested_differential_evidence_output" ]]; then
+      (umask 077; printf 'model=%s\n' "$reference_model" > "$requested_differential_evidence_output")
+      chmod 600 "$requested_differential_evidence_output"
+    fi
+    unset reference_model
     echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
     echo "Sensitive live-test artifacts will be removed before exit."
     ;;
@@ -1076,7 +1098,8 @@ case "$MODE" in
     printf '%s\n' "$evidence_lines"
     if [[ -n "$requested_differential_evidence_output" ]]; then
       umask 077
-      printf '%s\n' "$evidence_lines" > "$requested_differential_evidence_output"
+      # Exact identities are private IPC to the parent gate, never public stdout.
+      printf 'models=low=%s, high=%s\n%s\n' "$low_model" "$high_model" "$evidence_lines" > "$requested_differential_evidence_output"
       chmod 600 "$requested_differential_evidence_output"
     fi
     completion_status=0

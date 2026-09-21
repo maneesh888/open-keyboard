@@ -495,9 +495,9 @@ if [[ "$POST_PROVIDER_SHA" != "$HEAD_SHA" ]]; then
 fi
 require_clean_checkout
 
+differential_evidence_file="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-live-identity-evidence.XXXXXX")"
+chmod 600 "$differential_evidence_file"
 if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
-  differential_evidence_file="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-live-differential-evidence.XXXXXX")"
-  chmod 600 "$differential_evidence_file"
   echo "Running the targeted two-profile live-model matrix for exact HEAD."
   env \
     -u UAC_LIVE_ENV_FILE \
@@ -570,7 +570,9 @@ if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
     OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT="$differential_evidence_file" \
       "$ROOT/scripts/ios/test.sh" live-model-differential
   [[ -s "$differential_evidence_file" ]] || fail "Targeted live-model evidence output was not produced."
-  require_private_evidence_shape "$differential_evidence_file" 10 "Targeted live-model evidence"
+  require_private_evidence_shape "$differential_evidence_file" 11 "Targeted live-model evidence"
+  [[ "$(grep -E '^models=' "$differential_evidence_file")" == "models=low=$REQUIRED_LOW_MODEL, high=$REQUIRED_HIGH_MODEL" ]] ||
+    fail "The exercised model roles differ from the original exact selection."
   PROFILE_MODEL_BINDINGS_LINE="$(grep -E '^profile_model_bindings=' "$differential_evidence_file")"
   PROFILE_MODELS_DISTINCT_LINE="$(grep -E '^profile_models_distinct=' "$differential_evidence_file")"
   BASELINE_LINE="$(grep -E '^baseline_outcomes=' "$differential_evidence_file")"
@@ -661,8 +663,12 @@ else
     -u SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL \
     -u SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
     OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE="$SEED_FILE" \
+    OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT="$differential_evidence_file" \
     OPEN_KEYBOARD_LIVE_PROFILE="$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" \
       "$ROOT/scripts/ios/test.sh" live-gateway-smoke
+  require_private_evidence_shape "$differential_evidence_file" 1 "Reference identity evidence"
+  [[ "$(cat "$differential_evidence_file")" == "model=$TESTED_MODEL" ]] ||
+    fail "The exercised reference model differs from the original exact selection."
 fi
 
 POST_LIVE_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"

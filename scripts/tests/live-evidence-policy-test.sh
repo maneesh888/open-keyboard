@@ -173,7 +173,6 @@ run_snapshot_gate() {
     EVENT_HEAD_SHA="$HEAD_SHA" \
     GITHUB_WORKSPACE="$ROOT" \
     LIVE_IMPACT=gateway \
-    LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=false \
     RUNNER_TEMP="$FIXTURE" \
     VALIDATOR_ROOT="$ROOT/scripts" \
     bash -e -o pipefail "$ENFORCER" >> "$OUTPUT" 2>&1
@@ -327,5 +326,31 @@ assert_rejected "$none_impact_body
 - No credential, private provider value, model identity, or gateway response body retained." "No-impact evidence duplicating the retention boundary" none
 assert_rejected "$none_impact_body
 - Trust boundary: local execution attests secret-backed exact identity comparisons; GitHub verifies retained exact-head non-sensitive assertions only." "No-impact evidence duplicating the trust boundary" none
+
+for body in "$valid_body" "$differential_body" "$none_impact_body"; do
+  impact=gateway
+  [[ "$body" != "$differential_body" ]] || impact=gateway-differential
+  [[ "$body" != "$none_impact_body" ]] || impact=none
+  for payload in \
+    '- Live private model: privacy-sentinel' \
+    '- No credential boundary: privacy-sentinel' \
+    '- Trust boundary: privacy-sentinel' \
+    '- profile_hash=privacy-sentinel' \
+    'private free text sentinel'; do
+    assert_rejected "$body
+## Live gateway evidence
+$payload" "Unknown/private payload in evidence section" "$impact"
+  done
+  assert_rejected "$body
+- No credential boundary: privacy-sentinel" "Extra malformed retention boundary" "$impact"
+  assert_rejected "$body
+- Trust boundary: privacy-sentinel" "Extra malformed trust boundary" "$impact"
+done
+
+if ! run_policy "$(cat "$ROOT/.github/pull_request_template.md")" none; then
+  cat "$OUTPUT" >&2
+  echo "The repository PR template violates the private evidence schema." >&2
+  exit 1
+fi
 
 echo "Live-evidence policy regression tests passed."

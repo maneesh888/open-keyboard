@@ -403,13 +403,8 @@ presented as a capability boundary, high failure, unverified scenarios, and cont
 evidence. GitHub still receives no credentials, model identifiers, private URLs, or response
 bodies.
 
-During the one pull request that introduces this schema, an older trusted/base validator still
-requires its retired profile-latency field. The bootstrap supplies fixed zero placeholders only in
-a mode-600 temporary compatibility projection, never in terminal or pull-request evidence, and
-trap-cleans that projection. The shim is skipped automatically after the trusted validator exposes
-the redacted-schema marker. The candidate side always requires the stricter differential record
-through this one-time bridge and rejects target downgrades or latency fields in actual evidence;
-only the trusted-side projection may narrow that record to the old ordinary-gateway schema.
+The exact trusted base must expose the private-schema marker. Missing and legacy validators
+fail closed without candidate fallbacks, compatibility projections, or fabricated measurements.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
@@ -536,3 +531,11 @@ its source after environment approval and before reading deployment secrets.
 Production `v*` tags must point to commits contained in `main`. Manual dispatch defaults
 to validation without upload. The deployment workflow does not prove App Review acceptance or a
 successful public release.
+
+## Private evidence and trusted policy
+
+See `docs/LIVE_EVIDENCE_PRIVACY.md` for the public assertion schema and local identity boundary.
+The live workflow requires the private schema on its exact trusted base, with no candidate
+fallback, legacy projection, synthetic timings, or separate migration environment. Both event
+and current snapshots must pass; four-provider outcomes and exact-head independent review remain
+mandatory. Unknown fields in the live-evidence section fail closed.

@@ -86,7 +86,10 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/test.sh)
       differential_required="true"
       ;;
-    OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
+    OpenKeyboard/Models/AppConfig.swift | \
+      OpenKeyboard/ViewModels/SettingsViewModel.swift | \
+      OpenKeyboard/Services/* | \
+      OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
       OpenKeyboard/Services/OpenKeyboardAIConnector.swift | \
       OpenKeyboard/Services/UniversalAIConnectorAdapter.swift | \
       OpenKeyboard/Services/NetworkManager.swift | \

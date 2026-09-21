@@ -35,7 +35,6 @@ DEPLOY_SOURCE_POLICY_TEST="$ROOT/scripts/tests/deploy-source-policy-test.sh"
 DEPLOY_SOURCE_VALIDATOR="$ROOT/scripts/validate-deployment-source.sh"
 LIVE_TEST_SAFETY="$ROOT/scripts/ios/live-test-safety.sh"
 LIVE_TEST_SAFETY_POLICY_TEST="$ROOT/scripts/tests/live-test-safety-test.sh"
-LIVE_POLICY_BOOTSTRAP="$ROOT/scripts/live-policy-bootstrap.sh"
 LIVE_POLICY_BOOTSTRAP_TEST="$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
 RUNTIME_PROOF_POLICY_TEST="$ROOT/scripts/tests/runtime-proof-policy-test.sh"
 WORKFLOW_AUTHORIZATION_POLICY_TEST="$ROOT/scripts/tests/workflow-authorization-policy-test.sh"
@@ -76,7 +75,6 @@ for required_file in \
   "$DEPLOY_SOURCE_VALIDATOR" \
   "$LIVE_TEST_SAFETY" \
   "$LIVE_TEST_SAFETY_POLICY_TEST" \
-  "$LIVE_POLICY_BOOTSTRAP" \
   "$LIVE_POLICY_BOOTSTRAP_TEST" \
   "$RUNTIME_PROOF_POLICY_TEST" \
   "$WORKFLOW_AUTHORIZATION_POLICY_TEST" \
@@ -113,15 +111,12 @@ if rg --quiet '^  workflow_dispatch:' "$CI_WORKFLOW"; then
   exit 1
 fi
 rg --fixed-strings --quiet 'live-impact.sh \' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'supports_differential=false' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'TRUSTED_LIVE_IMPACT=$trusted_live_impact' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'LIVE_POLICY_BOOTSTRAP_DIFFERENTIAL=$bootstrap_differential' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'source "$GITHUB_WORKSPACE/scripts/live-policy-bootstrap.sh"' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'openkeyboard_resolve_live_policy_bootstrap' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'openkeyboard_write_trusted_gateway_projection' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet '"$GITHUB_WORKSPACE/scripts/validate-pr-live-evidence.sh"' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'trusted-gateway-projection.md' "$LIVE_WORKFLOW"
-rg --fixed-strings --quiet 'LIVE_IMPACT="$TRUSTED_LIVE_IMPACT"' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'LIVE_IMPACT=$trusted_live_impact' "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet 'readonly OPEN_KEYBOARD_REDACTED_LIVE_EVIDENCE_SCHEMA=1' "$LIVE_WORKFLOW"
+if rg --quiet 'live-policy-migration|trusted-gateway-projection|source |cp "scripts/' "$LIVE_WORKFLOW"; then
+  echo "Live policy must use trusted validators without candidate fallback or migration projections." >&2
+  exit 1
+fi
 rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK"
 rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"

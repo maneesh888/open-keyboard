@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Hooks export repository-local Git state; fixtures must not inherit it.
+while IFS= read -r git_environment_name; do
+  unset "$git_environment_name"
+done < <(git -C "$ROOT" rev-parse --local-env-vars)
+FIXTURE="$(mktemp -d)"
+trap 'rm -rf -- "$FIXTURE"' EXIT
+REPO="$FIXTURE/repo"
+mkdir -p "$REPO/scripts/ios" "$REPO/.agent/local-seeds"
+cp "$ROOT/scripts/check-live.sh" "$REPO/scripts/"
+cp "$ROOT/scripts/ios/live-test-safety.sh" "$REPO/scripts/ios/"
+printf '#!/bin/bash\necho gateway\n' > "$REPO/scripts/live-impact.sh"
+chmod +x "$REPO/scripts/live-impact.sh"
+printf '.agent/\n' > "$REPO/.gitignore"
+cat > "$REPO/.agent/local-seeds/openkeyboard-gateway.env" <<'SEED'
+OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL=https://private.invalid
+OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY=credential-sentinel
+OPEN_KEYBOARD_SIMULATOR_LOW_MODEL=low-identity-sentinel
+OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL=https://private.invalid
+OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY=credential-sentinel
+OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL=high-identity-sentinel
+SEED
+chmod 600 "$REPO/.agent/local-seeds/openkeyboard-gateway.env"
+# Mock only the expensive XCTest process. The gate and guarded seed/identity validation are real.
+cat > "$REPO/scripts/ios/test.sh" <<'MOCK'
+#!/bin/bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+[[ "$1" != core ]] || exit 0
+if [[ "$1" == live-provider-matrix ]]; then
+  printf '%s\n' \
+    'provider_exact_bindings=openai=true, anthropic=true, openrouter=true, gateway=true' \
+    'provider_test_connection_outcomes=openai=passed, anthropic=passed, openrouter=passed, gateway=passed' \
+    'provider_diagnostic_outcomes=openai=passed, anthropic=passed, openrouter=passed, gateway=passed' > "$OPEN_KEYBOARD_LIVE_PROVIDER_EVIDENCE_OUTPUT"
+  exit 0
+fi
+if [[ "$1" == live-gateway-smoke ]]; then
+  if [[ "$(cat "$ROOT/.agent/scenario")" == substituted ]]; then
+    printf 'model=substituted-identity-sentinel\n' > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
+  else
+    printf 'model=high-identity-sentinel\n' > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
+  fi
+  exit 0
+fi
+cat > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" <<'EVIDENCE'
+models=low=low-identity-sentinel, high=high-identity-sentinel
+profile_model_bindings=low=true, high=true
+profile_models_distinct=true
+baseline_outcomes=low=passed, high=passed
+differential_outcomes=low=expected-model-capability, high=passed
+follow_up_outcomes=low=passed, high=passed
+summarize_outcomes=low=passed, high=passed
+continue_writing_outcomes=low=passed, high=passed
+operation_scoped_warning_contracts=verified
+diagnostic_outcomes_low=transport=passed, grammar=passed, rewrite=passed, translation=passed
+diagnostic_outcomes_high=transport=passed, grammar=passed, rewrite=passed, translation=passed
+EVIDENCE
+case "$(cat "$ROOT/.agent/scenario")" in
+  substituted) sed -i.bak 's/high-identity-sentinel/substituted-identity-sentinel/' "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+  swapped) sed -i.bak 's/models=.*/models=low=high-identity-sentinel, high=low-identity-sentinel/' "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+  missing) sed -i.bak '/follow_up_outcomes/d' "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+  outcome) sed -i.bak 's/low=expected-model-capability/low=passed/' "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+  extra) printf 'prompt=private-text-sentinel\n' >> "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+  duplicate) printf 'models=low=low-identity-sentinel, high=high-identity-sentinel\n' >> "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT" ;;
+esac
+rm -f "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT.bak"
+MOCK
+chmod +x "$REPO/scripts/ios/test.sh"
+git -C "$REPO" init -q
+git -C "$REPO" config user.name Fixture
+git -C "$REPO" config user.email fixture@example.invalid
+git -C "$REPO" add .
+git -C "$REPO" -c core.hooksPath=/dev/null commit -qm fixture
+git -C "$REPO" update-ref refs/remotes/origin/main HEAD
+run_gate() {
+  env -u OPEN_KEYBOARD_LIVE_REQUIRED_MODEL -u OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
+    -u OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE "$@" \
+    bash -ax "$REPO/scripts/check-live.sh" "${GATE_TARGET:-gateway-differential}" > "$FIXTURE/output" 2>&1
+}
+assert_private() {
+  if grep -Eq 'identity-sentinel|credential-sentinel|text-sentinel|private.invalid|12.345s|23.456s' "$FIXTURE/output"; then
+    echo "Synthetic private runner values escaped into output." >&2; exit 1
+  fi
+}
+printf valid > "$REPO/.agent/scenario"
+run_gate
+assert_private
+grep -q 'model_identity_matches=low=true, high=true' "$FIXTURE/output"
+for scenario in substituted swapped missing outcome extra duplicate; do
+  printf '%s' "$scenario" > "$REPO/.agent/scenario"
+  if run_gate; then echo "Invalid private evidence accepted: $scenario" >&2; exit 1; fi
+  assert_private
+done
+printf valid > "$REPO/.agent/scenario"
+for requirement in \
+  'low=high-identity-sentinel, high=low-identity-sentinel' \
+  'low=low-identity-sentinel, high=substituted-identity-sentinel' \
+  'low=low-identity-sentinel' \
+  ''; do
+  if run_gate "OPEN_KEYBOARD_LIVE_REQUIRED_MODELS=$requirement"; then
+    echo "Invalid exact model requirement accepted." >&2; exit 1
+  fi
+  assert_private
+done
+if run_gate OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=identity-sentinel; then
+  echo "Single-model requirement silently discarded by differential target." >&2; exit 1
+fi
+assert_private
+if run_gate OPEN_KEYBOARD_LIVE_EXPECTED_SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; then
+  echo "Stale local head accepted." >&2; exit 1
+fi
+assert_private
+GATE_TARGET=gateway
+printf valid > "$REPO/.agent/scenario"
+run_gate
+assert_private
+grep -q 'model_identity_matches=reference=true' "$FIXTURE/output"
+run_gate OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=high-identity-sentinel
+assert_private
+for requirement in wrong-identity-sentinel model-agnostic ''; do
+  if run_gate "OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=$requirement"; then
+    echo "Ordinary gate accepted an invalid explicit identity requirement." >&2; exit 1
+  fi
+  assert_private
+done
+printf substituted > "$REPO/.agent/scenario"
+if run_gate; then echo "Ordinary gate accepted a substituted runtime identity." >&2; exit 1; fi
+assert_private
+# Exercise the real seed loader with inherited tracing and a private-looking malformed key.
+printf '\nPRIVATE_KEY_SENTINEL=value\n' >> "$REPO/.agent/local-seeds/openkeyboard-gateway.env"
+if run_gate; then echo "Malformed seed accepted." >&2; exit 1; fi
+if grep -q PRIVATE_KEY_SENTINEL "$FIXTURE/output"; then
+  echo "Malformed seed key escaped into output." >&2; exit 1
+fi
+assert_private
+
+# Execute the real live-ui branch and output wrapper with only Xcode/Simulator setup mocked.
+python3 - "$ROOT/scripts/ios/test.sh" "$FIXTURE/live-ui.sh" <<'PY_UI'
+import pathlib, sys
+s = pathlib.Path(sys.argv[1]).read_text()
+wrapper = s[s.index('run_xcodebuild() {'):s.index('require_xcodebuild() {')]
+branch = s[s.index('  live-ui)') + len('  live-ui)'):s.index('  live-gateway-smoke)')]
+branch = branch[:branch.rindex('    ;;')]
+setup = r"""#!/bin/bash
+set -euo pipefail
+RED= GREEN= YELLOW= NC= PROJECT=fixture SCHEME=fixture
+OPEN_KEYBOARD_LIVE_GATEWAY_URL=private-endpoint-sentinel
+OPEN_KEYBOARD_LIVE_API_KEY=private-credential-sentinel
+OPEN_KEYBOARD_LIVE_MODEL=private-model-sentinel
+require_xcodebuild() { :; }
+begin_sensitive_live_workspace() { SENSITIVE_LIVE_WORKSPACE="$UI_FIXTURE/sensitive"; mkdir -p "$SENSITIVE_LIVE_WORKSPACE"; }
+create_sensitive_live_simulator() { SENSITIVE_LIVE_SIMULATOR=fixture-owned-simulator; }
+simulator_destination() { printf 'platform=iOS Simulator,id=%s' "$1"; }
+xcodebuild() {
+  printf '%s\n' "$@" > "$UI_FIXTURE/arguments"
+  echo private-response-sentinel
+  echo private-timing-sentinel >&2
+  return "$MOCK_XCODE_STATUS"
+}
+"""
+pathlib.Path(sys.argv[2]).write_text(setup + wrapper + branch)
+PY_UI
+for status in 0 1; do
+  ui_status=0
+  UI_FIXTURE="$FIXTURE" MOCK_XCODE_STATUS="$status" bash "$FIXTURE/live-ui.sh" > "$FIXTURE/ui-output" 2>&1 || ui_status=$?
+  [[ "$ui_status" == "$status" ]] || { echo "Live UI command status was lost." >&2; exit 1; }
+  if grep -q sentinel "$FIXTURE/ui-output"; then echo "Live UI raw output escaped." >&2; exit 1; fi
+  grep -q 'platform=iOS Simulator,id=fixture-owned-simulator' "$FIXTURE/arguments"
+  grep -q "$FIXTURE/sensitive/DerivedData" "$FIXTURE/arguments"
+  grep -q "$FIXTURE/sensitive/live-ui.xcresult" "$FIXTURE/arguments"
+done
+
+echo "Private live-runner regression tests passed (mock XCTest)."
