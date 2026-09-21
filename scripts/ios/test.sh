@@ -3,6 +3,8 @@
 # OpenKeyboard iOS/Core Test Runner
 # Usage: ./scripts/ios/test.sh {core|build|deterministic-ui|ui|live-ui|live-gateway-smoke|live-model-differential [--diagnostic]|real-keyboard-live|screenshots|all|coverage}
 
+set +x
+set +a
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -45,6 +47,15 @@ elif [[ "$#" -gt 1 ]]; then
 fi
 
 run_xcodebuild() {
+  if [[ -n "${SENSITIVE_LIVE_WORKSPACE:-}" ]]; then
+    # XCTest can echo request/configuration values on failure. Never forward its raw output.
+    local live_log="$SENSITIVE_LIVE_WORKSPACE/xcodebuild.log"
+    (umask 077; "$@" > "$live_log" 2>&1) || {
+      echo "Sensitive live test command failed; raw output was withheld." >&2
+      return 1
+    }
+    return 0
+  fi
   if command -v xcpretty >/dev/null 2>&1; then
     "$@" | xcpretty
   else
@@ -381,6 +392,7 @@ case "$MODE" in
       exit 1
     fi
 
+    reference_model="$OPEN_KEYBOARD_SIMULATOR_MODEL"
     inject_xctestrun_live_smoke_env "$xctestrun"
     openkeyboard_unset_simulator_gateway_profiles
     run_xcodebuild xcodebuild test-without-building \
@@ -389,6 +401,10 @@ case "$MODE" in
       -only-testing:OpenKeyboardUITests/LiveGatewaySmokeTests/testLiveGatewayTestConnectionServicePathWhenSeeded \
       -resultBundlePath "$result_bundle"
     openkeyboard_assert_single_passing_xcresult "$result_bundle"
+    if [[ -n "${OPEN_KEYBOARD_LIVE_REFERENCE_EVIDENCE_OUTPUT:-}" ]]; then
+      (umask 077; printf 'model=%s\n' "$reference_model" > "$OPEN_KEYBOARD_LIVE_REFERENCE_EVIDENCE_OUTPUT")
+      chmod 600 "$OPEN_KEYBOARD_LIVE_REFERENCE_EVIDENCE_OUTPUT"
+    fi
     echo -e "${GREEN}✓ Live gateway Test Connection smoke complete${NC}"
     echo "Sensitive live-test artifacts will be removed before exit."
     ;;
@@ -465,6 +481,11 @@ case "$MODE" in
 
       openkeyboard_load_simulator_gateway_seed "$seed_file"
       openkeyboard_select_simulator_gateway_profile "$profile_role"
+      if [[ "$profile_role" == low ]]; then
+        openkeyboard_require_exact_live_model "$OPEN_KEYBOARD_SIMULATOR_MODEL" "$low_model"
+      else
+        openkeyboard_require_exact_live_model "$OPEN_KEYBOARD_SIMULATOR_MODEL" "$high_model"
+      fi
       OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE="$profile_role"
       inject_xctestrun_live_smoke_env "$xctestrun"
       openkeyboard_unset_simulator_gateway_profiles
@@ -538,7 +559,8 @@ case "$MODE" in
       "$low_diagnostic_latencies" \
       "$high_diagnostic_outcomes" \
       "$high_diagnostic_latencies")"
-    printf '%s\n' "$evidence_lines"
+    # The identity-bearing record is private IPC only, deleted by check-live.sh on exit.
+    echo "Profile scenarios completed; private evidence is available to the local gate."
     if [[ -n "${OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT:-}" ]]; then
       umask 077
       printf '%s\n' "$evidence_lines" > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"

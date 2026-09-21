@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Marker consumed by live-policy-bootstrap.sh when a pull request changes the retained evidence
+# schema before the trusted base validator has learned it.
+readonly OPEN_KEYBOARD_REDACTED_LIVE_EVIDENCE_SCHEMA=1
+
 HEAD_SHA="${HEAD_SHA:-}"
 LIVE_IMPACT="${LIVE_IMPACT:-}"
 PR_BODY="${PR_BODY:-}"
@@ -10,12 +14,7 @@ if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-if [[ "$LIVE_IMPACT" == "none" ]]; then
-  echo "This exact head does not require local gateway credentials."
-  exit 0
-fi
-
-if [[ "$LIVE_IMPACT" != "gateway" && "$LIVE_IMPACT" != "gateway-differential" ]]; then
+if [[ "$LIVE_IMPACT" != "none" && "$LIVE_IMPACT" != "gateway" && "$LIVE_IMPACT" != "gateway-differential" ]]; then
   echo "Live-impact classification returned an unsupported target." >&2
   exit 2
 fi
@@ -26,12 +25,20 @@ live_verification_target=""
 live_verification_target_count=0
 live_tested_head=""
 live_tested_head_count=0
-required_live_models=""
-required_live_models_count=0
-exact_live_tested_models=""
-exact_live_tested_models_count=0
+live_model_requirement=""
+live_model_requirement_count=0
+live_model_identity_matches=""
+live_model_identity_matches_count=0
+live_model_role_distinctness=""
+live_model_role_distinctness_count=0
 live_model_substitutions=""
 live_model_substitutions_count=0
+live_provider_exact_bindings=""
+live_provider_exact_bindings_count=0
+live_provider_test_connection_outcomes=""
+live_provider_test_connection_outcomes_count=0
+live_provider_diagnostic_outcomes=""
+live_provider_diagnostic_outcomes_count=0
 plain_text_grammar_verification=""
 plain_text_grammar_verification_count=0
 live_summarize_outcomes=""
@@ -46,12 +53,23 @@ live_follow_up_outcomes=""
 live_follow_up_outcomes_count=0
 live_operation_scoped_warning_contracts=""
 live_operation_scoped_warning_contracts_count=0
-live_profile_latencies=""
-live_profile_latencies_count=0
+legacy_required_models_count=0
+legacy_tested_models_count=0
+legacy_commitment_scheme_count=0
+prohibited_raw_model_fields_count=0
+prohibited_latency_fields_count=0
 retention_boundary_count=0
 trust_boundary_count=0
+invalid_retention_boundary_count=0
+invalid_trust_boundary_count=0
+
+evidence_section=false
 while IFS= read -r body_line; do
   body_line="${body_line%$'\r'}"
+  case "$body_line" in
+    '## Live gateway evidence') evidence_section=true; continue ;;
+    '## '*) evidence_section=false ;;
+  esac
   case "$body_line" in
     '- Local live verification: '*)
       local_live_verification="${body_line#- Local live verification: }"
@@ -65,17 +83,43 @@ while IFS= read -r body_line; do
       live_tested_head="${body_line#- Exact live-tested head: }"
       ((live_tested_head_count += 1))
       ;;
-    '- Required live models: '*)
-      required_live_models="${body_line#- Required live models: }"
-      ((required_live_models_count += 1))
+    '- Live model requirement: '*)
+      live_model_requirement="${body_line#- Live model requirement: }"
+      ((live_model_requirement_count += 1))
+      case "$live_model_requirement" in
+        exact|model-agnostic|'not required') ;;
+        *) ((prohibited_raw_model_fields_count += 1)) ;;
+      esac
       ;;
-    '- Exact live-tested models: '*)
-      exact_live_tested_models="${body_line#- Exact live-tested models: }"
-      ((exact_live_tested_models_count += 1))
+    '- Live model identity matches: '*)
+      live_model_identity_matches="${body_line#- Live model identity matches: }"
+      ((live_model_identity_matches_count += 1))
+      case "$live_model_identity_matches" in
+        'not required'|reference=true|reference=false|\
+        'low=true, high=true'|'low=true, high=false'|\
+        'low=false, high=true'|'low=false, high=false') ;;
+        *) ((prohibited_raw_model_fields_count += 1)) ;;
+      esac
+      ;;
+    '- Live model role distinctness: '*)
+      live_model_role_distinctness="${body_line#- Live model role distinctness: }"
+      ((live_model_role_distinctness_count += 1))
       ;;
     '- Live-model substitutions: '*)
       live_model_substitutions="${body_line#- Live-model substitutions: }"
       ((live_model_substitutions_count += 1))
+      ;;
+    '- Live provider exact bindings: '*)
+      live_provider_exact_bindings="${body_line#- Live provider exact bindings: }"
+      ((live_provider_exact_bindings_count += 1)) ;;
+    '- Live provider Test Connection outcomes: '*)
+      live_provider_test_connection_outcomes="${body_line#- Live provider Test Connection outcomes: }"
+      ((live_provider_test_connection_outcomes_count += 1)) ;;
+    '- Live provider diagnostic outcomes: '*)
+      live_provider_diagnostic_outcomes="${body_line#- Live provider diagnostic outcomes: }"
+      ((live_provider_diagnostic_outcomes_count += 1)) ;;
+    '- Live provider matrix latency: '*|'- Live provider matrix latencies: '*|'- provider_matrix_latency='*|'- provider_matrix_latencies='*)
+      ((prohibited_latency_fields_count += 1))
       ;;
     '- Live plain-text grammar verification: '*)
       plain_text_grammar_verification="${body_line#- Live plain-text grammar verification: }"
@@ -105,19 +149,145 @@ while IFS= read -r body_line; do
       live_operation_scoped_warning_contracts="${body_line#- Live operation-scoped warning contracts: }"
       ((live_operation_scoped_warning_contracts_count += 1))
       ;;
-    '- Live profile latencies: '*)
-      live_profile_latencies="${body_line#- Live profile latencies: }"
-      ((live_profile_latencies_count += 1))
+    '- Live profile latency: '*|'- Live profile latencies: '*|'- profile_latency='*|'- profile_latencies='*)
+      ((prohibited_latency_fields_count += 1))
       ;;
-    '- No credential or gateway response body retained.')
+    '- Live diagnostic latency: '*|'- Live diagnostic latencies: '*|'- Live diagnostic latency low: '*|'- Live diagnostic latencies low: '*|'- Live diagnostic latency high: '*|'- Live diagnostic latencies high: '*|'- diagnostic_latency_low='*|'- diagnostic_latencies_low='*|'- diagnostic_latency_high='*|'- diagnostic_latencies_high='*)
+      ((prohibited_latency_fields_count += 1))
+      ;;
+    '- Required live model: '*|'- Required live models: '*)
+      ((legacy_required_models_count += 1))
+      ;;
+    '- Exact live-tested model: '*|'- Exact live-tested models: '*)
+      ((legacy_tested_models_count += 1))
+      ;;
+    '- Live model commitment: '*|'- Live model commitment scheme: '*|'- Live model HMAC: '*|'- Live model HMAC key: '*|'- hmac_sha256='*)
+      ((legacy_commitment_scheme_count += 1))
+      ;;
+    '- No credential, private provider value, model identity, or gateway response body retained.')
       ((retention_boundary_count += 1))
       ;;
-    '- Trust boundary: local execution is contributor-attested; GitHub verifies retained exact-head evidence only.')
+    '- No credential'*)
+      ((invalid_retention_boundary_count += 1))
+      ;;
+    '- Trust boundary: local execution attests secret-backed exact identity comparisons; GitHub verifies retained exact-head non-sensitive assertions only.')
       ((trust_boundary_count += 1))
+      ;;
+    '- Trust boundary: '*)
+      ((invalid_trust_boundary_count += 1))
+      ;;
+    *)
+      if [[ "$evidence_section" == true && -n "$body_line" ]]; then
+        echo "Unknown content in the public live-evidence section." >&2
+        exit 1
+      fi
+      case "$body_line" in
+        '- Live '*|'- Live-'*|'- Required live '*|'- Exact live-tested '*|'- Local live '*|'- No credential'*|'- Trust boundary:'*)
+          echo "Unknown public live-evidence field." >&2; exit 1 ;;
+      esac
       ;;
   esac
 done <<< "$PR_BODY"
 
+if (( legacy_required_models_count != 0 || legacy_tested_models_count != 0 || legacy_commitment_scheme_count != 0 || prohibited_raw_model_fields_count != 0 )); then
+  echo "Live evidence must not retain legacy raw model fields or opaque model commitments." >&2
+  exit 1
+fi
+if (( prohibited_latency_fields_count != 0 )); then
+  echo "Live evidence must not retain provider, profile, or diagnostic timing fields." >&2
+  exit 1
+fi
+# Adapter adoption activates its four-provider contract by an exact-head tracked dependency,
+# never by a contributor-supplied skip flag. Optional claims on earlier heads are still validated.
+connector_required=false
+if [[ "$LIVE_IMPACT" != none ]] && git cat-file -e "$HEAD_SHA:Vendor/universal-ai-connector" 2>/dev/null; then
+  connector_required=true
+fi
+if [[ "$connector_required" == true || "$live_provider_exact_bindings_count" -gt 0 ||
+      "$live_provider_test_connection_outcomes_count" -gt 0 || "$live_provider_diagnostic_outcomes_count" -gt 0 ]]; then
+  if [[ "$live_provider_exact_bindings_count" -ne 1 || "$live_provider_test_connection_outcomes_count" -ne 1 ||
+        "$live_provider_diagnostic_outcomes_count" -ne 1 ]]; then
+    echo "Provider evidence must contain all three unique fields." >&2; exit 1
+  fi
+  if [[ "$connector_required" == false && "$live_provider_exact_bindings" == "not required" &&
+        "$live_provider_test_connection_outcomes" == "not required" && "$live_provider_diagnostic_outcomes" == "not required" ]]; then
+    :
+  elif [[ "$LIVE_IMPACT" == none ||
+          "$live_provider_exact_bindings" != 'openai=true, anthropic=true, openrouter=true, gateway=true' ||
+          "$live_provider_test_connection_outcomes" != 'openai=passed, anthropic=passed, openrouter=passed, gateway=passed' ||
+          "$live_provider_diagnostic_outcomes" != 'openai=passed, anthropic=passed, openrouter=passed, gateway=passed' ]]; then
+    echo "Required provider bindings and outcomes were not verified." >&2; exit 1
+  fi
+fi
+
+if [[ "$LIVE_IMPACT" == "none" ]]; then
+  none_field_names=(
+    "Local live verification"
+    "Live verification target"
+    "Exact live-tested head"
+    "Live model requirement"
+    "Live model identity matches"
+    "Live model role distinctness"
+    "Live-model substitutions"
+    "Live plain-text grammar verification"
+    "Live summarize outcomes"
+    "Live continue-writing outcomes"
+    "Live baseline outcomes"
+    "Live differential outcomes"
+    "Live follow-up outcomes"
+    "Live operation-scoped warning contracts"
+  )
+  none_field_counts=(
+    "$local_live_verification_count"
+    "$live_verification_target_count"
+    "$live_tested_head_count"
+    "$live_model_requirement_count"
+    "$live_model_identity_matches_count"
+    "$live_model_role_distinctness_count"
+    "$live_model_substitutions_count"
+    "$plain_text_grammar_verification_count"
+    "$live_summarize_outcomes_count"
+    "$live_continue_writing_outcomes_count"
+    "$live_baseline_outcomes_count"
+    "$live_differential_outcomes_count"
+    "$live_follow_up_outcomes_count"
+    "$live_operation_scoped_warning_contracts_count"
+  )
+  none_field_values=(
+    "$local_live_verification"
+    "$live_verification_target"
+    "$live_tested_head"
+    "$live_model_requirement"
+    "$live_model_identity_matches"
+    "$live_model_role_distinctness"
+    "$live_model_substitutions"
+    "$plain_text_grammar_verification"
+    "$live_summarize_outcomes"
+    "$live_continue_writing_outcomes"
+    "$live_baseline_outcomes"
+    "$live_differential_outcomes"
+    "$live_follow_up_outcomes"
+    "$live_operation_scoped_warning_contracts"
+  )
+  for none_field_index in "${!none_field_names[@]}"; do
+    if [[ "${none_field_counts[$none_field_index]}" -gt 1 ||
+          ( "${none_field_counts[$none_field_index]}" -eq 1 &&
+            "${none_field_values[$none_field_index]}" != "not required" ) ]]; then
+      echo "No-impact pull requests may record ${none_field_names[$none_field_index]} only once as 'not required'." >&2
+      exit 1
+    fi
+  done
+  if [[ "$retention_boundary_count" -gt 1 || "$invalid_retention_boundary_count" -ne 0 ]]; then
+    echo "No-impact pull requests may include the exact retention boundary at most once." >&2
+    exit 1
+  fi
+  if [[ "$trust_boundary_count" -gt 1 || "$invalid_trust_boundary_count" -ne 0 ]]; then
+    echo "No-impact pull requests may include the exact trust boundary at most once." >&2
+    exit 1
+  fi
+  echo "This exact head does not require local gateway credentials."
+  exit 0
+fi
 if [[ "$local_live_verification_count" -ne 1 || "$local_live_verification" != "passed" ]]; then
   echo "The pull request must record exactly one passing local live-verification field." >&2
   exit 1
@@ -131,26 +301,29 @@ if [[ "$live_verification_target" != "$LIVE_IMPACT" ]]; then
   echo "The recorded live-verification target does not match the exact-head impact classification." >&2
   exit 1
 fi
-if [[ "$live_tested_head_count" -ne 1 ]]; then
-  echo "The pull request must record exactly one exact live-tested head." >&2
+if [[ "$live_tested_head_count" -ne 1 || \
+      ! "$live_tested_head" =~ ^[0-9a-f]{40}$ || "$live_tested_head" != "$HEAD_SHA" ]]; then
+  echo "The pull request must bind exactly one live-evidence record to this exact head." >&2
   exit 1
 fi
-if [[ ! "$live_tested_head" =~ ^[0-9a-f]{40}$ || "$live_tested_head" != "$HEAD_SHA" ]]; then
-  echo "Local live evidence is not bound to this exact head." >&2
+if [[ "$live_model_requirement_count" -ne 1 || \
+      ( "$live_model_requirement" != "exact" && "$live_model_requirement" != "model-agnostic" ) ]]; then
+  echo "The pull request must record exactly one supported live model requirement class." >&2
   exit 1
 fi
-if [[ "$required_live_models_count" -ne 1 || -z "$required_live_models" || "$required_live_models" == "not required" ]]; then
-  echo "The pull request must record exactly one required live-model coverage field." >&2
+if [[ "$live_model_identity_matches_count" -ne 1 ]]; then
+  echo "The pull request must record exactly one locally attested model-identity match field." >&2
   exit 1
 fi
-if [[ "$exact_live_tested_models_count" -ne 1 || -z "$exact_live_tested_models" || "$exact_live_tested_models" == "not required" || "$exact_live_tested_models" == "none" ]]; then
-  echo "The pull request must record exactly one non-empty exact live-tested model field." >&2
+if [[ "$live_model_role_distinctness_count" -ne 1 ]]; then
+  echo "The pull request must record exactly one model-role distinctness field." >&2
   exit 1
 fi
 if [[ "$live_model_substitutions_count" -ne 1 || "$live_model_substitutions" != "none" ]]; then
   echo "Live-model substitutions or fallback are not accepted as exact-model proof." >&2
   exit 1
 fi
+
 if [[ "$plain_text_grammar_verification_count" -ne 1 || "$plain_text_grammar_verification" != "verified" ]]; then
   echo "The pull request must record exactly one verified live plain-text grammar field." >&2
   exit 1
@@ -159,28 +332,18 @@ if [[ "$live_summarize_outcomes_count" -ne 1 || "$live_continue_writing_outcomes
   echo "The pull request must record exactly one Summarize and one Continue Writing live-outcome field." >&2
   exit 1
 fi
-if [[ "$required_live_models" != "model-agnostic" && "$required_live_models" != "$exact_live_tested_models" ]]; then
-  echo "Exact live-tested models do not match the required model coverage." >&2
-  exit 1
-fi
 
 if [[ "$live_verification_target" == "gateway-differential" ]]; then
-  if [[ ! "$required_live_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
-    echo "Differential required models must use canonical low=<id>, high=<id> order." >&2
+  if [[ "$live_model_requirement" != "exact" ]]; then
+    echo "Differential live evidence requires the exact model requirement class." >&2
     exit 1
   fi
-  required_low_model="${BASH_REMATCH[1]}"
-  required_high_model="${BASH_REMATCH[2]}"
-  if [[ "$required_low_model" == "$required_high_model" ]]; then
-    echo "Differential evidence requires distinct low and high model IDs." >&2
+  if [[ "$live_model_identity_matches" != "low=true, high=true" ]]; then
+    echo "Differential evidence must attest both exact role-bound model identities in canonical order." >&2
     exit 1
   fi
-  if [[ ! "$exact_live_tested_models" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
-    echo "Differential tested models must use canonical low=<id>, high=<id> order." >&2
-    exit 1
-  fi
-  if [[ "${BASH_REMATCH[1]}" != "$required_low_model" || "${BASH_REMATCH[2]}" != "$required_high_model" ]]; then
-    echo "Differential tested model roles were substituted or reversed." >&2
+  if [[ "$live_model_role_distinctness" != "true" ]]; then
+    echo "Differential evidence must attest distinct low and high model roles." >&2
     exit 1
   fi
   if [[ "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "low=passed, high=passed" ]]; then
@@ -207,15 +370,13 @@ if [[ "$live_verification_target" == "gateway-differential" ]]; then
     echo "Differential evidence must verify operation-scoped warning contracts." >&2
     exit 1
   fi
-  if [[ "$live_profile_latencies_count" -ne 1 || \
-        ! "$live_profile_latencies" =~ ^low=[0-9]+([.][0-9]{3})?s,\ high=[0-9]+([.][0-9]{3})?s$ ]]; then
-    echo "Differential evidence must record canonical per-profile latencies." >&2
+else
+  if [[ "$live_model_identity_matches" != "reference=true" ]]; then
+    echo "Ordinary gateway evidence must attest the exact seeded reference-model identity." >&2
     exit 1
   fi
-else
-  if [[ "$exact_live_tested_models" != "model-agnostic" && \
-        ! "$exact_live_tested_models" =~ ^[A-Za-z0-9][A-Za-z0-9._:/+-]*$ ]]; then
-    echo "Ordinary gateway evidence contains an unsafe tested model ID." >&2
+  if [[ "$live_model_role_distinctness" != "not required" ]]; then
+    echo "Ordinary gateway evidence must not claim differential role distinctness." >&2
     exit 1
   fi
   if [[ "$live_summarize_outcomes" != "not required" || \
@@ -223,20 +384,20 @@ else
         "$live_baseline_outcomes_count" -ne 1 || "$live_baseline_outcomes" != "not required" || \
         "$live_differential_outcomes_count" -ne 1 || "$live_differential_outcomes" != "not required" || \
         "$live_follow_up_outcomes_count" -ne 1 || "$live_follow_up_outcomes" != "not required" || \
-        "$live_operation_scoped_warning_contracts_count" -ne 1 || "$live_operation_scoped_warning_contracts" != "not required" || \
-        "$live_profile_latencies_count" -ne 1 || "$live_profile_latencies" != "not required" ]]; then
+        "$live_operation_scoped_warning_contracts_count" -ne 1 || "$live_operation_scoped_warning_contracts" != "not required" ]]; then
     echo "Ordinary gateway evidence must not claim the differential matrix fields." >&2
     exit 1
   fi
 fi
+
 if [[ "$retention_boundary_count" -ne 1 ]]; then
-  echo "The pull request must record exactly one live-proof retention boundary." >&2
+  echo "The pull request must record exactly one non-sensitive live-proof retention boundary." >&2
   exit 1
 fi
 if [[ "$trust_boundary_count" -ne 1 ]]; then
-  echo "The pull request must record exactly one live-proof trust boundary." >&2
+  echo "The pull request must record exactly one local-attestation trust boundary." >&2
   exit 1
 fi
 
 echo "Exact-head local live evidence was recorded."
-echo "GitHub did not receive gateway credentials."
+echo "GitHub received only non-sensitive assertions; private live identities were compared locally and not retained."

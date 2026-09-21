@@ -124,5 +124,5 @@ must reject that as verified differential evidence instead of creating a flaky g
 - Do not print API keys or Authorization headers.
 - Do not print full selected/private text in CI logs.
 - Do not retain raw gateway responses or secret-bearing live logs, even in ignored directories.
-- Retain only redacted outcome, exact model identity, exact head, and latency summaries required by
+- Keep exact model identity and latency private; retain only role-bound assertions, exact head, and outcomes required by
   the pull-request evidence contract.

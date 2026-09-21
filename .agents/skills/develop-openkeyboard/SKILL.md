@@ -156,3 +156,13 @@ in commentary; a filesystem path, `.xcresult`, PR link, or summary alone is not 
 the user to upload screenshots. For `human-approved` evidence, report the exact-head approval and
 absent AI-screenshot boundary instead. Never claim an unexecuted simulator, extension, gateway,
 device, signing, deployment, or release path.
+
+## Private live identity evidence
+
+Follow `docs/LIVE_EVIDENCE_PRIVACY.md`: exact task/seed/selected-model comparisons remain local;
+public evidence retains canonical role-bound assertions and outcomes only. Do not publish model
+names, identity hashes, credentials, endpoints, prompts, responses, or timing fingerprints. Inspect
+local enforcement and its redacted result independently; GitHub assertion acceptance is not proof
+of provider identity or runtime acceptance. Keep exact-head review, normal-runtime/human approval,
+and all protected checks. For the first schema PR, inspect the pinned legacy migration and its
+positive/negative tests; never supply invented measurements to satisfy a legacy field.

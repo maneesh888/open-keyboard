@@ -41,6 +41,8 @@ differential_required="false"
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
     .github/pull_request_template.md | \
+      Vendor/universal-ai-connector | \
+      scripts/bootstrap-universal-ai-connector.sh | \
       .github/workflows/live.yml | \
       .gitmodules | \
       .githooks/pre-push | \
@@ -67,7 +69,9 @@ while IFS= read -r -d '' changed_path; do
   esac
 
   case "$changed_path" in
-    .github/workflows/live.yml | \
+    Vendor/universal-ai-connector | \
+      scripts/bootstrap-universal-ai-connector.sh | \
+      .github/workflows/live.yml | \
       .gitmodules | \
       Vendor/semantic-prompt-contract | \
       scripts/check-live.sh | \
@@ -80,7 +84,10 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/test.sh)
       differential_required="true"
       ;;
-    OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
+    OpenKeyboard/Models/AppConfig.swift | \
+      OpenKeyboard/ViewModels/SettingsViewModel.swift | \
+      OpenKeyboard/Services/* | \
+      OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
       OpenKeyboard/Services/CanonicalGatewayClient.swift | \
       OpenKeyboard/Services/NetworkManager.swift | \
       OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift | \

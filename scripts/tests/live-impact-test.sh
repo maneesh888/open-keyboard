@@ -58,7 +58,6 @@ gateway_sensitive_paths=(
   OpenKeyboard/Info.plist
   OpenKeyboard/Views/PlaygroundView.swift
   OpenKeyboard/Views/LiveAITestHarnessView.swift
-  OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
   OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
@@ -84,6 +83,8 @@ differential_workflow_paths=(
   scripts/check-live.sh
   scripts/live-impact.sh
   scripts/live-policy-bootstrap.sh
+  Vendor/universal-ai-connector
+  scripts/bootstrap-universal-ai-connector.sh
   scripts/validate-pr-live-evidence.sh
   scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
@@ -96,7 +97,12 @@ for differential_workflow_path in "${differential_workflow_paths[@]}"; do
 done
 
 differential_model_pipeline_paths=(
+  OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Models/KeyboardSuggestionModels.swift
+  OpenKeyboard/Models/AppConfig.swift
+  OpenKeyboard/ViewModels/SettingsViewModel.swift
+  OpenKeyboard/Services/UniversalAIConnectorAdapter.swift
+  OpenKeyboard/Services/OpenKeyboardAIConnector.swift
   OpenKeyboard/Services/CanonicalGatewayClient.swift
   OpenKeyboard/Services/NetworkManager.swift
   OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift
@@ -122,6 +128,7 @@ assert_impact_path \
   OpenKeyboardExtension/KeyboardViewModel.swift \
   gateway-differential \
   'let maximumAttempts = 1'
+assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway-differential 'hapticFeedback.keyTapped()'
 assert_impact_path \
   OpenKeyboard/Views/KeyboardPreviewLabView.swift \
   gateway \

@@ -356,26 +356,20 @@ rollup to point to completed successful root jobs. It also requires
 `gh pr checks <number> --required` to exit successfully so a failed event-family result cannot be
 hidden by a newer same-name check.
 
-`.github/workflows/live.yml` uses the classifier from the trusted base commit. For a gateway
-runtime change, the pull request must retain unique canonical pass, target, retention, trust, and
-exact-tested-SHA fields. It must also record required live-model coverage, the exact models actually
-tested, and that no substitution occurred. Exact model requirements must match the tested-model
-list byte-for-byte; model-agnostic gateway work may name `model-agnostic` as the requirement but
-must still record the actual tested model. Exact-model runs set
-`OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-id>`. Every exact-model or model-agnostic run must verify
-the seeded model through the production plain-text grammar flow; a connected-but-unverified
-`.limited` result is not passing live evidence. Every live-evidence body event creates the stable
-`Required live verification` root job. It rejects duplicate, contradictory, fallback, and
-wrong-model fields in both the immutable event body and the current exact-head body. Local execution
-is contributor-attested; GitHub never receives the credential or gateway response.
+`.github/workflows/live.yml` uses the classifier and validators from the trusted base commit.
+Public live evidence contains the exact tested SHA, target, requirement class, role-bound local
+identity-match assertions, role distinctness, no-substitution assertion, and semantic outcomes.
+Exact model IDs and explicit model requirements are compared only inside the local gate. A
+model-agnostic run still executes the exact seeded reference model and verifies production
+plain-text grammar. Differential evidence requires both LOW/HIGH baselines, the expected LOW
+capability boundary, HIGH success, follow-up, Summarize, Continue Writing, and warning contracts.
 
-For `gateway-differential`, retained model fields use canonical
-`low=<exact-id>, high=<exact-id>` order. Separate canonical fields record baseline outcomes,
-long-text differential outcomes, follow-up outcomes, operation-scoped warning verification, and
-per-profile latency. The validator rejects missing roles, stale heads, duplicates, reversed or
-malformed mappings, substitutions, low success presented as a capability boundary, high failure,
-unverified scenarios, and contradictory evidence. GitHub still receives no credentials or response
-bodies.
+Never retain exact model IDs, model hashes, credentials, private URLs, prompts, responses, or
+per-profile timings in PRs or logs. Public assertions cannot independently prove a private model
+identity; GitHub validates the exact-head assertion record and independent review assesses the
+local enforcement and evidence. Both immutable-event and freshly fetched current snapshots must
+pass. Missing, duplicate, swapped, substituted, stale, diagnostic-only, or incomplete evidence fails.
+See `docs/LIVE_EVIDENCE_PRIVACY.md` for the schema, trust limits, and pinned legacy migration.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a

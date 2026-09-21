@@ -388,6 +388,28 @@ model or `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<id>, high=<id>'` for the matr
 intermittent low boundary remains diagnostic/`UNVERIFIED` when the expected boundary is not
 established.
 
+### Privacy-preserving live evidence
+
+Exact selected-model matching stays local: compare the guarded seed, any explicit task requirement,
+and each actually selected LOW/HIGH profile byte-for-byte. Require distinct roles, both profiles,
+no fallback, and every classified semantic outcome. Never publish model identities or their hashes,
+credentials, private endpoints, prompts, responses, or timing fingerprints. The local runner may use
+mode-600 temporary identity records for comparisons; it must delete them on exit and never print
+raw live-test output. A public model-agnostic requirement still verifies the exact seeded reference.
+
+Public evidence uses `Live model requirement: exact|model-agnostic`, role-bound
+`Live model identity matches: low=true, high=true` (or `reference=true`), and
+`Live model role distinctness: true` (or `not required`). These are local assertions, not remote
+identity proof. GitHub validates completeness and the exact head; independent review must inspect
+local validation evidence without copying private values. Never infer live semantic or runtime
+acceptance from a syntactically valid assertion record.
+
+The privacy-schema migration is documented in `docs/LIVE_EVIDENCE_PRIVACY.md`. Preserve the trusted
+base classifier and its semantic/head checks. Only the pinned legacy validator may receive the
+explicit withheld-timing accommodation; unknown legacy sources fail closed. Public role aliases in
+temporary compatibility input are not model names. Never invent latency measurements or outcomes.
+Keep required checks, environment protection, exact-head review, and human runtime approval intact.
+
 Remote `Required technical checks` prove deterministic checks only. `Required checks` validates
 the PR/review ledger, and `Required live verification` validates retained exact-head live evidence.
 None proves normal simulator UI, physical-device behavior, signing, deployment, or App Review.

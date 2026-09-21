@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+set +x
+set +a
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -100,11 +102,16 @@ if [[ "${OPEN_KEYBOARD_LIVE_REQUIRE_DIFFERENTIAL:-}" == "true" ]]; then
   LIVE_MODE="gateway-differential"
 fi
 
+if [[ "$LIVE_MODE" == "gateway-differential" && "${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL+x}" == x ]] ||
+   [[ "$LIVE_MODE" == "gateway" && "${OPEN_KEYBOARD_LIVE_REQUIRED_MODELS+x}" == x ]]; then
+  fail "Live model requirement inputs do not match the selected target."
+fi
+
 if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
   openkeyboard_require_two_profile_gateway_seed ||
     fail "Two-profile live model coverage validation failed."
   TESTED_MODELS="low=$OPEN_KEYBOARD_SIMULATOR_LOW_MODEL, high=$OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL"
-  REQUIRED_MODELS="${OPEN_KEYBOARD_LIVE_REQUIRED_MODELS:-$TESTED_MODELS}"
+  REQUIRED_MODELS="${OPEN_KEYBOARD_LIVE_REQUIRED_MODELS-$TESTED_MODELS}"
   if [[ ! "$REQUIRED_MODELS" =~ ^low=([A-Za-z0-9][A-Za-z0-9._:/+-]*),\ high=([A-Za-z0-9][A-Za-z0-9._:/+-]*)$ ]]; then
     fail "Differential live-model requirements must use canonical low=<id>, high=<id> order."
   fi
@@ -121,10 +128,21 @@ else
   openkeyboard_select_reference_simulator_gateway_profile ||
     fail "Reference live-model profile selection failed."
   TESTED_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
-  REQUIRED_MODEL="${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL:-model-agnostic}"
+  REQUIRED_MODEL="${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL-$TESTED_MODEL}"
+  if [[ "${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL+x}" == x && "$REQUIRED_MODEL" == model-agnostic ]]; then
+    fail "An explicit model requirement must name an exact model."
+  fi
   openkeyboard_require_exact_live_model "$TESTED_MODEL" "$REQUIRED_MODEL" ||
     fail "Live model coverage validation failed."
 fi
+
+# Do not export private comparisons into subprocesses, even if callers exported these names.
+export -n REQUIRED_MODEL REQUIRED_MODELS REQUIRED_LOW_MODEL REQUIRED_HIGH_MODEL TESTED_MODEL TESTED_MODELS
+MODEL_REQUIREMENT=exact
+if [[ "$LIVE_MODE" == gateway && "${OPEN_KEYBOARD_LIVE_REQUIRED_MODEL+x}" != x ]]; then
+  MODEL_REQUIREMENT=model-agnostic
+fi
+unset OPEN_KEYBOARD_LIVE_REQUIRED_MODEL OPEN_KEYBOARD_LIVE_REQUIRED_MODELS
 
 echo "Running deterministic gateway prerequisites for exact HEAD."
 env \
@@ -151,18 +169,20 @@ if [[ "$POST_DETERMINISTIC_SHA" != "$HEAD_SHA" ]]; then
 fi
 require_clean_checkout
 
+evidence_file="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-live-evidence.XXXXXX")"
+chmod 600 "$evidence_file"
+trap 'openkeyboard_cleanup_live_evidence_file "$evidence_file"' EXIT
+trap 'openkeyboard_exit_after_live_evidence_signal 129 "$evidence_file"' HUP
+trap 'openkeyboard_exit_after_live_evidence_signal 130 "$evidence_file"' INT
+trap 'openkeyboard_exit_after_live_evidence_signal 143 "$evidence_file"' TERM
+
 if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
-  evidence_file="$(mktemp "${TMPDIR:-/tmp}/openkeyboard-live-evidence.XXXXXX")"
-  chmod 600 "$evidence_file"
-  trap 'openkeyboard_cleanup_live_evidence_file "$evidence_file"' EXIT
-  trap 'openkeyboard_exit_after_live_evidence_signal 129 "$evidence_file"' HUP
-  trap 'openkeyboard_exit_after_live_evidence_signal 130 "$evidence_file"' INT
-  trap 'openkeyboard_exit_after_live_evidence_signal 143 "$evidence_file"' TERM
   echo "Running the targeted two-profile live-model matrix for exact HEAD."
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE="$SEED_FILE" \
   OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT="$evidence_file" \
     "$ROOT/scripts/ios/test.sh" live-model-differential
   [[ -s "$evidence_file" ]] || fail "Targeted live-model evidence output was not produced."
+  [[ "$(wc -l < "$evidence_file" | tr -d ' ')" == 12 ]] || fail "Targeted live evidence has an unexpected field count."
   MODELS_LINE="$(grep -E '^models=' "$evidence_file")"
   BASELINE_LINE="$(grep -E '^baseline_outcomes=' "$evidence_file")"
   DIFFERENTIAL_LINE="$(grep -E '^differential_outcomes=' "$evidence_file")"
@@ -191,7 +211,9 @@ else
   echo "Running local live gateway smoke for exact HEAD."
   OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE="$SEED_FILE" \
   OPEN_KEYBOARD_LIVE_PROFILE="$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" \
+  OPEN_KEYBOARD_LIVE_REFERENCE_EVIDENCE_OUTPUT="$evidence_file" \
     "$ROOT/scripts/ios/test.sh" live-gateway-smoke
+  [[ "$(cat "$evidence_file")" == "model=$TESTED_MODEL" ]] || fail "Live smoke used a substituted reference model."
 fi
 
 POST_LIVE_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
@@ -204,22 +226,22 @@ echo "OpenKeyboard live gateway verification passed."
 echo "target=$LIVE_MODE"
 echo "head_sha=$HEAD_SHA"
 if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
-  echo "required_models=$REQUIRED_MODELS"
-  echo "tested_models=$TESTED_MODELS"
+  echo "model_requirement=exact"
+  echo "model_identity_matches=low=true, high=true"
+  echo "model_roles_distinct=true"
   echo "${BASELINE_LINE}"
   echo "${DIFFERENTIAL_LINE}"
   echo "${FOLLOW_UP_LINE}"
   echo "${SUMMARIZE_LINE}"
   echo "${CONTINUE_WRITING_LINE}"
   echo "${WARNING_LINE}"
-  echo "${LATENCY_LINE}"
   echo "${DIAGNOSTIC_OUTCOMES_LOW_LINE}"
-  echo "${DIAGNOSTIC_LATENCIES_LOW_LINE}"
   echo "${DIAGNOSTIC_OUTCOMES_HIGH_LINE}"
-  echo "${DIAGNOSTIC_LATENCIES_HIGH_LINE}"
   echo "model_substitutions=none"
 else
-  echo "required_model=$REQUIRED_MODEL"
-  echo "tested_model=$TESTED_MODEL"
+  echo "model_requirement=$MODEL_REQUIREMENT"
+  echo "model_identity_matches=reference=true"
+  echo "model_roles_distinct=not required"
+  echo "model_substitutions=none"
 fi
 echo "plain_text_grammar_verified=true"
