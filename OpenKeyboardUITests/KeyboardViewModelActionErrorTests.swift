@@ -14,6 +14,77 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testEveryTypingKeyEmitsOneHapticAndPreservesItsAction() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let feedback = RecordingKeyboardHapticFeedback()
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: FailingKeyboardAIService(),
+            hapticFeedback: feedback,
+            loadConfig: { Self.configuredGateway }
+        )
+        XCTAssertEqual(feedback.tapCount, 0)
+
+        viewModel.insert("a")
+        XCTAssertEqual(proxy.text, "a")
+        XCTAssertEqual(feedback.tapCount, 1)
+        viewModel.toggleShift()
+        XCTAssertTrue(viewModel.isShiftEnabled)
+        XCTAssertEqual(feedback.tapCount, 2)
+        viewModel.insert("b")
+        XCTAssertEqual(proxy.text, "aB")
+        XCTAssertFalse(viewModel.isShiftEnabled)
+        XCTAssertEqual(feedback.tapCount, 3)
+        viewModel.insertSpace()
+        XCTAssertEqual(proxy.text, "aB ")
+        XCTAssertEqual(feedback.tapCount, 4)
+        viewModel.insertReturn()
+        XCTAssertEqual(proxy.text, "aB \n")
+        XCTAssertEqual(feedback.tapCount, 5)
+        viewModel.deleteBackward()
+        XCTAssertEqual(proxy.text, "aB ")
+        XCTAssertEqual(feedback.tapCount, 6)
+        viewModel.toggleNumbers()
+        XCTAssertEqual(viewModel.inputMode, .numbers)
+        XCTAssertEqual(feedback.tapCount, 7)
+        viewModel.insert("1")
+        XCTAssertEqual(proxy.text, "aB 1")
+        XCTAssertEqual(feedback.tapCount, 8)
+        viewModel.toggleSymbols()
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        XCTAssertEqual(feedback.tapCount, 9)
+        viewModel.insert("#")
+        XCTAssertEqual(proxy.text, "aB 1#")
+        XCTAssertEqual(feedback.tapCount, 10)
+        viewModel.toggleNumbers()
+        XCTAssertEqual(viewModel.inputMode, .letters)
+        XCTAssertEqual(feedback.tapCount, 11)
+
+        var advanceCount = 0
+        viewModel.nextKeyboard {
+            XCTAssertEqual(feedback.tapCount, 12, "Feedback precedes leaving the keyboard")
+            advanceCount += 1
+        }
+        XCTAssertEqual(advanceCount, 1)
+        XCTAssertEqual(proxy.text, "aB 1#")
+    }
+
+    func testDeletingEmptyDocumentStillEmitsOneHaptic() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let feedback = RecordingKeyboardHapticFeedback()
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: FailingKeyboardAIService(),
+            hapticFeedback: feedback,
+            loadConfig: { Self.configuredGateway }
+        )
+
+        viewModel.deleteBackward()
+
+        XCTAssertEqual(proxy.text, "")
+        XCTAssertEqual(feedback.tapCount, 1)
+    }
+
     func testLocalNLPPredictionsAreDisabledByDefault() {
         let predictor = RecordingNextTextPredictor()
         let viewModel = KeyboardViewModel(
@@ -3806,5 +3877,14 @@ private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {
         let index = text.index(text.startIndex, offsetBy: cursorOffset - 1)
         text.remove(at: index)
         cursorOffset -= 1
+    }
+}
+
+@MainActor
+private final class RecordingKeyboardHapticFeedback: KeyboardHapticFeedbackProviding {
+    private(set) var tapCount = 0
+
+    func keyTapped() {
+        tapCount += 1
     }
 }

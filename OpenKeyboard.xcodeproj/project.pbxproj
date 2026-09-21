@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        A7E663F238A445819AC34102 /* KeyboardHapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */; };
+        A7E663F238A445819AC34103 /* KeyboardHapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */; };
 		2012167C7CC2E3BB270F0D60B /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
 		39D261B1DB017C6BA7680468B /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
 		4AA7F5EC8066C0C5DAC5080AB /* OpenKeyboardExtension/KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */; };
@@ -116,6 +118,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardHapticFeedback.swift; sourceTree = SOURCE_ROOT; };
 		00925BF528988C8F99265380 /* OpenKeyboardExtension/OpenKeyboardExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenKeyboardExtension/OpenKeyboardExtension.entitlements; sourceTree = SOURCE_ROOT; };
 		39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewModel.swift; sourceTree = SOURCE_ROOT; };
 		4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardViewController.swift; sourceTree = SOURCE_ROOT; };
@@ -232,6 +235,7 @@
 				00925BF528988C8F99265380 /* OpenKeyboardExtension/OpenKeyboardExtension.entitlements */,
 				4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */,
 				572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */,
+				A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */,
 				39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */,
 				OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */,
 				OKPLAN0000000000000001 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift */,
@@ -470,6 +474,7 @@
 				OKTHEMEUITEST00000002 /* OpenKeyboardTheme.swift in Sources */,
 				OKTHEMETEST000000002 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift in Sources */,
 				OKACTIONERRTEST0002 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift in Sources */,
+				A7E663F238A445819AC34103 /* KeyboardHapticFeedback.swift in Sources */,
 				OKVMUITEST0000000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
 				OKAIUITEST0000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
 				OKNEXTPREDUITEST002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */,
@@ -488,6 +493,7 @@
 				OKDEBUGPOLICY0000002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
 				4AA7F5EC8066C0C5DAC5080AB /* OpenKeyboardExtension/KeyboardViewController.swift in Sources */,
 				572626087CD519914B6B58B5B /* OpenKeyboardExtension/KeyboardView.swift in Sources */,
+				A7E663F238A445819AC34102 /* KeyboardHapticFeedback.swift in Sources */,
 				39D261B1DB017C6BA7680468B /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
 				OKAI000000000000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
 				OKSUGMODELEXT0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
