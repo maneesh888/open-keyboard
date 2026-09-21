@@ -216,7 +216,7 @@ struct KeyboardView: View {
                             .accessibilityIdentifier("keyboard_key_numbers")
                         case "keyboard_emoji":
                             KeyButton(label: "Emoji", systemImage: "face.smiling", role: .modifier, target: target) {
-                                onNextKeyboard()
+                                viewModel.nextKeyboard(using: onNextKeyboard)
                             }
                             .accessibilityIdentifier("keyboard_key_emoji")
                         case "keyboard_space":
