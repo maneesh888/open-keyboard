@@ -1,6 +1,6 @@
 # Prompt Evaluation Suite
 
-Last updated: 2026-08-12
+Last updated: 2026-09-08
 
 ## Purpose
 
@@ -51,6 +51,10 @@ The curated playground and gateway smoke phrases must be synthetic and meaningfu
 
 ## Live prompt evals
 
+The Core package route below remains an opt-in legacy compatibility harness. It does not exercise
+the shipped app/extension transport after the Universal AI Connector migration and therefore cannot
+serve as production-consumer transport proof by itself.
+
 Live prompt evals should be skipped unless explicit env vars are set:
 
 ```bash
@@ -60,15 +64,17 @@ OPEN_KEYBOARD_LIVE_MODEL=... \
 swift test --package-path OpenKeyboardCore --filter LivePromptEvaluationTests
 ```
 
-Live evals should track:
+Live evals should evaluate these properties inside the guarded local process and retain only their
+non-sensitive pass/fail outcomes:
 
 - response quality
 - meaning preservation
 - whether the model added unwanted explanation
 - prompt-injection resistance
-- model name
-- latency
-- token usage/cost if the gateway exposes usage
+- exact requested/returned model match
+
+Do not print or persist raw model identities, latency/timing values, token/cost values, provider
+credentials, private endpoints, or raw gateway responses as live evidence.
 
 Implemented live test file:
 
@@ -84,12 +90,24 @@ Current live harness coverage:
 - Gemma-specific valid plain-text checks for rewrite, Improve, Summarize, Translate, and Continue Writing.
 - Rewrite clarity sanity check.
 - Prompt-injection-as-input summarization check.
-- Broad latency budget tracking per scenario.
+- Per-scenario timeout enforcement without printing or retaining measured timing values.
 - Forbidden phrase checks for meta commentary, auth/API-key leakage, and obvious instruction leakage.
 
 The shared live scenarios intentionally use broad assertions because model output is non-deterministic.
 The Gemma cases add a stable minimum-detail rubric and skip when the configured model is not Gemma.
 Normal CI compiles the file and skips live execution unless all live env vars are set.
+
+Production-consumer live verification runs through the iOS target and pinned connector:
+
+```bash
+./scripts/ios/test.sh live-gateway-smoke
+./scripts/ios/test.sh live-model-differential
+./scripts/check-live.sh gateway-differential
+```
+
+Those routes build the connector artifact from the recorded gitlink, exercise exact canonical
+plain-text request/response mapping, and preserve the existing operation-specific validators. They
+are automated live evidence, not normal simulator visual proof.
 
 Live eval fixtures must use synthetic, non-sensitive text only. Do not add real private user text, secrets, API keys, Authorization headers, or production conversation content to live eval scenarios.
 
@@ -112,7 +130,7 @@ This route is not a second full prompt-evaluation run. Deterministic warning/sta
 and the Xcode build run once; only a short baseline, one fixed public long-text Malayalam Translate
 case, and a short follow-up run per isolated profile. Assertions cover exact selected identity, the
 target-specific translation-capability classification or structurally usable Malayalam output,
-operation-scoped UI/ViewModel contracts, and latency—not generated wording.
+and operation-scoped UI/ViewModel contracts—not generated wording or timing.
 
 A candidate fixture is blocking only after the low profile repeatedly produces the canonical
 capability failure and the high profile succeeds on the identical operation/text. If the low model
@@ -124,5 +142,7 @@ must reject that as verified differential evidence instead of creating a flaky g
 - Do not print API keys or Authorization headers.
 - Do not print full selected/private text in CI logs.
 - Do not retain raw gateway responses or secret-bearing live logs, even in ignored directories.
-- Retain only redacted outcome, exact model identity, exact head, and latency summaries required by
-  the pull-request evidence contract.
+- Compare exact provider/model identities only inside the guarded local live process. Retain only
+  non-sensitive requirement classes, exact-match/role-binding booleans, no-substitution assertions,
+  required outcomes, and exact head; do not retain raw identities, timing fields, or opaque
+  commitments.

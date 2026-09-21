@@ -149,17 +149,21 @@ struct PlaygroundView: View {
         let apiKey = config.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         let model = config.selectedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !gatewayURL.isEmpty, !apiKey.isEmpty, !model.isEmpty else {
-            gatewayProofStatus = "Analysis failed. Gateway is not configured. Reconnect your gateway in the app."
+            gatewayProofStatus = "Analysis failed. AI provider is not configured. Reconnect it in the app."
             return
         }
 
         do {
+            let profile = try OpenKeyboardGatewayProfile(
+                provider: config.provider,
+                baseURL: gatewayURL,
+                apiKey: apiKey
+            )
             try await NetworkManager.shared.testCorrectionSmoke(
-                gatewayURL: gatewayURL,
-                apiKey: apiKey,
+                profile: profile,
                 model: model
             )
-            gatewayProofStatus = "Gateway correction succeeded for the current Playground text."
+            gatewayProofStatus = "Provider correction succeeded for the current Playground text."
         } catch {
             let message = NetworkManager.userFacingSmokeErrorMessage(for: error, model: model)
             gatewayProofStatus = "Analysis failed. \(message)"

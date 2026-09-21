@@ -1,3 +1,6 @@
 [submodule "Vendor/semantic-prompt-contract"]
 	path = Vendor/semantic-prompt-contract
 	url = ../semantic-prompt-contract.git
+[submodule "Vendor/universal-ai-connector"]
+	path = Vendor/universal-ai-connector
+	url = https://github.com/maneesh888/universal-ai-connector.git

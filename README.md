@@ -1,6 +1,6 @@
 # Open Keyboard
 
-Open Keyboard is a privacy-focused, open-source iOS keyboard with AI writing tools, paired with a self-hosted LLM Gateway. Basic typing stays local. When the user chooses an AI action, the keyboard sends the needed text/context to the gateway configured by the user and inserts the model response back into the current app.
+Open Keyboard is a privacy-focused, open-source iOS keyboard with AI writing tools. It can connect directly to OpenAI, Anthropic, or OpenRouter, or to a user-controlled OpenAI-compatible LLM Gateway. Basic typing stays local. When the user chooses an AI action, the keyboard sends the needed text/context to the explicitly configured provider and inserts the validated model response back into the current app.
 
 > Status: complete working prototype in active hardening. The app, keyboard extension, shared configuration, gateway pairing, grammar correction, and first AI writing tools are implemented and buildable. Current work is focused on keyboard polish, selected-text and paragraph handling, real-device validation, and release preparation.
 
@@ -38,11 +38,11 @@ Public screenshot assets are served from the project page to keep this repositor
 Open Keyboard is built for people who want AI writing help while keeping control of the client, gateway, keys, model backend, and logging policy.
 
 - Provides a custom iOS keyboard extension for everyday typing.
-- Connects to a user-controlled LLM Gateway using a gateway URL and API key.
-- Loads the selected model from the configured gateway.
+- Connects to OpenAI, Anthropic, OpenRouter, or a user-controlled OpenAI-compatible Gateway using an editable provider base URL and API key.
+- Discovers models through the selected provider when supported and requires an exact model identifier; manual entry appears only when discovery is explicitly unsupported.
 - Separates grammar and typo correction from the visible AI writing tools Improve, Rephrase, and Translate; Summarize support remains implemented but is hidden from the keyboard carousel.
-- Stores the complete versioned gateway profile (URL, exact model, API key, and validation metadata) as one item in a shared Keychain access group.
-- Uses App Group storage only for non-authoritative configured/revision hints and transient connection or UI-test metadata; both production targets load the runtime profile from Keychain.
+- Stores the complete versioned provider profile (provider, base URL, exact model, API key, validation metadata, and any test-origin marker) as one item in a shared Keychain access group.
+- Uses App Group storage only for non-authoritative, revision-bound configured/validation/error hints and transient UI-test coordination metadata; both production targets load the runtime profile from Keychain.
 - Supports local/self-hosted model backends through LLM Gateway and Ollama-compatible routes.
 - Keeps normal CI deterministic with offline mocks; live model tests are opt-in.
 
@@ -71,13 +71,15 @@ The goal is not to claim that text never leaves the device. The goal is to put t
 The host app currently includes:
 
 - onboarding for gateway setup and iOS keyboard enablement
-- settings for gateway URL and API key entry
-- connection testing against the configured gateway
-- model discovery through the gateway
+- provider-aware settings for OpenAI, Anthropic, OpenRouter, and OpenAI-compatible Gateway profiles, with editable base URL and masked API-key entry
+- HTTPS is required for direct OpenAI, Anthropic, and OpenRouter profiles; OpenAI-compatible profiles permit plaintext HTTP only for exact loopback hosts (`localhost`, canonical `127/8`, or `::1`)
+- explicit load, retry, and cancel states for model discovery, including distinct empty, unsupported, authentication, timeout, and malformed-response outcomes
+- exact model choice when discovery succeeds; a sole discovered model may be selected automatically, while manual entry is available only after explicit unsupported discovery
+- Test Connection re-runs one fresh discovery and one minimal plain-text grammar request on the exact model, with no provider, endpoint, credential, or model substitution
 - visible Full Access and privacy copy
 - link-out to the gateway admin UI when a gateway URL is configured
 - atomic shared Keychain storage for the complete gateway profile used by both the app and keyboard extension
-- migration from earlier split App Group/Keychain profiles without publishing a partially replaced runtime configuration
+- add-only migration from earlier split App Group/Keychain profiles without publishing a partially replaced runtime configuration; schema-v2 secure profiles remain read-compatible and upgrade only on the next explicit validated save
 
 ### Keyboard Extension
 
@@ -91,7 +93,7 @@ The keyboard extension currently includes:
   - AI writing tools expose Improve, simple Rephrase, Translate, and independent rewrite-style actions without mixing them into the correction review flow; Summarize support remains available internally but is omitted from the carousel.
 - typed keyboard errors keep gateway transport, authentication, missing-model, and per-operation model-capability failures distinct; an unusable grammar-only result keeps the original text, identifies the selected model's correction failure without declaring it globally incompatible, and does not disable unrelated writing actions.
 - automatic grammar-analysis failures stay as nonblocking toolbar warnings: the key grid and typed text remain available, and analysis retries after the next edit; manual AI-action failures remain scoped to the action that failed.
-- interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; the Settings model check uses at most two 20-second attempts.
+- interactive keyboard AI requests stop after 15 seconds, preserve the user's text, and show a retryable timeout instead of leaving the keyboard waiting indefinitely; each Settings model-check operation is bounded to 20 seconds.
 - an AI writing workflow with source text, selectable actions, generated suggestion text, selected operation state, retry, copy, back, and accept controls
 - a Translate workflow with explicit Arabic, Dutch, Simplified Chinese, American English, Hindi, Malayalam, Urdu, Bengali, Marathi, Telugu, Tamil, Spanish, French, Portuguese, and Russian target selection before any request is sent
 - a single action carousel with Improve, simple Rephrase, Translate, Shorten, Friendly, Formal, Compassionate, Confident, Engaging, Fluent, Diplomatic, Empathetic, Exciting, Cooperative, Assertive, Detailed, Casual, and Professional; only Translate opens a second carousel for target selection
@@ -103,13 +105,13 @@ Next focus: broader selected-text, paragraph, and multi-action workflows beyond 
 
 ### OpenKeyboardCore
 
-`OpenKeyboardCore` contains UI-independent logic:
+`OpenKeyboardCore` contains UI-independent logic and legacy gateway compatibility fixtures used by
+deterministic tests:
 
 - gateway URL/API key validation and normalization
 - gateway config persistence abstractions
-- OpenAI-compatible `/v1/models` parsing
-- OpenAI-compatible `/v1/chat/completions` request/response handling
-- typed gateway error mapping
+- test-only OpenAI-compatible request/response and error-mapping coverage; shipped app and extension
+  targets do not use this direct transport path
 - prompt builders for grammar fixing, rewrite, summarize, translate, continue writing, and custom templates
 - keyboard reducer behavior
 - context extraction and replacement strategies
@@ -127,8 +129,11 @@ Open Keyboard is designed to pair with LLM Gateway, a separately installed compa
 - can route selected models to an optional Apfel backend
 
 The pinned semantic prompt package owns the operation-specific instructions, response contract
-metadata, and deterministic message rendering. Open Keyboard owns request transport, local grammar
-diffing, response parsing, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
+metadata, and deterministic message rendering. The pinned Universal AI Connector owns provider
+transport, authenticated model discovery, canonical request/response translation, typed provider
+failures, concurrency, cancellation, and transport lifecycle. Open Keyboard owns provider-profile
+persistence, exact model selection, action deadlines, local grammar diffing, semantic response
+validation, and UI behavior. Grammar correction, Rewrite/Rephrase, every rewrite
 style, Improve, Summarize, Translate, and Continue Writing return operation-specific validated
 plain text with no structured response format. The client derives grammar edits and writing-action
 result objects locally, retains target-language validation and retry behavior for Translate, and
@@ -143,8 +148,33 @@ Canonical writing-action and bounded-suggestion semantics live in the pinned
 `Vendor/semantic-prompt-contract` Git submodule at contract version `5.0.0`. This path is a checkout
 of a separate repository, and the consumer repository's immutable gitlink pins it to one exact
 commit/version. `OpenKeyboardCore` consumes its Swift package product, while the app, extension,
-and UI tests compile the same generated Swift adapter. UI, request transport, gateway
-authentication, model routing, response parsing, and product presentation remain local.
+and UI tests compile the same generated Swift adapter. UI, gateway profile persistence, exact model
+selection, semantic validation, and product presentation remain local.
+
+### Universal AI Connector
+
+Provider-neutral networking is consumed from the pinned `Vendor/universal-ai-connector` Git
+submodule. The Xcode app, keyboard extension, and UI-test targets link only the public
+`UniversalAiConnector` Swift package product; they never import its private bridge. Each process
+reuses one connector for the active normalized provider, base URL, and credential. A configuration
+change atomically replaces and closes the old connector; a credential-free App Group notification
+also invalidates in-flight extension work across the app/extension process boundary. Operation
+cancellation remains scoped to its owner, and adapter teardown closes the retained connector. The
+connector sample `ContentView` is not compiled into the product. Open Keyboard adds its own 15-second
+keyboard and 20-second Settings wall-clock deadlines outside the connector's validated 10-second
+connect and 60-second request limits.
+
+The generated binary artifact is intentionally not committed. Repository iOS build and test
+routes call the guarded bootstrap automatically. Before building directly in Xcode, run:
+
+```bash
+git submodule update --init --recursive
+./scripts/bootstrap-universal-ai-connector.sh
+```
+
+The bootstrap uses the connector repository's canonical XCFramework build, rejects tracked local
+connector changes, and verifies that the checkout matches the recorded gitlink. See
+`docs/UNIVERSAL_AI_CONNECTOR.md` for the ownership and failure-mapping boundary.
 
 For a fresh checkout, clone with the submodule initialized:
 
@@ -152,8 +182,8 @@ For a fresh checkout, clone with the submodule initialized:
 git clone --recurse-submodules https://github.com/maneesh888/open-keyboard.git
 ```
 
-For an existing clone, or if `Vendor/semantic-prompt-contract` is empty, recover the pinned checkout
-from the OpenKeyboard repository root:
+For an existing clone, or if either vendored checkout is empty, recover both pinned checkouts from
+the OpenKeyboard repository root:
 
 ```bash
 git submodule update --init --recursive
@@ -168,20 +198,20 @@ after an upgrade. Never copy canonical prompt wording back into an OpenKeyboard 
 
 ## Pairing Flow
 
-1. Run LLM Gateway locally or on a host reachable by the iPhone/simulator.
-2. Create an API key in the LLM Gateway admin UI/API.
-3. Enter the gateway URL and API key in Open Keyboard settings.
-4. Test the connection and load available models.
+1. Choose OpenAI, Anthropic, OpenRouter, or OpenAI-compatible Gateway in Open Keyboard settings.
+2. Confirm or edit the provider base URL and enter a dedicated API key.
+3. Load models and select the exact identifier, or enter it manually only if discovery is reported unsupported.
+4. Run Test Connection to re-discover and validate that exact model before the profile is saved.
 5. Enable Open Keyboard in iOS Settings.
 6. Enable Allow Full Access for AI network actions.
 7. Use keyboard AI actions in any app that allows custom keyboards.
 
 ## API Contract
 
-Open Keyboard expects the gateway to provide:
+The connector owns provider-specific endpoints, headers, and response translation. For the
+`openai-compatible` adapter, Open Keyboard expects the configured base URL to provide:
 
 ```text
-GET  /health
 GET  /v1/models
 POST /v1/chat/completions
 ```
@@ -207,11 +237,15 @@ The quick CI path runs:
 - Swift package tests for `OpenKeyboardCore`
 - iOS simulator build for the app and keyboard extension
 
+The iOS routes bootstrap the exact pinned Universal AI Connector XCFramework before Xcode package
+resolution. Direct Xcode builds require the manual bootstrap command shown above.
+
 Individual checks:
 
 ```bash
 ./scripts/ios/test.sh core
 ./scripts/ios/test.sh build
+./scripts/ios/test.sh release-exclusion
 ./scripts/ios/test.sh ui
 ./scripts/ios/test.sh screenshots
 ```
@@ -239,6 +273,7 @@ These commands use the canonical seed and are credential-gated:
 ./scripts/check-live.sh gateway
 ./scripts/check-live.sh gateway-differential
 ./scripts/ios/test.sh live-gateway-smoke
+./scripts/ios/test.sh live-provider-matrix
 ./scripts/ios/test.sh live-model-differential
 ./scripts/ios/test.sh real-keyboard-live
 ```
@@ -262,6 +297,15 @@ high profile when present; otherwise it accepts the documented complete legacy t
 silently substitutes the low profile. The committed seed example documents both formats without
 containing real endpoints, keys, or model IDs.
 
+`live-provider-matrix` uses the pinned connector's guarded local-config parser to read only the
+documented provider credentials from the ignored `.env.live` in the Universal AI Connector's
+primary checkout (a sibling checkout by default, or `OPEN_KEYBOARD_UAC_LIVE_CHECKOUT`). It builds
+once, then runs isolated Settings discovery, exact-model Test Connection, and diagnostic rows for
+OpenAI, Anthropic, OpenRouter, and OpenAI-compatible Gateway. Values are injected only into a
+private temporary `.xctestrun`, never printed, and removed with the disposable simulator and
+result bundles on exit. The machine-readable summary contains only canonical provider-binding
+booleans and Test Connection/diagnostic outcomes.
+
 `live-model-differential` builds the test artifacts once, runs the deterministic operation-scoped
 warning prerequisites once, then executes only the baseline, fixed long-text boundary, and
 post-boundary follow-up on isolated low and high profiles. The default command is strict
@@ -270,17 +314,21 @@ verification and exits nonzero when any required outcome is unverified. Use
 unverified diagnostic may complete but is labeled `LIVE_UNVERIFIED` and never prints green
 verification success. Low success on the boundary is recorded as diagnostic—not converted into a
 flaky pass—and exact-head policy rejects it as verified matrix evidence. High-profile structural
-success remains independently required. Per-profile wall-clock latency is retained without
-response bodies.
+success remains independently required.
 The same private result bundles retain a sanitized attachment for each role with separate
-transport, grammar, rewrite, and translation pass/fail plus per-capability latency; the live runner
-validates and reports those fields before deleting the temporary attachments.
+transport, grammar, rewrite, and translation pass/fail rows; the live runner validates and reports
+those fields before deleting the temporary attachments.
 
-`./scripts/check-live.sh gateway` proves the exact model stored in the seed and rejects silent
-catalog fallback. When a task requires a named model, set
+`./scripts/check-live.sh gateway` runs the four-provider matrix before the classifier-selected
+gateway target, proves the exact model stored in each guarded seed, and rejects silent catalog
+fallback. When a task requires a named model, set
 `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<exact-model-id>`; the check fails before testing if the seed does
-not match. Model-specific pull requests must record the required and exact tested model IDs, and a
-different working model does not satisfy that evidence.
+not match. The exact provider/model comparisons occur only inside the local live process and its
+mode-600 temporary state. The retained terminal/PR record deliberately contains no endpoint,
+credential, raw model identity, or opaque commitment—only the requirement class, exact-match and
+role-binding booleans, no-substitution assertion, exact head, and required outcomes. GitHub rejects
+legacy timing fields and validates that non-sensitive record; local execution attests the
+secret-backed comparison.
 
 Changes to model-capability classification, long-input handling, parser compatibility, retry
 behavior, automatic-analysis warnings, manual-action error scope, or Translate warning scope use
@@ -304,17 +352,17 @@ seed diagnostics report the dynamically resolved expected path, never values.
 
 ## Current Verification
 
-Recent local verification:
+Recent deterministic verification for the connector migration:
 
-- `git diff --check`: passed
-- `xcodebuild -scheme OpenKeyboard -destination 'generic/platform=iOS Simulator' -derivedDataPath "${TMPDIR:-/tmp}/openkeyboard-derived" build-for-testing`: passed
-- `KeyboardSuggestionModelsTests`: passed
-- `KeyboardViewModelActionErrorTests`: passed
-- automated configured real-extension XCUITest regression for AI controls: passed
+- app plus extension link against the public connector product: passed
+- deterministic UI-target suite: 307 tests, 0 failures
+- connector request, response, discovery, typed-error, reuse, close, and cancellation regressions: passed
+- production-source transport-boundary policy: passed
 
-This result does not establish normal simulator or physical-device proof. The project still needs
-normal simulator runtime proof, broader physical-device and live-gateway acceptance, prompt-quality
-evaluation, release signing, and App Store readiness verification before release. See
+This deterministic result does not establish live gateway, normal simulator, or physical-device
+proof. The connector migration still needs exact-head live differential evidence and normal
+simulator runtime proof before publication/readiness. Broader physical-device acceptance, release
+signing, and App Store verification remain release work. See
 `docs/REAL_EXTENSION_SMOKE_PLAN.md` for the separated automated, normal-simulator, and device routes.
 
 ## Roadmap

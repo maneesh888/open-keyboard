@@ -1,6 +1,6 @@
 # Keyboard Extension Evidence Plan
 
-Last updated: 2026-08-26
+Last updated: 2026-09-08
 
 ## Purpose
 
@@ -242,6 +242,39 @@ Expected screenshots for a keyboard action are:
 The screenshots and record must bind to the same capture Git SHA. They verify a later current head
 only through the test-only carry-forward procedure below. Report transport success, semantic
 acceptance, and visual/runtime acceptance separately.
+
+### Required extension performance record
+
+For connector or keyboard-startup changes, collect these measurements from the same exact Git SHA
+and build configuration used for normal simulator runtime proof. Keep them separate from visual
+acceptance: a size or timing measurement does not prove that an action worked.
+
+```text
+Evidence class: normal simulator performance measurement
+Git SHA: <full SHA>
+Build configuration: <Debug/Release>
+Simulator model: <model>
+OS version: <version>
+Linked extension bundle: <path outside the repository>
+Linked extension bundle size: <bytes>
+Linked extension executable size: <bytes>
+Startup definition: focus/switch action through first visible production OpenKeyboard key or toolbar
+Startup samples: <sample count and milliseconds>
+Startup summary: <minimum, median, and maximum milliseconds>
+Extension process: <process name>
+Steady-state memory: <bytes after the keyboard is visibly idle>
+Peak action memory: <bytes during a completed live action>
+Measurement method: <Xcode gauge, Instruments, or named simulator-control route>
+```
+
+- Measure the built `.appex` directory and its linked executable; record exact byte counts rather
+  than rounded Finder values.
+- Define startup latency before sampling and use the same visible start and end events for every
+  sample. Collect at least five normally launched samples without test arguments or seeded state.
+- Read memory from the keyboard-extension process, not the host app. Record steady state after the
+  visible keyboard settles and the peak observed while one configured live action completes.
+- Do not add production logging solely for measurement, and never include credentials, private
+  endpoint values, or private model identifiers in the record or supporting artifacts.
 
 ### Test-only carry-forward procedure
 

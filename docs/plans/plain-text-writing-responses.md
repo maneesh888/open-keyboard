@@ -65,14 +65,13 @@ roadmap. The semantic-contract release and OpenKeyboard adoption in this plan mu
 the later connector migration can then consume the same plain-text behavior without an
 OpenKeyboard-specific response mode.
 
-Alignment status updated 2026-09-09: Universal AI Connector main at
+Alignment status updated 2026-09-10: Universal AI Connector main at
 `c2257c35d5992940db15d2a95c17688adc7a3fb4` already exposes provider-neutral model discovery,
-including the Swift `async` `listModels` surface. OpenKeyboard already owns and presents Gateway
-configuration, connection testing, model loading, and model selection. The first missing product
-workflow is therefore live provider/Gateway configuration, model loading, exact selection, and
-connection testing in the connector's existing deterministic iOS sample, not model loading in
-OpenKeyboard or a new connector API. Connector main also already contains deterministic Android
-and Kotlin/JVM console samples; their later stages extend those hosts rather than create them.
+including the Swift `async` `listModels` surface. OpenKeyboard now consumes that pinned public
+surface for host-owned OpenAI, Anthropic, OpenRouter, and OpenAI-compatible provider profiles in
+Settings and the keyboard extension. The product does not compile or copy the connector sample
+`ContentView`. The staged connector-sample roadmap below remains separate cross-repository work;
+it is retained here as planning context and is not an OpenKeyboard product dependency.
 
 ### Ownership boundaries
 
@@ -144,8 +143,10 @@ and Kotlin/JVM console samples; their later stages extend those hosts rather tha
   state, cancellation/retry behavior, configuration replacement, exact selection/manual fallback,
   the two-call connection flow, and the no-fallback/no-substitution rules.
 - Add an opt-in live route that runs the actual iOS sample, not a library-only test harness, against
-  at least two exact explicitly selected models. Record model discovery, transport success,
-  generation acceptance, latency, and returned/requested model identity separately.
+  at least two exact explicitly selected models. Verify requested/returned identity and any useful
+  timing measurements only inside the private local process. Retain only non-sensitive exact-match
+  booleans, discovery/transport/generation outcomes, the target, and exact head; never retain raw
+  model identities or latency.
 - Collect normal simulator runtime proof using the normally launched sample with no seeded or
   test-host state. This simulator proof is a separate Stage 1 evidence row.
 - Stage 1 acceptance also requires the exact signed sample build to install and launch on a
@@ -191,8 +192,8 @@ and Kotlin/JVM console samples; their later stages extend those hosts rather tha
 
 #### OpenKeyboard migration evidence
 
-- Begin OpenKeyboard-specific connector adoption only after sufficient connector sample confidence
-  has been established. Sample acceptance does not waive OpenKeyboard's own integration gates.
+- OpenKeyboard-specific connector adoption uses the pinned public Swift surface directly; sample
+  acceptance does not waive or replace OpenKeyboard's own integration gates.
 - Before removing OpenKeyboard's legacy chat transport, prove request/result parity for Settings
   smoke tests and keyboard actions, concurrent grammar chunks, connector replacement after config
   changes, invalid credentials, unavailable models, rate limits, timeout, cancellation, malformed
@@ -291,8 +292,9 @@ and Kotlin/JVM console samples; their later stages extend those hosts rather tha
 - Treat the change as gateway-, model-capability-, parser-, and semantic-behavior-impacting.
 - Run the exact-head low/high model matrix through
   `./scripts/check-live.sh gateway-differential` with no fallback or model substitution.
-- Verify Summarize, Translate, and Continue Writing independently. Record transport success,
-  response-shape acceptance, semantic acceptance, latency, and exact model identity separately.
+- Verify Summarize, Translate, and Continue Writing independently. Compare exact model identity
+  only inside the guarded local gate and retain non-sensitive identity-match and outcome booleans;
+  do not print or persist raw model identities or latency.
 - For Translate, collect normal simulator runtime proof using the actual extension through an
   ordinary host-app text field, visible production UI, and configured live gateway. Capture and
   inspect the required direct Simulator screenshots outside XCTest.
@@ -340,8 +342,10 @@ and extension requirements recorded above.
   request counts. They do not prove network availability, semantic model behavior, visible normal
   runtime, signing, or extension compatibility.
 - **Live evidence:** the opt-in actual-sample route must pass with at least two exact selected models
-  and report discovery, transport, response acceptance, latency, and model identity separately.
-  Live success does not by itself prove the visible UI or physical-device behavior.
+  and verify discovery, transport, response acceptance, and exact identity locally. Retained
+  evidence contains only pass/fail and exact-match assertions bound to the exact head, with no raw
+  model identity or latency. Live success does not by itself prove the visible UI or
+  physical-device behavior.
 - **Normal simulator runtime proof:** direct, inspected evidence from the normally launched iOS
   sample proves the visible host-app flow only. It does not prove a signed physical-iPhone build or
   the keyboard extension.

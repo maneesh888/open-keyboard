@@ -1,5 +1,87 @@
 #!/usr/bin/env bash
+
+# Seed inputs contain private endpoints, credentials, and model identities. Disable inherited
+# tracing and automatic export before arguments, environment, or the guarded seed are read.
+case "$-" in
+  *x*) set +x ;;
+esac
+case "$-" in
+  *a*) set +a ;;
+esac
 set -euo pipefail
+
+openkeyboard_unset_ambient_private_live_values() {
+  unset \
+    OPENAI_API_KEY \
+    OPENAI_LIVE_MODEL \
+    ANTHROPIC_API_KEY \
+    ANTHROPIC_LIVE_MODEL \
+    OPENROUTER_API_KEY \
+    OPENROUTER_LIVE_MODEL \
+    GATEWAY_LIVE_BASE_URL \
+    GATEWAY_API_KEY \
+    GATEWAY_LIVE_MODEL \
+    GATEWAY_LIVE_STRUCTURED_OUTPUT \
+    OPEN_KEYBOARD_LIVE_GATEWAY_URL \
+    OPEN_KEYBOARD_LIVE_API_KEY \
+    OPEN_KEYBOARD_LIVE_MODEL \
+    OPEN_KEYBOARD_LIVE_REQUIRED_MODEL \
+    OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
+    OPEN_KEYBOARD_TEST_GATEWAY_URL \
+    OPEN_KEYBOARD_TEST_API_KEY \
+    OPEN_KEYBOARD_TEST_GATEWAY_URL_HEX \
+    OPEN_KEYBOARD_TEST_API_KEY_HEX \
+    OPEN_KEYBOARD_TEST_MODEL \
+    OPEN_KEYBOARD_TEST_PROVIDER \
+    OPEN_KEYBOARD_LIVE_DIFFERENTIAL_ROLE \
+    OPEN_KEYBOARD_SIMULATOR_PROVIDER \
+    OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LOW_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_HIGH_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_GATEWAY_URL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_API_KEY \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_MODEL \
+    OPEN_KEYBOARD_SIMULATOR_LEGACY_PROFILE_STATE \
+    OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE \
+    OPEN_KEYBOARD_PRIVATE_REAL_SCREENSHOT_DIR \
+    OPEN_KEYBOARD_PRIVATE_REAL_SCREENSHOT_PHRASE \
+    SIMCTL_CHILD_OPEN_KEYBOARD_TEST_GATEWAY_URL \
+    SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
+    SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL \
+    SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
+    line \
+    value \
+    base_url \
+    key_value \
+    model_value \
+    model_id \
+    tested_model \
+    required_model \
+    low_model \
+    high_model \
+    expected_profile_model \
+    gateway_url_hex \
+    api_key_hex \
+    requested_seed_file \
+    requested_live_profile \
+    requested_uac_checkout \
+    requested_provider_evidence_output \
+    requested_differential_evidence_output \
+    requested_live_test_identifier \
+    requested_simulator_template \
+    requested_screenshot_dir \
+    requested_screenshot_phrase
+}
+
+# This route is seed-only. Ambient credential/model/URL values, including stale SIMCTL_CHILD
+# values, must not reach repository resolution or validation helpers.
+openkeyboard_unset_ambient_private_live_values
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
@@ -37,6 +119,7 @@ seed_file=""
 simulator="booted"
 profile="reference"
 replace_existing_config=false
+export -n seed_file simulator profile replace_existing_config
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -26,8 +26,9 @@ its own seed. If cross-machine synchronization is needed, use a trusted secret m
 mode-`600` file at the canonical path on each machine rather than committing or copying it through a
 worktree.
 
-The file accepts only `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL`,
-`OPEN_KEYBOARD_SIMULATOR_API_KEY`, and `OPEN_KEYBOARD_SIMULATOR_MODEL`. An
+The file accepts either the complete legacy `OPEN_KEYBOARD_SIMULATOR_GATEWAY_URL` /
+`OPEN_KEYBOARD_SIMULATOR_API_KEY` / `OPEN_KEYBOARD_SIMULATOR_MODEL` triple or complete, distinct
+`OPEN_KEYBOARD_SIMULATOR_LOW_*` and `OPEN_KEYBOARD_SIMULATOR_HIGH_*` triples. An
 `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` override must still resolve to a current-user-owned,
 private, ignored, untracked regular file below the primary checkout's `.agent/local-seeds/`
 directory, without `..` traversal or extended ACL entries. The file must also remain untracked and
@@ -35,6 +36,13 @@ ignored in the executing worktree. Run
 `./scripts/check-live.sh gateway`, `./scripts/ios/test.sh live-gateway-smoke`, or
 `./scripts/ios/test.sh real-keyboard-live` only when local credentials are intentionally available.
 Missing or rejected configuration reports a path or policy reason without printing values.
+
+The exact-head `check-live.sh` route additionally runs `live-provider-matrix`, which reads the
+pinned connector's guarded, ignored `.env.live` from its primary checkout. That private seed must
+contain the four documented OpenAI, Anthropic, OpenRouter, and Gateway profiles. Exact identities
+are compared locally but are not printed or retained; the resulting evidence contains only
+canonical booleans, required pass/fail outcomes, and the exact head. Timing fields are deliberately
+excluded and rejected by the pull-request evidence validator.
 
 ---
 
@@ -244,6 +252,8 @@ http://localhost:8080/admin/
    - Repeat for OpenKeyboardExtension target
 
 8. **Build:**
+   - From the repository root, run `git submodule update --init --recursive` and
+     `./scripts/bootstrap-universal-ai-connector.sh` once before a direct Xcode build.
    - Select iPhone Simulator
    - Press ⌘+R to build and run
 
@@ -277,7 +287,9 @@ But they need to be **imported into an Xcode project** to build.
 
 1. **Launch OpenKeyboard app** (on Simulator or device)
 2. **Enter API key** from Test 3
-3. **Test connection** → should hit `http://localhost:8080/health`
+3. **Test connection** → should perform one authenticated `GET /v1/models`, require an exact model
+   selection when multiple models are returned, then run the grammar smoke through
+   `POST /v1/chat/completions`. The app does not call `/health`.
 4. **Enable keyboard:**
    - Settings → General → Keyboard → Keyboards
    - Add "OpenKeyboard"
@@ -286,7 +298,7 @@ But they need to be **imported into an Xcode project** to build.
 6. **Switch to OpenKeyboard** (globe key)
 7. **Type something** → AI suggestions should appear
 8. **Tap AI button** → AI actions menu
-9. **Select "Fix Grammar"** → should call gateway `/v1/completions`
+9. **Select "Fix Grammar"** → should call gateway `/v1/chat/completions` through Universal AI Connector
 
 ---
 

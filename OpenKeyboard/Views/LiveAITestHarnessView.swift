@@ -1,4 +1,5 @@
-#if DEBUG
+#if DEBUG && targetEnvironment(simulator)
+import Darwin
 import SwiftUI
 
 struct LiveAITestHarnessView: View {
@@ -6,8 +7,11 @@ struct LiveAITestHarnessView: View {
     @State private var statusText = "Ready"
     @State private var isLoading = false
 
-    private let environment = ProcessInfo.processInfo.environment
-    private let arguments = ProcessInfo.processInfo.arguments
+    private let configuration: SimulatorLiveAIConfiguration?
+
+    init(configuration: SimulatorLiveAIConfiguration?) {
+        self.configuration = configuration
+    }
 
     var body: some View {
         NavigationView {
@@ -92,63 +96,37 @@ struct LiveAITestHarnessView: View {
     }
 
     private func performLiveAction(action: String, text: String) async throws -> String {
-        guard let gatewayURLString = environment["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
-              let gatewayURL = URL(string: gatewayURLString),
-              let model = environment["OPEN_KEYBOARD_LIVE_MODEL"],
-              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard let configuration else {
             throw LiveAITestHarnessError.missingConfiguration
         }
 
-        var apiKey = environment["OPEN_KEYBOARD_LIVE_API_KEY"] ?? ""
-        if arguments.contains("--live-ai-invalid-key") {
-            apiKey = "invalid-open-keyboard-ui-test-key"
-        }
-        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw LiveAITestHarnessError.missingConfiguration
-        }
-
-        var request = URLRequest(url: gatewayURL.appendingPathComponent("v1/chat/completions"))
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 90
+        let apiKey = configuration.usesInvalidKey
+            ? "invalid-open-keyboard-ui-test-key"
+            : configuration.apiKey
 
         let rendering = KeyboardGatewayActionContract.rendering(operation: action, text: text)
-        request.httpBody = try JSONEncoder().encode(ChatRequest(
-            model: model,
-            operation: rendering.wireOperationID ?? action,
-            inputText: text,
-            messages: rendering.messages.map { ChatMessage(role: $0.role, content: $0.content) },
-            responseFormat: ChatResponseFormat(semanticType: rendering.responseFormatType),
-            maxTokens: rendering.maxTokens,
-            temperature: rendering.temperature,
-            stream: false
-        ))
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw LiveAITestHarnessError.invalidResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            throw LiveAITestHarnessError.httpStatus(http.statusCode)
-        }
-
-        let completion = try JSONDecoder().decode(ChatResponse.self, from: data)
-        guard let choice = completion.choices.first,
-              choice.finishReason != "length",
-              !choice.message.content.isEmpty else {
-            throw LiveAITestHarnessError.invalidResponse
+        let profile = try OpenKeyboardGatewayProfile(
+            gatewayURL: configuration.gatewayURL,
+            apiKey: apiKey
+        )
+        let request = try OpenKeyboardAIRequest.writing(
+            rendering: rendering,
+            modelID: configuration.model,
+            timeoutInterval: 90
+        )
+        let response = try await OpenKeyboardRequestDeadline.value(timeoutInterval: 90) {
+            try await UniversalAIConnectorAdapter.shared.respond(to: request, profile: profile)
         }
 
         let result: KeyboardActionOperationResult
         if action == "fix_grammar" {
             result = try KeyboardActionOperationResult.plainTextGrammarResponse(
-                choice.message.content,
+                response,
                 original: text
             )
         } else {
             result = try KeyboardActionOperationResult.plainTextResponse(
-                choice.message.content,
+                response,
                 rendering: rendering,
                 title: action == "summarize" ? "Summarize" : "Improve",
                 source: text
@@ -168,85 +146,83 @@ struct LiveAITestHarnessView: View {
         if let urlError = error as? URLError, urlError.code == .timedOut {
             return "Gateway request timed out"
         }
+        if let connectorError = error as? OpenKeyboardAIConnectorError {
+            switch connectorError {
+            case .unauthorized, .forbidden:
+                return "Gateway authorization failed"
+            case .timeout:
+                return "Gateway request timed out"
+            case .serverStatus(let status):
+                return "Gateway HTTP \(status)"
+            default:
+                return "Gateway request failed"
+            }
+        }
         return "Gateway request failed"
+    }
+}
+
+struct SimulatorLiveAIConfiguration {
+    let gatewayURL: String
+    let apiKey: String
+    let model: String
+    let usesInvalidKey: Bool
+
+    private static let environmentKeys = [
+        "OPEN_KEYBOARD_LIVE_GATEWAY_URL",
+        "OPEN_KEYBOARD_LIVE_API_KEY",
+        "OPEN_KEYBOARD_LIVE_MODEL"
+    ]
+
+    static func capture(arguments: [String]) -> SimulatorLiveAIConfiguration? {
+        let isAuthorized = arguments.contains("--uitesting")
+            && arguments.contains("--live-ai-test-harness")
+        let captured: (gatewayURL: String?, apiKey: String?, model: String?)?
+        if isAuthorized {
+            let environment = ProcessInfo.processInfo.environment
+            captured = (
+                environment["OPEN_KEYBOARD_LIVE_GATEWAY_URL"],
+                environment["OPEN_KEYBOARD_LIVE_API_KEY"],
+                environment["OPEN_KEYBOARD_LIVE_MODEL"]
+            )
+        } else {
+            captured = nil
+        }
+
+        environmentKeys.forEach { name in
+            name.withCString { _ = unsetenv($0) }
+        }
+
+        guard let captured,
+              let gatewayURL = captured.gatewayURL,
+              !gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let apiKey = captured.apiKey,
+              !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let model = captured.model,
+              !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+
+        return SimulatorLiveAIConfiguration(
+            gatewayURL: gatewayURL,
+            apiKey: apiKey,
+            model: model,
+            usesInvalidKey: arguments.contains("--live-ai-invalid-key")
+        )
     }
 }
 
 private enum LiveAITestHarnessError: Error {
     case missingConfiguration
-    case unsupportedAction
     case invalidResponse
-    case httpStatus(Int)
 
     var userMessage: String {
         switch self {
         case .missingConfiguration:
             return "Missing live gateway test configuration"
-        case .unsupportedAction:
-            return "Unsupported live AI action"
         case .invalidResponse:
             return "Invalid gateway response"
-        case .httpStatus(let status):
-            if status == 401 || status == 403 {
-                return "Gateway authorization failed"
-            }
-            return "Gateway HTTP \(status)"
         }
-    }
-}
-
-private struct ChatRequest: Encodable {
-    let model: String
-    let operation: String
-    let inputText: String
-    let messages: [ChatMessage]
-    let responseFormat: ChatResponseFormat?
-    let maxTokens: Int
-    let temperature: Double?
-    let stream: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case model
-        case operation
-        case inputText = "input_text"
-        case messages
-        case responseFormat = "response_format"
-        case maxTokens = "max_tokens"
-        case temperature
-        case stream
-    }
-}
-
-private struct ChatResponseFormat: Encodable {
-    let type: String
-
-    init?(semanticType: String?) {
-        guard let semanticType else { return nil }
-        let type = semanticType.trimmingCharacters(in: .whitespacesAndNewlines)
-        precondition(
-            type == "json_object",
-            "Unsupported semantic response format: \(type.isEmpty ? "<empty>" : type)"
-        )
-        self.type = type
-    }
-}
-
-private struct ChatMessage: Codable {
-    let role: String
-    let content: String
-}
-
-private struct ChatResponse: Decodable {
-    let choices: [ChatChoice]
-}
-
-private struct ChatChoice: Decodable {
-    let message: ChatMessage
-    let finishReason: String?
-
-    enum CodingKeys: String, CodingKey {
-        case message
-        case finishReason = "finish_reason"
     }
 }
 #endif

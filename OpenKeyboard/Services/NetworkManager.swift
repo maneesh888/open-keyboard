@@ -7,10 +7,6 @@
 
 import Foundation
 
-protocol NetworkManagerTransporting: GatewayChatTransporting {}
-
-extension URLSession: NetworkManagerTransporting {}
-
 enum NetworkError: Error {
     case invalidURL
     case noData
@@ -18,6 +14,7 @@ enum NetworkError: Error {
     case serverError(String)
     case networkError(Error)
     case modelUnavailable
+    case unsupportedModelDiscovery
     case unusableCorrection
     case unusableCapability(String)
     case timeout
@@ -37,6 +34,8 @@ enum NetworkError: Error {
             return "Network error: \(error.localizedDescription)"
         case .modelUnavailable:
             return "The selected model is not available for this key."
+        case .unsupportedModelDiscovery:
+            return "This provider does not support model discovery. Enter an exact model identifier."
         case .unusableCorrection:
             return "Gateway connected, but the selected model did not return a usable correction."
         case .unusableCapability(let capability):
@@ -116,7 +115,7 @@ struct GatewayDiagnosticReport: Equatable {
 }
 
 class NetworkManager {
-    static let shared = NetworkManager()
+    static let shared = NetworkManager(connector: UniversalAIConnectorAdapter.shared)
     static let grammarDiagnosticPresetID = "plain-grammar-fast"
     static let rewriteDiagnosticPresetID = "structured-operation-rewrite"
     static let translationDiagnosticPresetID = "structured-operation-translate-dutch"
@@ -141,54 +140,68 @@ class NetworkManager {
         "The button dissapeared untill I retryed the action, so the tester were unable to finish the demo."
     ]
 
-    private let transport: NetworkManagerTransporting
+    private let connector: OpenKeyboardAIConnectorServing
 
-    init(transport: NetworkManagerTransporting = URLSession.shared) {
-        self.transport = transport
-    }
-
-    /// Test connection to gateway with given API key. Uses the authenticated
-    /// models endpoint so gateways that do not expose unauthenticated /health
-    /// can still validate correctly.
-    func testConnection(gatewayURL: String, apiKey: String) async throws -> Bool {
-        !((try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)).isEmpty)
+    init(connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared) {
+        self.connector = connector
     }
 
     /// Run a correction smoke through the same plain-text chat completions contract
     /// used by the keyboard action path.
     func testCorrectionSmoke(gatewayURL: String, apiKey: String, model: String) async throws {
+        let profile = try Self.profile(
+            provider: .openAICompatible,
+            baseURL: gatewayURL,
+            apiKey: apiKey
+        )
+        try await testCorrectionSmoke(profile: profile, model: model)
+    }
+
+    func testCorrectionSmoke(profile: OpenKeyboardGatewayProfile, model: String) async throws {
         let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
         let preset = Self.requiredGatewayPreset(id: Self.grammarDiagnosticPresetID)
         let smokeInput = preset.input
         let grammarRendering = preset.rendering
-        let validationAttempts = 2
-        for attempt in 1...validationAttempts {
-            let content = try await chatCompletionContent(
-                gatewayURL: gatewayURL,
-                apiKey: apiKey,
-                model: trimmedModel,
-                operation: grammarRendering.wireOperationID,
+        let content = try await connectorResponseContent(
+            profile: profile,
+            model: trimmedModel,
+            rendering: grammarRendering,
+            timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
+        )
+        do {
+            _ = try await Self.validatePlainTextCorrectionContent(
+                content,
                 inputText: smokeInput,
-                systemPrompt: grammarRendering.messages[0].content,
-                userPrompt: grammarRendering.messages[1].content,
-                maxTokens: grammarRendering.maxTokens,
-                temperature: grammarRendering.temperature,
-                responseFormat: CanonicalGatewayResponseFormat(
-                    semanticType: grammarRendering.responseFormatType
-                ),
-                timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
+                minimumCount: 1
             )
-            do {
-                _ = try await Self.validatePlainTextCorrectionContent(content, inputText: smokeInput, minimumCount: 1)
-                return
-            } catch {
-                guard attempt < validationAttempts else { throw NetworkError.unusableCorrection }
-            }
+        } catch {
+            throw NetworkError.unusableCorrection
         }
     }
 
     func runGatewayDiagnostics(gatewayURL: String, apiKey: String, preferredModel: String) async -> GatewayDiagnosticReport {
+        do {
+            return await runGatewayDiagnostics(
+                profile: try Self.profile(
+                    provider: .openAICompatible,
+                    baseURL: gatewayURL,
+                    apiKey: apiKey
+                ),
+                preferredModel: preferredModel
+            )
+        } catch {
+            return Self.invalidConfigurationDiagnosticReport(
+                preferredModel: preferredModel,
+                error: error
+            )
+        }
+    }
+
+    func runGatewayDiagnostics(
+        profile: OpenKeyboardGatewayProfile,
+        preferredModel: String
+    ) async -> GatewayDiagnosticReport {
         let trimmedPreferredModel = preferredModel.trimmingCharacters(in: .whitespacesAndNewlines)
         var models: [String] = []
         var checks: [GatewayDiagnosticCheck] = []
@@ -196,9 +209,10 @@ class NetworkManager {
         let modelsOutcome = await diagnosticCheck(
             id: "models",
             title: "Models",
-            endpoint: "GET /v1/models"
+            endpoint: Self.modelDiscoveryEndpoint(for: profile.provider),
+            unsupportedModelDiscoveryIsSkipped: true
         ) {
-            models = try await fetchModels(gatewayURL: gatewayURL, apiKey: apiKey)
+            models = try await fetchModels(profile: profile)
             guard !models.isEmpty else { throw NetworkError.modelUnavailable }
             return "Loaded \(models.count) model\(models.count == 1 ? "" : "s")."
         }
@@ -234,7 +248,7 @@ class NetworkManager {
             let outcome = await diagnosticCheck(
                 id: capability.id,
                 title: capability.title,
-                endpoint: "POST /v1/chat/completions"
+                endpoint: Self.responseEndpoint(for: profile.provider)
             ) {
                 // Capability probes are deliberately independent from model discovery. The exact
                 // selected model may still accept completions when /models is unavailable or
@@ -242,8 +256,7 @@ class NetworkManager {
                 // reporting their own outcome.
                 guard !selectedModel.isEmpty else { throw NetworkError.modelUnavailable }
                 try await testDiagnosticCapability(
-                    gatewayURL: gatewayURL,
-                    apiKey: apiKey,
+                    profile: profile,
                     model: selectedModel,
                     presetID: capability.presetID
                 )
@@ -257,26 +270,16 @@ class NetworkManager {
     }
 
     private func testDiagnosticCapability(
-        gatewayURL: String,
-        apiKey: String,
+        profile: OpenKeyboardGatewayProfile,
         model: String,
         presetID: String
     ) async throws {
         let preset = Self.requiredGatewayPreset(id: presetID)
         let rendering = preset.rendering
-        let content = try await chatCompletionContent(
-            gatewayURL: gatewayURL,
-            apiKey: apiKey,
+        let content = try await connectorResponseContent(
+            profile: profile,
             model: model,
-            operation: rendering.wireOperationID,
-            inputText: preset.input,
-            systemPrompt: rendering.messages[0].content,
-            userPrompt: rendering.messages[1].content,
-            maxTokens: rendering.maxTokens,
-            temperature: rendering.temperature,
-            responseFormat: CanonicalGatewayResponseFormat(
-                semanticType: rendering.responseFormatType
-            ),
+            rendering: rendering,
             timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
         )
         do {
@@ -315,7 +318,14 @@ class NetworkManager {
     }
 
     static func isUsableCorrectionSmokeResponse(_ value: String) -> Bool {
-        CanonicalGatewayClient.isUsableCorrectionSmokeResponse(value)
+        let normalized = value.lowercased().trimmingCharacters(
+            in: .whitespacesAndNewlines.union(.punctuationCharacters)
+        )
+        guard !normalized.isEmpty else { return false }
+        return normalized.contains("i have an apple")
+            || normalized.contains("i have a apple")
+            || normalized.contains("i had an apple")
+            || (normalized.contains("have") && normalized.contains("apple"))
     }
 
     static func randomCorrectionSmokeTestPhrase() -> String {
@@ -323,8 +333,18 @@ class NetworkManager {
     }
 
     static func normalizedGatewayBaseURLString(_ value: String) throws -> String {
+        try normalizedProviderBaseURLString(value, provider: .openAICompatible)
+    }
+
+    static func normalizedProviderBaseURLString(
+        _ value: String,
+        provider: OpenKeyboardAIProvider
+    ) throws -> String {
         do {
-            return try CanonicalGatewayClient.normalizedGatewayBaseURLString(value)
+            return try GatewayURLNormalizer.normalizedStoredBaseURLString(
+                value,
+                provider: provider
+            )
         } catch {
             throw NetworkError.invalidURL
         }
@@ -332,7 +352,12 @@ class NetworkManager {
 
     static func endpointURL(gatewayURL: String, path: String) throws -> URL {
         do {
-            return try CanonicalGatewayClient.endpointURL(gatewayURL: gatewayURL, path: path)
+            let base = try GatewayURLNormalizer.normalizedStoredBaseURLString(gatewayURL)
+            let cleanedPath = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard let url = URL(string: "\(base)/\(cleanedPath)") else {
+                throw OpenKeyboardAIConnectorError.invalidURL
+            }
+            return url
         } catch {
             throw NetworkError.invalidURL
         }
@@ -372,33 +397,21 @@ class NetworkManager {
 
     /// Fetch available models from gateway
     func fetchModels(gatewayURL: String, apiKey: String) async throws -> [String] {
-        let url = try Self.endpointURL(gatewayURL: gatewayURL, path: "v1/models")
+        let profile = try Self.profile(
+            provider: .openAICompatible,
+            baseURL: gatewayURL,
+            apiKey: apiKey
+        )
+        return try await fetchModels(profile: profile)
+    }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 10
-
+    func fetchModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
         do {
-            let (data, response) = try await transport.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw NetworkError.noData
+            return try await OpenKeyboardRequestDeadline.value(
+                timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
+            ) {
+                try await self.connector.listModels(profile: profile)
             }
-
-            if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
-                throw NetworkError.unauthorized
-            }
-
-            if httpResponse.statusCode != 200 {
-                throw NetworkError.serverError("HTTP \(httpResponse.statusCode)")
-            }
-
-            guard let decoded = try? JSONDecoder().decode(ModelsResponse.self, from: data) else {
-                throw NetworkError.noData
-            }
-
-            return decoded.data.map(\.id)
         } catch let error as NetworkError {
             throw error
         } catch is CancellationError {
@@ -407,46 +420,30 @@ class NetworkManager {
             throw NetworkError.cancelled
         } catch let error as URLError where error.code == .timedOut {
             throw NetworkError.timeout
+        } catch let error as OpenKeyboardAIConnectorError {
+            throw Self.networkError(from: error, responseOperation: false)
         } catch {
             throw NetworkError.networkError(error)
         }
     }
 
-    private func chatCompletionContent(
-        gatewayURL: String,
-        apiKey: String,
+    private func connectorResponseContent(
+        profile: OpenKeyboardGatewayProfile,
         model: String,
-        operation: String?,
-        inputText: String?,
-        systemPrompt: String,
-        userPrompt: String,
-        maxTokens: Int,
-        temperature: Double? = 0.1,
-        responseFormat: CanonicalGatewayResponseFormat? = nil,
+        rendering: SemanticPromptRendering,
         timeoutInterval: TimeInterval
     ) async throws -> String {
-        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
-
         do {
-            return try await CanonicalGatewayClient(transport: transport).chatCompletionContent(
-                systemPrompt: systemPrompt,
-                userPrompt: userPrompt,
-                operation: operation,
-                inputText: inputText,
-                maxTokens: maxTokens,
-                config: AppConfig(
-                    apiKey: apiKey,
-                    gatewayURL: gatewayURL,
-                    selectedModel: trimmedModel,
-                    isConfigured: true,
-                    grammarCorrectionVerified: true,
-                    grammarCorrectionContractVersion: AppConfig.grammarCorrectionCapabilityVersion
-                ),
-                temperature: temperature,
-                responseFormat: responseFormat,
+            let request = try OpenKeyboardAIRequest.writing(
+                rendering: rendering,
+                modelID: model,
                 timeoutInterval: timeoutInterval
             )
+            return try await OpenKeyboardRequestDeadline.value(
+                timeoutInterval: timeoutInterval
+            ) {
+                try await self.connector.respond(to: request, profile: profile)
+            }
         } catch let error as NetworkError {
             throw error
         } catch is CancellationError {
@@ -455,8 +452,8 @@ class NetworkManager {
             throw NetworkError.cancelled
         } catch let error as URLError where error.code == .timedOut {
             throw NetworkError.timeout
-        } catch let error as CanonicalGatewayClientError {
-            throw Self.networkError(from: error)
+        } catch let error as OpenKeyboardAIConnectorError {
+            throw Self.networkError(from: error, responseOperation: true)
         } catch {
             throw NetworkError.networkError(error)
         }
@@ -466,6 +463,7 @@ class NetworkManager {
         id: String,
         title: String,
         endpoint: String,
+        unsupportedModelDiscoveryIsSkipped: Bool = false,
         operation: () async throws -> String
     ) async -> (check: GatewayDiagnosticCheck, wasCancelled: Bool) {
         let started = Date()
@@ -480,11 +478,13 @@ class NetworkManager {
                 message: message
             ), false)
         } catch {
+            let isUnsupported = unsupportedModelDiscoveryIsSkipped
+                && Self.isUnsupportedModelDiscovery(error)
             return (GatewayDiagnosticCheck(
                 id: id,
                 title: title,
                 endpoint: endpoint,
-                status: .failed,
+                status: isUnsupported ? .skipped : .failed,
                 durationMilliseconds: Self.durationMilliseconds(since: started),
                 message: Self.diagnosticMessage(for: error)
             ), Self.isDiagnosticCancellation(error))
@@ -498,6 +498,12 @@ class NetworkManager {
         return false
     }
 
+    private static func isUnsupportedModelDiscovery(_ error: Error) -> Bool {
+        guard let networkError = error as? NetworkError else { return false }
+        if case .unsupportedModelDiscovery = networkError { return true }
+        return false
+    }
+
     @MainActor
     private static func validatePlainTextCorrectionContent(
         _ content: String,
@@ -506,7 +512,10 @@ class NetworkManager {
     ) throws -> Int {
         let corrected: String
         do {
-            corrected = try GrammarCorrectionResponseValidator.validated(content, original: inputText)
+            corrected = try GrammarCorrectionResponseValidator.classified(
+                content,
+                original: inputText
+            ).text
         } catch {
             throw NetworkError.unusableCorrection
         }
@@ -533,7 +542,75 @@ class NetworkManager {
         return KeyboardActionErrorState.sanitized(raw)
     }
 
-    private static func networkError(from error: CanonicalGatewayClientError) -> NetworkError {
+    func closeConnector() {
+        connector.close()
+    }
+
+    private static func profile(
+        provider: OpenKeyboardAIProvider,
+        baseURL: String,
+        apiKey: String
+    ) throws -> OpenKeyboardGatewayProfile {
+        do {
+            return try OpenKeyboardGatewayProfile(
+                provider: provider,
+                baseURL: baseURL,
+                apiKey: apiKey
+            )
+        } catch let error as OpenKeyboardAIConnectorError {
+            throw networkError(from: error, responseOperation: false)
+        } catch {
+            throw NetworkError.networkError(error)
+        }
+    }
+
+    private static func invalidConfigurationDiagnosticReport(
+        preferredModel: String,
+        error: Error
+    ) -> GatewayDiagnosticReport {
+        GatewayDiagnosticReport(
+            selectedModel: preferredModel.trimmingCharacters(in: .whitespacesAndNewlines),
+            checks: [
+                GatewayDiagnosticCheck(
+                    id: "diagnostic-input",
+                    title: "Configuration",
+                    endpoint: "-",
+                    status: .failed,
+                    durationMilliseconds: nil,
+                    message: diagnosticMessage(for: error)
+                )
+            ]
+        )
+    }
+
+    private static func modelDiscoveryEndpoint(for provider: OpenKeyboardAIProvider) -> String {
+        switch provider {
+        case .anthropic:
+            return "Connector model discovery"
+        case .openAI, .openAICompatible:
+            return "GET /v1/models"
+        case .openRouter:
+            return "GET /api/v1/models"
+        }
+    }
+
+    private static func responseEndpoint(for provider: OpenKeyboardAIProvider) -> String {
+        switch provider {
+        case .anthropic:
+            return "POST /v1/messages"
+        case .openAI:
+            return "POST /v1/responses"
+        case .openAICompatible:
+            return "POST /v1/chat/completions"
+        case .openRouter:
+            return "POST /api/v1/chat/completions"
+        }
+    }
+
+    private static func networkError(
+        from error: OpenKeyboardAIConnectorError,
+        responseOperation: Bool
+    ) -> NetworkError {
         switch error {
         case .invalidURL:
             return .invalidURL
@@ -541,26 +618,22 @@ class NetworkManager {
             return .unauthorized
         case .missingInput:
             return .unusableCorrection
-        case .unauthorized:
+        case .unauthorized, .forbidden:
             return .unauthorized
         case .modelUnavailable:
             return .modelUnavailable
-        case .invalidResponse, .unusableCorrection:
-            return .unusableCorrection
+        case .invalidResponse, .truncatedResponse:
+            return responseOperation ? .unusableCorrection : .noData
         case .timeout:
             return .timeout
-        case .serverStatus(let status):
-            return .serverError("HTTP \(status)")
-        case .transport:
+        case .rateLimited:
+            return .serverError("HTTP 429")
+        case .serverStatus(let statusCode):
+            return .serverError("HTTP \(statusCode)")
+        case .unsupportedModelDiscovery:
+            return .unsupportedModelDiscovery
+        case .transport, .provider, .closed:
             return .networkError(URLError(.unknown))
         }
-    }
-}
-
-private struct ModelsResponse: Decodable {
-    let data: [Model]
-
-    struct Model: Decodable {
-        let id: String
     }
 }

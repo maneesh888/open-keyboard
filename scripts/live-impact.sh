@@ -47,6 +47,8 @@ while IFS= read -r -d '' changed_path; do
       scripts/check-live.sh | \
       scripts/check.sh | \
       scripts/check-semantic-prompt-contract.sh | \
+      scripts/bootstrap-universal-ai-connector.sh | \
+      scripts/tests/universal-ai-connector-policy-test.sh | \
       scripts/live-impact.sh | \
       scripts/validate-pr-live-evidence.sh | \
       scripts/ios/enable-openkeyboard-simulator-keyboard.sh | \
@@ -55,6 +57,7 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/seed-simulator-gateway-config.sh | \
       scripts/ios/test.sh | \
       Vendor/semantic-prompt-contract | \
+      Vendor/universal-ai-connector | \
       OpenKeyboard/* | \
       OpenKeyboardCore/Package.swift | \
       OpenKeyboardCore/Sources/* | \
@@ -70,6 +73,9 @@ while IFS= read -r -d '' changed_path; do
     .github/workflows/live.yml | \
       .gitmodules | \
       Vendor/semantic-prompt-contract | \
+      Vendor/universal-ai-connector | \
+      scripts/bootstrap-universal-ai-connector.sh | \
+      scripts/tests/universal-ai-connector-policy-test.sh | \
       scripts/check-live.sh | \
       scripts/live-impact.sh | \
       scripts/live-policy-bootstrap.sh | \
@@ -81,8 +87,10 @@ while IFS= read -r -d '' changed_path; do
       differential_required="true"
       ;;
     OpenKeyboard/Models/KeyboardSuggestionModels.swift | \
-      OpenKeyboard/Services/CanonicalGatewayClient.swift | \
+      OpenKeyboard/Services/OpenKeyboardAIConnector.swift | \
+      OpenKeyboard/Services/UniversalAIConnectorAdapter.swift | \
       OpenKeyboard/Services/NetworkManager.swift | \
+      OpenKeyboard/Views/LiveAITestHarnessView.swift | \
       OpenKeyboardCore/Sources/OpenKeyboardCore/GatewayClient.swift | \
       OpenKeyboardCore/Sources/OpenKeyboardCore/WritingAction.swift | \
       OpenKeyboardExtension/KeyboardAIService.swift | \

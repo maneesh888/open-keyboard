@@ -2,15 +2,18 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
+@testable import OpenKeyboardCore
 
-public final class URLSessionHTTPClient: HTTPClient {
+/// Test-only direct transport retained for opt-in legacy Core gateway fixtures.
+/// Production app and extension traffic is owned by Universal AI Connector.
+final class URLSessionHTTPClient: HTTPClient {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    init(session: URLSession = .shared) {
         self.session = session
     }
 
-    public func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
         var urlRequest = URLRequest(url: request.url)
         urlRequest.httpMethod = request.method
         urlRequest.httpBody = request.body

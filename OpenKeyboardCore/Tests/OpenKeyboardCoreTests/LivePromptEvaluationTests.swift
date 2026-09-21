@@ -7,15 +7,16 @@ final class LivePromptEvaluationTests: XCTestCase {
         let input = "Our support team definately need clearer notes before they reply to the customer about the delayed refnd."
         let expected = "Our support team definitely needs clearer notes before they reply to the customer about the delayed refund."
 
-        let startedAt = Date()
         let result = try await client.performWritingActionResult(.fixGrammar, text: input, model: model)
-        let latency = Date().timeIntervalSince(startedAt)
-        print(String(format: "LIVE_GRAMMAR_REQUEST_LATENCY_SECONDS=%.3f", latency))
 
         XCTAssertEqual(result.operation, "fix_grammar")
         XCTAssertTrue(result.items.isEmpty, "The model must not return patch metadata for grammar.")
-        XCTAssertEqual(result.displayText, expected)
+        XCTAssertTrue(
+            result.displayText == expected,
+            "Live grammar output did not match the expected fixture."
+        )
         XCTAssertTrue(result.displayText.contains("reply"), "Unrelated word 'reply' must remain unchanged.")
+        print("LIVE_GRAMMAR_REQUEST status=passed")
     }
 
     func testLiveGemmaReturnsExpectedContractForEveryOperationWhenConfigured() async throws {

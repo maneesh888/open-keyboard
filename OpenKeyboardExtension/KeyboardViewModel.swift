@@ -6,6 +6,66 @@
 import SwiftUI
 import UIKit
 
+private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
+    private final class ObserverBox {
+        weak var viewModel: KeyboardViewModel?
+
+        init(viewModel: KeyboardViewModel) {
+            self.viewModel = viewModel
+        }
+    }
+
+    static let shared = KeyboardActiveProfileObserverRegistry()
+
+    private let lock = NSLock()
+    private var entries: [UInt: ObserverBox] = [:]
+    private var nextIdentifier: UInt = 1
+
+    func register(_ viewModel: KeyboardViewModel) -> UnsafeMutableRawPointer {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let identifier = nextAvailableIdentifier()
+        entries[identifier] = ObserverBox(viewModel: viewModel)
+        // The Darwin center treats this as an opaque identity and never dereferences it. A
+        // monotonically allocated identifier avoids tying callback safety to either object's
+        // lifetime or to allocator address reuse.
+        return UnsafeMutableRawPointer(bitPattern: identifier)!
+    }
+
+    func viewModel(for token: UnsafeMutableRawPointer) -> KeyboardViewModel? {
+        lock.lock()
+        defer { lock.unlock() }
+        return entries[UInt(bitPattern: token)]?.viewModel
+    }
+
+    func unregister(_ token: UnsafeMutableRawPointer) {
+        lock.lock()
+        entries.removeValue(forKey: UInt(bitPattern: token))
+        lock.unlock()
+    }
+
+    private func nextAvailableIdentifier() -> UInt {
+        while nextIdentifier == 0 || entries[nextIdentifier] != nil {
+            nextIdentifier &+= 1
+        }
+        let identifier = nextIdentifier
+        nextIdentifier &+= 1
+        return identifier
+    }
+}
+
+private let keyboardActiveProfileDidChangeCallback: CFNotificationCallback = {
+    _, observer, _, _, _ in
+    guard let observer,
+          let viewModel = KeyboardActiveProfileObserverRegistry.shared.viewModel(for: observer) else {
+        return
+    }
+    Task { @MainActor [weak viewModel] in
+        viewModel?.handleActiveProfileDidChange()
+    }
+}
+
 enum KeyboardInputMode: Equatable {
     case letters
     case numbers
@@ -307,6 +367,7 @@ final class KeyboardViewModel: ObservableObject {
     private let typingPredictionsEnabled: Bool
     private let loadConfig: () -> AppConfig
     private let loadGatewayConnectionError: () -> String?
+    private var activeProfileObserverToken: UnsafeMutableRawPointer?
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
@@ -332,6 +393,9 @@ final class KeyboardViewModel: ObservableObject {
     private var grammarCorrectionRequestID: UUID?
     private var actionPanelTask: Task<Void, Never>?
     private var actionPanelRequestID: UUID?
+    private var manualActionTask: Task<Void, Never>?
+    private var manualActionRequestID: UUID?
+    private var activeProfileGeneration: UInt = 0
     private var shouldResumeAutomaticAnalysisOnKeyboardReturn = false
     private let automaticAnalysisDelayNanoseconds: UInt64
     private var lastAnalyzedText: String?
@@ -343,6 +407,11 @@ final class KeyboardViewModel: ObservableObject {
     private var grammarReviewHasRejections = false
     private var grammarFollowUpCompletionState = KeyboardCompletionPanelState.grammarReviewComplete
     private var grammarFollowUpCompletionStatus = "No more suggestions"
+
+    private struct EffectiveGatewayState: Equatable {
+        let config: AppConfig
+        let connectionError: String?
+    }
 
     private enum Keys {
         static let composingBuffer = "keyboardExtension.composingBuffer"
@@ -501,6 +570,24 @@ final class KeyboardViewModel: ObservableObject {
         }
         refreshTypingPredictions()
         recordConfigVisibilityProbe(context: "init")
+        registerForActiveProfileChanges()
+        // Close the load-before-registration window. If a payload-free Darwin pulse arrived
+        // during initialization, this catches the persisted state transition; when nothing
+        // changed it deliberately preserves any seeded presentation state.
+        _ = refreshEffectiveGatewayState()
+    }
+
+    deinit {
+        guard let activeProfileObserverToken else { return }
+        CFNotificationCenterRemoveObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            activeProfileObserverToken,
+            CFNotificationName(
+                rawValue: AppConfig.activeProfileDidChangeDarwinNotification as CFString
+            ),
+            nil
+        )
+        KeyboardActiveProfileObserverRegistry.shared.unregister(activeProfileObserverToken)
     }
 
     func insert(_ character: String) {
@@ -1457,8 +1544,37 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func reloadConfig() {
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        if refreshEffectiveGatewayState() {
+            return
+        }
+        updateAIStatusForEffectiveGatewayState()
+    }
+
+    private func loadEffectiveGatewayState() -> EffectiveGatewayState {
+        EffectiveGatewayState(
+            config: loadConfig(),
+            connectionError: Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        )
+    }
+
+    @discardableResult
+    private func refreshEffectiveGatewayState() -> Bool {
+        // Load the complete effective state before touching in-flight work. Darwin notifications
+        // are payload-free and may be delayed or coalesced, so only an observed state transition
+        // is allowed to invalidate requests and presentation state.
+        let latestState = loadEffectiveGatewayState()
+        guard latestState.config != config || latestState.connectionError != gatewayConnectionError else {
+            return false
+        }
+
+        invalidateForEffectiveGatewayStateChange()
+        config = latestState.config
+        gatewayConnectionError = latestState.connectionError
+        updateAIStatusForEffectiveGatewayState()
+        return true
+    }
+
+    private func updateAIStatusForEffectiveGatewayState() {
         if !hasFullAccess {
             aiStatus = "Enable Allow Full Access"
         } else if let gatewayConnectionError {
@@ -1466,6 +1582,63 @@ final class KeyboardViewModel: ObservableObject {
         } else {
             aiStatus = hasUsableGatewayConfig ? "AI ready · \(config.selectedModel)" : "Pair gateway in app"
         }
+    }
+
+    private func registerForActiveProfileChanges() {
+        let observerToken = KeyboardActiveProfileObserverRegistry.shared.register(self)
+        activeProfileObserverToken = observerToken
+        CFNotificationCenterAddObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            observerToken,
+            keyboardActiveProfileDidChangeCallback,
+            AppConfig.activeProfileDidChangeDarwinNotification as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    fileprivate func handleActiveProfileDidChange() {
+        guard refreshEffectiveGatewayState() else { return }
+        recordDebugEvent("active_profile_change_applied")
+    }
+
+    private func invalidateForEffectiveGatewayStateChange() {
+        // Invalidate request generations before cancellation. A provider implementation may
+        // complete despite cancellation, but no response created with the old profile can then
+        // mutate keyboard state.
+        activeProfileGeneration &+= 1
+        manualActionRequestID = nil
+        grammarCorrectionRequestID = nil
+        actionPanelRequestID = nil
+
+        manualActionTask?.cancel()
+        manualActionTask = nil
+        automaticAnalysisTask?.cancel()
+        automaticAnalysisTask = nil
+        grammarCorrectionTask?.cancel()
+        grammarCorrectionTask = nil
+        actionPanelTask?.cancel()
+        actionPanelTask = nil
+        aiService.closeConnector()
+
+        actionPanelState = nil
+        suggestionState = nil
+        grammarWholeVersionProposalState = nil
+        rewriteOptionsState = nil
+        actionError = nil
+        automaticAnalysisWarning = nil
+        hasNoIssueAnalysisResult = false
+        completionPanelState = .allDone
+        isGrammarCorrectionLoading = false
+        isPerformingAIAction = false
+        lastAnalyzedText = nil
+        lastKeyboardReplacementSourceText = nil
+        lastKeyboardReplacementResultText = nil
+        shouldResumeAutomaticAnalysisOnKeyboardReturn = false
+        grammarFollowUpPassCount = 0
+        grammarReviewSeenTexts = []
+        grammarReviewHasRejections = false
+        panelMode = .keyboard
     }
 
     func startAutomaticAnalysis() {
@@ -1528,8 +1701,7 @@ final class KeyboardViewModel: ObservableObject {
             recordDebugEvent("action_blocked_no_full_access")
             return
         }
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        reloadConfig()
         if let gatewayConnectionError {
             aiStatus = gatewayConnectionError
             recordDebugEvent("action_blocked_gateway_error")
@@ -1565,14 +1737,24 @@ final class KeyboardViewModel: ObservableObject {
         isPerformingAIAction = true
         aiStatus = "\(action.title)…"
         let documentRevisionAtRequest = documentRevision
-        let sanitizedKey = currentConfig.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let sanitizedURL = currentConfig.gatewayURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        recordDebugEvent("action_request_start text=\(replacementPlan.textForAI.count) url=\(sanitizedURL) keyLength=\(sanitizedKey.count) model=\(currentConfig.selectedModel)")
+        recordDebugEvent(
+            "action_request_start text=\(replacementPlan.textForAI.count) "
+                + "provider=\(currentConfig.provider.rawValue)"
+        )
+        let requestID = UUID()
+        let profileGenerationAtRequest = activeProfileGeneration
+        manualActionRequestID = requestID
 
-        Task {
+        manualActionTask = Task {
             do {
                 let result = try await aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
                     switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result, sourceText: replacementPlan.textForAI) {
                     case .showCorrections(let response):
@@ -1639,11 +1821,23 @@ final class KeyboardViewModel: ObservableObject {
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     isPerformingAIAction = false
                     aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
                 }
             } catch {
                 await MainActor.run {
+                    guard manualActionRequestID == requestID,
+                          activeProfileGeneration == profileGenerationAtRequest else {
+                        return
+                    }
+                    manualActionTask = nil
+                    manualActionRequestID = nil
                     recordDebugEvent("action_request_failed:\(Self.sanitizedErrorMessage(error))")
                     showActionError(
                         error,
@@ -1727,8 +1921,7 @@ final class KeyboardViewModel: ObservableObject {
             )
             return
         }
-        config = loadConfig()
-        gatewayConnectionError = Self.normalizedGatewayConnectionError(loadGatewayConnectionError())
+        reloadConfig()
         if let gatewayConnectionError {
             showActionError(
                 KeyboardAIError.server(gatewayConnectionError),
@@ -1976,16 +2169,21 @@ final class KeyboardViewModel: ObservableObject {
         if lastAnalyzedText == analysisText, canOpenAnalysisResult { return }
 
         let currentConfig = config
+        let profileGenerationAtRequest = activeProfileGeneration
         let documentTextAtRequest = currentDocumentTextForAnalysis()
         let documentRevisionAtRequest = documentRevision
         beginGrammarReviewSession(with: analysisText)
         lastAnalyzedText = analysisText
         isPerformingAIAction = true
         aiStatus = "Analyzing…"
-        recordDebugEvent("automatic_analysis_start text=\(analysisText.count) model=\(currentConfig.selectedModel)")
+        recordDebugEvent("automatic_analysis_start text=\(analysisText.count) provider=\(currentConfig.provider.rawValue)")
 
         do {
             let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
+            // A profile/error transition already installed the correct replacement state. An
+            // old-generation completion must not run the ordinary document-change recovery path,
+            // because that path itself mutates loading state and schedules another request.
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             guard let currentAnalysisText = currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest),
                   currentAnalysisText == analysisText,
                   documentRevision == documentRevisionAtRequest else {
@@ -2012,6 +2210,7 @@ final class KeyboardViewModel: ObservableObject {
             )
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_cancelled")
             if lastAnalyzedText == analysisText, !isGrammarCorrectionLoading {
                 isPerformingAIAction = false
@@ -2019,6 +2218,7 @@ final class KeyboardViewModel: ObservableObject {
                 lastAnalyzedText = nil
             }
         } catch {
+            guard activeProfileGeneration == profileGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_failed:\(Self.sanitizedErrorMessage(error))")
             guard !Task.isCancelled,
                   !isGrammarCorrectionLoading,
@@ -2854,7 +3054,7 @@ final class KeyboardViewModel: ObservableObject {
 
     private static func normalizedGatewayConnectionError(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
+        return trimmed.isEmpty ? nil : KeyboardActionErrorState.sanitized(trimmed)
     }
 }
 
