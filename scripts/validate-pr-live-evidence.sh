@@ -63,8 +63,13 @@ trust_boundary_count=0
 invalid_retention_boundary_count=0
 invalid_trust_boundary_count=0
 
+evidence_section=false
 while IFS= read -r body_line; do
   body_line="${body_line%$'\r'}"
+  case "$body_line" in
+    '## Live gateway evidence') evidence_section=true; continue ;;
+    '## '*) evidence_section=false ;;
+  esac
   case "$body_line" in
     '- Local live verification: '*)
       local_live_verification="${body_line#- Local live verification: }"
@@ -173,6 +178,16 @@ while IFS= read -r body_line; do
       ;;
     '- Trust boundary: '*)
       ((invalid_trust_boundary_count += 1))
+      ;;
+    *)
+      if [[ "$evidence_section" == true && -n "$body_line" ]]; then
+        echo "Unknown content in the public live-evidence section." >&2
+        exit 1
+      fi
+      case "$body_line" in
+        '- Live '*|'- Live-'*|'- Required live '*|'- Exact live-tested '*|'- Local live '*|'- No credential'*|'- Trust boundary:'*)
+          echo "Unknown public live-evidence field." >&2; exit 1 ;;
+      esac
       ;;
   esac
 done <<< "$PR_BODY"
@@ -381,11 +396,11 @@ else
   fi
 fi
 
-if [[ "$retention_boundary_count" -ne 1 ]]; then
+if [[ "$retention_boundary_count" -ne 1 || "$invalid_retention_boundary_count" -ne 0 ]]; then
   echo "The pull request must record exactly one non-sensitive live-proof retention boundary." >&2
   exit 1
 fi
-if [[ "$trust_boundary_count" -ne 1 ]]; then
+if [[ "$trust_boundary_count" -ne 1 || "$invalid_trust_boundary_count" -ne 0 ]]; then
   echo "The pull request must record exactly one local-attestation trust boundary." >&2
   exit 1
 fi

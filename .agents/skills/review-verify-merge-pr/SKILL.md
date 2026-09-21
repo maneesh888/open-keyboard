@@ -246,3 +246,13 @@ taken, and residual proof limits. For the automatic AI route, render or attach e
 as required proof in the final response, even when it appeared in commentary or is linked from the
 PR. A path, `.xcresult`, review link, or summary alone is not delivery. For the human route, report
 the exact-head owner approval and missing AI-screenshot boundary; never ask the user to upload one.
+
+## Private live identity evidence
+
+Follow `docs/LIVE_EVIDENCE_PRIVACY.md`: exact task/seed/selected-model comparisons remain local;
+public evidence retains canonical role-bound assertions and outcomes only. Do not publish model
+names, identity hashes, credentials, endpoints, prompts, responses, or timing fingerprints. Inspect
+local enforcement and its redacted result independently; GitHub assertion acceptance is not proof
+of provider identity or runtime acceptance. Keep exact-head review, normal-runtime/human approval,
+and all protected checks. Require the trusted base to support the private schema; reject legacy bases without
+candidate fallback or compatibility projections. Never invent measurements to satisfy a legacy field.

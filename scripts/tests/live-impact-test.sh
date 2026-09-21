@@ -57,7 +57,6 @@ gateway_sensitive_paths=(
   scripts/ios/enable-openkeyboard-simulator-keyboard.sh
   OpenKeyboard/Info.plist
   OpenKeyboard/Views/PlaygroundView.swift
-  OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Resources/Nested/GatewayPolicy.json
   OpenKeyboardCore/Package.swift
   OpenKeyboardCore/Sources/AnotherModule/NestedGatewayRuntime.swift
@@ -97,6 +96,8 @@ for differential_workflow_path in "${differential_workflow_paths[@]}"; do
 done
 
 differential_model_pipeline_paths=(
+  OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
+  OpenKeyboard/Models/AppConfig.swift
   OpenKeyboard/Models/KeyboardSuggestionModels.swift
   OpenKeyboard/Services/OpenKeyboardAIConnector.swift
   OpenKeyboard/Services/UniversalAIConnectorAdapter.swift
@@ -130,6 +131,8 @@ assert_impact_path \
   gateway \
   'unrelated keyboard layout adjustment'
 
+assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway-differential 'hapticGenerator.impactOccurred()'
+assert_impact_path OpenKeyboard/ViewModels/SettingsViewModel.swift gateway-differential 'selectedModel = selection'
 gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
 git -C "$FIXTURE" checkout -q -B rename-base "$docs_sha"

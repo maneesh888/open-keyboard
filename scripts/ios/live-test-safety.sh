@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Seed readers must never trace private inputs.
+set +x
+set +a
+
 openkeyboard_repository_git() (
   local git_environment_name
 
@@ -645,13 +649,13 @@ openkeyboard_load_simulator_gateway_seed() {
     fi
 
     if ! openkeyboard_is_allowed_simulator_seed_key "$key"; then
-      echo "Unsupported seed variable on line $line_number: $key" >&2
+      echo "Unsupported seed variable on line $line_number" >&2
       openkeyboard_unset_simulator_gateway_profiles
       return 2
     fi
 
     if [[ "$seen_keys" == *$'\n'"$key"$'\n'* ]]; then
-      echo "Duplicate seed variable on line $line_number: $key" >&2
+      echo "Duplicate seed variable on line $line_number" >&2
       openkeyboard_unset_simulator_gateway_profiles
       return 2
     fi
