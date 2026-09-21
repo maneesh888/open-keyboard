@@ -40,13 +40,31 @@ remain separate. Human approval must name the exact head and retains the absent 
 ## Trusted-base migration
 
 The first privacy PR still uses the trusted base classifier. A supported legacy validator has Git
-blob `249c196c6eb2ca94a397896e7cfd448463f463ca` (source code, not a model hash). Under the existing
-`live-policy` environment, the reviewed bootstrap validates the full private assertion schema and
-also runs that trusted validator. Its only source accommodation is to permit the literal `withheld`
+blob `249c196c6eb2ca94a397896e7cfd448463f463ca` (source code, not a model hash). The only allowed legacy base SHA is
+`6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6`. Before candidate checkout, the migration requires an
+actual owner-approved GitHub run through the dedicated `live-policy-migration` environment.
+Its required reviewer must be the repository owner; configure it with admin bypass disabled.
+The ordinary `live-policy` environment is not an approval boundary (its protection rules were empty
+when this migration was prepared). The reviewed bootstrap validates the full private assertion
+schema and also runs the trusted validator. Its only source accommodation is to permit the literal `withheld`
 for differential timings. No measurement is synthesized. The temporary legacy input maps confirmed
 roles to fixed `LOW`, `HIGH`, or `REFERENCE` aliases and copies actual head/target/outcome fields.
 Those aliases express roles in the old string-equality grammar; they are not claimed model IDs.
 The temporary record is mode 600 and deleted on exit/signals. Unknown legacy sources fail closed.
+
+The routing job reads environment configuration before selecting it. Missing or unprotected
+configuration never starts the separate approval job; the independent required root check fails
+before candidate checkout. The protected `Required live verification` job has no prerequisite and
+cannot be hidden by cancellation of a dependency. During migration it fails until approval is
+recorded. After the owner approves the separate environment job, rerun the failed required job in
+that same exact-head run; its approval history is then available. No polling or check waiver is used. This prevents GitHub from implicitly creating an unprotected
+migration environment. The guard requires real approval history by the owner, for this environment
+and workflow run, whose head matches the exact PR head. Codex must not manufacture this approval.
+External environment setup requires explicit owner authorization; it is not part of a normal code
+commit. A new candidate head needs fresh run approval. The live workflow runs on opened,
+synchronize, reopened, and body-edited events; draft/readiness changes alone do not alter live
+evidence and do not start another live run. The independent review/checks workflow still validates
+readiness and exact-head authorization.
 
 After merge, workflows load the bootstrap, classifier, and validator from the trusted base and use
 the private schema directly. There is no environment switch to enable migration, skip live checks,

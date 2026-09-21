@@ -7,20 +7,91 @@ on:
       - synchronize
       - reopened
       - edited
-      - ready_for_review
-      - converted_to_draft
 
 permissions:
   contents: read
   pull-requests: read
+  actions: read
 
 jobs:
+  live-policy-routing:
+    name: Resolve live-policy environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.route.outputs.environment }}
+      migration_ready: ${{ steps.route.outputs.migration_ready }}
+    steps:
+      - name: Resolve protected migration route without candidate code
+        id: route
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          OWNER_ID: ${{ github.repository_owner_id }}
+        run: |
+          # Default only to the existing environment. Never reference a missing migration
+          # environment: GitHub would implicitly create it without protection.
+          echo "environment=live-policy" >> "$GITHUB_OUTPUT"
+          echo "migration_ready=false" >> "$GITHUB_OUTPUT"
+          if [[ "$PR_BASE_SHA" != 6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6 ]]; then
+            exit 0
+          fi
+          if ! gh api "repos/$GITHUB_REPOSITORY/environments/live-policy-migration" > "$RUNNER_TEMP/migration-environment.json"; then
+            echo "The owner must configure the protected migration environment first."
+            exit 0
+          fi
+          if ! jq -e --argjson owner "$OWNER_ID" '
+            .name == "live-policy-migration" and
+            ([.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] |
+             length == 1 and .[0].type == "User" and .[0].reviewer.id == $owner)
+          ' "$RUNNER_TEMP/migration-environment.json" >/dev/null; then
+            echo "Migration environment must require the repository owner as its sole reviewer."
+            exit 0
+          fi
+          echo "environment=live-policy-migration" >> "$GITHUB_OUTPUT"
+          echo "migration_ready=true" >> "$GITHUB_OUTPUT"
+
+  migration-approval:
+    name: Approve pinned privacy-schema migration
+    needs: live-policy-routing
+    if: needs.live-policy-routing.outputs.migration_ready == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.live-policy-routing.outputs.environment }}
+    steps:
+      - name: Record owner approval gate
+        run: echo "The owner-approved environment gate completed; rerun failed required verification for this run."
+
   required-live-verification:
     name: Required live verification
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: live-policy
     steps:
+      - name: Verify actual migration approval before candidate checkout
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          OWNER_ID: ${{ github.repository_owner_id }}
+        run: |
+          if [[ "$PR_BASE_SHA" != 6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6 ]]; then
+            exit 0
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/environments/live-policy-migration" > "$RUNNER_TEMP/migration-environment.json"
+          jq -e --argjson owner "$OWNER_ID" '
+            .name == "live-policy-migration" and
+            ([.protection_rules[] | select(.type == "required_reviewers") | .reviewers[]] |
+             length == 1 and .[0].type == "User" and .[0].reviewer.id == $owner)
+          ' "$RUNNER_TEMP/migration-environment.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$RUNNER_TEMP/migration-run.json"
+          jq -e --arg head "$PR_HEAD_SHA" '.head_sha == $head and .event == "pull_request"' \
+            "$RUNNER_TEMP/migration-run.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/approvals" > "$RUNNER_TEMP/migration-approvals.json"
+          jq -e --argjson owner "$OWNER_ID" '
+            any(.[]; .state == "approved" and .user.id == $owner and
+                any(.environments[]; .name == "live-policy-migration"))
+          ' "$RUNNER_TEMP/migration-approvals.json" >/dev/null
+          echo "Owner-approved migration run $GITHUB_RUN_ID for exact head $PR_HEAD_SHA."
+
       - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -35,11 +106,15 @@ jobs:
         run: |
           validator_root="$RUNNER_TEMP/live-policy-validators"
           mkdir -p "$validator_root"
-          # After migration the bootstrap itself is taken from the trusted base. The one-time
-          # legacy path is protected by the live-policy environment and a pinned legacy blob.
+          # After migration the bootstrap itself is taken from the trusted base. Candidate
+          # migration code is permitted only for the pinned base after actual owner approval.
           if git show "$PR_BASE_SHA:scripts/live-policy-bootstrap.sh" | grep -Fq 'openkeyboard_prepare_live_validators()'; then
             git show "$PR_BASE_SHA:scripts/live-policy-bootstrap.sh" > "$validator_root/bootstrap.sh"
           else
+            if [[ "$PR_BASE_SHA" != 6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6 ]]; then
+              echo "Unknown or unapproved legacy bootstrap." >&2
+              exit 1
+            fi
             cp scripts/live-policy-bootstrap.sh "$validator_root/bootstrap.sh"
           fi
           source "$validator_root/bootstrap.sh"

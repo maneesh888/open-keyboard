@@ -405,8 +405,9 @@ local validation evidence without copying private values. Never infer live seman
 acceptance from a syntactically valid assertion record.
 
 The privacy-schema migration is documented in `docs/LIVE_EVIDENCE_PRIVACY.md`. Preserve the trusted
-base classifier and its semantic/head checks. Only the pinned legacy validator may receive the
-explicit withheld-timing accommodation; unknown legacy sources fail closed. Public role aliases in
+base classifier and its semantic/head checks. Only the pinned legacy base and validator may receive the
+explicit withheld-timing accommodation after genuine owner approval in the protected migration
+environment; missing protection/approval and unknown legacy sources fail closed. Public role aliases in
 temporary compatibility input are not model names. Never invent latency measurements or outcomes.
 Keep required checks, environment protection, exact-head review, and human runtime approval intact.
 

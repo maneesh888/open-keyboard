@@ -348,11 +348,16 @@ case "$MODE" in
       echo -e "${RED}✗ OPEN_KEYBOARD_LIVE_GATEWAY_URL, OPEN_KEYBOARD_LIVE_API_KEY, and OPEN_KEYBOARD_LIVE_MODEL are required for live-ui.${NC}"
       exit 1
     fi
+    begin_sensitive_live_workspace live-ui
+    create_sensitive_live_simulator "iPhone 16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
     run_xcodebuild xcodebuild test \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
+      -derivedDataPath "$SENSITIVE_LIVE_WORKSPACE/DerivedData" \
+      -resultBundlePath "$SENSITIVE_LIVE_WORKSPACE/live-ui.xcresult" \
       -only-testing:OpenKeyboardUITests/LiveGatewayAIUITests \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO

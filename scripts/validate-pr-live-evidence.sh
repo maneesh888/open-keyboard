@@ -390,11 +390,11 @@ else
   fi
 fi
 
-if [[ "$retention_boundary_count" -ne 1 ]]; then
+if [[ "$retention_boundary_count" -ne 1 || "$invalid_retention_boundary_count" -ne 0 ]]; then
   echo "The pull request must record exactly one non-sensitive live-proof retention boundary." >&2
   exit 1
 fi
-if [[ "$trust_boundary_count" -ne 1 ]]; then
+if [[ "$trust_boundary_count" -ne 1 || "$invalid_trust_boundary_count" -ne 0 ]]; then
   echo "The pull request must record exactly one local-attestation trust boundary." >&2
   exit 1
 fi

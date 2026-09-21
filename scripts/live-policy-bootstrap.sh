@@ -14,6 +14,10 @@ openkeyboard_prepare_live_validators() {
     echo "Trusted base uses the private assertion schema."
     return 0
   fi
+  if [[ "$base_sha" != 6619f0bb1f3aa8306a4b1dc94b2fdd514ee1f6f6 ]]; then
+    echo "Unknown legacy base; migration requires the explicitly reviewed base SHA." >&2
+    return 1
+  fi
   legacy_blob="$(git hash-object "$validator_root/validate-pr-live-evidence.sh")"
   if [[ "$legacy_blob" != 249c196c6eb2ca94a397896e7cfd448463f463ca ]]; then
     echo "Unknown legacy live validator; a separately reviewed migration is required." >&2
@@ -32,7 +36,7 @@ p.write_text(s.replace(old, new))
 PY
   cp "$repository_root/scripts/validate-pr-live-evidence.sh" "$validator_root/private-live-evidence.sh" || return 1
   chmod +x "$validator_root/private-live-evidence.sh" || return 1
-  echo "Reviewed legacy privacy migration: role assertions plus trusted semantic checks; timings withheld."
+  echo "Pinned legacy privacy migration: role assertions plus trusted semantic checks; timings withheld."
 }
 
 openkeyboard_validate_live_snapshot() (

@@ -369,7 +369,8 @@ per-profile timings in PRs or logs. Public assertions cannot independently prove
 identity; GitHub validates the exact-head assertion record and independent review assesses the
 local enforcement and evidence. Both immutable-event and freshly fetched current snapshots must
 pass. Missing, duplicate, swapped, substituted, stale, diagnostic-only, or incomplete evidence fails.
-See `docs/LIVE_EVIDENCE_PRIVACY.md` for the schema, trust limits, and pinned legacy migration.
+See `docs/LIVE_EVIDENCE_PRIVACY.md` for the schema, trust limits, and pinned legacy migration,
+which requires a separately configured owner-reviewed environment and actual exact-run approval.
 
 The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
 `OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a

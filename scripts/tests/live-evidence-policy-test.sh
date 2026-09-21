@@ -327,6 +327,19 @@ if run_policy "$malformed_latency_body" gateway-differential; then
   exit 1
 fi
 
+# A valid boundary must never mask an additional malformed/private boundary, in either snapshot.
+for extra_boundary in '- Trust boundary: private-model-sentinel' '- No credential private-endpoint-sentinel'; do
+  bad_boundary_body="$valid_body
+$extra_boundary"
+  if run_policy "$bad_boundary_body" ||
+     run_policy "$differential_body
+$extra_boundary" gateway-differential ||
+     run_snapshot_gate "$valid_body" "$bad_boundary_body" ||
+     run_snapshot_gate "$bad_boundary_body" "$valid_body"; then
+    echo "A malformed privacy boundary was accepted." >&2; exit 1
+  fi
+done
+
 # Privacy and completeness failures are rejected without echoing the supplied value.
 for extra in \
   '- Required live models: private-model-sentinel' \
