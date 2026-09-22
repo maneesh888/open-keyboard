@@ -503,10 +503,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw KeyboardAIError.invalidResponse
         }
 
-        var validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
-        if validatedChunks.map(\.text).joined() == text {
-            validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
-        }
+        let validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
 
         let corrected = validatedChunks.map(\.text).joined()
         do {
