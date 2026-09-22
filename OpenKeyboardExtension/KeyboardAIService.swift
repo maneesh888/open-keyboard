@@ -503,7 +503,17 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw KeyboardAIError.invalidResponse
         }
 
-        let validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+        var validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+        if validatedChunks.map(\.text).joined() == text {
+            do {
+                validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+            } catch let error as CancellationError {
+                throw error
+            } catch {
+                // The retry only checks whether a valid unchanged response was a false negative.
+                // Keep that first usable response when the optional retry cannot be used.
+            }
+        }
 
         let corrected = validatedChunks.map(\.text).joined()
         do {
