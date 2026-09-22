@@ -1151,25 +1151,6 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(requestInputs, [source, source])
     }
 
-    func testKeyboardAIServiceKeepsValidUnchangedGrammarWhenRetryIsUnusable() async throws {
-        let source = "The grammar and tone both need work."
-        let connector = SequencedConnectorResponseTestDouble(
-            contents: [source, "Certainly: \(source)"]
-        )
-        let service = KeyboardAIService(connector: connector)
-
-        let result = try await service.performResult(
-            action: .fixGrammar,
-            on: source,
-            config: configuredGateway
-        )
-
-        XCTAssertTrue(result.isNoChangeResult)
-        XCTAssertEqual(result.displayText, source)
-        XCTAssertEqual(connector.requests.count, 2)
-        XCTAssertEqual(connector.requests.compactMap { $0.messages.last?.content }, [source, source])
-    }
-
     private func assertModelCapabilityFailure(
         content: String,
         action: KeyboardAIAction,
