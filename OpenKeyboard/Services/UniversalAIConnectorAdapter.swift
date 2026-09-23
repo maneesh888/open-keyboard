@@ -28,6 +28,11 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
     }
 
     func listModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        let traceID = AIOperationDiagnosticContext.traceID
+        let transportStarted = Date()
+        if let traceID {
+            AIOperationDiagnostics.shared.record(traceID: traceID, stage: .transport)
+        }
         do {
             let runtime = try store.runtime(for: profile)
             let providerId = UniversalAiProviderId(rawValue: profile.providerID)
@@ -37,6 +42,20 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                       models.allSatisfy({ $0.target.providerId == providerId }) else {
                     throw OpenKeyboardAIConnectorError.invalidResponse
                 }
+                if let traceID {
+                    let durationMilliseconds = Self.durationMilliseconds(since: transportStarted)
+                    AIOperationDiagnostics.shared.record(
+                        traceID: traceID,
+                        stage: .transport,
+                        durationMilliseconds: durationMilliseconds,
+                        httpStatusCategory: .success
+                    )
+                    AIOperationDiagnostics.shared.record(
+                        traceID: traceID,
+                        stage: .decoding,
+                        durationMilliseconds: durationMilliseconds
+                    )
+                }
                 return models.map(\.target.modelId.rawValue)
             case let .unsupported(returnedProviderId):
                 guard returnedProviderId == providerId else {
@@ -45,7 +64,18 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                 throw OpenKeyboardAIConnectorError.unsupportedModelDiscovery
             }
         } catch {
-            throw Self.mappedError(error)
+            let mappedError = Self.mappedError(error)
+            if let traceID {
+                let diagnostic = Self.diagnosticFailure(for: mappedError)
+                AIOperationDiagnostics.shared.record(
+                    traceID: traceID,
+                    stage: diagnostic.stage,
+                    durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
+                    httpStatusCategory: diagnostic.statusCategory,
+                    failure: diagnostic.failure
+                )
+            }
+            throw mappedError
         }
     }
 
@@ -53,6 +83,17 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         to request: OpenKeyboardAIRequest,
         profile: OpenKeyboardGatewayProfile
     ) async throws -> String {
+        let traceID = AIOperationDiagnosticContext.traceID
+        let transportStarted = Date()
+        if let traceID {
+            AIOperationDiagnostics.shared.record(
+                traceID: traceID,
+                stage: .transport,
+                requestBytes: request.messages.reduce(0) { partial, message in
+                    partial + message.content.lengthOfBytes(using: .utf8)
+                }
+            )
+        }
         do {
             let runtime = try store.runtime(for: profile)
             let connectorRequest = Self.connectorRequest(
@@ -60,12 +101,40 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                 providerID: profile.providerID
             )
             let response = try await runtime.respond(to: connectorRequest)
-            return try Self.plainText(
+            let output = try Self.plainText(
                 from: response,
                 expectedTarget: connectorRequest.target
             )
+            if let traceID {
+                let durationMilliseconds = Self.durationMilliseconds(since: transportStarted)
+                AIOperationDiagnostics.shared.record(
+                    traceID: traceID,
+                    stage: .transport,
+                    durationMilliseconds: durationMilliseconds,
+                    httpStatusCategory: .success,
+                    responseBytes: output.lengthOfBytes(using: .utf8)
+                )
+                AIOperationDiagnostics.shared.record(
+                    traceID: traceID,
+                    stage: .decoding,
+                    durationMilliseconds: durationMilliseconds,
+                    responseBytes: output.lengthOfBytes(using: .utf8)
+                )
+            }
+            return output
         } catch {
-            throw Self.mappedError(error)
+            let mappedError = Self.mappedError(error)
+            if let traceID {
+                let diagnostic = Self.diagnosticFailure(for: mappedError)
+                AIOperationDiagnostics.shared.record(
+                    traceID: traceID,
+                    stage: diagnostic.stage,
+                    durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
+                    httpStatusCategory: diagnostic.statusCategory,
+                    failure: diagnostic.failure
+                )
+            }
+            throw mappedError
         }
     }
 
@@ -256,6 +325,42 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
             return nil
         }
         return Int(number.rawValue)
+    }
+
+    private static func durationMilliseconds(since started: Date) -> Int {
+        max(0, Int(Date().timeIntervalSince(started) * 1_000))
+    }
+
+    private static func diagnosticFailure(
+        for error: Error
+    ) -> (
+        stage: AIOperationDiagnosticStage,
+        failure: AIOperationDiagnosticFailure,
+        statusCategory: AIOperationDiagnosticHTTPStatusCategory?
+    ) {
+        guard let error = error as? OpenKeyboardAIConnectorError else {
+            return (.transport, .transportFailure, nil)
+        }
+        switch error {
+        case .timeout:
+            return (.transport, .transportTimeout, nil)
+        case .invalidResponse, .truncatedResponse:
+            return (.decoding, .malformedResponse, nil)
+        case .transport:
+            return (.transport, .gatewayNonresponse, nil)
+        case .serverStatus(let statusCode):
+            return (
+                .transport,
+                .gatewayRejected,
+                AIOperationDiagnosticHTTPStatusCategory(statusCode: statusCode)
+            )
+        case .rateLimited, .unauthorized, .forbidden, .modelUnavailable:
+            return (.transport, .gatewayRejected, .clientError)
+        case .provider, .closed, .unsupportedModelDiscovery:
+            return (.transport, .transportFailure, nil)
+        case .invalidURL, .notConfigured, .missingInput:
+            return (.promptConstruction, .validationRejected, nil)
+        }
     }
 }
 

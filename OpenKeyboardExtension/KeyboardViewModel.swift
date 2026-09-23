@@ -395,6 +395,7 @@ final class KeyboardViewModel: ObservableObject {
     private var actionPanelRequestID: UUID?
     private var manualActionTask: Task<Void, Never>?
     private var manualActionRequestID: UUID?
+    private var actionErrorDiagnosticTraceID: String?
     private var activeProfileGeneration: UInt = 0
     private var shouldResumeAutomaticAnalysisOnKeyboardReturn = false
     private let automaticAnalysisDelayNanoseconds: UInt64
@@ -899,6 +900,7 @@ final class KeyboardViewModel: ObservableObject {
 
     func clearActionError() {
         actionError = nil
+        actionErrorDiagnosticTraceID = nil
         actionPanelState = nil
         rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
@@ -908,6 +910,7 @@ final class KeyboardViewModel: ObservableObject {
     func retryAfterActionError() {
         let recoveryScope = actionError?.scope
         actionError = nil
+        actionErrorDiagnosticTraceID = nil
         rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         if recoveryScope == .grammar {
@@ -934,7 +937,86 @@ final class KeyboardViewModel: ObservableObject {
 
     func copyActionErrorDetails() {
         guard let actionError else { return }
-        UIPasteboard.general.string = "\(actionError.title): \(actionError.message)"
+        if let actionErrorDiagnosticTraceID {
+            UIPasteboard.general.string = AIOperationDiagnostics.shared.export(
+                traceID: actionErrorDiagnosticTraceID
+            )
+        } else {
+            UIPasteboard.general.string = [
+                "OpenKeyboard AI diagnostics schema=1",
+                "Privacy boundary: no typed text, generated text, API keys, authorization headers, gateway endpoints, or model identifiers are included.",
+                "error_kind=\(actionError.kind.title.lowercased().replacingOccurrences(of: " ", with: "_"))",
+                "trace=unavailable"
+            ].joined(separator: "\n")
+        }
+    }
+
+    private func beginAIOperation(
+        action: KeyboardAIAction,
+        origin: AIOperationDiagnosticOrigin,
+        input: String
+    ) -> String {
+        let traceID = AIOperationDiagnostics.shared.begin(
+            operation: action.diagnosticOperation,
+            origin: origin
+        )
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .contextCapture,
+            requestBytes: input.lengthOfBytes(using: .utf8)
+        )
+        return traceID
+    }
+
+    private func markDiagnosticCancellation(_ traceID: String) {
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .cancellation,
+            failure: .cancelled
+        )
+        AIOperationDiagnostics.shared.complete(
+            traceID: traceID,
+            outcome: .cancelled,
+            failure: .cancelled
+        )
+    }
+
+    private func markDiagnosticStaleResult(_ traceID: String) {
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .staleResultSuppression,
+            failure: .staleResultSuppressed
+        )
+        AIOperationDiagnostics.shared.complete(
+            traceID: traceID,
+            outcome: .staleResultSuppressed,
+            failure: .staleResultSuppressed
+        )
+    }
+
+    private func markDiagnosticFailure(_ traceID: String, error: Error) {
+        AIOperationDiagnostics.shared.complete(
+            traceID: traceID,
+            outcome: .failed,
+            failure: Self.diagnosticFailure(for: error)
+        )
+    }
+
+    private static func diagnosticFailure(for error: Error) -> AIOperationDiagnosticFailure {
+        if error is CancellationError { return .cancelled }
+        guard let error = error as? KeyboardAIError else { return .transportFailure }
+        switch error {
+        case .timeout:
+            return .transportTimeout
+        case .invalidResponse, .modelCapability, .unreliableTranslation:
+            return .validationRejected
+        case .transport:
+            return .gatewayNonresponse
+        case .server:
+            return .gatewayRejected
+        case .notConfigured, .missingInput, .invalidURL, .unauthorized, .modelUnavailable, .missingTranslationTarget:
+            return .gatewayRejected
+        }
     }
 
     func applyTypingPrediction(id: String) {
@@ -992,33 +1074,68 @@ final class KeyboardViewModel: ObservableObject {
         lastAnalyzedText = sourceText
         let requestID = UUID()
         grammarCorrectionRequestID = requestID
+        let traceID = beginAIOperation(
+            action: .fixGrammar,
+            origin: .keyboardManualAction,
+            input: sourceText
+        )
         recordDebugEvent("grammar_correction_request_start text=\(sourceText.count)")
 
         grammarCorrectionTask = Task {
             do {
-                let result = try await aiService.performResult(action: .fixGrammar, on: sourceText, config: currentConfig)
+                let result = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+                    try await aiService.performResult(
+                        action: .fixGrammar,
+                        on: sourceText,
+                        config: currentConfig
+                    )
+                }
                 await MainActor.run {
                     guard isGrammarCorrectionLoading,
                           grammarCorrectionRequestID == requestID else {
+                        markDiagnosticStaleResult(traceID)
                         return
                     }
                     guard currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest) == sourceText else {
+                        markDiagnosticStaleResult(traceID)
                         discardStaleGrammarCorrectionResponse(sourceText: sourceText)
                         return
                     }
                     guard documentRevision == documentRevisionAtRequest else {
+                        markDiagnosticStaleResult(traceID)
                         discardStaleGrammarCorrectionResponse(sourceText: sourceText)
                         return
                     }
+                    let outcome = KeyboardActionResultHandler.outcome(
+                        operation: "fix_grammar",
+                        result: result,
+                        sourceText: sourceText
+                    )
+                    switch outcome {
+                    case .showRewriteOptions, .noUsableResult:
+                        actionErrorDiagnosticTraceID = traceID
+                        AIOperationDiagnostics.shared.complete(
+                            traceID: traceID,
+                            outcome: .failed,
+                            failure: .validationRejected
+                        )
+                    default:
+                        AIOperationDiagnostics.shared.complete(
+                            traceID: traceID,
+                            outcome: .succeeded
+                        )
+                    }
                     applyGrammarCorrectionResult(
-                        KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: sourceText),
+                        outcome,
                         sourceText: sourceText,
                         documentRevision: documentRevisionAtRequest,
-                        isFollowUp: kind == .followUp
+                        isFollowUp: kind == .followUp,
+                        diagnosticTraceID: traceID
                     )
                     recordDebugEvent("grammar_correction_request_success")
                 }
             } catch is CancellationError {
+                markDiagnosticCancellation(traceID)
                 await MainActor.run {
                     guard grammarCorrectionRequestID == requestID else { return }
                     grammarCorrectionTask = nil
@@ -1032,7 +1149,10 @@ final class KeyboardViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    guard grammarCorrectionRequestID == requestID else { return }
+                    guard grammarCorrectionRequestID == requestID else {
+                        markDiagnosticStaleResult(traceID)
+                        return
+                    }
                     grammarCorrectionTask = nil
                     grammarCorrectionRequestID = nil
                     if lastAnalyzedText == sourceText {
@@ -1040,7 +1160,12 @@ final class KeyboardViewModel: ObservableObject {
                     }
                     recordDebugEvent("grammar_correction_request_failed:\(Self.sanitizedErrorMessage(error))")
                     isGrammarCorrectionLoading = false
-                    showActionError(error, scope: .grammar)
+                    markDiagnosticFailure(traceID, error: error)
+                    showActionError(
+                        error,
+                        scope: .grammar,
+                        diagnosticTraceID: traceID
+                    )
                 }
             }
         }
@@ -1050,7 +1175,8 @@ final class KeyboardViewModel: ObservableObject {
         _ outcome: KeyboardActionProductOutcome,
         sourceText: String,
         documentRevision: Int,
-        isFollowUp: Bool
+        isFollowUp: Bool,
+        diagnosticTraceID: String?
     ) {
         isGrammarCorrectionLoading = false
         isPerformingAIAction = false
@@ -1118,9 +1244,17 @@ final class KeyboardViewModel: ObservableObject {
         case .noChanges:
             markGrammarCorrectionAllClear(afterFollowUp: isFollowUp)
         case .showRewriteOptions:
-            showActionError(KeyboardAIError.modelCapability, scope: .grammar)
+            showActionError(
+                KeyboardAIError.modelCapability,
+                scope: .grammar,
+                diagnosticTraceID: diagnosticTraceID
+            )
         case .noUsableResult:
-            showActionError(KeyboardAIError.invalidResponse, scope: .grammar)
+            showActionError(
+                KeyboardAIError.invalidResponse,
+                scope: .grammar,
+                diagnosticTraceID: diagnosticTraceID
+            )
         }
     }
 
@@ -1173,6 +1307,7 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisTask?.cancel()
         automaticAnalysisTask = nil
         actionError = nil
+        actionErrorDiagnosticTraceID = nil
         automaticAnalysisWarning = nil
         actionPanelState = nil
         suggestionState = nil
@@ -1189,7 +1324,8 @@ final class KeyboardViewModel: ObservableObject {
 
     private func showActionError(
         _ sourceError: Error,
-        scope: KeyboardActionErrorScope = .global
+        scope: KeyboardActionErrorScope = .global,
+        diagnosticTraceID: String? = nil
     ) {
         let keyboardError = sourceError as? KeyboardAIError
         let message = keyboardError?.errorDescription ?? sourceError.localizedDescription
@@ -1204,6 +1340,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarCorrectionTask?.cancel()
         grammarCorrectionTask = nil
         grammarCorrectionRequestID = nil
+        actionErrorDiagnosticTraceID = diagnosticTraceID
         actionError = error
         actionPanelState = nil
         grammarWholeVersionProposalState = nil
@@ -1626,6 +1763,7 @@ final class KeyboardViewModel: ObservableObject {
         grammarWholeVersionProposalState = nil
         rewriteOptionsState = nil
         actionError = nil
+        actionErrorDiagnosticTraceID = nil
         automaticAnalysisWarning = nil
         hasNoIssueAnalysisResult = false
         completionPanelState = .allDone
@@ -1726,7 +1864,13 @@ final class KeyboardViewModel: ObservableObject {
         }
 
         let currentConfig = config
+        let traceID = beginAIOperation(
+            action: action,
+            origin: .keyboardManualAction,
+            input: replacementPlan.textForAI
+        )
         actionError = nil
+        actionErrorDiagnosticTraceID = nil
         if action == .fixGrammar {
             automaticAnalysisWarning = nil
         }
@@ -1747,10 +1891,17 @@ final class KeyboardViewModel: ObservableObject {
 
         manualActionTask = Task {
             do {
-                let result = try await aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
+                let result = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+                    try await aiService.performResult(
+                        action: action,
+                        on: replacementPlan.textForAI,
+                        config: currentConfig
+                    )
+                }
                 await MainActor.run {
                     guard manualActionRequestID == requestID,
                           activeProfileGeneration == profileGenerationAtRequest else {
+                        markDiagnosticStaleResult(traceID)
                         return
                     }
                     manualActionTask = nil
@@ -1758,6 +1909,7 @@ final class KeyboardViewModel: ObservableObject {
                     recordDebugEvent("action_request_success output=\(result.displayText.count) items=\(result.items.count)")
                     switch KeyboardActionResultHandler.outcome(operation: action.operationName, result: result, sourceText: replacementPlan.textForAI) {
                     case .showCorrections(let response):
+                        AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                         suggestionState = KeyboardSuggestionState(response: response, sourceContext: replacementPlan.textForAI)
                         grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
@@ -1766,6 +1918,7 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .correctionDetail
                     case .showGrammarWholeVersionProposal(let proposedText):
+                        AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                         suggestionState = nil
                         grammarWholeVersionProposalState = GrammarWholeVersionProposalState(
                             originalText: replacementPlan.textForAI,
@@ -1779,6 +1932,7 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .grammarWholeVersionProposal
                     case .showRewriteOptions(let options):
+                        AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                         suggestionState = nil
                         grammarWholeVersionProposalState = nil
                         rewriteOptionsState = KeyboardRewriteOptionsState(
@@ -1793,6 +1947,7 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .rewriteOptions
                     case .replaceText(let output):
+                        AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                         replace(plan: replacementPlan, with: output)
                         grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
@@ -1804,6 +1959,7 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noChanges:
+                        AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                         suggestionState = nil
                         grammarWholeVersionProposalState = nil
                         rewriteOptionsState = nil
@@ -1813,13 +1969,20 @@ final class KeyboardViewModel: ObservableObject {
                         isPerformingAIAction = false
                         panelMode = .correctionComplete
                     case .noUsableResult:
+                        AIOperationDiagnostics.shared.complete(
+                            traceID: traceID,
+                            outcome: .failed,
+                            failure: .validationRejected
+                        )
                         showActionError(
                             action == .fixGrammar ? KeyboardAIError.invalidResponse : KeyboardAIError.modelCapability,
-                            scope: action == .fixGrammar ? .grammar : .writingAction
+                            scope: action == .fixGrammar ? .grammar : .writingAction,
+                            diagnosticTraceID: traceID
                         )
                     }
                 }
             } catch is CancellationError {
+                markDiagnosticCancellation(traceID)
                 await MainActor.run {
                     guard manualActionRequestID == requestID,
                           activeProfileGeneration == profileGenerationAtRequest else {
@@ -1834,14 +1997,17 @@ final class KeyboardViewModel: ObservableObject {
                 await MainActor.run {
                     guard manualActionRequestID == requestID,
                           activeProfileGeneration == profileGenerationAtRequest else {
+                        markDiagnosticStaleResult(traceID)
                         return
                     }
                     manualActionTask = nil
                     manualActionRequestID = nil
                     recordDebugEvent("action_request_failed:\(Self.sanitizedErrorMessage(error))")
+                    markDiagnosticFailure(traceID, error: error)
                     showActionError(
                         error,
-                        scope: action == .fixGrammar ? .grammar : .writingAction
+                        scope: action == .fixGrammar ? .grammar : .writingAction,
+                        diagnosticTraceID: traceID
                     )
                 }
             }
@@ -1947,15 +2113,27 @@ final class KeyboardViewModel: ObservableObject {
         aiStatus = "\(action.title)…"
 
         let currentConfig = config
+        let traceID = beginAIOperation(
+            action: action,
+            origin: .keyboardActionPanel,
+            input: replacementPlan.textForAI
+        )
         let requestID = UUID()
         actionPanelRequestID = requestID
         recordDebugEvent("action_panel_request_start action=\(action.rawValue) text=\(replacementPlan.textForAI.count)")
         actionPanelTask = Task { [weak self] in
             do {
                 guard let self else { return }
-                let result = try await self.aiService.performResult(action: action, on: replacementPlan.textForAI, config: currentConfig)
+                let result = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+                    try await self.aiService.performResult(
+                        action: action,
+                        on: replacementPlan.textForAI,
+                        config: currentConfig
+                    )
+                }
                 await MainActor.run {
                     guard self.actionPanelRequestID == requestID else {
+                        self.markDiagnosticStaleResult(traceID)
                         self.recordDebugEvent("action_panel_response_discarded_stale_request")
                         return
                     }
@@ -1963,10 +2141,12 @@ final class KeyboardViewModel: ObservableObject {
                           var state = self.actionPanelState,
                           state.replacementPlan == replacementPlan,
                           state.selectedAction == action else {
+                        self.markDiagnosticStaleResult(traceID)
                         self.invalidateActionPanelForSourceChange()
                         return
                     }
                     guard self.currentReplacementPlan() == replacementPlan else {
+                        self.markDiagnosticStaleResult(traceID)
                         self.invalidateActionPanelForSourceChange()
                         return
                     }
@@ -1978,6 +2158,11 @@ final class KeyboardViewModel: ObservableObject {
                     )
                     let options = self.actionPanelOptions(from: outcome, action: action)
                     guard !options.isEmpty else {
+                        AIOperationDiagnostics.shared.complete(
+                            traceID: traceID,
+                            outcome: .failed,
+                            failure: .validationRejected
+                        )
                         if let target = action.translationTarget {
                             self.showTranslationCapabilityWarning(
                                 target: target,
@@ -1985,11 +2170,16 @@ final class KeyboardViewModel: ObservableObject {
                                 replacementPlan: replacementPlan
                             )
                         } else {
-                            self.showActionError(KeyboardAIError.modelCapability, scope: .writingAction)
+                            self.showActionError(
+                                KeyboardAIError.modelCapability,
+                                scope: .writingAction,
+                                diagnosticTraceID: traceID
+                            )
                         }
                         return
                     }
 
+                    AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
                     state.finishLoading(options: options)
                     self.actionPanelState = state
                     self.rewriteOptionsState = nil
@@ -2000,6 +2190,16 @@ final class KeyboardViewModel: ObservableObject {
                     self.recordDebugEvent("action_panel_request_success action=\(action.rawValue) options=\(options.count)")
                 }
             } catch is CancellationError {
+                AIOperationDiagnostics.shared.record(
+                    traceID: traceID,
+                    stage: .cancellation,
+                    failure: .cancelled
+                )
+                AIOperationDiagnostics.shared.complete(
+                    traceID: traceID,
+                    outcome: .cancelled,
+                    failure: .cancelled
+                )
                 await MainActor.run {
                     guard let self,
                           self.actionPanelRequestID == requestID,
@@ -2010,20 +2210,35 @@ final class KeyboardViewModel: ObservableObject {
                     }
                     self.showActionError(
                         KeyboardAIError.server("Request cancelled. Try again."),
-                        scope: .writingAction
+                        scope: .writingAction,
+                        diagnosticTraceID: traceID
                     )
                 }
             } catch {
                 await MainActor.run {
-                    guard let self,
-                          self.actionPanelRequestID == requestID,
+                    guard let self else {
+                        AIOperationDiagnostics.shared.record(
+                            traceID: traceID,
+                            stage: .staleResultSuppression,
+                            failure: .staleResultSuppressed
+                        )
+                        AIOperationDiagnostics.shared.complete(
+                            traceID: traceID,
+                            outcome: .staleResultSuppressed,
+                            failure: .staleResultSuppressed
+                        )
+                        return
+                    }
+                    guard self.actionPanelRequestID == requestID,
                           self.panelMode == .actions,
                           self.actionPanelState?.replacementPlan == replacementPlan,
                           self.actionPanelState?.selectedAction == action,
                           self.currentReplacementPlan() == replacementPlan else {
+                        self.markDiagnosticStaleResult(traceID)
                         return
                     }
                     self.recordDebugEvent("action_panel_request_failed:\(Self.sanitizedErrorMessage(error))")
+                    self.markDiagnosticFailure(traceID, error: error)
                     if let target = Self.translationCapabilityWarningTarget(for: error, action: action) {
                         self.showTranslationCapabilityWarning(
                             target: target,
@@ -2031,7 +2246,11 @@ final class KeyboardViewModel: ObservableObject {
                             replacementPlan: replacementPlan
                         )
                     } else {
-                        self.showActionError(error, scope: .writingAction)
+                        self.showActionError(
+                            error,
+                            scope: .writingAction,
+                            diagnosticTraceID: traceID
+                        )
                     }
                 }
             }
@@ -2172,6 +2391,11 @@ final class KeyboardViewModel: ObservableObject {
         let profileGenerationAtRequest = activeProfileGeneration
         let documentTextAtRequest = currentDocumentTextForAnalysis()
         let documentRevisionAtRequest = documentRevision
+        let traceID = beginAIOperation(
+            action: .fixGrammar,
+            origin: .keyboardAutomaticAnalysis,
+            input: analysisText
+        )
         beginGrammarReviewSession(with: analysisText)
         lastAnalyzedText = analysisText
         isPerformingAIAction = true
@@ -2179,14 +2403,24 @@ final class KeyboardViewModel: ObservableObject {
         recordDebugEvent("automatic_analysis_start text=\(analysisText.count) provider=\(currentConfig.provider.rawValue)")
 
         do {
-            let result = try await aiService.performResult(action: .fixGrammar, on: analysisText, config: currentConfig)
+            let result = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+                try await aiService.performResult(
+                    action: .fixGrammar,
+                    on: analysisText,
+                    config: currentConfig
+                )
+            }
             // A profile/error transition already installed the correct replacement state. An
             // old-generation completion must not run the ordinary document-change recovery path,
             // because that path itself mutates loading state and schedules another request.
-            guard activeProfileGeneration == profileGenerationAtRequest else { return }
+            guard activeProfileGeneration == profileGenerationAtRequest else {
+                markDiagnosticStaleResult(traceID)
+                return
+            }
             guard let currentAnalysisText = currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest),
                   currentAnalysisText == analysisText,
                   documentRevision == documentRevisionAtRequest else {
+                markDiagnosticStaleResult(traceID)
                 isPerformingAIAction = false
                 if lastAnalyzedText == analysisText {
                     lastAnalyzedText = nil
@@ -2200,16 +2434,33 @@ final class KeyboardViewModel: ObservableObject {
                 return
             }
             guard panelMode == .keyboard else {
+                markDiagnosticStaleResult(traceID)
                 isPerformingAIAction = false
                 return
             }
+            let outcome = KeyboardActionResultHandler.outcome(
+                operation: "fix_grammar",
+                result: result,
+                sourceText: analysisText
+            )
+            switch outcome {
+            case .showRewriteOptions, .noUsableResult:
+                AIOperationDiagnostics.shared.complete(
+                    traceID: traceID,
+                    outcome: .failed,
+                    failure: .validationRejected
+                )
+            default:
+                AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
+            }
             applyAutomaticAnalysisResult(
-                KeyboardActionResultHandler.outcome(operation: "fix_grammar", result: result, sourceText: analysisText),
+                outcome,
                 sourceText: analysisText,
                 documentRevision: documentRevisionAtRequest
             )
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
+            markDiagnosticCancellation(traceID)
             guard activeProfileGeneration == profileGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_cancelled")
             if lastAnalyzedText == analysisText, !isGrammarCorrectionLoading {
@@ -2218,7 +2469,10 @@ final class KeyboardViewModel: ObservableObject {
                 lastAnalyzedText = nil
             }
         } catch {
-            guard activeProfileGeneration == profileGenerationAtRequest else { return }
+            guard activeProfileGeneration == profileGenerationAtRequest else {
+                markDiagnosticStaleResult(traceID)
+                return
+            }
             recordDebugEvent("automatic_analysis_failed:\(Self.sanitizedErrorMessage(error))")
             guard !Task.isCancelled,
                   !isGrammarCorrectionLoading,
@@ -2226,9 +2480,11 @@ final class KeyboardViewModel: ObservableObject {
                   documentRevision == documentRevisionAtRequest,
                   lastAnalyzedText == analysisText,
                   currentInputTextForAnalysis(knownStaleContextText: documentTextAtRequest) == analysisText else {
+                markDiagnosticStaleResult(traceID)
                 recordDebugEvent("automatic_analysis_failure_discarded_stale_request")
                 return
             }
+            markDiagnosticFailure(traceID, error: error)
             showAutomaticAnalysisWarning(error)
         }
     }

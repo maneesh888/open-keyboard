@@ -11,6 +11,7 @@ struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
     @State private var showingPlayground = false
+    @State private var showingAIDiagnostics = false
 
     var body: some View {
         NavigationView {
@@ -75,6 +76,37 @@ struct ContentView: View {
                             }
 
                             Button(action: {
+                                showingAIDiagnostics = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "stethoscope")
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("AI Diagnostics")
+                                            .font(.headline)
+                                        Text("View and export redacted operation traces")
+                                            .font(.caption)
+                                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "chevron.right")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                }
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 14)
+                                .padding(.horizontal, 16)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(OpenKeyboardTheme.Brand.cyan.opacity(0.45), lineWidth: 1.2)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("ai_diagnostics_entry_button")
+
+                            Button(action: {
                                 showingSettings = true
                             }) {
                                 HStack(spacing: 8) {
@@ -108,12 +140,103 @@ struct ContentView: View {
                 NavigationView {
                     PlaygroundView()
                 }
-                .environmentObject(settingsViewModel)
+                    .environmentObject(settingsViewModel)
+            }
+            .sheet(isPresented: $showingAIDiagnostics) {
+                AIOperationDiagnosticsView()
             }
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
         .task {
             await settingsViewModel.validateSavedGatewayOnceOnLaunch()
+        }
+    }
+}
+
+private struct AIOperationDiagnosticsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var records: [AIOperationDiagnosticRecord] = []
+
+    private var export: String {
+        AIOperationDiagnostics.shared.export()
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Privacy-safe export") {
+                    Text("These traces contain only operation IDs, typed stages and failures, timing, byte counts, HTTP status categories, app/build, and OS metadata. They never include typed or generated text, credentials, endpoints, or model identifiers.")
+                        .font(.footnote)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+
+                    ShareLink(
+                        item: export,
+                        subject: Text("OpenKeyboard AI diagnostics"),
+                        message: Text("Redacted AI operation diagnostics")
+                    ) {
+                        Label("Export Redacted Diagnostics", systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityIdentifier("ai_diagnostics_export")
+                }
+
+                Section("Recent operations") {
+                    if records.isEmpty {
+                        Text("No recent AI operations. The ledger keeps at most 48 traces for seven days.")
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+
+                    ForEach(records) { record in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(record.operation.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.headline)
+                                Spacer()
+                                Text(record.outcome?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "In progress")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(outcomeColor(record.outcome))
+                            }
+                            Text("Trace \(record.traceID)")
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                            if let failure = record.failure {
+                                Text("Failure: \(failure.rawValue.replacingOccurrences(of: "_", with: " "))")
+                                    .font(.caption)
+                                    .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                            }
+                            Text("\(record.events.count) stages · updated \(record.updatedAt.formatted(.relative(presentation: .named)))")
+                                .font(.caption)
+                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        }
+                        .accessibilityIdentifier("ai_diagnostics_trace")
+                    }
+                }
+            }
+            .navigationTitle("AI Diagnostics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Refresh") { reload() }
+                }
+            }
+            .onAppear(perform: reload)
+        }
+    }
+
+    private func reload() {
+        records = AIOperationDiagnostics.shared.records()
+    }
+
+    private func outcomeColor(_ outcome: AIOperationDiagnosticOutcome?) -> Color {
+        switch outcome {
+        case .succeeded:
+            return OpenKeyboardTheme.Semantic.success
+        case .failed, .cancelled, .staleResultSuppressed:
+            return OpenKeyboardTheme.Semantic.error
+        case nil:
+            return OpenKeyboardTheme.Semantic.warning
         }
     }
 }

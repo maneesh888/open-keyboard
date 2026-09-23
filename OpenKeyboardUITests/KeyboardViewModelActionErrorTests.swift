@@ -6,11 +6,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
     override func setUp() {
         super.setUp()
         AppConfig.clearGatewayConnectionError()
+        AIOperationDiagnostics.shared.removeAll()
     }
 
     override func tearDown() {
         UIPasteboard.general.string = nil
         AppConfig.clearGatewayConnectionError()
+        AIOperationDiagnostics.shared.removeAll()
         super.tearDown()
     }
 
@@ -861,6 +863,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertNil(viewModel.actionError)
         XCTAssertEqual(viewModel.toolbarState.title, "Open Keyboard AI")
         XCTAssertEqual(proxy.text, original)
+        let diagnostic = AIOperationDiagnostics.shared.records().first
+        XCTAssertEqual(diagnostic?.outcome, .cancelled)
+        XCTAssertTrue(diagnostic?.events.contains(where: { $0.stage == .cancellation }) == true)
     }
 
     func testFailureKeepsStickyErrorUntilExplicitRecoveryActions() async {
@@ -882,7 +887,11 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "please make this better")
 
         viewModel.copyActionErrorDetails()
-        XCTAssertEqual(UIPasteboard.general.string, "AI unavailable: Unable to reach gateway.")
+        let copiedDetails = try? XCTUnwrap(UIPasteboard.general.string)
+        XCTAssertTrue(copiedDetails?.contains("OpenKeyboard AI diagnostics schema=1") == true)
+        XCTAssertTrue(copiedDetails?.contains("trace=") == true)
+        XCTAssertFalse(copiedDetails?.contains("Unable to reach gateway.") == true)
+        XCTAssertFalse(copiedDetails?.contains("please make this better") == true)
 
         viewModel.retryAfterActionError()
         XCTAssertNil(viewModel.actionError)
@@ -2323,7 +2332,9 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(viewModel.isPerformingAIAction)
 
         viewModel.copyActionErrorDetails()
-        XCTAssertEqual(UIPasteboard.general.string, "AI unavailable: Gateway returned an invalid response.")
+        let copiedDetails = try? XCTUnwrap(UIPasteboard.general.string)
+        XCTAssertTrue(copiedDetails?.contains("failure=gateway_rejected") == true)
+        XCTAssertFalse(copiedDetails?.contains("Gateway returned an invalid response.") == true)
     }
 
     func testUnsafePlainTextOperationResultShowsErrorAndNeverReplacesDocumentText() async {

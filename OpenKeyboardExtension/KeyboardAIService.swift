@@ -226,6 +226,16 @@ enum KeyboardAIAction: CaseIterable, Hashable, Identifiable, Sendable {
         }
     }
 
+    var diagnosticOperation: AIOperationDiagnosticOperation {
+        switch self {
+        case .improve: return .improve
+        case .fixGrammar: return .fixGrammar
+        case .rewrite, .rewriteStyle: return .rewrite
+        case .summarize: return .summarize
+        case .translate: return .translate
+        }
+    }
+
     var contractOperationID: String {
         switch self {
         case .improve:
@@ -378,8 +388,11 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     func analyzeSuggestions(for text: String, config: AppConfig) async throws -> KeyboardSuggestionResponse {
         let output = try await performRawSuggestionRequest(prompt: KeyboardSuggestionParser.prompt(for: text), config: config)
         do {
-            return try KeyboardSuggestionParser.parseAssistantContent(output)
+            let response = try KeyboardSuggestionParser.parseAssistantContent(output)
+            recordValidation()
+            return response
         } catch {
+            recordValidation(failure: .validationRejected)
             throw KeyboardAIError.modelCapability
         }
     }
@@ -392,6 +405,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 modelID: config.selectedModel,
                 timeoutInterval: requestTimeoutInterval
             )
+            recordPromptConstruction(for: request)
             return try await OpenKeyboardRequestDeadline.value(
                 timeoutInterval: requestTimeoutInterval
             ) {
@@ -417,18 +431,21 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         }
         guard let rendering = action.rendering(for: text),
               rendering.messages.count >= 2 else {
+            recordValidation(failure: .validationRejected)
             throw KeyboardAIError.missingTranslationTarget
         }
         let maximumAttempts = action.isTranslation ? 2 : 1
         for attempt in 0..<maximumAttempts {
             let result: KeyboardActionOperationResult
             do {
-                result = try await requestResult(
-                    action: action,
-                    text: text,
-                    rendering: rendering,
-                    config: config
-                )
+                result = try await AIOperationDiagnosticContext.$attempt.withValue(attempt + 1) {
+                    try await requestResult(
+                        action: action,
+                        text: text,
+                        rendering: rendering,
+                        config: config
+                    )
+                }
             } catch let error as KeyboardAIError {
                 let scopedError: KeyboardAIError
                 if error == .modelCapability, let target = action.translationTarget {
@@ -438,7 +455,11 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 }
                 if case .unreliableTranslation = scopedError,
                    attempt < maximumAttempts - 1 {
+                    recordRetry(nextAttempt: attempt + 2)
                     continue
+                }
+                if attempt > 0 {
+                    recordValidation(failure: .retryFailed)
                 }
                 throw scopedError
             }
@@ -450,10 +471,14 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             guard isUnusableTranslation else {
                 return result
             }
+            recordValidation(failure: .validationRejected)
             if attempt == maximumAttempts - 1 {
+                recordValidation(failure: .retryFailed)
                 throw KeyboardAIError.unreliableTranslation(target)
             }
+            recordRetry(nextAttempt: attempt + 2)
         }
+        recordValidation(failure: .retryFailed)
         throw KeyboardAIError.modelCapability
     }
 
@@ -471,6 +496,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 modelID: config.selectedModel,
                 timeoutInterval: requestTimeoutInterval
             )
+            recordPromptConstruction(for: request)
             output = try await OpenKeyboardRequestDeadline.value(
                 timeoutInterval: requestTimeoutInterval
             ) {
@@ -482,13 +508,16 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw Self.keyboardError(from: error)
         }
         do {
-            return try KeyboardActionOperationResult.plainTextResponse(
+            let result = try KeyboardActionOperationResult.plainTextResponse(
                 output,
                 rendering: rendering,
                 title: action.title,
                 source: text
             )
+            recordValidation()
+            return result
         } catch {
+            recordValidation(failure: .validationRejected)
             if let target = action.translationTarget {
                 throw KeyboardAIError.unreliableTranslation(target)
             }
@@ -505,7 +534,15 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
         var validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
         if validatedChunks.map(\.text).joined() == text {
-            validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
+            recordRetry(nextAttempt: 2)
+            do {
+                validatedChunks = try await AIOperationDiagnosticContext.$attempt.withValue(2) {
+                    try await requestGrammarCorrections(for: chunks, config: config)
+                }
+            } catch {
+                recordValidation(failure: .retryFailed)
+                throw error
+            }
         }
 
         let corrected = validatedChunks.map(\.text).joined()
@@ -523,8 +560,10 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                 forceWholeVersionProposal: hasStructurallyDriftingChunk
             )
         } catch is GrammarCorrectionResponseError {
+            recordValidation(failure: .validationRejected)
             throw KeyboardAIError.invalidResponse
         } catch {
+            recordValidation(failure: .validationRejected)
             throw Self.keyboardError(from: error)
         }
     }
@@ -555,14 +594,20 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                             modelID: config.selectedModel,
                             timeoutInterval: self.requestTimeoutInterval
                         )
+                        self.recordPromptConstruction(for: request)
                         let output = try await OpenKeyboardRequestDeadline.value(
                             timeoutInterval: self.requestTimeoutInterval
                         ) {
                             try await self.connector.respond(to: request, profile: profile)
                         }
+                        let validated = try await GrammarCorrectionResponseValidator.classified(
+                            output,
+                            original: chunk.text
+                        )
+                        self.recordValidation()
                         return (
                             chunkIndex,
-                            try await GrammarCorrectionResponseValidator.classified(output, original: chunk.text)
+                            validated
                         )
                     }
                 }
@@ -580,13 +625,49 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         } catch let error as OpenKeyboardAIConnectorError {
             throw Self.keyboardError(from: error)
         } catch is GrammarCorrectionResponseError {
+            recordValidation(failure: .validationRejected)
             throw KeyboardAIError.invalidResponse
         } catch {
             throw Self.keyboardError(from: error)
         }
 
-        guard correctedChunks.allSatisfy({ $0 != nil }) else { throw KeyboardAIError.invalidResponse }
+        guard correctedChunks.allSatisfy({ $0 != nil }) else {
+            recordValidation(failure: .validationRejected)
+            throw KeyboardAIError.invalidResponse
+        }
         return correctedChunks.compactMap { $0 }
+    }
+
+    private func recordPromptConstruction(for request: OpenKeyboardAIRequest) {
+        guard let traceID = AIOperationDiagnosticContext.traceID else { return }
+        let byteCount = request.messages.reduce(0) { partial, message in
+            partial + message.content.lengthOfBytes(using: .utf8)
+        }
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .promptConstruction,
+            requestBytes: byteCount
+        )
+    }
+
+    private func recordValidation(
+        failure: AIOperationDiagnosticFailure? = nil
+    ) {
+        guard let traceID = AIOperationDiagnosticContext.traceID else { return }
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .validation,
+            failure: failure
+        )
+    }
+
+    private func recordRetry(nextAttempt: Int) {
+        guard let traceID = AIOperationDiagnosticContext.traceID else { return }
+        AIOperationDiagnostics.shared.record(
+            traceID: traceID,
+            stage: .retry,
+            attempt: nextAttempt
+        )
     }
 
     static func keyboardError(from error: Error) -> KeyboardAIError {
