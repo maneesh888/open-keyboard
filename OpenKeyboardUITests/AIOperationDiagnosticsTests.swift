@@ -90,6 +90,54 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(record.failure, .staleResultSuppressed)
     }
 
+    func testMalformedConnectorFailureRemainsTheFinalSupportFacingCategory() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let traceID = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+
+        ledger.record(
+            traceID: traceID,
+            stage: .decoding,
+            durationMilliseconds: 2_300,
+            failure: .malformedResponse
+        )
+        // The view model only knows that no usable operation result was produced. Its broad
+        // validation category must not hide the adapter's already-recorded decode cause.
+        ledger.complete(
+            traceID: traceID,
+            outcome: .failed,
+            failure: .validationRejected
+        )
+
+        let record = try XCTUnwrap(ledger.record(traceID: traceID))
+        XCTAssertEqual(record.failure, .malformedResponse)
+        XCTAssertEqual(record.events.last?.failure, .malformedResponse)
+
+        let exported = ledger.export(traceID: traceID)
+        XCTAssertTrue(exported.contains("failure=malformed_response"))
+        XCTAssertFalse(exported.contains("validation_rejected"))
+        XCTAssertFalse(exported.contains("private response fixture"))
+    }
+
+    func testAppOutputValidationRejectionRemainsTheFinalSupportFacingCategory() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let traceID = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+
+        ledger.record(
+            traceID: traceID,
+            stage: .validation,
+            failure: .validationRejected
+        )
+        ledger.complete(
+            traceID: traceID,
+            outcome: .failed,
+            failure: .validationRejected
+        )
+
+        let record = try XCTUnwrap(ledger.record(traceID: traceID))
+        XCTAssertEqual(record.failure, .validationRejected)
+        XCTAssertEqual(record.events.last?.failure, .validationRejected)
+    }
+
     func testHTTPStatusCategoriesDiscardExactStatusCode() {
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 204), .success)
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 429), .clientError)

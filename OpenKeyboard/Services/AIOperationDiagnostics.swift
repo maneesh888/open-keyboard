@@ -243,6 +243,12 @@ final class AIOperationDiagnostics: @unchecked Sendable {
             return
         }
 
+        let resolvedFailure = Self.resolvedTerminalFailure(
+            requested: failure,
+            outcome: outcome,
+            events: records[index].events
+        )
+
         let elapsedMilliseconds = max(
             0,
             Int(timestamp.timeIntervalSince(records[index].startedAt) * 1_000)
@@ -256,12 +262,12 @@ final class AIOperationDiagnostics: @unchecked Sendable {
             httpStatusCategory: nil,
             requestBytes: nil,
             responseBytes: nil,
-            failure: failure
+            failure: resolvedFailure
         ))
         records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
         records[index].updatedAt = timestamp
         records[index].outcome = outcome
-        records[index].failure = failure
+        records[index].failure = resolvedFailure
         write(records)
         signpostState = activeSignposts.removeValue(forKey: traceID)
         lock.unlock()
@@ -354,5 +360,22 @@ final class AIOperationDiagnostics: @unchecked Sendable {
               let data = try? JSONEncoder().encode(records) else { return }
         defaults.set(data, forKey: Self.storageKey)
         defaults.synchronize()
+    }
+
+    /// A view-model terminal error may be deliberately broad after a lower layer has already
+    /// classified the cause. Keep that support-facing cause when terminal completion supplies no
+    /// narrower category. A genuine output validation rejection already records the same typed
+    /// category at the validation stage, so it remains unchanged.
+    private static func resolvedTerminalFailure(
+        requested: AIOperationDiagnosticFailure?,
+        outcome: AIOperationDiagnosticOutcome,
+        events: [AIOperationDiagnosticEvent]
+    ) -> AIOperationDiagnosticFailure? {
+        guard outcome == .failed,
+              requested == nil || requested == .validationRejected,
+              let recordedFailure = events.reversed().compactMap(\.failure).first else {
+            return requested
+        }
+        return recordedFailure
     }
 }

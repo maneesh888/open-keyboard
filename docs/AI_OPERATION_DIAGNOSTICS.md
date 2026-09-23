@@ -43,6 +43,13 @@ task cancellation is `cancelled`; and a response prevented from mutating newer k
 `stale_result_suppressed`. HTTP failures retain only their status category and use
 `gateway_rejected`.
 
+When terminal UI handling supplies a broad `validation_rejected` category, the ledger retains a
+more specific failure already recorded at a lower stage (for example, a connector decoding
+failure). A genuine app output-validator rejection already has a `validation_rejected` validation
+event and remains classified that way. The connector response contract does not expose raw HTTP
+status or raw response bytes for malformed decoded payloads, so those fields stay absent rather
+than being inferred.
+
 The keyboard creates one trace for each manual action, action-panel action, automatic grammar
 analysis, and explicit grammar review. Services add the lower-level prompt, transport, decoding,
 validation, and retry stages under that trace. The view model owns the final outcome because it is
