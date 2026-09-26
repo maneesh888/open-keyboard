@@ -29,3 +29,30 @@ final class OnboardingScreenshotUITests: BaseOpenKeyboardUITestCase {
         attachScreenshot(named: "onboarding-welcome-iPhone")
     }
 }
+
+final class HomeScreenKeyboardAccessUITests: XCTestCase {
+    func testHomeHidesKeyboardSettingsAfterKeyboardReportsFullAccess() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--skip-onboarding",
+            "--seed-keyboard-full-access"
+        ]
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Open Keyboard"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["open_keyboard_settings_button"].exists)
+    }
+
+    func testHomeShowsKeyboardSettingsBeforeKeyboardReportsFullAccess() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "--uitesting",
+            "--skip-onboarding",
+            "--clear-keyboard-full-access"
+        ]
+        app.launch()
+
+        XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
+    }
+}

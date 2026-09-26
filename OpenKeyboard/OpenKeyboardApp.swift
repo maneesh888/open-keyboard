@@ -39,6 +39,7 @@ struct OpenKeyboardApp: App {
         Self.seedUITestGatewayErrorAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
         Self.seedUITestKeyboardSuggestionStateAtLaunchIfNeeded()
+        Self.seedUITestKeyboardFullAccessAtLaunchIfNeeded()
         #endif
     }
 
@@ -305,6 +306,20 @@ struct OpenKeyboardApp: App {
             sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionStateSeededAt")
         }
         sharedDefaults.synchronize()
+    }
+
+    private static func seedUITestKeyboardFullAccessAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+
+        if arguments.contains("--seed-keyboard-full-access") {
+            AppConfig.updateKeyboardFullAccess(true, in: sharedDefaults)
+        } else if arguments.contains("--clear-keyboard-full-access") {
+            AppConfig.updateKeyboardFullAccess(false, in: sharedDefaults)
+        }
     }
 
     private static func normalizeUITestGatewayURL(_ value: String) -> String {

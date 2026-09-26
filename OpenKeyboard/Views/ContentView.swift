@@ -9,6 +9,8 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @AppStorage(AppConfig.keyboardFullAccessKey, store: UserDefaults(suiteName: AppConfig.appGroupIdentifier))
+    private var keyboardHasFullAccess = false
     @State private var showingSettings = false
     @State private var showingPlayground = false
 
@@ -37,8 +39,11 @@ struct ContentView: View {
                         StatusCard(viewModel: settingsViewModel)
 
                         VStack(spacing: 12) {
-                            PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
-                                settingsViewModel.openKeyboardSettings()
+                            if !keyboardHasFullAccess {
+                                PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
+                                    settingsViewModel.openKeyboardSettings()
+                                }
+                                .accessibilityIdentifier("open_keyboard_settings_button")
                             }
 
                             if settingsViewModel.trustedModelLoaded {

@@ -719,6 +719,7 @@ struct AppConfig: Codable, Equatable {
     static let gatewayLegacySecretCleanupReferenceKey = "gatewayProfile.legacySecretCleanupReference.v1"
     static let gatewayLegacyUnversionedSecretCleanupPendingKey = "gatewayProfile.legacyUnversionedSecretCleanupPending.v1"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
+    static let keyboardFullAccessKey = "keyboardExtension.hasFullAccess"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
     private static let keyboardUITestConfigOriginKey = "keyboardExtension.gatewayConfigIsUITestSeed"
     private static let keyboardUITestConfigSeedIDKey = "keyboardExtension.gatewayConfigSeedID"
@@ -748,6 +749,22 @@ struct AppConfig: Codable, Equatable {
 extension AppConfig {
     static func sharedDefaults() -> UserDefaults? {
         UserDefaults(suiteName: AppConfig.appGroupIdentifier)
+    }
+
+    static func keyboardHasFullAccess(from defaults: UserDefaults) -> Bool {
+        defaults.bool(forKey: keyboardFullAccessKey)
+    }
+
+    static func updateKeyboardFullAccess(
+        _ hasFullAccess: Bool,
+        in defaults: UserDefaults? = sharedDefaults()
+    ) {
+        guard let defaults,
+              keyboardHasFullAccess(from: defaults) != hasFullAccess else {
+            return
+        }
+        defaults.set(hasFullAccess, forKey: keyboardFullAccessKey)
+        defaults.synchronize()
     }
 
     static func load() -> AppConfig {
