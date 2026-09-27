@@ -1,57 +1,68 @@
 # AI operation diagnostics
 
-## Schema and privacy boundary
+The app and extension share a bounded App Group ledger. It records real production operations;
+no diagnostic state substitutes for an AI response or changes retry, validation, or correction behavior.
 
-The shared App Group key `aiOperationDiagnostics.v1` contains a JSON array of schema-version `1`
-records. Every record has a randomly generated UUID trace ID, a closed operation enum, a closed
-origin enum, start/update timestamps, app version, build version, OS version, a bounded list of
-typed events, and an optional typed outcome and failure.
+## Metadata and reproduction context
 
-Each event contains only its closed stage enum, attempt number, elapsed/duration milliseconds,
-an optional HTTP *category* (`1xx` through `5xx`), and optional request/response byte counts. The
-allowed stages are context capture, prompt construction, transport, decoding, validation, retry,
-cancellation, stale-result suppression, and final outcome. The schema intentionally has no
-free-form text field and no model, endpoint, header, authorization, or credential field.
+Metadata is collected without phrase/response capture: random trace ID, operation and origin,
+start time, app/build and OS versions, executable UUID (identifies the exact app or extension binary),
+provider and exact model ID, pinned prompt-contract version, effective sampling preferences,
+output-token limit, app request timeout, attempt, and per-request UUID. Request IDs correlate concurrent
+chunks and retries to their events. At most eight request contexts and 64 events are kept per trace;
+omitted request contexts are counted explicitly. At most 48 traces are retained for seven days.
 
-Consequently, neither the keyboard's Copy Details action nor the host-app export can include:
+The executable UUID is a binary fingerprint, not a Git SHA. Provider/model configuration can itself
+be sensitive; the diagnostics screen discloses that it is included in metadata exports.
+Only validated, bounded model identifiers are accepted. Configuration credentials, authentication
+headers and gateway addresses are never passed to the ledger.
 
-- Typed source/context text or generated model text.
-- API keys, authorization headers, gateway URLs, host names, paths, or query strings.
-- Private model identifiers or provider error strings.
+Connector success is recorded as `connector_response_accepted=true`, not an inferred HTTP 200.
+An exact HTTP status is recorded only when the connector supplies it in structured error metadata.
+Timings cover the connector call, not an isolated network request. Closed rejection subreasons
+preserve known decoder, contract, local output-shape, truncation, and incomplete-response failures.
+An upstream `malformed_provider_response` can still aggregate multiple provider-wire checks;
+it must not be presented as the exact upstream cause.
 
-Native `Logger` and `OSSignposter` output follows the same boundary: it emits only the random
-trace ID, closed operation/stage/outcome values, and no request or response content.
+## Explicit text consent
 
-The Universal AI Connector owns the underlying URL session, so the app does not invent or retain
-`URLSessionTaskMetrics` it cannot observe. Instead, the adapter records the safe transport timing,
-byte counts, and HTTP status category available at that boundary; the native signpost spans the
-entire operation.
+Text capture is OFF by default. In AI Diagnostics, **Enable Text Capture for 10 Minutes** opens
+an explicit confirmation explaining collection of phrases sent to AI and available responses,
+including automatic keyboard checks and text from other apps. Nothing is uploaded automatically.
+The host app writes a random, expiring consent session shared with the keyboard extension.
+Only operations begun during that session may capture text. Every write rechecks the same active
+session. Enabling capture cannot retroactively capture an in-flight operation; expiry or revocation
+prevents late responses from retaining text, even if another session is later enabled.
 
-## Retention
+The ledger can retain the original phrase plus individual user-message/decoded-response pairs.
+Each text field is capped at 4,096 UTF-8 bytes, preserving valid Unicode and marking truncation.
+Only the eight newest consented operations retain text, for at most 24 hours. Expired text is purged
+on the next ledger read/write. A maximum of eight request contexts per operation bounds storage.
+Raw HTTP bodies, arbitrary provider error messages, and headers are never collected. If the connector
+rejects a wire response before exposing decoded text, that response text remains unavailable.
+User-provided phrases may themselves contain sensitive information; the consent warns of this.
 
-The ledger keeps at most 48 traces, with at most 64 events per trace. Records expire seven days
-after their latest update. Every read and write prunes expired records and enforces those limits;
-diagnostics are intentionally lossy rather than an audit log.
+**Stop Capture and Delete Captured Text** revokes consent and deletes all retained text while keeping
+metadata. **Delete All Diagnostics** clears all records and consent. Writes and deletion use shared
+file coordination, and content never goes to OSLog or signposts.
 
-## Incident classification
+## Review and sharing
 
-The final typed failure is the support-facing classification. Transport with no usable gateway
-response is `gateway_nonresponse`; a deadline or connector timeout is `transport_timeout`; a
-decoded connector payload that is malformed or incomplete is `malformed_response`; a result that
-fails the app's output checks is `validation_rejected`; an exhausted retry is `retry_failed`;
-task cancellation is `cancelled`; and a response prevented from mutating newer keyboard state is
-`stale_result_suppressed`. HTTP failures retain only their status category and use
-`gateway_rejected`.
+**Export Diagnostics Without Text** and the keyboard's **Copy Details** always omit captured text.
+**Review Captured Text Before Sharing** displays a separate sensitive preview. Only the explicit
+**Share With Text** action exports that preview. No analytics collector or automatic upload is added.
+The preview is dismissed when the app enters the background. JSON quoting prevents captured text
+from forging additional diagnostic lines. A missing trace ID exports zero records, never unrelated
+traces. Sharing exports the diagnostics as the actual share item, not a placeholder message.
 
-When terminal UI handling supplies a broad `validation_rejected` category, the ledger retains a
-more specific failure already recorded at a lower stage (for example, a connector decoding
-failure). A genuine app output-validator rejection already has a `validation_rejected` validation
-event and remains classified that way. The connector response contract does not expose raw HTTP
-status or raw response bytes for malformed decoded payloads, so those fields stay absent rather
-than being inferred.
+Records retain the v1 storage key/schema; additive optional fields decode old exports without migration.
+Old records have unknown provider/model/request context, and absent values must never be guessed.
 
-The keyboard creates one trace for each manual action, action-panel action, automatic grammar
-analysis, and explicit grammar review. Services add the lower-level prompt, transport, decoding,
-validation, and retry stages under that trace. The view model owns the final outcome because it is
-the only layer that can tell whether a completed response was accepted or safely suppressed as
-stale.
+## Verification
+
+`AIOperationDiagnosticsTests` covers legacy decoding, metadata, consent, expiry, cross-instance
+revocation/deletion, late replies, default redaction, explicit text exports, UTF-8 bounds, retention,
+missing-trace isolation, available rejected responses, and no fabricated HTTP success status.
+Normal simulator verification additionally covers the visible consent, ordinary keyboard operation,
+text preview, metadata-only export, and deletion. These diagnostics do not by themselves establish
+that the original correction/recheck failure is fixed.

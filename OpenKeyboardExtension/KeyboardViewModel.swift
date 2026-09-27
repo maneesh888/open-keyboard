@@ -944,7 +944,7 @@ final class KeyboardViewModel: ObservableObject {
         } else {
             UIPasteboard.general.string = [
                 "OpenKeyboard AI diagnostics schema=1",
-                "Privacy boundary: no typed text, generated text, API keys, authorization headers, gateway endpoints, or model identifiers are included.",
+                "Phrase and response text excluded. Configuration credentials and endpoints are excluded.",
                 "error_kind=\(actionError.kind.title.lowercased().replacingOccurrences(of: " ", with: "_"))",
                 "trace=unavailable"
             ].joined(separator: "\n")
@@ -958,7 +958,8 @@ final class KeyboardViewModel: ObservableObject {
     ) -> String {
         let traceID = AIOperationDiagnostics.shared.begin(
             operation: action.diagnosticOperation,
-            origin: origin
+            origin: origin,
+            sourceText: input
         )
         AIOperationDiagnostics.shared.record(
             traceID: traceID,

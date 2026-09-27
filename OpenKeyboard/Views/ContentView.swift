@@ -83,7 +83,7 @@ struct ContentView: View {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text("AI Diagnostics")
                                             .font(.headline)
-                                        Text("View and export redacted operation traces")
+                                        Text("Review recent AI operations and diagnostic captures")
                                             .font(.caption)
                                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                                             .lineLimit(1)
@@ -155,28 +155,47 @@ struct ContentView: View {
 
 private struct AIOperationDiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss
-    @State private var records: [AIOperationDiagnosticRecord] = []
+    @StateObject private var viewModel = AIOperationDiagnosticsViewModel()
+    @State private var showingCaptureConsent = false
+    @State private var showingTextPreview = false
+    @Environment(\.scenePhase) private var scenePhase
 
-    private var export: String {
-        AIOperationDiagnostics.shared.export()
-    }
+    private var records: [AIOperationDiagnosticRecord] { viewModel.records }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Privacy-safe export") {
-                    Text("These traces contain only operation IDs, typed stages and failures, timing, byte counts, HTTP status categories, app/build, and OS metadata. They never include typed or generated text, credentials, endpoints, or model identifiers.")
+                Section("Operation details") {
+                    Text("Includes provider, model, request settings, failure details, timing, and app/OS versions. Credentials from Settings and gateway addresses are never collected. Phrase and response text are excluded from this export.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-
-                    ShareLink(
-                        item: export,
-                        subject: Text("OpenKeyboard AI diagnostics"),
-                        message: Text("Redacted AI operation diagnostics")
-                    ) {
-                        Label("Export Redacted Diagnostics", systemImage: "square.and.arrow.up")
+                    ShareLink(item: viewModel.metadataExport, subject: Text("OpenKeyboard AI diagnostics")) {
+                        Label("Export Diagnostics Without Text", systemImage: "square.and.arrow.up")
                     }
                     .accessibilityIdentifier("ai_diagnostics_export")
+                }
+
+                Section("Capture text with permission") {
+                    Text("Off by default. A capture session saves phrases sent to AI and available responses on this device for troubleshooting, including automatic keyboard checks. Nothing is uploaded automatically.")
+                        .font(.footnote)
+                    if let expiresAt = viewModel.captureExpiresAt {
+                        Text("Capture enabled until \(expiresAt.formatted(date: .omitted, time: .shortened))")
+                            .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                            .accessibilityIdentifier("ai_diagnostics_capture_active")
+                    } else {
+                        Button("Enable Text Capture for 10 Minutes") { showingCaptureConsent = true }
+                            .accessibilityIdentifier("ai_diagnostics_enable_capture")
+                    }
+                    Button("Review Captured Text Before Sharing") {
+                        viewModel.prepareTextPreview()
+                        showingTextPreview = true
+                    }
+                    .accessibilityIdentifier("ai_diagnostics_review_text")
+                    Button("Stop Capture and Delete Captured Text", role: .destructive) { viewModel.stopAndDeleteText() }
+                        .accessibilityIdentifier("ai_diagnostics_delete_text")
+                    Text("Keeps text from at most 8 operations for 24 hours, with up to 4 KB per phrase or response. Longer content is marked truncated. Responses rejected inside the connector may be unavailable.")
+                        .font(.caption)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                 }
 
                 Section("Recent operations") {
@@ -194,6 +213,11 @@ private struct AIOperationDiagnosticsView: View {
                                 Text(record.outcome?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "In progress")
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(outcomeColor(record.outcome))
+                            }
+                            if let request = record.requests?.first {
+                                Text("\(request.provider.displayName) · \(request.modelID ?? "Model unavailable")")
+                                    .font(.caption)
+                                    .textSelection(.enabled)
                             }
                             Text("Trace \(record.traceID)")
                                 .font(.caption.monospaced())
@@ -216,6 +240,10 @@ private struct AIOperationDiagnosticsView: View {
                         .accessibilityIdentifier("ai_diagnostics_trace")
                     }
                 }
+                Section {
+                    Button("Delete All Diagnostics", role: .destructive) { viewModel.clear() }
+                        .accessibilityIdentifier("ai_diagnostics_delete_all")
+                }
             }
             .navigationTitle("AI Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
@@ -224,15 +252,44 @@ private struct AIOperationDiagnosticsView: View {
                     Button("Done") { dismiss() }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Refresh") { reload() }
+                    Button("Refresh") { viewModel.refresh() }
                 }
             }
-            .onAppear(perform: reload)
+            .onAppear { viewModel.refresh() }
+            .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in viewModel.refresh() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { viewModel.refresh() }
+                if phase == .background { showingTextPreview = false; viewModel.dismissTextPreview() }
+            }
+            .alert("Allow temporary diagnostic text capture?", isPresented: $showingCaptureConsent) {
+                Button("Cancel", role: .cancel) {}
+                Button("Allow for 10 Minutes") { viewModel.startCapture() }
+            } message: {
+                Text("For the next 10 minutes, Open Keyboard will store phrases sent to AI and available responses, including automatic checks and text from other apps. This may include sensitive information. Text stays on this device for up to 24 hours and is shared only when you choose to share it. You can stop and delete it at any time.")
+            }
+            .sheet(isPresented: $showingTextPreview, onDismiss: { viewModel.dismissTextPreview() }) {
+                NavigationStack {
+                    ScrollView {
+                        Text(viewModel.textPreview)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                            .padding()
+                    }
+                    .navigationTitle("Review Sensitive Diagnostics")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Done") { showingTextPreview = false }
+                        }
+                        ToolbarItem(placement: .primaryAction) {
+                            ShareLink(item: viewModel.textPreview, subject: Text("OpenKeyboard diagnostics with captured text")) {
+                                Text("Share With Text")
+                            }
+                            .accessibilityIdentifier("ai_diagnostics_share_text")
+                        }
+                    }
+                }
+            }
         }
-    }
-
-    private func reload() {
-        records = AIOperationDiagnostics.shared.records()
     }
 
     private func outcomeColor(_ outcome: AIOperationDiagnosticOutcome?) -> Color {

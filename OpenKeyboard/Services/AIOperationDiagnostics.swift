@@ -1,10 +1,10 @@
 import Foundation
 import OSLog
+import Combine
+import MachO
 
-/// A privacy-safe, shareable record of one production AI operation.
-///
-/// The App Group ledger intentionally stores only typed lifecycle metadata. It never accepts
-/// request/response text, credentials, provider URLs, or model identifiers as inputs.
+/// Local, bounded diagnostic records. Text requires an explicit, expiring capture session.
+/// Configuration credentials and endpoints are never passed to this ledger.
 enum AIOperationDiagnosticStage: String, Codable, CaseIterable, Sendable {
     case contextCapture = "context_capture"
     case promptConstruction = "prompt_construction"
@@ -38,6 +38,9 @@ enum AIOperationDiagnosticSubreason: String, Codable, CaseIterable, Sendable {
     case malformedProviderResponse = "malformed_provider_response"
     case malformedProviderStream = "malformed_provider_stream"
     case invalidStructuredProviderResponse = "invalid_structured_provider_response"
+    case outputLimitReached = "output_limit_reached"
+    case providerIncompleteResponse = "provider_incomplete_response"
+    case incompleteStream = "incomplete_stream"
     case connectorContractValidationFailure = "connector_contract_validation_failure"
     case targetMismatch = "target_mismatch"
     case unexpectedCompletionReason = "unexpected_completion_reason"
@@ -99,6 +102,40 @@ enum AIOperationDiagnosticOrigin: String, Codable, Sendable {
     case hostAppModelDiscovery = "host_app_model_discovery"
 }
 
+/// Bounded content, with explicit truncation rather than an implied complete reproduction.
+struct AIOperationDiagnosticText: Codable, Equatable, Sendable {
+    let text: String
+    let truncated: Bool
+
+    init(_ value: String) {
+        var bytes = Array(value.utf8.prefix(4_096))
+        while String(bytes: bytes, encoding: .utf8) == nil { bytes.removeLast() }
+        text = String(decoding: bytes, as: UTF8.self)
+        truncated = bytes.count < value.utf8.count
+    }
+}
+
+struct AIOperationDiagnosticRequest: Codable, Equatable, Sendable, Identifiable {
+    let id: String
+    let attempt: Int
+    let provider: OpenKeyboardAIProvider
+    let modelID: String?
+    let maxOutputTokens: Int?
+    let temperature: Double?
+    let topP: Double?
+    let timeoutMilliseconds: Int?
+    let promptContractVersion: String
+    var userMessage: AIOperationDiagnosticText?
+    var responseText: AIOperationDiagnosticText?
+    var completionReason: String?
+    var outputCount: Int?
+}
+
+private struct AIOperationTextCaptureConsent: Codable {
+    let id: String
+    let expiresAt: Date
+}
+
 struct AIOperationDiagnosticEvent: Codable, Equatable, Sendable, Identifiable {
     let id: UUID
     let stage: AIOperationDiagnosticStage
@@ -112,6 +149,9 @@ struct AIOperationDiagnosticEvent: Codable, Equatable, Sendable, Identifiable {
     /// An additive optional field. Records written before this was introduced decode as `nil`, so
     /// the existing v1 App Group ledger remains backward compatible without migration.
     let subreason: AIOperationDiagnosticSubreason?
+    var requestID: String? = nil
+    var httpStatusCode: Int? = nil
+    var connectorResponseAccepted: Bool? = nil
 }
 
 struct AIOperationDiagnosticRecord: Codable, Equatable, Sendable, Identifiable {
@@ -130,6 +170,13 @@ struct AIOperationDiagnosticRecord: Codable, Equatable, Sendable, Identifiable {
     var outcome: AIOperationDiagnosticOutcome?
     var failure: AIOperationDiagnosticFailure?
 
+    // Optional additions keep old v1 exports readable.
+    var binaryID: String? = nil
+    var captureSessionID: String? = nil
+    var sourceText: AIOperationDiagnosticText? = nil
+    var requests: [AIOperationDiagnosticRequest]? = nil
+    var requestsOmitted: Int? = nil
+
     var id: String { traceID }
 }
 
@@ -140,15 +187,19 @@ enum AIOperationDiagnosticContext {
 
 /// Bounded, expiring diagnostic ledger shared by the app and keyboard extension.
 ///
-/// The storage format is deliberately separate from gateway configuration. The record type has no
-/// free-form text fields, so callers cannot accidentally persist text typed into the keyboard,
-/// generated output, API keys, authorization headers, private endpoints, or model IDs.
+/// Text capture is independently consented, bounded, and never sent to OSLog. Metadata-only
+/// export is the default, including for the keyboard Copy Details action.
 final class AIOperationDiagnostics: @unchecked Sendable {
     static let shared = AIOperationDiagnostics()
 
     static let retention: TimeInterval = 7 * 24 * 60 * 60
     static let maximumRecords = 48
     static let maximumEventsPerRecord = 64
+    static let maximumRequestsPerRecord = 8
+    static let maximumTextRecords = 8
+    static let textRetention: TimeInterval = 24 * 60 * 60
+    static let captureDuration: TimeInterval = 10 * 60
+    private static let consentKey = "aiOperationDiagnostics.textConsent.v1"
 
     private static let storageKey = "aiOperationDiagnostics.v1"
     // Both the host app and keyboard extension update the App Group defaults. Coordinate every
@@ -180,11 +231,12 @@ final class AIOperationDiagnostics: @unchecked Sendable {
     @discardableResult
     func begin(
         operation: AIOperationDiagnosticOperation,
-        origin: AIOperationDiagnosticOrigin
+        origin: AIOperationDiagnosticOrigin,
+        sourceText: String? = nil
     ) -> String {
         let timestamp = now()
         let traceID = UUID().uuidString.lowercased()
-        let record = AIOperationDiagnosticRecord(
+        var record = AIOperationDiagnosticRecord(
             schemaVersion: AIOperationDiagnosticRecord.schemaVersion,
             traceID: traceID,
             operation: operation,
@@ -201,6 +253,11 @@ final class AIOperationDiagnostics: @unchecked Sendable {
 
         let didPersist = withExclusiveStorageAccess {
             var records = prunedRecords(from: readRecords(), at: timestamp)
+            record.binaryID = Self.binaryIdentifier()
+            if let consent = activeConsent(at: timestamp) {
+                record.captureSessionID = consent.id
+                record.sourceText = sourceText.map(AIOperationDiagnosticText.init)
+            }
             records.append(record)
             write(records)
             let signpostID = Self.signposter.makeSignpostID()
@@ -226,7 +283,10 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         requestBytes: Int? = nil,
         responseBytes: Int? = nil,
         failure: AIOperationDiagnosticFailure? = nil,
-        subreason: AIOperationDiagnosticSubreason? = nil
+        subreason: AIOperationDiagnosticSubreason? = nil,
+        requestID: String? = nil,
+        httpStatusCode: Int? = nil,
+        connectorResponseAccepted: Bool? = nil
     ) {
         let timestamp = now()
         let didRecord = withExclusiveStorageAccess {
@@ -251,7 +311,10 @@ final class AIOperationDiagnostics: @unchecked Sendable {
                 requestBytes: requestBytes.map { max(0, $0) },
                 responseBytes: responseBytes.map { max(0, $0) },
                 failure: failure,
-                subreason: subreason
+                subreason: subreason,
+                requestID: requestID,
+                httpStatusCode: httpStatusCode.flatMap { (100...599).contains($0) ? $0 : nil },
+                connectorResponseAccepted: connectorResponseAccepted
             ))
             records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
             records[index].updatedAt = timestamp
@@ -332,47 +395,158 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         records().first(where: { $0.traceID == traceID })
     }
 
-    /// A redacted text export suitable for a support ticket or the keyboard's Copy Details action.
-    func export(traceID: String? = nil) -> String {
-        let selected = traceID.flatMap { record(traceID: $0) }.map { [$0] } ?? records()
+    /// Text is excluded unless a separate, explicit preview/share action requests it.
+    func export(traceID: String? = nil, includeText: Bool = false) -> String {
+        let selected = records().filter { traceID == nil || $0.traceID == traceID }
         var lines = [
-            "OpenKeyboard AI diagnostics schema=1",
-            "Privacy boundary: no typed text, generated text, API keys, authorization headers, gateway endpoints, or model identifiers are included.",
-            "records=\(selected.count) retention=7d maxRecords=\(Self.maximumRecords)"
+            "OpenKeyboard AI diagnostics schema=1 context_version=2",
+            "Includes provider/model and request settings. Configuration credentials and endpoints are excluded.",
+            includeText ? "SENSITIVE: consented phrase/response text may be included below. Review before sharing." : "Phrase and response text excluded.",
+            "records=\(selected.count) metadata_retention=7d text_retention=24h"
         ]
+        let dateFormat = ISO8601DateFormatter()
         for record in selected {
-            lines.append(
-                "trace=\(record.traceID) operation=\(record.operation.rawValue) origin=\(record.origin.rawValue) outcome=\(record.outcome?.rawValue ?? "in_progress") failure=\(record.failure?.rawValue ?? "none") app=\(record.appVersion) build=\(record.buildVersion) os=\(record.operatingSystemVersion)"
-            )
+            lines.append("trace=\(record.traceID) operation=\(record.operation.rawValue) origin=\(record.origin.rawValue) outcome=\(record.outcome?.rawValue ?? "in_progress") failure=\(record.failure?.rawValue ?? "none") app=\(record.appVersion) build=\(record.buildVersion) binary=\(record.binaryID ?? "unknown") os=\(record.operatingSystemVersion) started_at=\(dateFormat.string(from: record.startedAt))")
+            if let count = record.requestsOmitted { lines.append("  request_records_omitted=\(count)") }
+            if includeText, let source = record.sourceText { lines.append(Self.textLine("source_text", source)) }
+            for request in record.requests ?? [] {
+                lines.append("  request=\(request.id) attempt=\(request.attempt) provider=\(request.provider.rawValue) model=\(request.modelID ?? "not_recorded") contract=\(request.promptContractVersion) max_output_tokens=\(request.maxOutputTokens.map(String.init) ?? "default") temperature=\(request.temperature.map(String.init(describing:)) ?? "provider_default") top_p=\(request.topP.map(String.init(describing:)) ?? "provider_default") timeout_ms=\(request.timeoutMilliseconds.map(String.init) ?? "unknown") completion=\(request.completionReason ?? "unavailable") outputs=\(request.outputCount.map(String.init) ?? "unavailable")")
+                if includeText {
+                    if let input = request.userMessage { lines.append(Self.textLine("user_message", input)) }
+                    if let output = request.responseText { lines.append(Self.textLine("response_text", output)) }
+                }
+            }
             for event in record.events {
-                var eventLine = "  stage=\(event.stage.rawValue) attempt=\(event.attempt) elapsed_ms=\(event.elapsedMilliseconds)"
-                if let durationMilliseconds = event.durationMilliseconds {
-                    eventLine += " duration_ms=\(durationMilliseconds)"
-                }
-                if let httpStatusCategory = event.httpStatusCategory {
-                    eventLine += " http=\(httpStatusCategory.rawValue)"
-                }
-                if let requestBytes = event.requestBytes {
-                    eventLine += " request_bytes=\(requestBytes)"
-                }
-                if let responseBytes = event.responseBytes {
-                    eventLine += " response_bytes=\(responseBytes)"
-                }
-                if let failure = event.failure {
-                    eventLine += " failure=\(failure.rawValue)"
-                }
-                if let subreason = event.subreason {
-                    eventLine += " subreason=\(subreason.rawValue)"
-                }
-                lines.append(eventLine)
+                var line = "  stage=\(event.stage.rawValue) attempt=\(event.attempt) elapsed_ms=\(event.elapsedMilliseconds)"
+                if let value = event.requestID { line += " request=\(value)" }
+                if let value = event.durationMilliseconds { line += " duration_ms=\(value)" }
+                if let value = event.httpStatusCategory { line += " http=\(value.rawValue)" }
+                if let value = event.httpStatusCode { line += " http_status=\(value)" }
+                if let value = event.connectorResponseAccepted { line += " connector_response_accepted=\(value)" }
+                if let value = event.requestBytes { line += " request_bytes=\(value)" }
+                if let value = event.responseBytes { line += " response_bytes=\(value)" }
+                if let value = event.failure { line += " failure=\(value.rawValue)" }
+                if let value = event.subreason { line += " subreason=\(value.rawValue)" }
+                lines.append(line)
             }
         }
         return lines.joined(separator: "\n")
     }
 
+    private static func textLine(_ name: String, _ value: AIOperationDiagnosticText) -> String {
+        // JSON quoting keeps untrusted text from forging additional diagnostic lines.
+        let encoded = (try? JSONEncoder().encode(value.text)).flatMap { String(data: $0, encoding: .utf8) } ?? "null"
+        return "  \(name)_truncated=\(value.truncated) \(name)=\(encoded)"
+    }
+
+    var textCaptureExpiresAt: Date? {
+        withExclusiveStorageAccess { activeConsent(at: now())?.expiresAt } ?? nil
+    }
+
+    /// Called only after the host app's explicit capture confirmation.
+    func startTextCapture() {
+        _ = withExclusiveStorageAccess {
+            let consent = AIOperationTextCaptureConsent(id: UUID().uuidString, expiresAt: now().addingTimeInterval(Self.captureDuration))
+            guard let data = try? JSONEncoder().encode(consent) else { return }
+            defaults?.set(data, forKey: Self.consentKey)
+            defaults?.synchronize()
+        }
+    }
+
+    func stopTextCaptureAndDelete() {
+        _ = withExclusiveStorageAccess {
+            defaults?.removeObject(forKey: Self.consentKey)
+            write(readRecords().map(Self.withoutText))
+        }
+    }
+
+    @discardableResult
+    func beginRequest(traceID: String, provider: OpenKeyboardAIProvider, request: OpenKeyboardAIRequest? = nil) -> String? {
+        withExclusiveStorageAccess {
+            let timestamp = now()
+            var records = prunedRecords(from: readRecords(), at: timestamp)
+            guard let index = records.firstIndex(where: { $0.traceID == traceID }), records[index].outcome == nil else { return nil }
+            guard (records[index].requests?.count ?? 0) < Self.maximumRequestsPerRecord else {
+                records[index].requestsOmitted = (records[index].requestsOmitted ?? 0) + 1
+                write(records)
+                return nil
+            }
+            let capture = activeConsent(at: timestamp)?.id == records[index].captureSessionID && records[index].captureSessionID != nil
+            let id = UUID().uuidString.lowercased()
+            let providerUsesDefaults = provider == .openAI || provider == .anthropic
+            let context = AIOperationDiagnosticRequest(
+                id: id, attempt: AIOperationDiagnosticContext.attempt, provider: provider,
+                modelID: request.flatMap { Self.safeModelID($0.modelID) },
+                maxOutputTokens: request?.maxOutputTokens,
+                temperature: providerUsesDefaults ? nil : request?.temperature,
+                topP: providerUsesDefaults ? nil : request?.topP,
+                timeoutMilliseconds: request.map { Int(min(86_400, max(0, $0.timeoutInterval)) * 1_000) },
+                promptContractVersion: KeyboardGatewayActionContract.contractVersion,
+                userMessage: capture ? request?.messages.last(where: { $0.role == .user }).map { AIOperationDiagnosticText($0.content) } : nil,
+                responseText: nil, completionReason: nil, outputCount: nil
+            )
+            records[index].requests = (records[index].requests ?? []) + [context]
+            write(records)
+            return id
+        } ?? nil
+    }
+
+    func recordResponse(traceID: String, requestID: String, text: String?, completionReason: String, outputCount: Int) {
+        _ = withExclusiveStorageAccess {
+            let timestamp = now()
+            var records = prunedRecords(from: readRecords(), at: timestamp)
+            guard let index = records.firstIndex(where: { $0.traceID == traceID }), records[index].outcome == nil,
+                  let requestIndex = records[index].requests?.firstIndex(where: { $0.id == requestID }) else { return }
+            let knownReasons = ["stop", "max_output_tokens", "content_filter", "tool_call", "unknown"]
+            records[index].requests?[requestIndex].completionReason = knownReasons.contains(completionReason) ? completionReason : "other"
+            records[index].requests?[requestIndex].outputCount = outputCount
+            if let sessionID = records[index].captureSessionID, activeConsent(at: timestamp)?.id == sessionID {
+                records[index].requests?[requestIndex].responseText = text.map(AIOperationDiagnosticText.init)
+            }
+            write(records)
+        }
+    }
+
+    private func activeConsent(at date: Date) -> AIOperationTextCaptureConsent? {
+        defaults?.synchronize()
+        guard let data = defaults?.data(forKey: Self.consentKey),
+              let consent = try? JSONDecoder().decode(AIOperationTextCaptureConsent.self, from: data),
+              consent.expiresAt > date else { return nil }
+        return consent
+    }
+
+    private static func safeModelID(_ value: String) -> String? {
+        guard value.utf8.count <= 255, value.range(of: "^[A-Za-z0-9][A-Za-z0-9._:/+-]*$", options: .regularExpression) != nil else { return nil }
+        return value
+    }
+
+    private static func withoutText(_ value: AIOperationDiagnosticRecord) -> AIOperationDiagnosticRecord {
+        var record = value
+        record.captureSessionID = nil
+        record.sourceText = nil
+        if var requests = record.requests {
+            for index in requests.indices { requests[index].userMessage = nil; requests[index].responseText = nil }
+            record.requests = requests
+        }
+        return record
+    }
+
+    private static func binaryIdentifier() -> String? {
+        guard let header = _dyld_get_image_header(0), header.pointee.magic == MH_MAGIC_64 else { return nil }
+        var cursor = UnsafeRawPointer(header).advanced(by: MemoryLayout<mach_header_64>.size)
+        for _ in 0..<header.pointee.ncmds {
+            let command = cursor.load(as: load_command.self)
+            guard command.cmdsize >= MemoryLayout<load_command>.size else { return nil }
+            if command.cmd == LC_UUID { return UUID(uuid: cursor.load(as: uuid_command.self).uuid).uuidString.lowercased() }
+            cursor = cursor.advanced(by: Int(command.cmdsize))
+        }
+        return nil
+    }
+
     func removeAll() {
         _ = withExclusiveStorageAccess {
             defaults?.removeObject(forKey: Self.storageKey)
+            defaults?.removeObject(forKey: Self.consentKey)
             defaults?.synchronize()
             activeSignposts.removeAll()
         }
@@ -392,17 +566,22 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         at timestamp: Date
     ) -> [AIOperationDiagnosticRecord] {
         let earliest = timestamp.addingTimeInterval(-Self.retention)
-        return Array(
-            records
-                .filter { $0.updatedAt >= earliest }
-                .sorted { $0.updatedAt > $1.updatedAt }
-                .prefix(Self.maximumRecords)
-        )
+        let retained = Array(records.filter { $0.updatedAt >= earliest }
+            .sorted { $0.startedAt > $1.startedAt }.prefix(Self.maximumRecords))
+        var textCount = 0
+        return retained.map { record in
+            guard record.captureSessionID != nil else { return record }
+            textCount += 1
+            guard textCount <= Self.maximumTextRecords, record.startedAt >= timestamp.addingTimeInterval(-Self.textRetention) else {
+                return Self.withoutText(record)
+            }
+            return record
+        }
     }
 
     private func write(_ records: [AIOperationDiagnosticRecord]) {
         guard let defaults,
-              let data = try? JSONEncoder().encode(records) else { return }
+              let data = try? JSONEncoder().encode(prunedRecords(from: records, at: now())) else { return }
         defaults.set(data, forKey: Self.storageKey)
         defaults.synchronize()
     }
@@ -456,4 +635,27 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         }
         return recordedFailure
     }
+}
+
+
+/// Presentation state stays outside the view; the service owns App Group storage and consent.
+@MainActor
+final class AIOperationDiagnosticsViewModel: ObservableObject {
+    @Published private(set) var records: [AIOperationDiagnosticRecord] = []
+    @Published private(set) var captureExpiresAt: Date?
+    @Published private(set) var metadataExport = ""
+    @Published private(set) var textPreview = ""
+    private let diagnostics: AIOperationDiagnostics
+
+    init(diagnostics: AIOperationDiagnostics = .shared) { self.diagnostics = diagnostics }
+    func refresh() {
+        records = diagnostics.records()
+        captureExpiresAt = diagnostics.textCaptureExpiresAt
+        metadataExport = diagnostics.export()
+    }
+    func startCapture() { diagnostics.startTextCapture(); refresh() }
+    func stopAndDeleteText() { diagnostics.stopTextCaptureAndDelete(); textPreview = ""; refresh() }
+    func clear() { diagnostics.removeAll(); textPreview = ""; refresh() }
+    func prepareTextPreview() { textPreview = diagnostics.export(includeText: true) }
+    func dismissTextPreview() { textPreview = "" }
 }

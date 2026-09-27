@@ -1,4 +1,5 @@
 import XCTest
+import UniversalAiConnector
 
 final class AIOperationDiagnosticsTests: XCTestCase {
     private var suiteName: String!
@@ -249,10 +250,169 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(record.events.last?.failure, .validationRejected)
     }
 
+    private func request(_ text: String = "The cat are asleep.", model: String = "fixture/model") throws -> OpenKeyboardAIRequest {
+        try OpenKeyboardAIRequest(modelID: model, messages: [.init(role: .user, content: text)], maxOutputTokens: 512, temperature: 0.1)
+    }
+
+    func testMetadataIncludesExactModelAndSettingsButNeverTextWithoutConsent() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: "private fixture source")
+        let id = try XCTUnwrap(ledger.beginRequest(traceID: trace, provider: .openRouter, request: request("private fixture input")))
+        ledger.recordResponse(traceID: trace, requestID: id, text: "private fixture output", completionReason: "stop", outputCount: 1)
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        XCTAssertNil(record.sourceText)
+        XCTAssertNil(record.requests?.first?.userMessage)
+        XCTAssertNil(record.requests?.first?.responseText)
+        XCTAssertEqual(record.requests?.first?.modelID, "fixture/model")
+        XCTAssertEqual(record.requests?.first?.maxOutputTokens, 512)
+        XCTAssertEqual(record.requests?.first?.timeoutMilliseconds, 15_000)
+        XCTAssertNotNil(record.binaryID)
+        let export = ledger.export(includeText: true)
+        XCTAssertTrue(export.contains("provider=openrouter model=fixture/model"))
+        XCTAssertTrue(export.contains("started_at="))
+        XCTAssertFalse(export.contains("private fixture"))
+    }
+
+    func testConsentedTextRequiresSeparateExportAndQuotesNewlines() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        ledger.startTextCapture()
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: "private fixture source\ntrace=forged")
+        let id = try XCTUnwrap(ledger.beginRequest(traceID: trace, provider: .openRouter, request: request("private fixture input")))
+        ledger.recordResponse(traceID: trace, requestID: id, text: "private fixture output", completionReason: "stop", outputCount: 1)
+        XCTAssertFalse(ledger.export().contains("private fixture"))
+        let detailed = ledger.export(traceID: trace, includeText: true)
+        XCTAssertTrue(detailed.contains("private fixture input"))
+        XCTAssertTrue(detailed.contains("private fixture output"))
+        XCTAssertFalse(detailed.contains("\ntrace=forged"))
+        XCTAssertTrue(ledger.export(traceID: "missing", includeText: true).contains("records=0"))
+    }
+
+    func testConsentCannotRetroactivelyCaptureInFlightOperation() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+        ledger.startTextCapture()
+        let id = try XCTUnwrap(ledger.beginRequest(traceID: trace, provider: .openRouter, request: request("private fixture input")))
+        ledger.recordResponse(traceID: trace, requestID: id, text: "private fixture output", completionReason: "stop", outputCount: 1)
+        XCTAssertFalse(ledger.export(includeText: true).contains("private fixture"))
+    }
+
+    func testRevocationDeletesTextAcrossInstancesAndBlocksLateResponsesAfterReenable() throws {
+        let host = AIOperationDiagnostics(defaults: defaults)
+        let keyboard = AIOperationDiagnostics(defaults: try XCTUnwrap(UserDefaults(suiteName: suiteName)))
+        host.startTextCapture()
+        let trace = keyboard.begin(operation: .fixGrammar, origin: .keyboardAutomaticAnalysis, sourceText: "private fixture source")
+        let id = try XCTUnwrap(keyboard.beginRequest(traceID: trace, provider: .openRouter, request: request()))
+        host.stopTextCaptureAndDelete()
+        host.startTextCapture()
+        keyboard.recordResponse(traceID: trace, requestID: id, text: "private fixture late output", completionReason: "stop", outputCount: 1)
+        XCTAssertFalse(host.export(includeText: true).contains("private fixture"))
+        XCTAssertNil(host.record(traceID: trace)?.captureSessionID)
+    }
+
+    func testCaptureExpiresAndTextRetentionPurgesIndependentlyOfMetadata() throws {
+        var current = Date(timeIntervalSince1970: 10_000)
+        let ledger = AIOperationDiagnostics(defaults: defaults, now: { current })
+        ledger.startTextCapture()
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: "private fixture source")
+        let id = try XCTUnwrap(ledger.beginRequest(traceID: trace, provider: .openRouter, request: request()))
+        current = current.addingTimeInterval(AIOperationDiagnostics.captureDuration + 1)
+        XCTAssertNil(ledger.textCaptureExpiresAt)
+        ledger.recordResponse(traceID: trace, requestID: id, text: "private fixture late output", completionReason: "stop", outputCount: 1)
+        XCTAssertNil(ledger.record(traceID: trace)?.requests?.first?.responseText)
+        let later = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "private fixture new source")
+        XCTAssertNil(ledger.record(traceID: later)?.sourceText)
+        current = current.addingTimeInterval(AIOperationDiagnostics.textRetention)
+        XCTAssertEqual(ledger.records().count, 2)
+        XCTAssertFalse(ledger.export(includeText: true).contains("private fixture"))
+    }
+
+    func testTextAndRequestBoundsAreReportedAndClearRevokesConsent() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        ledger.startTextCapture()
+        let text = String(repeating: "🐱", count: 2_000)
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: text)
+        for _ in 0..<(AIOperationDiagnostics.maximumRequestsPerRecord + 2) {
+            _ = ledger.beginRequest(traceID: trace, provider: .openRouter, request: try request(text))
+        }
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        XCTAssertEqual(record.sourceText?.text.utf8.count, 4_096)
+        XCTAssertEqual(record.sourceText?.truncated, true)
+        XCTAssertEqual(record.requests?.count, AIOperationDiagnostics.maximumRequestsPerRecord)
+        XCTAssertEqual(record.requestsOmitted, 2)
+        ledger.removeAll()
+        XCTAssertNil(ledger.textCaptureExpiresAt)
+        XCTAssertTrue(ledger.records().isEmpty)
+    }
+
+    func testOnlyEightOperationsKeepTextWhileMetadataRemains() throws {
+        var current = Date(timeIntervalSince1970: 10_000)
+        let ledger = AIOperationDiagnostics(defaults: defaults, now: { current })
+        ledger.startTextCapture()
+        for _ in 0..<12 {
+            _ = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "private fixture source")
+            current = current.addingTimeInterval(1)
+        }
+        XCTAssertEqual(ledger.records().count, 12)
+        XCTAssertEqual(ledger.records().filter { $0.sourceText != nil }.count, 8)
+    }
+
+    func testUnsafeModelIDCannotInjectExportLines() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        _ = ledger.beginRequest(traceID: trace, provider: .openRouter, request: try request(model: "fixture\nsecret=value"))
+        XCTAssertNil(ledger.record(traceID: trace)?.requests?.first?.modelID)
+        XCTAssertFalse(ledger.export().contains("secret=value"))
+    }
+
+    func testAdapterCapturesAvailableRejectedResponseAndLinksFailureToRequest() async throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        ledger.startTextCapture()
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: "Synthetic source")
+        let adapter = UniversalAIConnectorAdapter(factory: { _ in DiagnosticRuntime(completion: .maxOutputTokens) }, diagnostics: ledger)
+        let profile = try OpenKeyboardGatewayProfile(provider: .openRouter, baseURL: "https://openrouter.ai/api/v1", apiKey: "fixture-credential-never-export")
+        do {
+            _ = try await AIOperationDiagnosticContext.$traceID.withValue(trace) {
+                try await adapter.respond(to: request(), profile: profile)
+            }
+            XCTFail("Expected truncated response")
+        } catch let error as OpenKeyboardAIConnectorError { XCTAssertEqual(error, .truncatedResponse) }
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        let context = try XCTUnwrap(record.requests?.first)
+        XCTAssertEqual(context.responseText?.text, "Synthetic response")
+        XCTAssertEqual(record.events.last?.requestID, context.id)
+        XCTAssertEqual(record.events.last?.subreason, .outputLimitReached)
+        XCTAssertFalse(ledger.export(includeText: true).contains("fixture-credential-never-export"))
+        XCTAssertFalse(ledger.export(includeText: true).contains("https://openrouter.ai"))
+    }
+
+    func testConnectorSuccessDoesNotInventAnHTTPStatus() async throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+        let adapter = UniversalAIConnectorAdapter(factory: { _ in DiagnosticRuntime(completion: .stop) }, diagnostics: ledger)
+        let profile = try OpenKeyboardGatewayProfile(provider: .openRouter, baseURL: "https://openrouter.ai/api/v1", apiKey: "fixture-credential")
+        _ = try await AIOperationDiagnosticContext.$traceID.withValue(trace) {
+            try await adapter.respond(to: request(), profile: profile)
+        }
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        XCTAssertTrue(record.events.contains { $0.connectorResponseAccepted == true })
+        XCTAssertTrue(record.events.allSatisfy { $0.httpStatusCode == nil && $0.httpStatusCategory == nil })
+    }
+
     func testHTTPStatusCategoriesDiscardExactStatusCode() {
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 204), .success)
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 429), .clientError)
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 503), .serverError)
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 700), .unknown)
+    }
+}
+
+private final class DiagnosticRuntime: UniversalAIConnectorRuntime, @unchecked Sendable {
+    let completion: UniversalAiCompletionReason
+    init(completion: UniversalAiCompletionReason) { self.completion = completion }
+    func close() {}
+    func listModels(providerId: UniversalAiProviderId) async throws -> UniversalAiModelListResult { .unsupported(providerId: providerId) }
+    func respond(to request: UniversalAiRequest) async throws -> UniversalAiResponse {
+        UniversalAiResponse(contractVersion: UniversalAiRequest.currentContractVersion, id: .init(rawValue: "fixture-response"), target: request.target,
+            outputs: [.init(id: .init(rawValue: "fixture-output"), index: 0, kind: .text, text: "Synthetic response")], completionReason: completion)
     }
 }
