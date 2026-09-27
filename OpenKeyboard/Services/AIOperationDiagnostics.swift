@@ -704,6 +704,13 @@ final class AIOperationDiagnosticsViewModel: ObservableObject {
         dismissTextPreview()
         refresh()
     }
+    func setTextCaptureEnabled(_ enabled: Bool) {
+        if enabled { startCapture() } else { stopAndDeleteText() }
+    }
+    func confirmShare() -> Bool {
+        refresh()
+        return !textPreview.isEmpty
+    }
     func startCapture() { diagnostics.startTextCapture(); refresh() }
     func stopAndDeleteText() { diagnostics.stopTextCaptureAndDelete(); dismissTextPreview(); refresh() }
     func clear() { diagnostics.removeAll(); dismissTextPreview(); refresh() }

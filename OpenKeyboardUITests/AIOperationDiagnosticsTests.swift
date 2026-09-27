@@ -449,6 +449,28 @@ final class AIOperationDiagnosticsTests: XCTestCase {
     }
 
     @MainActor
+    func testCaptureSwitchAndShareConfirmationRespectCancellationAndRevocation() {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.setTextCaptureEnabled(true)
+        XCTAssertNotNil(vm.captureExpiresAt)
+        let trace = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "consented fixture")
+        vm.prepareTextPreview()
+        XCTAssertTrue(vm.confirmShare())
+        XCTAssertTrue(vm.textPreview.contains("consented fixture"))
+        vm.dismissTextPreview()
+        XCTAssertFalse(vm.confirmShare(), "Cancel must discard the pending share")
+        vm.prepareTextPreview()
+        vm.setTextCaptureEnabled(false)
+        XCTAssertNil(vm.captureExpiresAt)
+        XCTAssertFalse(vm.confirmShare(), "Disabling capture invalidates pending sensitive sharing")
+        XCTAssertNil(ledger.record(traceID: trace)?.sourceText)
+        vm.prepareTextPreview()
+        XCTAssertTrue(vm.confirmShare())
+        XCTAssertFalse(vm.textPreview.contains("consented fixture"))
+    }
+
+    @MainActor
     func testReportTabsAndCheckboxesRestrictBothExportsToVisibleSelection() {
         let ledger = AIOperationDiagnostics(defaults: defaults)
         ledger.startTextCapture()

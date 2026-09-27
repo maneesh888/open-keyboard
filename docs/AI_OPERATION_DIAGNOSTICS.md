@@ -26,9 +26,9 @@ it must not be presented as the exact upstream cause.
 
 ## Explicit text consent
 
-Text capture is OFF by default. In AI Diagnostics, **Enable Text Capture for 10 Minutes** opens
-an explicit confirmation explaining collection of phrases sent to AI and available responses,
-including automatic keyboard checks and text from other apps. Nothing is uploaded automatically.
+Text capture is OFF by default. The **Capture Text** switch enables a ten-minute capture session.
+Its footer explains local collection of AI phrases and responses, including automatic checks and
+text from other apps. Nothing is uploaded automatically.
 The host app writes a random, expiring consent session shared with the keyboard extension.
 Only operations begun during that session may capture text. Every write rechecks the same active
 session. Enabling capture cannot retroactively capture an in-flight operation; expiry or revocation
@@ -40,20 +40,20 @@ Only the eight newest consented operations retain text, for at most 24 hours. Ex
 on the next ledger read/write. A maximum of eight request contexts per operation bounds storage.
 Raw HTTP bodies, arbitrary provider error messages, and headers are never collected. If the connector
 rejects a wire response before exposing decoded text, that response text remains unavailable.
-User-provided phrases may themselves contain sensitive information; the consent warns of this.
+User-provided phrases may themselves contain sensitive information; the share confirmation warns of this.
 
-**Stop Capture and Delete Captured Text** revokes consent and deletes all retained text while keeping
+Turning **Capture Text** off revokes consent and deletes all retained text while keeping
 metadata. **Delete All Diagnostics** clears all records and consent. Writes and deletion use shared
 file coordination, and content never goes to OSLog or signposts.
 
 ## Review and sharing
 
-**Export Redacted Diagnostics** and the keyboard's **Copy Details** always omit captured text.
-**Review Captured Text Before Sharing** displays a separate sensitive preview. Only the explicit
-**Share With Text** action exports that preview. No analytics collector or automatic upload is added.
-The preview is dismissed when the app enters the background. JSON quoting prevents captured text
-from forging additional diagnostic lines. A missing trace ID exports zero records, never unrelated
-traces. Sharing exports the diagnostics as the actual share item, not a placeholder message.
+**Share Diagnostics** opens an **OK / Cancel** confirmation explaining that selected reports may
+include sensitive captured phrases and AI responses. Cancel exports nothing. OK revalidates the
+selected report snapshot and opens the native iOS share sheet with the actual diagnostic text.
+Changed, deleted, or expired reports invalidate pending sharing. The keyboard's **Copy Details**
+remains metadata-only. No analytics collector or automatic upload is added. JSON quoting prevents
+captured text from forging diagnostic lines. A missing trace ID exports zero records.
 
 Records retain the v1 storage key/schema; additive optional fields decode old exports without migration.
 Old records have unknown provider/model/request context, and absent values must never be guessed.
@@ -64,7 +64,7 @@ Old records have unknown provider/model/request context, and absent values must 
 revocation/deletion, late replies, default redaction, explicit text exports, UTF-8 bounds, retention,
 missing-trace isolation, available rejected responses, and no fabricated HTTP success status.
 Normal simulator verification additionally covers the visible consent, ordinary keyboard operation,
-text preview, metadata-only export, and deletion. These diagnostics do not by themselves establish
+share confirmation, cancellation, the native share sheet, and disabling capture. These diagnostics do not by themselves establish
 that the original correction/recheck failure is fixed.
 
 ## Selecting reports
@@ -74,9 +74,8 @@ segmented tabs filter the list. Errors contains failed operations. Warnings cont
 ignored operations and non-failed operations with a recorded failure, including recovered failures.
 Clean successful or in-progress operations remain available under All.
 
-Checkboxes choose individual reports. Both the
-redacted export and the separate sensitive-text preview include only checked, visible reports;
-an empty selection cannot be shared. Switching tabs selects that tab's reports. After manual
-selection, newly arriving reports are not silently added. Optional capture controls are collapsed
-below the list. A sensitive preview is invalidated if its backing reports change or their text is
-deleted or expires, and the user must review again before sharing.
+Checkboxes choose individual reports. Sharing includes only checked, visible reports; an empty
+selection cannot be shared. Switching tabs selects that tab's reports. After manual selection,
+newly arriving reports are not silently added. A single Capture Text switch replaces the expanded
+capture controls. A pending share is invalidated if its backing reports change or their text is
+deleted or expires, and the user must confirm again before sharing.

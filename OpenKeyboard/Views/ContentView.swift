@@ -156,8 +156,8 @@ struct ContentView: View {
 private struct AIOperationDiagnosticsView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var viewModel = AIOperationDiagnosticsViewModel()
-    @State private var showingCaptureConsent = false
-    @State private var showingTextPreview = false
+    @State private var showingShareConfirmation = false
+    @State private var showingShareSheet = false
     @Environment(\.scenePhase) private var scenePhase
 
     private var records: [AIOperationDiagnosticRecord] { viewModel.visibleRecords }
@@ -165,12 +165,15 @@ private struct AIOperationDiagnosticsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Privacy-safe export") {
-                    Text("Includes provider, model, request settings, failure details, timing, and app/OS versions. Credentials from Settings and gateway addresses are never collected. Phrase and response text are excluded from this export.")
+                Section("Diagnostics export") {
+                    Text("Includes provider, model, request settings, failure details, timing, and app/OS versions. Credentials from Settings and gateway addresses are never collected. Captured phrases and responses are included only after you confirm sharing.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                    ShareLink(item: viewModel.metadataExport, subject: Text("OpenKeyboard AI diagnostics")) {
-                        Label("Export Redacted Diagnostics", systemImage: "square.and.arrow.up")
+                    Button {
+                        viewModel.prepareTextPreview()
+                        showingShareConfirmation = !viewModel.textPreview.isEmpty
+                    } label: {
+                        Label("Share Diagnostics", systemImage: "square.and.arrow.up")
                     }
                     .accessibilityIdentifier("ai_diagnostics_export")
                     .disabled(viewModel.exportTraceIDs.isEmpty)
@@ -233,29 +236,13 @@ private struct AIOperationDiagnosticsView: View {
                     }
                 }
                 Section {
-                    DisclosureGroup("Capture text with permission") {
-                        Text("Off by default. A capture session saves phrases sent to AI and available responses on this device for troubleshooting, including automatic keyboard checks. Nothing is uploaded automatically.")
-                            .font(.footnote)
-                        if let expiresAt = viewModel.captureExpiresAt {
-                            Text("Capture enabled until \(expiresAt.formatted(date: .omitted, time: .shortened))")
-                                .foregroundColor(OpenKeyboardTheme.Semantic.warning)
-                                .accessibilityIdentifier("ai_diagnostics_capture_active")
-                        } else {
-                            Button("Enable Text Capture for 10 Minutes") { showingCaptureConsent = true }
-                                .accessibilityIdentifier("ai_diagnostics_enable_capture")
-                        }
-                        Button("Review Captured Text Before Sharing") {
-                            viewModel.prepareTextPreview()
-                            showingTextPreview = true
-                        }
-                        .accessibilityIdentifier("ai_diagnostics_review_text")
-                        .disabled(viewModel.exportTraceIDs.isEmpty)
-                        Button("Stop Capture and Delete Captured Text", role: .destructive) { viewModel.stopAndDeleteText() }
-                            .accessibilityIdentifier("ai_diagnostics_delete_text")
-                        Text("Keeps text from at most 8 operations for 24 hours, with up to 4 KB per phrase or response. Longer content is marked truncated. Responses rejected inside the connector may be unavailable.")
-                            .font(.caption)
-                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
-                    }
+                    Toggle("Capture Text", isOn: Binding(
+                        get: { viewModel.captureExpiresAt != nil },
+                        set: { viewModel.setTextCaptureEnabled($0) }
+                    ))
+                    .accessibilityIdentifier("ai_diagnostics_capture_toggle")
+                } footer: {
+                    Text("Records AI phrases and available responses for 10 minutes, including automatic checks and text from other apps. Stored on this device for up to 24 hours. Turning this off deletes captured text.")
                 }
                 Section {
                     Button("Delete All Diagnostics", role: .destructive) { viewModel.clear() }
@@ -276,36 +263,22 @@ private struct AIOperationDiagnosticsView: View {
             .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in viewModel.refresh() }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active { viewModel.refresh() }
-                if phase == .background { showingTextPreview = false; viewModel.dismissTextPreview() }
-            }
-            .alert("Allow temporary diagnostic text capture?", isPresented: $showingCaptureConsent) {
-                Button("Cancel", role: .cancel) {}
-                Button("Allow for 10 Minutes") { viewModel.startCapture() }
-            } message: {
-                Text("For the next 10 minutes, Open Keyboard will store phrases sent to AI and available responses, including automatic checks and text from other apps. This may include sensitive information. Text stays on this device for up to 24 hours and is shared only when you choose to share it. You can stop and delete it at any time.")
-            }
-            .sheet(isPresented: $showingTextPreview, onDismiss: { viewModel.dismissTextPreview() }) {
-                NavigationStack {
-                    ScrollView {
-                        Text(viewModel.textPreview.isEmpty ? "Reports changed. Close this preview and review the selected reports again." : viewModel.textPreview)
-                            .font(.caption.monospaced())
-                            .textSelection(.enabled)
-                            .padding()
-                    }
-                    .navigationTitle("Review Sensitive Diagnostics")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showingTextPreview = false }
-                        }
-                        ToolbarItem(placement: .primaryAction) {
-                            ShareLink(item: viewModel.textPreview, subject: Text("OpenKeyboard diagnostics with captured text")) {
-                                Text("Share With Text")
-                            }
-                            .accessibilityIdentifier("ai_diagnostics_share_text")
-                            .disabled(viewModel.textPreview.isEmpty)
-                        }
-                    }
+                if phase == .background && !showingShareSheet {
+                    showingShareConfirmation = false
+                    viewModel.dismissTextPreview()
                 }
+            }
+            .alert("Share diagnostics?", isPresented: $showingShareConfirmation) {
+                Button("Cancel", role: .cancel) { viewModel.dismissTextPreview() }
+                Button("OK") { showingShareSheet = viewModel.confirmShare() }
+            } message: {
+                Text("The selected reports may include captured phrases and AI responses, which can contain sensitive information. Continue to choose where to share them?")
+            }
+            .sheet(isPresented: $showingShareSheet, onDismiss: { viewModel.dismissTextPreview() }) {
+                DiagnosticShareSheet(text: viewModel.textPreview)
+            }
+            .onChange(of: viewModel.textPreview) { _, text in
+                if text.isEmpty { showingShareConfirmation = false; showingShareSheet = false }
             }
         }
     }
@@ -320,6 +293,16 @@ private struct AIOperationDiagnosticsView: View {
             return OpenKeyboardTheme.Semantic.warning
         }
     }
+}
+
+private struct DiagnosticShareSheet: UIViewControllerRepresentable {
+    let text: String
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 struct StatusCard: View {
