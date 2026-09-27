@@ -69,7 +69,7 @@ that the original correction/recheck failure is fixed.
 
 ## Selecting reports
 
-The original export and recent-operations list remain the main screen. All, Errors, and Warnings
+Capture and sharing controls are at the top, followed by the recent-operations list. All, Errors, and Warnings
 segmented tabs filter the list. Errors contains failed operations. Warnings contains cancelled or
 ignored operations and non-failed operations with a recorded failure, including recovered failures.
 Clean successful or in-progress operations remain available under All.

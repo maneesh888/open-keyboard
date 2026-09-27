@@ -179,6 +179,19 @@ private struct AIOperationDiagnosticsView: View {
                     .disabled(viewModel.exportTraceIDs.isEmpty)
                 }
 
+                Section {
+                    Toggle("Capture Text", isOn: Binding(
+                        get: { viewModel.captureExpiresAt != nil },
+                        set: { viewModel.setTextCaptureEnabled($0) }
+                    ))
+                    .accessibilityIdentifier("ai_diagnostics_capture_toggle")
+                } footer: {
+                    Text("Records AI phrases and available responses for 10 minutes, including automatic checks and text from other apps. Stored on this device for up to 24 hours. Turning this off deletes captured text.")
+                }
+                Section {
+                    Button("Delete All Diagnostics", role: .destructive) { viewModel.clear() }
+                        .accessibilityIdentifier("ai_diagnostics_delete_all")
+                }
                 Section("Recent operations") {
                     Picker("Reports", selection: Binding(get: { viewModel.filter }, set: { viewModel.selectFilter($0) })) {
                         ForEach(AIOperationDiagnosticFilter.allCases, id: \.self) { filter in
@@ -235,19 +248,7 @@ private struct AIOperationDiagnosticsView: View {
                         .accessibilityIdentifier("ai_diagnostics_trace")
                     }
                 }
-                Section {
-                    Toggle("Capture Text", isOn: Binding(
-                        get: { viewModel.captureExpiresAt != nil },
-                        set: { viewModel.setTextCaptureEnabled($0) }
-                    ))
-                    .accessibilityIdentifier("ai_diagnostics_capture_toggle")
-                } footer: {
-                    Text("Records AI phrases and available responses for 10 minutes, including automatic checks and text from other apps. Stored on this device for up to 24 hours. Turning this off deletes captured text.")
-                }
-                Section {
-                    Button("Delete All Diagnostics", role: .destructive) { viewModel.clear() }
-                        .accessibilityIdentifier("ai_diagnostics_delete_all")
-                }
+
             }
             .navigationTitle("AI Diagnostics")
             .navigationBarTitleDisplayMode(.inline)
