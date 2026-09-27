@@ -51,6 +51,7 @@ final class OnboardingNavigationUITests: BaseOpenKeyboardUITestCase {
 
         XCTAssertTrue(app.staticTexts["Open Keyboard"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["keyboard_full_access_note"].waitForExistence(timeout: 5))
     }
 }
 
@@ -66,6 +67,7 @@ final class HomeScreenKeyboardAccessUITests: XCTestCase {
 
         XCTAssertTrue(app.staticTexts["Open Keyboard"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["open_keyboard_settings_button"].exists)
+        XCTAssertFalse(app.staticTexts["keyboard_full_access_note"].exists)
     }
 
     func testHomeShowsKeyboardSettingsBeforeKeyboardReportsFullAccess() {
@@ -78,5 +80,6 @@ final class HomeScreenKeyboardAccessUITests: XCTestCase {
         app.launch()
 
         XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["keyboard_full_access_note"].waitForExistence(timeout: 5))
     }
 }

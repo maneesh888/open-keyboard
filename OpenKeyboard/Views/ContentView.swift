@@ -40,10 +40,45 @@ struct ContentView: View {
 
                         VStack(spacing: 12) {
                             if !keyboardHasFullAccess {
-                                PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
+                                Button {
                                     settingsViewModel.openKeyboardSettings()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "keyboard")
+                                            .font(.title3.weight(.semibold))
+                                            .foregroundColor(OpenKeyboardTheme.Brand.cyan)
+                                            .frame(width: 36, height: 36)
+                                            .background(OpenKeyboardTheme.Brand.cyan.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Open Keyboard Settings")
+                                                .font(.headline)
+                                            Text("Enable Full Access for AI suggestions and text improvements")
+                                                .font(.caption)
+                                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .accessibilityIdentifier("keyboard_full_access_note")
+                                        }
+
+                                        Spacer(minLength: 8)
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    }
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(OpenKeyboardTheme.Semantic.warning.opacity(0.42), lineWidth: 1.2)
+                                    )
                                 }
+                                .buttonStyle(.plain)
                                 .accessibilityIdentifier("open_keyboard_settings_button")
+                                .accessibilityHint("Opens Keyboard Settings to enable Full Access for AI features")
                             }
 
                             if settingsViewModel.trustedModelLoaded {
