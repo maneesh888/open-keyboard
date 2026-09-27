@@ -201,7 +201,8 @@ Use exactly these classes in plans, PR ledgers, and reports:
    includes XCUITest routes that install and activate the real keyboard extension.
 2. **Normal simulator runtime proof:** a normally installed and launched app with no `--uitesting`,
    debug-state injection, seeded result panels, component/test hosts, or test-host shortcuts. Use
-   the actual extension through an ordinary host-app text field and visible production UI. Capture
+   the affected normal app surface; extension requirements use the actual extension through an
+   ordinary host-app text field and visible production UI. Capture
    screenshots directly from Simulator/Xcode outside XCTest.
 3. **Physical-device proof:** for AI verification, the exact signed build is installed on the
    configured device, exercised through the normal keyboard-extension lifecycle, and verified by
@@ -213,12 +214,49 @@ proof-sensitive push, PR readiness, release readiness, or a claim that the user-
 works. Test-seeded states are diagnostics and do not prove a production request produced that
 state. Simulator evidence never satisfies a physical-device requirement.
 
+### Verification applicability
+
+Choose proof from the changed behavior and the user's acceptance criteria before running gates.
+A filename is a conservative signal, not proof that the change affects every feature in that file.
+Record why each evidence class is required or **not applicable**. Not applicable is not failed,
+missing, waived, or verified evidence; do not invent an unverified requirement for an unrelated test.
+Keep the real acceptance criteria intact: an after-typing observation does not prove an immediate
+return-from-Settings requirement, and improved diagnostics do not prove the underlying AI bug fixed.
+
+- Policy, documentation, and CI-classifier changes need deterministic policy/negative tests and
+  review, not model calls or Simulator screenshots when shipping behavior is unchanged.
+- Local UI, layout, Full Access hints, report filtering, selection, consent, retention, and export
+  need relevant regression and normal UI evidence. Require the actual extension only when the
+  acceptance criterion involves its lifecycle or cross-process handoff. Do not add a live model
+  comparison unless requests, responses, parsing, provider/model selection, or capability behavior
+  are affected. Privacy assertions still need deletion, expiry, redaction, and late-response tests.
+- Gateway/model behavior needs live evidence for the affected behavior. A differential comparison
+  is required for capability boundaries, model-role behavior, or a specifically requested matrix;
+  sharing a file with those behaviors is not enough. Canonical contract and dependency changes
+  retain their differential requirement.
+
+When the conservative classifier over-selects, create a diff-bound assessment using
+`docs/VERIFICATION_APPLICABILITY.md`. The classifier validates complete path/blob/mode bindings;
+CI requires its exact blob in a named requirement row, and independent review must inspect the
+rationale, affected dependencies, and alternative proof. A manifest is a claim to review, not
+self-approval. Reject an unjustified reduction. Continue automatically when relevant proof and
+review pass; do not ask the owner to approve irrelevant tests. If a trusted older base still
+requires a gate, land the policy correction first without bypassing protection.
+
+Accept alternative routes when they prove the same observable requirement at the required evidence
+class. Record the route and its limits. Do not discard valid evidence solely because a preferred
+tool or test name differs; do not relabel mocks as live, test-seeded UI as normal runtime, or a
+partial sequence as complete. Preserve valid evidence and investigate only the remaining gap.
+
 ### When runtime proof is required
 
-Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun, live gateway behavior,
-or result presentation require normal simulator runtime proof before push. Normal proof must:
+Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun, or result presentation
+require normal simulator runtime proof of the affected surface before push. For nonvisual gateway
+changes, live transport/schema/semantic evidence may satisfy the acceptance criterion; require a
+normal UI walkthrough only when that criterion includes a user-visible workflow. Normal proof must:
 
-- use the actual app and extension through an ordinary host-app text field;
+- use the normally launched app on the affected surface; for extension requirements, use the
+  actual extension through an ordinary host-app text field;
 - invoke the action through visible production UI with no test-only state or interaction;
 - use the configured live gateway when semantic behavior is being verified;
 - capture direct Simulator/Xcode screenshots, never `XCTAttachment` artifacts;

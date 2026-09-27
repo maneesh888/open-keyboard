@@ -42,6 +42,10 @@ jobs:
             git show "$PR_BASE_SHA:scripts/$validator_name" > "$validator_path"
             chmod +x "$validator_path"
           done
+          # Older bases retain their existing classifier until this policy lands.
+          if git cat-file -e "$PR_BASE_SHA:scripts/verification-assessment.py" 2>/dev/null; then
+            git show "$PR_BASE_SHA:scripts/verification-assessment.py" > "$validator_root/verification-assessment.py"
+          fi
           echo "root=$validator_root" >> "$GITHUB_OUTPUT"
           if ! grep -Fxq 'readonly OPEN_KEYBOARD_REDACTED_LIVE_EVIDENCE_SCHEMA=1' "$validator_root/validate-pr-live-evidence.sh"; then
             echo "Trusted base lacks the private assertion schema; update the base before verification." >&2
@@ -108,6 +112,7 @@ jobs:
           EVENT_BODY_FILE: ${{ runner.temp }}/event-pull-request-body.md
           CURRENT_BODY_FILE: ${{ runner.temp }}/current-pull-request-body.md
           VALIDATOR_ROOT: ${{ steps.validators.outputs.root }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           for snapshot_name in event current; do
             case "$snapshot_name" in
@@ -123,6 +128,10 @@ jobs:
               exit 1
             fi
 
+            if [[ -f "$VALIDATOR_ROOT/verification-assessment.py" ]]; then
+              python3 "$VALIDATOR_ROOT/verification-assessment.py" \
+                "$GITHUB_WORKSPACE" "$PR_BASE_SHA" "$EVENT_HEAD_SHA" "$LIVE_IMPACT" "$body_file"
+            fi
             echo "Validating $snapshot_name live-evidence snapshot."
             HEAD_SHA="$EVENT_HEAD_SHA" \
               LIVE_IMPACT="$LIVE_IMPACT" \

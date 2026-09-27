@@ -51,9 +51,6 @@ assert_impact_path() {
 }
 
 gateway_sensitive_paths=(
-  .github/pull_request_template.md
-  .githooks/pre-push
-  scripts/check.sh
   scripts/ios/enable-openkeyboard-simulator-keyboard.sh
   OpenKeyboard/Info.plist
   OpenKeyboard/Views/PlaygroundView.swift
@@ -76,14 +73,10 @@ done
 
 
 differential_workflow_paths=(
-  .github/workflows/live.yml
   .gitmodules
   Vendor/semantic-prompt-contract
   Vendor/universal-ai-connector
   scripts/check-live.sh
-  scripts/live-impact.sh
-  scripts/live-policy-bootstrap.sh
-  scripts/validate-pr-live-evidence.sh
   scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
   scripts/ios/seed-simulator-gateway-config.sh
@@ -156,5 +149,9 @@ if OPEN_KEYBOARD_REPOSITORY_ROOT="$FIXTURE" "$CLASSIFIER" invalid "$gateway_sha"
   echo "Live-impact classification accepted an invalid revision." >&2
   exit 1
 fi
+
+for policy_path in .github/pull_request_template.md .github/workflows/live.yml .githooks/pre-push scripts/check.sh scripts/live-impact.sh scripts/verification-assessment.py scripts/validate-pr-live-evidence.sh; do
+  assert_impact_path "$policy_path" none
+done
 
 echo "Live-impact regression tests passed."
