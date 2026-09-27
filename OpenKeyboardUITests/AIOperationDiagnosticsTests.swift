@@ -90,6 +90,32 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertEqual(record.failure, .staleResultSuppressed)
     }
 
+    func testSeparateLedgerInstancesCoordinateConcurrentSharedDefaultsWrites() throws {
+        let lockURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AIOperationDiagnosticsTests.\(UUID().uuidString).lock")
+        let hostDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let keyboardDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let hostLedger = AIOperationDiagnostics(defaults: hostDefaults, storageLockURL: lockURL)
+        let keyboardLedger = AIOperationDiagnostics(defaults: keyboardDefaults, storageLockURL: lockURL)
+        let completed = expectation(description: "concurrent App Group ledger writes")
+        completed.expectedFulfillmentCount = 24
+        let queue = DispatchQueue(label: "AIOperationDiagnosticsTests.concurrent", attributes: .concurrent)
+
+        for index in 0..<24 {
+            queue.async {
+                let ledger = index.isMultiple(of: 2) ? hostLedger : keyboardLedger
+                _ = ledger.begin(
+                    operation: .fixGrammar,
+                    origin: index.isMultiple(of: 2) ? .hostAppGatewayCheck : .keyboardManualAction
+                )
+                completed.fulfill()
+            }
+        }
+
+        wait(for: [completed], timeout: 10)
+        XCTAssertEqual(hostLedger.records().count, 24)
+    }
+
     func testMalformedConnectorFailureRemainsTheFinalSupportFacingCategory() throws {
         let ledger = AIOperationDiagnostics(defaults: defaults)
         let traceID = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)

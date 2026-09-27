@@ -129,6 +129,10 @@ final class AIOperationDiagnostics: @unchecked Sendable {
     static let maximumEventsPerRecord = 64
 
     private static let storageKey = "aiOperationDiagnostics.v1"
+    // Both the host app and keyboard extension update the App Group defaults. Coordinate every
+    // read-modify-write operation through this shared file URL so independent processes cannot
+    // overwrite each other's diagnostic events.
+    private static let storageLockFileName = "ai-operation-diagnostics.lock"
     private static let logger = Logger(
         subsystem: "com.maneesh.openkeyboard",
         category: "ai-operation-diagnostics"
@@ -137,15 +141,18 @@ final class AIOperationDiagnostics: @unchecked Sendable {
 
     private let defaults: UserDefaults?
     private let now: () -> Date
+    private let storageLockURL: URL?
     private let lock = NSLock()
     private var activeSignposts: [String: OSSignpostIntervalState] = [:]
 
     init(
         defaults: UserDefaults? = AppConfig.sharedDefaults(),
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        storageLockURL: URL? = nil
     ) {
         self.defaults = defaults
         self.now = now
+        self.storageLockURL = storageLockURL ?? Self.appGroupStorageLockURL()
     }
 
     @discardableResult
@@ -170,13 +177,19 @@ final class AIOperationDiagnostics: @unchecked Sendable {
             failure: nil
         )
 
-        lock.lock()
-        var records = prunedRecords(from: readRecords(), at: timestamp)
-        records.append(record)
-        write(records)
-        let signpostID = Self.signposter.makeSignpostID()
-        activeSignposts[traceID] = Self.signposter.beginInterval("AI operation", id: signpostID)
-        lock.unlock()
+        let didPersist = withExclusiveStorageAccess {
+            var records = prunedRecords(from: readRecords(), at: timestamp)
+            records.append(record)
+            write(records)
+            let signpostID = Self.signposter.makeSignpostID()
+            activeSignposts[traceID] = Self.signposter.beginInterval("AI operation", id: signpostID)
+            return true
+        } ?? false
+
+        guard didPersist else {
+            Self.logger.error("AI diagnostic ledger could not start an operation")
+            return traceID
+        }
 
         Self.logger.info("AI diagnostic started trace=\(traceID, privacy: .public) operation=\(operation.rawValue, privacy: .public)")
         return traceID
@@ -193,36 +206,38 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         failure: AIOperationDiagnosticFailure? = nil
     ) {
         let timestamp = now()
-        lock.lock()
-        var records = prunedRecords(from: readRecords(), at: timestamp)
-        guard let index = records.firstIndex(where: { $0.traceID == traceID }),
-              records[index].outcome == nil else {
+        let didRecord = withExclusiveStorageAccess {
+            var records = prunedRecords(from: readRecords(), at: timestamp)
+            guard let index = records.firstIndex(where: { $0.traceID == traceID }),
+                  records[index].outcome == nil else {
+                write(records)
+                return false
+            }
+
+            let elapsedMilliseconds = max(
+                0,
+                Int(timestamp.timeIntervalSince(records[index].startedAt) * 1_000)
+            )
+            records[index].events.append(AIOperationDiagnosticEvent(
+                id: UUID(),
+                stage: stage,
+                attempt: max(1, attempt),
+                elapsedMilliseconds: elapsedMilliseconds,
+                durationMilliseconds: durationMilliseconds.map { max(0, $0) },
+                httpStatusCategory: httpStatusCategory,
+                requestBytes: requestBytes.map { max(0, $0) },
+                responseBytes: responseBytes.map { max(0, $0) },
+                failure: failure
+            ))
+            records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
+            records[index].updatedAt = timestamp
             write(records)
-            lock.unlock()
-            return
+            return true
+        } ?? false
+
+        if didRecord {
+            Self.logger.debug("AI diagnostic trace=\(traceID, privacy: .public) stage=\(stage.rawValue, privacy: .public)")
         }
-
-        let elapsedMilliseconds = max(
-            0,
-            Int(timestamp.timeIntervalSince(records[index].startedAt) * 1_000)
-        )
-        records[index].events.append(AIOperationDiagnosticEvent(
-            id: UUID(),
-            stage: stage,
-            attempt: max(1, attempt),
-            elapsedMilliseconds: elapsedMilliseconds,
-            durationMilliseconds: durationMilliseconds.map { max(0, $0) },
-            httpStatusCategory: httpStatusCategory,
-            requestBytes: requestBytes.map { max(0, $0) },
-            responseBytes: responseBytes.map { max(0, $0) },
-            failure: failure
-        ))
-        records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
-        records[index].updatedAt = timestamp
-        write(records)
-        lock.unlock()
-
-        Self.logger.debug("AI diagnostic trace=\(traceID, privacy: .public) stage=\(stage.rawValue, privacy: .public)")
     }
 
     func complete(
@@ -233,44 +248,45 @@ final class AIOperationDiagnostics: @unchecked Sendable {
     ) {
         let timestamp = now()
         var signpostState: OSSignpostIntervalState?
+        let didComplete = withExclusiveStorageAccess {
+            var records = prunedRecords(from: readRecords(), at: timestamp)
+            guard let index = records.firstIndex(where: { $0.traceID == traceID }),
+                  records[index].outcome == nil else {
+                write(records)
+                return false
+            }
 
-        lock.lock()
-        var records = prunedRecords(from: readRecords(), at: timestamp)
-        guard let index = records.firstIndex(where: { $0.traceID == traceID }),
-              records[index].outcome == nil else {
+            let resolvedFailure = Self.resolvedTerminalFailure(
+                requested: failure,
+                outcome: outcome,
+                events: records[index].events
+            )
+
+            let elapsedMilliseconds = max(
+                0,
+                Int(timestamp.timeIntervalSince(records[index].startedAt) * 1_000)
+            )
+            records[index].events.append(AIOperationDiagnosticEvent(
+                id: UUID(),
+                stage: .finalOutcome,
+                attempt: max(1, attempt),
+                elapsedMilliseconds: elapsedMilliseconds,
+                durationMilliseconds: nil,
+                httpStatusCategory: nil,
+                requestBytes: nil,
+                responseBytes: nil,
+                failure: resolvedFailure
+            ))
+            records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
+            records[index].updatedAt = timestamp
+            records[index].outcome = outcome
+            records[index].failure = resolvedFailure
             write(records)
-            lock.unlock()
-            return
-        }
+            signpostState = activeSignposts.removeValue(forKey: traceID)
+            return true
+        } ?? false
 
-        let resolvedFailure = Self.resolvedTerminalFailure(
-            requested: failure,
-            outcome: outcome,
-            events: records[index].events
-        )
-
-        let elapsedMilliseconds = max(
-            0,
-            Int(timestamp.timeIntervalSince(records[index].startedAt) * 1_000)
-        )
-        records[index].events.append(AIOperationDiagnosticEvent(
-            id: UUID(),
-            stage: .finalOutcome,
-            attempt: max(1, attempt),
-            elapsedMilliseconds: elapsedMilliseconds,
-            durationMilliseconds: nil,
-            httpStatusCategory: nil,
-            requestBytes: nil,
-            responseBytes: nil,
-            failure: resolvedFailure
-        ))
-        records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
-        records[index].updatedAt = timestamp
-        records[index].outcome = outcome
-        records[index].failure = resolvedFailure
-        write(records)
-        signpostState = activeSignposts.removeValue(forKey: traceID)
-        lock.unlock()
+        guard didComplete else { return }
 
         if let signpostState {
             Self.signposter.endInterval("AI operation", signpostState)
@@ -280,11 +296,11 @@ final class AIOperationDiagnostics: @unchecked Sendable {
 
     func records() -> [AIOperationDiagnosticRecord] {
         let timestamp = now()
-        lock.lock()
-        let records = prunedRecords(from: readRecords(), at: timestamp)
-        write(records)
-        lock.unlock()
-        return records.sorted { $0.updatedAt > $1.updatedAt }
+        return withExclusiveStorageAccess {
+            let records = prunedRecords(from: readRecords(), at: timestamp)
+            write(records)
+            return records.sorted { $0.updatedAt > $1.updatedAt }
+        } ?? []
     }
 
     func record(traceID: String) -> AIOperationDiagnosticRecord? {
@@ -327,14 +343,15 @@ final class AIOperationDiagnostics: @unchecked Sendable {
     }
 
     func removeAll() {
-        lock.lock()
-        defaults?.removeObject(forKey: Self.storageKey)
-        defaults?.synchronize()
-        activeSignposts.removeAll()
-        lock.unlock()
+        _ = withExclusiveStorageAccess {
+            defaults?.removeObject(forKey: Self.storageKey)
+            defaults?.synchronize()
+            activeSignposts.removeAll()
+        }
     }
 
     private func readRecords() -> [AIOperationDiagnosticRecord] {
+        defaults?.synchronize()
         guard let data = defaults?.data(forKey: Self.storageKey),
               let records = try? JSONDecoder().decode([AIOperationDiagnosticRecord].self, from: data) else {
             return []
@@ -360,6 +377,39 @@ final class AIOperationDiagnostics: @unchecked Sendable {
               let data = try? JSONEncoder().encode(records) else { return }
         defaults.set(data, forKey: Self.storageKey)
         defaults.synchronize()
+    }
+
+    private static func appGroupStorageLockURL() -> URL? {
+        FileManager.default
+            .containerURL(forSecurityApplicationGroupIdentifier: AppConfig.appGroupIdentifier)?
+            .appendingPathComponent(storageLockFileName, isDirectory: false)
+    }
+
+    /// The file itself is only a coordination token; the diagnostic ledger remains in the existing
+    /// App Group defaults key. A writer coordination block is synchronous and serializes writers
+    /// in both the host app and keyboard-extension processes before each read-modify-write cycle.
+    private func withExclusiveStorageAccess<Result>(_ operation: () -> Result) -> Result? {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let storageLockURL else {
+            return operation()
+        }
+
+        var result: Result?
+        var coordinationError: NSError?
+        NSFileCoordinator().coordinate(
+            writingItemAt: storageLockURL,
+            options: [],
+            error: &coordinationError
+        ) { _ in
+            result = operation()
+        }
+
+        if let coordinationError {
+            Self.logger.error("AI diagnostic ledger coordination failed code=\(coordinationError.code, privacy: .public)")
+        }
+        return result
     }
 
     /// A view-model terminal error may be deliberately broad after a lower layer has already
