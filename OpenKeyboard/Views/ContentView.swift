@@ -9,6 +9,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage(AppConfig.keyboardFullAccessKey, store: UserDefaults(suiteName: AppConfig.appGroupIdentifier))
     private var keyboardHasFullAccess = false
     @State private var showingSettings = false
@@ -53,7 +54,7 @@ struct ContentView: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Open Keyboard Settings")
                                                 .font(.headline)
-                                            Text("Enable Full Access for AI suggestions and text improvements")
+                                            Text("Enable Full Access, then open the keyboard once to finish AI setup")
                                                 .font(.caption)
                                                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                                                 .fixedSize(horizontal: false, vertical: true)
@@ -155,6 +156,19 @@ struct ContentView: View {
         .task {
             await settingsViewModel.validateSavedGatewayOnceOnLaunch()
         }
+        .onAppear {
+            refreshKeyboardFullAccess()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            refreshKeyboardFullAccess()
+        }
+    }
+
+    private func refreshKeyboardFullAccess() {
+        guard let defaults = AppConfig.sharedDefaults() else { return }
+        defaults.synchronize()
+        keyboardHasFullAccess = AppConfig.keyboardHasFullAccess(from: defaults)
     }
 }
 
