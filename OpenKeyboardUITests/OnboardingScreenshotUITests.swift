@@ -30,6 +30,30 @@ final class OnboardingScreenshotUITests: BaseOpenKeyboardUITestCase {
     }
 }
 
+final class OnboardingNavigationUITests: BaseOpenKeyboardUITestCase {
+    override func launchArguments() -> [String] {
+        ["--uitesting", "--reset-onboarding", "--clear-keyboard-full-access"]
+    }
+
+    func testOnboardingSwipesToHomeAndKeepsSettingsShortcutBeforeFullAccess() throws {
+        XCTAssertTrue(app.staticTexts["Welcome to\nOpen Keyboard"].waitForExistence(timeout: 5))
+
+        app.swipeLeft()
+        XCTAssertTrue(app.staticTexts["Connect your gateway"].waitForExistence(timeout: 5))
+
+        app.swipeLeft()
+        XCTAssertTrue(app.staticTexts["Enable the keyboard"].waitForExistence(timeout: 5))
+
+        app.swipeLeft()
+        let getStarted = app.buttons["Get Started"]
+        XCTAssertTrue(getStarted.waitForExistence(timeout: 5))
+        getStarted.tap()
+
+        XCTAssertTrue(app.staticTexts["Open Keyboard"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
+    }
+}
+
 final class HomeScreenKeyboardAccessUITests: XCTestCase {
     func testHomeHidesKeyboardSettingsAfterKeyboardReportsFullAccess() {
         let app = XCUIApplication()
