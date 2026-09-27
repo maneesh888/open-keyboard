@@ -69,6 +69,67 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(ledger.records().isEmpty)
     }
 
+    func testLedgerReadsV1RecordsWrittenBeforeOptionalSubreason() throws {
+        struct LegacyEvent: Codable {
+            let id: UUID
+            let stage: AIOperationDiagnosticStage
+            let attempt: Int
+            let elapsedMilliseconds: Int
+            let durationMilliseconds: Int?
+            let httpStatusCategory: AIOperationDiagnosticHTTPStatusCategory?
+            let requestBytes: Int?
+            let responseBytes: Int?
+            let failure: AIOperationDiagnosticFailure?
+        }
+        struct LegacyRecord: Codable {
+            let schemaVersion: Int
+            let traceID: String
+            let operation: AIOperationDiagnosticOperation
+            let origin: AIOperationDiagnosticOrigin
+            let startedAt: Date
+            let updatedAt: Date
+            let appVersion: String
+            let buildVersion: String
+            let operatingSystemVersion: String
+            let events: [LegacyEvent]
+            let outcome: AIOperationDiagnosticOutcome?
+            let failure: AIOperationDiagnosticFailure?
+        }
+
+        let timestamp = Date()
+        let legacy = LegacyRecord(
+            schemaVersion: 1,
+            traceID: "legacy-trace",
+            operation: .rewrite,
+            origin: .keyboardManualAction,
+            startedAt: timestamp,
+            updatedAt: timestamp,
+            appVersion: "1.0",
+            buildVersion: "1",
+            operatingSystemVersion: "iOS",
+            events: [
+                LegacyEvent(
+                    id: UUID(),
+                    stage: .decoding,
+                    attempt: 1,
+                    elapsedMilliseconds: 0,
+                    durationMilliseconds: nil,
+                    httpStatusCategory: nil,
+                    requestBytes: nil,
+                    responseBytes: nil,
+                    failure: .malformedResponse
+                ),
+            ],
+            outcome: .failed,
+            failure: .malformedResponse
+        )
+        defaults.set(try JSONEncoder().encode([legacy]), forKey: "aiOperationDiagnostics.v1")
+
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let decoded = try XCTUnwrap(ledger.record(traceID: "legacy-trace"))
+        XCTAssertNil(decoded.events.first?.subreason)
+    }
+
     func testCompletedTraceCannotBeOverwrittenByLateResult() throws {
         let ledger = AIOperationDiagnostics(defaults: defaults)
         let traceID = ledger.begin(operation: .translate, origin: .keyboardActionPanel)
@@ -142,6 +203,30 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(exported.contains("failure=malformed_response"))
         XCTAssertFalse(exported.contains("validation_rejected"))
         XCTAssertFalse(exported.contains("private response fixture"))
+    }
+
+    func testExportIncludesClosedSubreasonWithoutPrivateValues() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let traceID = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+
+        ledger.record(
+            traceID: traceID,
+            stage: .decoding,
+            failure: .malformedResponse,
+            subreason: .malformedProviderStream
+        )
+        ledger.complete(traceID: traceID, outcome: .failed)
+
+        let record = try XCTUnwrap(ledger.record(traceID: traceID))
+        XCTAssertEqual(record.events.first?.subreason, .malformedProviderStream)
+
+        let exported = ledger.export(traceID: traceID)
+        XCTAssertTrue(exported.contains("subreason=malformed_provider_stream"))
+        XCTAssertFalse(exported.contains("raw provider message"))
+        XCTAssertFalse(exported.contains("generated response text"))
+        XCTAssertFalse(exported.contains("https://private-gateway.example"))
+        XCTAssertFalse(exported.contains("private-model-id"))
+        XCTAssertFalse(exported.contains("Authorization: Bearer private-token"))
     }
 
     func testAppOutputValidationRejectionRemainsTheFinalSupportFacingCategory() throws {

@@ -203,6 +203,12 @@ private struct AIOperationDiagnosticsView: View {
                                     .font(.caption)
                                     .foregroundColor(OpenKeyboardTheme.Semantic.error)
                             }
+                            if let subreason = record.events.reversed().compactMap(\.subreason).first {
+                                Text("Detail: \(subreason.rawValue.replacingOccurrences(of: "_", with: " "))")
+                                    .font(.caption)
+                                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    .accessibilityIdentifier("ai_diagnostics_subreason")
+                            }
                             Text("\(record.events.count) stages · updated \(record.updatedAt.formatted(.relative(presentation: .named)))")
                                 .font(.caption)
                                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)

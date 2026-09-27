@@ -40,7 +40,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
             case let .supported(returnedProviderId, models):
                 guard returnedProviderId == providerId,
                       models.allSatisfy({ $0.target.providerId == providerId }) else {
-                    throw OpenKeyboardAIConnectorError.invalidResponse
+                    throw SafeResponseRejection.targetMismatch
                 }
                 if let traceID {
                     let durationMilliseconds = Self.durationMilliseconds(since: transportStarted)
@@ -59,20 +59,24 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                 return models.map(\.target.modelId.rawValue)
             case let .unsupported(returnedProviderId):
                 guard returnedProviderId == providerId else {
-                    throw OpenKeyboardAIConnectorError.invalidResponse
+                    throw SafeResponseRejection.targetMismatch
                 }
                 throw OpenKeyboardAIConnectorError.unsupportedModelDiscovery
             }
         } catch {
             let mappedError = Self.mappedError(error)
             if let traceID {
-                let diagnostic = Self.diagnosticFailure(for: mappedError)
+                let diagnostic = Self.diagnosticFailure(
+                    for: mappedError,
+                    subreason: Self.diagnosticSubreason(for: error)
+                )
                 AIOperationDiagnostics.shared.record(
                     traceID: traceID,
                     stage: diagnostic.stage,
                     durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
                     httpStatusCategory: diagnostic.statusCategory,
-                    failure: diagnostic.failure
+                    failure: diagnostic.failure,
+                    subreason: diagnostic.subreason
                 )
             }
             throw mappedError
@@ -101,7 +105,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                 providerID: profile.providerID
             )
             let response = try await runtime.respond(to: connectorRequest)
-            let output = try Self.plainText(
+            let output = try Self.validatedPlainText(
                 from: response,
                 expectedTarget: connectorRequest.target
             )
@@ -125,13 +129,17 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         } catch {
             let mappedError = Self.mappedError(error)
             if let traceID {
-                let diagnostic = Self.diagnosticFailure(for: mappedError)
+                let diagnostic = Self.diagnosticFailure(
+                    for: mappedError,
+                    subreason: Self.diagnosticSubreason(for: error)
+                )
                 AIOperationDiagnostics.shared.record(
                     traceID: traceID,
                     stage: diagnostic.stage,
                     durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
                     httpStatusCategory: diagnostic.statusCategory,
-                    failure: diagnostic.failure
+                    failure: diagnostic.failure,
+                    subreason: diagnostic.subreason
                 )
             }
             throw mappedError
@@ -201,8 +209,22 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         from response: UniversalAiResponse,
         expectedTarget: UniversalAiTarget
     ) throws -> String {
+        do {
+            return try validatedPlainText(from: response, expectedTarget: expectedTarget)
+        } catch let rejection as SafeResponseRejection {
+            throw rejection.mappedError
+        }
+    }
+
+    /// Validates the canonical plain-text response without discarding its closed local rejection
+    /// category. `respond` uses this form so the diagnostic ledger can preserve that category;
+    /// `plainText` remains the compatibility boundary for callers expecting app errors.
+    static func validatedPlainText(
+        from response: UniversalAiResponse,
+        expectedTarget: UniversalAiTarget
+    ) throws -> String {
         guard response.target == expectedTarget else {
-            throw OpenKeyboardAIConnectorError.invalidResponse
+            throw SafeResponseRejection.targetMismatch
         }
         switch response.completionReason {
         case .stop:
@@ -210,16 +232,24 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         case .maxOutputTokens:
             throw OpenKeyboardAIConnectorError.truncatedResponse
         default:
-            throw OpenKeyboardAIConnectorError.invalidResponse
+            throw SafeResponseRejection.unexpectedCompletionReason
         }
         guard response.outputs.count == 1,
-              let output = response.outputs.first,
-              output.index == 0,
-              output.kind == .text,
-              output.structuredJson == nil,
-              let text = output.text,
+              let output = response.outputs.first else {
+            throw SafeResponseRejection.invalidOutputCount
+        }
+        guard output.index == 0 else {
+            throw SafeResponseRejection.unexpectedOutputIndex
+        }
+        guard output.kind == .text else {
+            throw SafeResponseRejection.nonTextOutput
+        }
+        guard output.structuredJson == nil else {
+            throw SafeResponseRejection.unexpectedStructuredOutput
+        }
+        guard let text = output.text,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw OpenKeyboardAIConnectorError.invalidResponse
+            throw SafeResponseRejection.missingOrEmptyText
         }
         return text
     }
@@ -230,6 +260,9 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         }
         if let mapped = error as? OpenKeyboardAIConnectorError {
             return mapped
+        }
+        if let rejection = error as? SafeResponseRejection {
+            return rejection.mappedError
         }
         guard let connectorError = error as? UniversalAiConnectorError else {
             if error is UniversalAiContractValidationError {
@@ -332,34 +365,105 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
     }
 
     private static func diagnosticFailure(
-        for error: Error
+        for error: Error,
+        subreason: AIOperationDiagnosticSubreason?
     ) -> (
         stage: AIOperationDiagnosticStage,
         failure: AIOperationDiagnosticFailure,
-        statusCategory: AIOperationDiagnosticHTTPStatusCategory?
+        statusCategory: AIOperationDiagnosticHTTPStatusCategory?,
+        subreason: AIOperationDiagnosticSubreason?
     ) {
         guard let error = error as? OpenKeyboardAIConnectorError else {
-            return (.transport, .transportFailure, nil)
+            return (.transport, .transportFailure, nil, nil)
         }
         switch error {
         case .timeout:
-            return (.transport, .transportTimeout, nil)
+            return (.transport, .transportTimeout, nil, nil)
         case .invalidResponse, .truncatedResponse:
-            return (.decoding, .malformedResponse, nil)
+            return (.decoding, .malformedResponse, nil, subreason)
         case .transport:
-            return (.transport, .gatewayNonresponse, nil)
+            return (.transport, .gatewayNonresponse, nil, nil)
         case .serverStatus(let statusCode):
             return (
                 .transport,
                 .gatewayRejected,
-                AIOperationDiagnosticHTTPStatusCategory(statusCode: statusCode)
+                AIOperationDiagnosticHTTPStatusCategory(statusCode: statusCode),
+                nil
             )
         case .rateLimited, .unauthorized, .forbidden, .modelUnavailable:
-            return (.transport, .gatewayRejected, .clientError)
+            return (.transport, .gatewayRejected, .clientError, nil)
         case .provider, .closed, .unsupportedModelDiscovery:
-            return (.transport, .transportFailure, nil)
+            return (.transport, .transportFailure, nil, nil)
         case .invalidURL, .notConfigured, .missingInput:
-            return (.promptConstruction, .validationRejected, nil)
+            return (.promptConstruction, .validationRejected, nil, nil)
+        }
+    }
+
+    /// Retains only closed reasons before `mappedError` intentionally reduces connector failures
+    /// to product-facing categories. Do not inspect or retain provider messages or metadata here.
+    static func diagnosticSubreason(for error: Error) -> AIOperationDiagnosticSubreason? {
+        if let rejection = error as? SafeResponseRejection {
+            return rejection.subreason
+        }
+        if error is UniversalAiContractValidationError {
+            return .connectorContractValidationFailure
+        }
+        guard let connectorError = error as? UniversalAiConnectorError else {
+            return nil
+        }
+
+        switch connectorError.code.rawValue {
+        case "malformed_provider_response":
+            return .malformedProviderResponse
+        case "malformed_provider_stream":
+            return .malformedProviderStream
+        case "invalid_structured_provider_response":
+            return .invalidStructuredProviderResponse
+        default:
+            break
+        }
+
+        guard connectorError.category == .validation,
+              !isClosedConnectorError(connectorError) else {
+            return nil
+        }
+        return .connectorContractValidationFailure
+    }
+
+    private static func isClosedConnectorError(_ error: UniversalAiConnectorError) -> Bool {
+        error.category == .validation
+            && error.code.rawValue == UniversalAiErrorCode.invalidRequest.rawValue
+            && error.message == "The Universal AI Connector is closed."
+    }
+
+    private enum SafeResponseRejection: Error {
+        case targetMismatch
+        case unexpectedCompletionReason
+        case invalidOutputCount
+        case unexpectedOutputIndex
+        case nonTextOutput
+        case unexpectedStructuredOutput
+        case missingOrEmptyText
+
+        var mappedError: OpenKeyboardAIConnectorError { .invalidResponse }
+
+        var subreason: AIOperationDiagnosticSubreason {
+            switch self {
+            case .targetMismatch:
+                return .targetMismatch
+            case .unexpectedCompletionReason:
+                return .unexpectedCompletionReason
+            case .invalidOutputCount:
+                return .invalidOutputCount
+            case .unexpectedOutputIndex:
+                return .unexpectedOutputIndex
+            case .nonTextOutput:
+                return .nonTextOutput
+            case .unexpectedStructuredOutput:
+                return .unexpectedStructuredOutput
+            case .missingOrEmptyText:
+                return .missingOrEmptyText
+            }
         }
     }
 }

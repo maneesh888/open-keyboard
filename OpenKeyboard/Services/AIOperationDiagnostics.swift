@@ -29,6 +29,25 @@ enum AIOperationDiagnosticFailure: String, Codable, CaseIterable, Sendable {
     case transportFailure = "transport_failure"
 }
 
+/// A closed, support-facing detail for a malformed connector response.
+///
+/// These values intentionally identify only adapter-controlled conditions or documented connector
+/// error codes. They never retain provider messages, payload values, response IDs, or any other
+/// arbitrary strings.
+enum AIOperationDiagnosticSubreason: String, Codable, CaseIterable, Sendable {
+    case malformedProviderResponse = "malformed_provider_response"
+    case malformedProviderStream = "malformed_provider_stream"
+    case invalidStructuredProviderResponse = "invalid_structured_provider_response"
+    case connectorContractValidationFailure = "connector_contract_validation_failure"
+    case targetMismatch = "target_mismatch"
+    case unexpectedCompletionReason = "unexpected_completion_reason"
+    case invalidOutputCount = "invalid_output_count"
+    case unexpectedOutputIndex = "unexpected_output_index"
+    case nonTextOutput = "non_text_output"
+    case unexpectedStructuredOutput = "unexpected_structured_output"
+    case missingOrEmptyText = "missing_or_empty_text"
+}
+
 enum AIOperationDiagnosticOutcome: String, Codable, Sendable {
     case succeeded
     case failed
@@ -90,6 +109,9 @@ struct AIOperationDiagnosticEvent: Codable, Equatable, Sendable, Identifiable {
     let requestBytes: Int?
     let responseBytes: Int?
     let failure: AIOperationDiagnosticFailure?
+    /// An additive optional field. Records written before this was introduced decode as `nil`, so
+    /// the existing v1 App Group ledger remains backward compatible without migration.
+    let subreason: AIOperationDiagnosticSubreason?
 }
 
 struct AIOperationDiagnosticRecord: Codable, Equatable, Sendable, Identifiable {
@@ -203,7 +225,8 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         httpStatusCategory: AIOperationDiagnosticHTTPStatusCategory? = nil,
         requestBytes: Int? = nil,
         responseBytes: Int? = nil,
-        failure: AIOperationDiagnosticFailure? = nil
+        failure: AIOperationDiagnosticFailure? = nil,
+        subreason: AIOperationDiagnosticSubreason? = nil
     ) {
         let timestamp = now()
         let didRecord = withExclusiveStorageAccess {
@@ -227,7 +250,8 @@ final class AIOperationDiagnostics: @unchecked Sendable {
                 httpStatusCategory: httpStatusCategory,
                 requestBytes: requestBytes.map { max(0, $0) },
                 responseBytes: responseBytes.map { max(0, $0) },
-                failure: failure
+                failure: failure,
+                subreason: subreason
             ))
             records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
             records[index].updatedAt = timestamp
@@ -275,7 +299,8 @@ final class AIOperationDiagnostics: @unchecked Sendable {
                 httpStatusCategory: nil,
                 requestBytes: nil,
                 responseBytes: nil,
-                failure: resolvedFailure
+                failure: resolvedFailure,
+                subreason: nil
             ))
             records[index].events = Array(records[index].events.suffix(Self.maximumEventsPerRecord))
             records[index].updatedAt = timestamp
@@ -335,6 +360,9 @@ final class AIOperationDiagnostics: @unchecked Sendable {
                 }
                 if let failure = event.failure {
                     eventLine += " failure=\(failure.rawValue)"
+                }
+                if let subreason = event.subreason {
+                    eventLine += " subreason=\(subreason.rawValue)"
                 }
                 lines.append(eventLine)
             }
