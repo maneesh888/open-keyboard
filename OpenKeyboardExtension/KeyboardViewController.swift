@@ -11,6 +11,7 @@ final class KeyboardViewController: UIInputViewController {
     private var hostingController: UIHostingController<KeyboardView>?
     private var viewModel: KeyboardViewModel?
     private var keyboardHeightConstraint: NSLayoutConstraint?
+    private var lastReportedFullAccess: Bool?
     private var cancellables = Set<AnyCancellable>()
 
     override func viewDidLoad() {
@@ -31,6 +32,7 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        refreshRuntimeState()
         viewModel?.documentDidChange()
     }
 
@@ -93,7 +95,10 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshRuntimeState() {
         let fullAccess = hasFullAccess
-        viewModel?.updateFullAccess(fullAccess)
+        if lastReportedFullAccess != fullAccess, let viewModel {
+            lastReportedFullAccess = fullAccess
+            viewModel.updateFullAccess(fullAccess)
+        }
         AppConfig.updateKeyboardFullAccess(fullAccess)
     }
 

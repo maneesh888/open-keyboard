@@ -54,7 +54,7 @@ struct ContentView: View {
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Open Keyboard Settings")
                                                 .font(.headline)
-                                            Text("Enable Full Access, then open the keyboard once to finish AI setup")
+                                            Text("Enable Full Access, then type once with the keyboard to finish AI setup")
                                                 .font(.caption)
                                                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                                                 .fixedSize(horizontal: false, vertical: true)

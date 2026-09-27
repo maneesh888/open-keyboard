@@ -53,7 +53,7 @@ final class OnboardingNavigationUITests: BaseOpenKeyboardUITestCase {
         XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
         let fullAccessNote = app.staticTexts["keyboard_full_access_note"]
         XCTAssertTrue(fullAccessNote.waitForExistence(timeout: 5))
-        XCTAssertEqual(fullAccessNote.label, "Enable Full Access, then open the keyboard once to finish AI setup")
+        XCTAssertEqual(fullAccessNote.label, "Enable Full Access, then type once with the keyboard to finish AI setup")
     }
 }
 
@@ -84,6 +84,6 @@ final class HomeScreenKeyboardAccessUITests: XCTestCase {
         XCTAssertTrue(app.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 5))
         let fullAccessNote = app.staticTexts["keyboard_full_access_note"]
         XCTAssertTrue(fullAccessNote.waitForExistence(timeout: 5))
-        XCTAssertEqual(fullAccessNote.label, "Enable Full Access, then open the keyboard once to finish AI setup")
+        XCTAssertEqual(fullAccessNote.label, "Enable Full Access, then type once with the keyboard to finish AI setup")
     }
 }
