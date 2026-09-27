@@ -396,6 +396,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         statusCategory: AIOperationDiagnosticHTTPStatusCategory?,
         subreason: AIOperationDiagnosticSubreason?
     ) {
+        if error is CancellationError { return (.cancellation, .cancelled, nil, nil) }
         guard let error = error as? OpenKeyboardAIConnectorError else {
             return (.transport, .transportFailure, nil, nil)
         }

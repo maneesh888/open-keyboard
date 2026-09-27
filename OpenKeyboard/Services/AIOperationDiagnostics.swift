@@ -182,6 +182,7 @@ struct AIOperationDiagnosticRecord: Codable, Equatable, Sendable, Identifiable {
 
 enum AIOperationDiagnosticContext {
     @TaskLocal static var traceID: String?
+    @TaskLocal static var requestID: String?
     @TaskLocal static var attempt = 1
 }
 
@@ -284,7 +285,7 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         responseBytes: Int? = nil,
         failure: AIOperationDiagnosticFailure? = nil,
         subreason: AIOperationDiagnosticSubreason? = nil,
-        requestID: String? = nil,
+        requestID: String? = AIOperationDiagnosticContext.requestID,
         httpStatusCode: Int? = nil,
         connectorResponseAccepted: Bool? = nil
     ) {
@@ -397,7 +398,11 @@ final class AIOperationDiagnostics: @unchecked Sendable {
 
     /// Text is excluded unless a separate, explicit preview/share action requests it.
     func export(traceID: String? = nil, includeText: Bool = false) -> String {
-        let selected = records().filter { traceID == nil || $0.traceID == traceID }
+        export(traceIDs: traceID.map { [$0] }, includeText: includeText)
+    }
+
+    func export(traceIDs: Set<String>?, includeText: Bool = false) -> String {
+        let selected = records().filter { traceIDs == nil || traceIDs!.contains($0.traceID) }
         var lines = [
             "OpenKeyboard AI diagnostics schema=1 context_version=2",
             "Includes provider/model and request settings. Configuration credentials and endpoints are excluded.",
@@ -472,7 +477,7 @@ final class AIOperationDiagnostics: @unchecked Sendable {
                 return nil
             }
             let capture = activeConsent(at: timestamp)?.id == records[index].captureSessionID && records[index].captureSessionID != nil
-            let id = UUID().uuidString.lowercased()
+            let id = AIOperationDiagnosticContext.requestID ?? UUID().uuidString.lowercased()
             let providerUsesDefaults = provider == .openAI || provider == .anthropic
             let context = AIOperationDiagnosticRequest(
                 id: id, attempt: AIOperationDiagnosticContext.attempt, provider: provider,
@@ -630,7 +635,9 @@ final class AIOperationDiagnostics: @unchecked Sendable {
     ) -> AIOperationDiagnosticFailure? {
         guard outcome == .failed,
               requested == nil || requested == .validationRejected,
-              let recordedFailure = events.reversed().compactMap(\.failure).first else {
+              let recordedFailure = events.reversed().compactMap(\.failure).first(where: {
+                  $0 != .cancelled && $0 != .staleResultSuppressed && $0 != .retryFailed
+              }) else {
             return requested
         }
         return recordedFailure
@@ -638,24 +645,73 @@ final class AIOperationDiagnostics: @unchecked Sendable {
 }
 
 
+enum AIOperationDiagnosticFilter: String, CaseIterable {
+    case all = "All"
+    case errors = "Errors"
+    case warnings = "Warnings"
+
+    func includes(_ record: AIOperationDiagnosticRecord) -> Bool {
+        switch self {
+        case .all: return true
+        case .errors: return record.outcome == .failed
+        case .warnings:
+            return record.outcome != .failed &&
+                (record.outcome == .cancelled || record.outcome == .staleResultSuppressed ||
+                 record.events.contains { $0.failure != nil })
+        }
+    }
+}
+
 /// Presentation state stays outside the view; the service owns App Group storage and consent.
 @MainActor
 final class AIOperationDiagnosticsViewModel: ObservableObject {
     @Published private(set) var records: [AIOperationDiagnosticRecord] = []
+    @Published private(set) var filter: AIOperationDiagnosticFilter = .all
+    @Published private(set) var selectedTraceIDs: Set<String> = []
     @Published private(set) var captureExpiresAt: Date?
     @Published private(set) var metadataExport = ""
     @Published private(set) var textPreview = ""
     private let diagnostics: AIOperationDiagnostics
+    private var selectsAllVisible = true
+    private var previewTraceIDs: Set<String>?
+
+    var visibleRecords: [AIOperationDiagnosticRecord] { records.filter { filter.includes($0) } }
+    var exportTraceIDs: Set<String> { selectedTraceIDs.intersection(visibleRecords.map(\.traceID)) }
 
     init(diagnostics: AIOperationDiagnostics = .shared) { self.diagnostics = diagnostics }
     func refresh() {
         records = diagnostics.records()
         captureExpiresAt = diagnostics.textCaptureExpiresAt
-        metadataExport = diagnostics.export()
+        selectedTraceIDs = selectsAllVisible ? Set(visibleRecords.map(\.traceID)) :
+            selectedTraceIDs.intersection(records.map(\.traceID))
+        metadataExport = diagnostics.export(traceIDs: exportTraceIDs)
+        // Never leave an old sensitive payload shareable after another process deletes it or
+        // retention expires. A changed report requires a fresh, explicit review.
+        if let previewTraceIDs, diagnostics.export(traceIDs: previewTraceIDs, includeText: true) != textPreview {
+            dismissTextPreview()
+        }
+    }
+    func selectFilter(_ value: AIOperationDiagnosticFilter) {
+        filter = value
+        selectsAllVisible = true
+        dismissTextPreview()
+        refresh()
+    }
+    func toggleSelection(_ traceID: String) {
+        guard visibleRecords.contains(where: { $0.traceID == traceID }) else { return }
+        selectsAllVisible = false
+        if !selectedTraceIDs.insert(traceID).inserted { selectedTraceIDs.remove(traceID) }
+        dismissTextPreview()
+        refresh()
     }
     func startCapture() { diagnostics.startTextCapture(); refresh() }
-    func stopAndDeleteText() { diagnostics.stopTextCaptureAndDelete(); textPreview = ""; refresh() }
-    func clear() { diagnostics.removeAll(); textPreview = ""; refresh() }
-    func prepareTextPreview() { textPreview = diagnostics.export(includeText: true) }
-    func dismissTextPreview() { textPreview = "" }
+    func stopAndDeleteText() { diagnostics.stopTextCaptureAndDelete(); dismissTextPreview(); refresh() }
+    func clear() { diagnostics.removeAll(); dismissTextPreview(); refresh() }
+    func prepareTextPreview() {
+        refresh()
+        guard !exportTraceIDs.isEmpty else { dismissTextPreview(); return }
+        previewTraceIDs = exportTraceIDs
+        textPreview = diagnostics.export(traceIDs: exportTraceIDs, includeText: true)
+    }
+    func dismissTextPreview() { previewTraceIDs = nil; textPreview = "" }
 }

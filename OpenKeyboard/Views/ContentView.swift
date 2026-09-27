@@ -160,64 +160,56 @@ private struct AIOperationDiagnosticsView: View {
     @State private var showingTextPreview = false
     @Environment(\.scenePhase) private var scenePhase
 
-    private var records: [AIOperationDiagnosticRecord] { viewModel.records }
+    private var records: [AIOperationDiagnosticRecord] { viewModel.visibleRecords }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Operation details") {
+                Section("Privacy-safe export") {
                     Text("Includes provider, model, request settings, failure details, timing, and app/OS versions. Credentials from Settings and gateway addresses are never collected. Phrase and response text are excluded from this export.")
                         .font(.footnote)
                         .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     ShareLink(item: viewModel.metadataExport, subject: Text("OpenKeyboard AI diagnostics")) {
-                        Label("Export Diagnostics Without Text", systemImage: "square.and.arrow.up")
+                        Label("Export Redacted Diagnostics", systemImage: "square.and.arrow.up")
                     }
                     .accessibilityIdentifier("ai_diagnostics_export")
-                }
-
-                Section("Capture text with permission") {
-                    Text("Off by default. A capture session saves phrases sent to AI and available responses on this device for troubleshooting, including automatic keyboard checks. Nothing is uploaded automatically.")
-                        .font(.footnote)
-                    if let expiresAt = viewModel.captureExpiresAt {
-                        Text("Capture enabled until \(expiresAt.formatted(date: .omitted, time: .shortened))")
-                            .foregroundColor(OpenKeyboardTheme.Semantic.warning)
-                            .accessibilityIdentifier("ai_diagnostics_capture_active")
-                    } else {
-                        Button("Enable Text Capture for 10 Minutes") { showingCaptureConsent = true }
-                            .accessibilityIdentifier("ai_diagnostics_enable_capture")
-                    }
-                    Button("Review Captured Text Before Sharing") {
-                        viewModel.prepareTextPreview()
-                        showingTextPreview = true
-                    }
-                    .accessibilityIdentifier("ai_diagnostics_review_text")
-                    Button("Stop Capture and Delete Captured Text", role: .destructive) { viewModel.stopAndDeleteText() }
-                        .accessibilityIdentifier("ai_diagnostics_delete_text")
-                    Text("Keeps text from at most 8 operations for 24 hours, with up to 4 KB per phrase or response. Longer content is marked truncated. Responses rejected inside the connector may be unavailable.")
-                        .font(.caption)
-                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    .disabled(viewModel.exportTraceIDs.isEmpty)
                 }
 
                 Section("Recent operations") {
+                    Picker("Reports", selection: Binding(get: { viewModel.filter }, set: { viewModel.selectFilter($0) })) {
+                        ForEach(AIOperationDiagnosticFilter.allCases, id: \.self) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("ai_diagnostics_filter")
+                    if viewModel.filter == .warnings {
+                        Text("Cancelled or ignored operations, and operations with a recorded failure that did not end in an error.")
+                            .font(.caption)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
                     if records.isEmpty {
-                        Text("No recent AI operations. The ledger keeps at most 48 traces for seven days.")
+                        Text(viewModel.records.isEmpty ? "No recent AI operations. The ledger keeps at most 48 traces for seven days." : "No operations in this category.")
                             .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
 
                     ForEach(records) { record in
                         VStack(alignment: .leading, spacing: 6) {
                             HStack {
+                                Button { viewModel.toggleSelection(record.traceID) } label: {
+                                    Image(systemName: viewModel.selectedTraceIDs.contains(record.traceID) ? "checkmark.square.fill" : "square")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Select report \(record.traceID)")
+                                .accessibilityValue(viewModel.selectedTraceIDs.contains(record.traceID) ? "Selected" : "Not selected")
+                                .accessibilityIdentifier("ai_diagnostics_select_\(record.traceID)")
                                 Text(record.operation.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
                                     .font(.headline)
                                 Spacer()
                                 Text(record.outcome?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "In progress")
                                     .font(.caption.weight(.semibold))
                                     .foregroundColor(outcomeColor(record.outcome))
-                            }
-                            if let request = record.requests?.first {
-                                Text("\(request.provider.displayName) · \(request.modelID ?? "Model unavailable")")
-                                    .font(.caption)
-                                    .textSelection(.enabled)
                             }
                             Text("Trace \(record.traceID)")
                                 .font(.caption.monospaced())
@@ -238,6 +230,31 @@ private struct AIOperationDiagnosticsView: View {
                                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                         }
                         .accessibilityIdentifier("ai_diagnostics_trace")
+                    }
+                }
+                Section {
+                    DisclosureGroup("Capture text with permission") {
+                        Text("Off by default. A capture session saves phrases sent to AI and available responses on this device for troubleshooting, including automatic keyboard checks. Nothing is uploaded automatically.")
+                            .font(.footnote)
+                        if let expiresAt = viewModel.captureExpiresAt {
+                            Text("Capture enabled until \(expiresAt.formatted(date: .omitted, time: .shortened))")
+                                .foregroundColor(OpenKeyboardTheme.Semantic.warning)
+                                .accessibilityIdentifier("ai_diagnostics_capture_active")
+                        } else {
+                            Button("Enable Text Capture for 10 Minutes") { showingCaptureConsent = true }
+                                .accessibilityIdentifier("ai_diagnostics_enable_capture")
+                        }
+                        Button("Review Captured Text Before Sharing") {
+                            viewModel.prepareTextPreview()
+                            showingTextPreview = true
+                        }
+                        .accessibilityIdentifier("ai_diagnostics_review_text")
+                        .disabled(viewModel.exportTraceIDs.isEmpty)
+                        Button("Stop Capture and Delete Captured Text", role: .destructive) { viewModel.stopAndDeleteText() }
+                            .accessibilityIdentifier("ai_diagnostics_delete_text")
+                        Text("Keeps text from at most 8 operations for 24 hours, with up to 4 KB per phrase or response. Longer content is marked truncated. Responses rejected inside the connector may be unavailable.")
+                            .font(.caption)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
                     }
                 }
                 Section {
@@ -270,7 +287,7 @@ private struct AIOperationDiagnosticsView: View {
             .sheet(isPresented: $showingTextPreview, onDismiss: { viewModel.dismissTextPreview() }) {
                 NavigationStack {
                     ScrollView {
-                        Text(viewModel.textPreview)
+                        Text(viewModel.textPreview.isEmpty ? "Reports changed. Close this preview and review the selected reports again." : viewModel.textPreview)
                             .font(.caption.monospaced())
                             .textSelection(.enabled)
                             .padding()
@@ -285,6 +302,7 @@ private struct AIOperationDiagnosticsView: View {
                                 Text("Share With Text")
                             }
                             .accessibilityIdentifier("ai_diagnostics_share_text")
+                            .disabled(viewModel.textPreview.isEmpty)
                         }
                     }
                 }

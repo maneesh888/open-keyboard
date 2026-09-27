@@ -367,6 +367,7 @@ enum KeyboardAIError: LocalizedError, Equatable {
 }
 
 final class KeyboardAIService: KeyboardAIServiceProviding {
+    private let diagnostics: AIOperationDiagnostics
     private let connector: OpenKeyboardAIConnectorServing
     private let requestTimeoutInterval: TimeInterval
     private let translationValidator: KeyboardTranslationOutputValidator
@@ -374,8 +375,10 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
     init(
         connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared,
         requestTimeoutInterval: TimeInterval = GatewayRequestTimeouts.keyboardAction,
-        translationValidator: KeyboardTranslationOutputValidator = KeyboardTranslationOutputValidator()
+        translationValidator: KeyboardTranslationOutputValidator = KeyboardTranslationOutputValidator(),
+        diagnostics: AIOperationDiagnostics = .shared
     ) {
+        self.diagnostics = diagnostics
         self.connector = connector
         self.requestTimeoutInterval = requestTimeoutInterval
         self.translationValidator = translationValidator
@@ -584,31 +587,36 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
                     let chunk = chunks[chunkIndex]
                     nextIndex += 1
                     group.addTask {
-                        let rendering = KeyboardGatewayActionContract.rendering(
-                            operation: "fix_grammar",
-                            text: chunk.text
-                        )
-                        let profile = try Self.connectorProfile(from: config)
-                        let request = try OpenKeyboardAIRequest.writing(
-                            rendering: rendering,
-                            modelID: config.selectedModel,
-                            timeoutInterval: self.requestTimeoutInterval
-                        )
-                        self.recordPromptConstruction(for: request)
-                        let output = try await OpenKeyboardRequestDeadline.value(
-                            timeoutInterval: self.requestTimeoutInterval
-                        ) {
-                            try await self.connector.respond(to: request, profile: profile)
+                        try await AIOperationDiagnosticContext.$requestID.withValue(UUID().uuidString.lowercased()) {
+                            let rendering = KeyboardGatewayActionContract.rendering(
+                                operation: "fix_grammar",
+                                text: chunk.text
+                            )
+                            let profile = try Self.connectorProfile(from: config)
+                            let request = try OpenKeyboardAIRequest.writing(
+                                rendering: rendering,
+                                modelID: config.selectedModel,
+                                timeoutInterval: self.requestTimeoutInterval
+                            )
+                            self.recordPromptConstruction(for: request)
+                            let output = try await OpenKeyboardRequestDeadline.value(
+                                timeoutInterval: self.requestTimeoutInterval
+                            ) {
+                                try await self.connector.respond(to: request, profile: profile)
+                            }
+                            let validated: ValidatedGrammarCorrectionResponse
+                            do {
+                                validated = try await GrammarCorrectionResponseValidator.classified(output, original: chunk.text)
+                            } catch {
+                                self.recordValidation(failure: .validationRejected)
+                                throw error
+                            }
+                            self.recordValidation()
+                            return (
+                                chunkIndex,
+                                validated
+                            )
                         }
-                        let validated = try await GrammarCorrectionResponseValidator.classified(
-                            output,
-                            original: chunk.text
-                        )
-                        self.recordValidation()
-                        return (
-                            chunkIndex,
-                            validated
-                        )
                     }
                 }
 
@@ -625,7 +633,6 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         } catch let error as OpenKeyboardAIConnectorError {
             throw Self.keyboardError(from: error)
         } catch is GrammarCorrectionResponseError {
-            recordValidation(failure: .validationRejected)
             throw KeyboardAIError.invalidResponse
         } catch {
             throw Self.keyboardError(from: error)
@@ -643,7 +650,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         let byteCount = request.messages.reduce(0) { partial, message in
             partial + message.content.lengthOfBytes(using: .utf8)
         }
-        AIOperationDiagnostics.shared.record(
+        diagnostics.record(
             traceID: traceID,
             stage: .promptConstruction,
             requestBytes: byteCount
@@ -654,7 +661,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         failure: AIOperationDiagnosticFailure? = nil
     ) {
         guard let traceID = AIOperationDiagnosticContext.traceID else { return }
-        AIOperationDiagnostics.shared.record(
+        diagnostics.record(
             traceID: traceID,
             stage: .validation,
             failure: failure
@@ -663,7 +670,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
 
     private func recordRetry(nextAttempt: Int) {
         guard let traceID = AIOperationDiagnosticContext.traceID else { return }
-        AIOperationDiagnostics.shared.record(
+        diagnostics.record(
             traceID: traceID,
             stage: .retry,
             attempt: nextAttempt

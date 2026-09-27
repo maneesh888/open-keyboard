@@ -398,6 +398,152 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(record.events.allSatisfy { $0.httpStatusCode == nil && $0.httpStatusCategory == nil })
     }
 
+    func testConcurrentChunkCancellationCannotReplaceMalformedResponseCause() async throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+        let runtime = DiagnosticChunkRuntime(failsFirst: true)
+        let adapter = UniversalAIConnectorAdapter(factory: { _ in runtime }, diagnostics: ledger)
+        let service = KeyboardAIService(connector: adapter, diagnostics: ledger)
+        let config = AppConfig(apiKey: "fixture-key", gatewayURL: "https://gateway.example/v1", selectedModel: "fixture-model", isConfigured: true, grammarCorrectionVerified: true, grammarCorrectionContractVersion: "fixture-contract")
+        do {
+            _ = try await AIOperationDiagnosticContext.$traceID.withValue(trace) {
+                try await service.performResult(action: .fixGrammar, on: "The cat are sleepy. The dog are happy.", config: config)
+            }
+            XCTFail("Expected malformed response")
+        } catch let error as KeyboardAIError { XCTAssertEqual(error, .invalidResponse) }
+        ledger.complete(traceID: trace, outcome: .failed, failure: .validationRejected)
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        XCTAssertEqual(record.failure, .malformedResponse)
+        XCTAssertTrue(record.events.contains { $0.failure == .cancelled && $0.stage == .cancellation })
+        XCTAssertFalse(record.events.contains { $0.failure == .transportFailure })
+        let requests = try XCTUnwrap(record.requests)
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(Set(requests.map(\.id)).count, 2)
+        for request in requests {
+            XCTAssertTrue(record.events.contains { $0.requestID == request.id && $0.stage == .promptConstruction })
+            XCTAssertTrue(record.events.contains { $0.requestID == request.id && $0.stage == .transport })
+        }
+    }
+
+    func testOutOfOrderGrammarChunksKeepPromptResponseAndValidationCorrelated() async throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        ledger.startTextCapture()
+        let trace = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction)
+        let runtime = DiagnosticChunkRuntime(failsFirst: false)
+        let adapter = UniversalAIConnectorAdapter(factory: { _ in runtime }, diagnostics: ledger)
+        let service = KeyboardAIService(connector: adapter, diagnostics: ledger)
+        let config = AppConfig(apiKey: "fixture-key", gatewayURL: "https://gateway.example/v1", selectedModel: "fixture-model", isConfigured: true, grammarCorrectionVerified: true, grammarCorrectionContractVersion: "fixture-contract")
+        _ = try await AIOperationDiagnosticContext.$traceID.withValue(trace) {
+            try await service.performResult(action: .fixGrammar, on: "The cat are sleepy. The dog are happy.", config: config)
+        }
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        let requests = try XCTUnwrap(record.requests)
+        XCTAssertEqual(requests.count, 2)
+        for request in requests {
+            XCTAssertEqual(request.responseText?.text, request.userMessage?.text.replacingOccurrences(of: " are ", with: " is "))
+            let stages = Set(record.events.filter { $0.requestID == request.id }.map(\.stage))
+            XCTAssertTrue(stages.isSuperset(of: [.promptConstruction, .transport, .decoding, .validation]))
+        }
+        let completed = await runtime.completedInputs
+        XCTAssertTrue(completed.first?.contains("dog") == true, "Second chunk must complete first")
+    }
+
+    @MainActor
+    func testReportTabsAndCheckboxesRestrictBothExportsToVisibleSelection() {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        ledger.startTextCapture()
+        let error = ledger.begin(operation: .fixGrammar, origin: .keyboardManualAction, sourceText: "error fixture")
+        ledger.complete(traceID: error, outcome: .failed, failure: .malformedResponse)
+        let success = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "success fixture")
+        ledger.complete(traceID: success, outcome: .succeeded)
+        let warning = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "warning fixture")
+        ledger.complete(traceID: warning, outcome: .cancelled, failure: .cancelled)
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.refresh()
+        XCTAssertEqual(vm.exportTraceIDs.count, 3)
+        vm.selectFilter(.errors)
+        XCTAssertEqual(vm.visibleRecords.map(\.traceID), [error])
+        XCTAssertTrue(vm.metadataExport.contains("trace=\(error)"))
+        XCTAssertFalse(vm.metadataExport.contains("trace=\(success)"))
+        vm.prepareTextPreview()
+        XCTAssertTrue(vm.textPreview.contains("error fixture"))
+        XCTAssertFalse(vm.textPreview.contains("success fixture"))
+        vm.toggleSelection(error)
+        XCTAssertTrue(vm.exportTraceIDs.isEmpty)
+        XCTAssertTrue(vm.metadataExport.contains("records=0"))
+        XCTAssertTrue(vm.textPreview.isEmpty)
+        vm.selectFilter(.warnings)
+        XCTAssertEqual(vm.visibleRecords.map(\.traceID), [warning])
+        vm.selectFilter(.all)
+        vm.toggleSelection(success)
+        XCTAssertEqual(vm.exportTraceIDs, [error, warning])
+        vm.prepareTextPreview()
+        XCTAssertFalse(vm.textPreview.contains("success fixture"))
+    }
+
+    @MainActor
+    func testManualSelectionDoesNotSilentlyAddNewReportsOnRefresh() {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let first = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.refresh()
+        vm.toggleSelection(first)
+        vm.toggleSelection(first)
+        _ = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        vm.refresh()
+        XCTAssertEqual(vm.exportTraceIDs, [first])
+        vm.selectFilter(.all)
+        XCTAssertEqual(vm.exportTraceIDs.count, 2)
+        ledger.removeAll()
+        vm.refresh()
+        XCTAssertTrue(vm.exportTraceIDs.isEmpty)
+    }
+
+    @MainActor
+    func testWarningsIncludeRecoveredFailuresButExcludeCleanInProgressAndSuccess() {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let recovered = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        ledger.record(traceID: recovered, stage: .transport, failure: .transportTimeout)
+        ledger.complete(traceID: recovered, outcome: .succeeded)
+        _ = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        let clean = ledger.begin(operation: .rewrite, origin: .keyboardManualAction)
+        ledger.complete(traceID: clean, outcome: .succeeded)
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.selectFilter(.warnings)
+        XCTAssertEqual(vm.visibleRecords.map(\.traceID), [recovered])
+    }
+
+    @MainActor
+    func testSensitivePreviewInvalidatesAfterAnotherInstanceDeletesText() throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let other = AIOperationDiagnostics(defaults: try XCTUnwrap(UserDefaults(suiteName: suiteName)))
+        ledger.startTextCapture()
+        _ = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "sensitive fixture")
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.prepareTextPreview()
+        XCTAssertTrue(vm.textPreview.contains("sensitive fixture"))
+        other.stopTextCaptureAndDelete()
+        vm.refresh()
+        XCTAssertTrue(vm.textPreview.isEmpty)
+        vm.prepareTextPreview()
+        XCTAssertFalse(vm.textPreview.contains("sensitive fixture"))
+    }
+
+    @MainActor
+    func testSensitivePreviewInvalidatesWhenTextRetentionExpires() {
+        var now = Date(timeIntervalSince1970: 10_000)
+        let ledger = AIOperationDiagnostics(defaults: defaults, now: { now })
+        ledger.startTextCapture()
+        _ = ledger.begin(operation: .rewrite, origin: .keyboardManualAction, sourceText: "sensitive fixture")
+        let vm = AIOperationDiagnosticsViewModel(diagnostics: ledger)
+        vm.prepareTextPreview()
+        XCTAssertTrue(vm.textPreview.contains("sensitive fixture"))
+        now = now.addingTimeInterval(AIOperationDiagnostics.textRetention + 1)
+        vm.refresh()
+        XCTAssertTrue(vm.textPreview.isEmpty)
+        XCTAssertEqual(vm.records.count, 1)
+    }
+
     func testHTTPStatusCategoriesDiscardExactStatusCode() {
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 204), .success)
         XCTAssertEqual(AIOperationDiagnosticHTTPStatusCategory(statusCode: 429), .clientError)
@@ -414,5 +560,32 @@ private final class DiagnosticRuntime: UniversalAIConnectorRuntime, @unchecked S
     func respond(to request: UniversalAiRequest) async throws -> UniversalAiResponse {
         UniversalAiResponse(contractVersion: UniversalAiRequest.currentContractVersion, id: .init(rawValue: "fixture-response"), target: request.target,
             outputs: [.init(id: .init(rawValue: "fixture-output"), index: 0, kind: .text, text: "Synthetic response")], completionReason: completion)
+    }
+}
+
+/// The first request waits for its sibling before failing; cancellation must pass through the
+/// actual service task group and adapter. In success mode the second chunk finishes first.
+private actor DiagnosticChunkRuntime: UniversalAIConnectorRuntime {
+    let failsFirst: Bool
+    private var started = 0
+    private(set) var completedInputs: [String] = []
+    init(failsFirst: Bool) { self.failsFirst = failsFirst }
+    nonisolated func close() {}
+    func listModels(providerId: UniversalAiProviderId) async throws -> UniversalAiModelListResult { .unsupported(providerId: providerId) }
+    func respond(to request: UniversalAiRequest) async throws -> UniversalAiResponse {
+        started += 1
+        let input = request.input.last?.content ?? ""
+        if input.contains("cat") {
+            while started < 2 { try await Task.sleep(nanoseconds: 1_000_000) }
+            if failsFirst { throw OpenKeyboardAIConnectorError.invalidResponse }
+            try await Task.sleep(nanoseconds: 30_000_000)
+        } else if failsFirst {
+            try await Task.sleep(nanoseconds: 10_000_000_000)
+        }
+        completedInputs.append(input)
+        return UniversalAiResponse(contractVersion: UniversalAiRequest.currentContractVersion,
+            id: .init(rawValue: UUID().uuidString), target: request.target,
+            outputs: [.init(id: .init(rawValue: UUID().uuidString), index: 0, kind: .text,
+                            text: input.replacingOccurrences(of: " are ", with: " is "))], completionReason: .stop)
     }
 }

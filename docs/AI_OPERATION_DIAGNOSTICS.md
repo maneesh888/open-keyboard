@@ -48,7 +48,7 @@ file coordination, and content never goes to OSLog or signposts.
 
 ## Review and sharing
 
-**Export Diagnostics Without Text** and the keyboard's **Copy Details** always omit captured text.
+**Export Redacted Diagnostics** and the keyboard's **Copy Details** always omit captured text.
 **Review Captured Text Before Sharing** displays a separate sensitive preview. Only the explicit
 **Share With Text** action exports that preview. No analytics collector or automatic upload is added.
 The preview is dismissed when the app enters the background. JSON quoting prevents captured text
@@ -66,3 +66,17 @@ missing-trace isolation, available rejected responses, and no fabricated HTTP su
 Normal simulator verification additionally covers the visible consent, ordinary keyboard operation,
 text preview, metadata-only export, and deletion. These diagnostics do not by themselves establish
 that the original correction/recheck failure is fixed.
+
+## Selecting reports
+
+The original export and recent-operations list remain the main screen. All, Errors, and Warnings
+segmented tabs filter the list. Errors contains failed operations. Warnings contains cancelled or
+ignored operations and non-failed operations with a recorded failure, including recovered failures.
+Clean successful or in-progress operations remain available under All.
+
+Checkboxes choose individual reports. Both the
+redacted export and the separate sensitive-text preview include only checked, visible reports;
+an empty selection cannot be shared. Switching tabs selects that tab's reports. After manual
+selection, newly arriving reports are not silently added. Optional capture controls are collapsed
+below the list. A sensitive preview is invalidated if its backing reports change or their text is
+deleted or expires, and the user must review again before sharing.
