@@ -11,6 +11,7 @@ struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @State private var showingSettings = false
     @State private var showingPlayground = false
+    @State private var showingAIDiagnostics = false
 
     var body: some View {
         NavigationView {
@@ -75,6 +76,37 @@ struct ContentView: View {
                             }
 
                             Button(action: {
+                                showingAIDiagnostics = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "stethoscope")
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("AI Diagnostics")
+                                            .font(.headline)
+                                        Text("Review recent AI operations and diagnostic captures")
+                                            .font(.caption)
+                                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer(minLength: 8)
+                                    Image(systemName: "chevron.right")
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                }
+                                .foregroundColor(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 14)
+                                .padding(.horizontal, 16)
+                                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                        .stroke(OpenKeyboardTheme.Brand.cyan.opacity(0.45), lineWidth: 1.2)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("ai_diagnostics_entry_button")
+
+                            Button(action: {
                                 showingSettings = true
                             }) {
                                 HStack(spacing: 8) {
@@ -108,7 +140,10 @@ struct ContentView: View {
                 NavigationView {
                     PlaygroundView()
                 }
-                .environmentObject(settingsViewModel)
+                    .environmentObject(settingsViewModel)
+            }
+            .sheet(isPresented: $showingAIDiagnostics) {
+                AIOperationDiagnosticsView()
             }
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
@@ -116,6 +151,159 @@ struct ContentView: View {
             await settingsViewModel.validateSavedGatewayOnceOnLaunch()
         }
     }
+}
+
+private struct AIOperationDiagnosticsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var viewModel = AIOperationDiagnosticsViewModel()
+    @State private var showingShareConfirmation = false
+    @State private var showingShareSheet = false
+    @Environment(\.scenePhase) private var scenePhase
+
+    private var records: [AIOperationDiagnosticRecord] { viewModel.visibleRecords }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Diagnostics export") {
+                    Text("Includes provider, model, request settings, failure details, timing, and app/OS versions. Credentials from Settings and gateway addresses are never collected. Captured phrases and responses are included only after you confirm sharing.")
+                        .font(.footnote)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    Button {
+                        viewModel.prepareTextPreview()
+                        showingShareConfirmation = !viewModel.textPreview.isEmpty
+                    } label: {
+                        Label("Share Diagnostics", systemImage: "square.and.arrow.up")
+                    }
+                    .accessibilityIdentifier("ai_diagnostics_export")
+                    .disabled(viewModel.exportTraceIDs.isEmpty)
+                }
+
+                Section {
+                    Toggle("Capture Text", isOn: Binding(
+                        get: { viewModel.captureExpiresAt != nil },
+                        set: { viewModel.setTextCaptureEnabled($0) }
+                    ))
+                    .accessibilityIdentifier("ai_diagnostics_capture_toggle")
+                } footer: {
+                    Text("Records AI phrases and available responses for 10 minutes, including automatic checks and text from other apps. Stored on this device for up to 24 hours. Turning this off deletes captured text.")
+                }
+                Section {
+                    Button("Delete All Diagnostics", role: .destructive) { viewModel.clear() }
+                        .accessibilityIdentifier("ai_diagnostics_delete_all")
+                }
+                Section("Recent operations") {
+                    Picker("Reports", selection: Binding(get: { viewModel.filter }, set: { viewModel.selectFilter($0) })) {
+                        ForEach(AIOperationDiagnosticFilter.allCases, id: \.self) { filter in
+                            Text(filter.rawValue).tag(filter)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("ai_diagnostics_filter")
+                    if viewModel.filter == .warnings {
+                        Text("Cancelled or ignored operations, and operations with a recorded failure that did not end in an error.")
+                            .font(.caption)
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+                    if records.isEmpty {
+                        Text(viewModel.records.isEmpty ? "No recent AI operations. The ledger keeps at most 48 traces for seven days." : "No operations in this category.")
+                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                    }
+
+                    ForEach(records) { record in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Button { viewModel.toggleSelection(record.traceID) } label: {
+                                    Image(systemName: viewModel.selectedTraceIDs.contains(record.traceID) ? "checkmark.square.fill" : "square")
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("Select report \(record.traceID)")
+                                .accessibilityValue(viewModel.selectedTraceIDs.contains(record.traceID) ? "Selected" : "Not selected")
+                                .accessibilityIdentifier("ai_diagnostics_select_\(record.traceID)")
+                                Text(record.operation.rawValue.replacingOccurrences(of: "_", with: " ").capitalized)
+                                    .font(.headline)
+                                Spacer()
+                                Text(record.outcome?.rawValue.replacingOccurrences(of: "_", with: " ") ?? "In progress")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundColor(outcomeColor(record.outcome))
+                            }
+                            Text("Trace \(record.traceID)")
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                            if let failure = record.failure {
+                                Text("Failure: \(failure.rawValue.replacingOccurrences(of: "_", with: " "))")
+                                    .font(.caption)
+                                    .foregroundColor(OpenKeyboardTheme.Semantic.error)
+                            }
+                            if let subreason = record.events.reversed().compactMap(\.subreason).first {
+                                Text("Detail: \(subreason.rawValue.replacingOccurrences(of: "_", with: " "))")
+                                    .font(.caption)
+                                    .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    .accessibilityIdentifier("ai_diagnostics_subreason")
+                            }
+                            Text("\(record.events.count) stages · updated \(record.updatedAt.formatted(.relative(presentation: .named)))")
+                                .font(.caption)
+                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        }
+                        .accessibilityIdentifier("ai_diagnostics_trace")
+                    }
+                }
+
+            }
+            .navigationTitle("AI Diagnostics")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Refresh") { viewModel.refresh() }
+                }
+            }
+            .onAppear { viewModel.refresh() }
+            .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in viewModel.refresh() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { viewModel.refresh() }
+                if phase == .background && !showingShareSheet {
+                    showingShareConfirmation = false
+                    viewModel.dismissTextPreview()
+                }
+            }
+            .alert("Share diagnostics?", isPresented: $showingShareConfirmation) {
+                Button("Cancel", role: .cancel) { viewModel.dismissTextPreview() }
+                Button("OK") { showingShareSheet = viewModel.confirmShare() }
+            } message: {
+                Text("The selected reports may include captured phrases and AI responses, which can contain sensitive information. Continue to choose where to share them?")
+            }
+            .sheet(isPresented: $showingShareSheet, onDismiss: { viewModel.dismissTextPreview() }) {
+                DiagnosticShareSheet(text: viewModel.textPreview)
+            }
+            .onChange(of: viewModel.textPreview) { _, text in
+                if text.isEmpty { showingShareConfirmation = false; showingShareSheet = false }
+            }
+        }
+    }
+
+    private func outcomeColor(_ outcome: AIOperationDiagnosticOutcome?) -> Color {
+        switch outcome {
+        case .succeeded:
+            return OpenKeyboardTheme.Semantic.success
+        case .failed, .cancelled, .staleResultSuppressed:
+            return OpenKeyboardTheme.Semantic.error
+        case nil:
+            return OpenKeyboardTheme.Semantic.warning
+        }
+    }
+}
+
+private struct DiagnosticShareSheet: UIViewControllerRepresentable {
+    let text: String
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: [text], applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
 struct StatusCard: View {

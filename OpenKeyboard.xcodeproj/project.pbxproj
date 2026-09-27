@@ -25,6 +25,7 @@
 		B4B9DFC292831B136A20EC6DB /* OpenKeyboard/Views/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B9DFC292831B136A20EC6D /* OpenKeyboard/Views/ContentView.swift */; };
 		F86D05867CF16CCF5D03F55DB /* OpenKeyboard/Views/OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F86D05867CF16CCF5D03F55D /* OpenKeyboard/Views/OnboardingView.swift */; };
 		OKACTIONERRTEST0002 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKACTIONERRTEST0001 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift */; };
+		OKAIDIAGTESTCASE2 /* OpenKeyboardUITests/AIOperationDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIDIAGTESTCASE1 /* OpenKeyboardUITests/AIOperationDiagnosticsTests.swift */; };
 		OKAI000000000000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */; };
 		OKAIUITEST0000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */; };
 		OKAPPCFGUITEST000000002 /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
@@ -36,6 +37,9 @@
 		OKAIADAPTAPP000000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIADAPT00000000001 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift */; };
 		OKAIADAPTEXT000000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIADAPT00000000001 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift */; };
 		OKAIADAPTTEST00000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIADAPT00000000001 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift */; };
+		OKAIDIAGAPP00000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIDIAG000000000001 /* OpenKeyboard/Services/AIOperationDiagnostics.swift */; };
+		OKAIDIAGEXT00000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIDIAG000000000001 /* OpenKeyboard/Services/AIOperationDiagnostics.swift */; };
+		OKAIDIAGTEST0000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKAIDIAG000000000001 /* OpenKeyboard/Services/AIOperationDiagnostics.swift */; };
 		OKAIPKGAPP00000000002 /* UniversalAiConnector in Frameworks */ = {isa = PBXBuildFile; productRef = OKAIPKGPRODAPP0000001 /* UniversalAiConnector */; };
 		OKAIPKGEXT00000000002 /* UniversalAiConnector in Frameworks */ = {isa = PBXBuildFile; productRef = OKAIPKGPRODEXT0000001 /* UniversalAiConnector */; };
 		OKAIPKGTEST0000000002 /* UniversalAiConnector in Frameworks */ = {isa = PBXBuildFile; productRef = OKAIPKGPRODTEST000001 /* UniversalAiConnector */; };
@@ -140,10 +144,12 @@
 		DDD0DF4B54E56F178EE967CC /* OpenKeyboard.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenKeyboard.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F86D05867CF16CCF5D03F55D /* OpenKeyboard/Views/OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Views/OnboardingView.swift; sourceTree = SOURCE_ROOT; };
 		OKACTIONERRTEST0001 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift; sourceTree = SOURCE_ROOT; };
+		OKAIDIAGTESTCASE1 /* OpenKeyboardUITests/AIOperationDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/AIOperationDiagnosticsTests.swift; sourceTree = SOURCE_ROOT; };
 		OKAI000000000000000001 /* OpenKeyboardExtension/KeyboardAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardAIService.swift; sourceTree = SOURCE_ROOT; };
 		OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = OpenKeyboard/OpenKeyboardAssets.xcassets; sourceTree = SOURCE_ROOT; };
 		OKAICONN000000000001 /* OpenKeyboard/Services/OpenKeyboardAIConnector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/OpenKeyboardAIConnector.swift; sourceTree = SOURCE_ROOT; };
 		OKAIADAPT00000000001 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/UniversalAIConnectorAdapter.swift; sourceTree = SOURCE_ROOT; };
+		OKAIDIAG000000000001 /* OpenKeyboard/Services/AIOperationDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboard/Services/AIOperationDiagnostics.swift; sourceTree = SOURCE_ROOT; };
 		OKCFGTEST00000000000001 /* OpenKeyboardUITests/SharedAppConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/SharedAppConfigTests.swift; sourceTree = SOURCE_ROOT; };
 		OKCGARCHTEST0000000001 /* OpenKeyboardUITests/GatewayClientArchitectureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardUITests/GatewayClientArchitectureTests.swift; sourceTree = SOURCE_ROOT; };
 		OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenKeyboardExtension/KeyboardDebugStatePolicy.swift; sourceTree = SOURCE_ROOT; };
@@ -209,6 +215,7 @@
 				OKSEMVAL0000000001 /* SemanticPlainTextResponseValidator.swift */,
 				OKAICONN000000000001 /* OpenKeyboard/Services/OpenKeyboardAIConnector.swift */,
 				OKAIADAPT00000000001 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift */,
+				OKAIDIAG000000000001 /* OpenKeyboard/Services/AIOperationDiagnostics.swift */,
 				OKDEBUGPOLICY000000001 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift */,
 				OKASSETS00000000000001 /* OpenKeyboard/OpenKeyboardAssets.xcassets */,
 				OKTHEME000000000000001 /* OpenKeyboardTheme.swift */,
@@ -273,6 +280,7 @@
 				OKSUGMODELTESTCASE1 /* OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift */,
 				OKTHEMETEST000000001 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift */,
 				OKACTIONERRTEST0001 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift */,
+				OKAIDIAGTESTCASE1 /* OpenKeyboardUITests/AIOperationDiagnosticsTests.swift */,
 				OKSETVMTEST00000001 /* OpenKeyboardUITests/SettingsViewModelTests.swift */,
 			);
 			name = OpenKeyboardUITests;
@@ -433,6 +441,7 @@
 				OKSUGMODELAPP0002 /* OpenKeyboard/Models/KeyboardSuggestionModels.swift in Sources */,
 				OKAICONNAPP0000000002 /* OpenKeyboard/Services/OpenKeyboardAIConnector.swift in Sources */,
 				OKAIADAPTAPP000000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */,
+				OKAIDIAGAPP00000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */,
 				OKTHEME000000000000002 /* OpenKeyboardTheme.swift in Sources */,
 				5BD7666BECBD76E9791FCCB7B /* OpenKeyboard/OpenKeyboardApp.swift in Sources */,
 				B4B9DFC292831B136A20EC6DB /* OpenKeyboard/Views/ContentView.swift in Sources */,
@@ -453,6 +462,7 @@
 				OKCGARCHTEST0000000002 /* OpenKeyboardUITests/GatewayClientArchitectureTests.swift in Sources */,
 				OKAICONNTEST000000002 /* OpenKeyboard/Services/OpenKeyboardAIConnector.swift in Sources */,
 				OKAIADAPTTEST00000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */,
+				OKAIDIAGTEST0000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */,
 				OKDEBUGPOLICYTEST0002 /* OpenKeyboardExtension/KeyboardDebugStatePolicy.swift in Sources */,
 				OKLIVEUI000000000000002 /* OpenKeyboardUITests/LiveGatewayAIUITests.swift in Sources */,
 				AB0000000000000000000005 /* OpenKeyboardUITests/BaseOpenKeyboardUITestCase.swift in Sources */,
@@ -474,6 +484,7 @@
 				OKTHEMEUITEST00000002 /* OpenKeyboardTheme.swift in Sources */,
 				OKTHEMETEST000000002 /* OpenKeyboardUITests/OpenKeyboardThemeTests.swift in Sources */,
 				OKACTIONERRTEST0002 /* OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift in Sources */,
+				OKAIDIAGTESTCASE2 /* OpenKeyboardUITests/AIOperationDiagnosticsTests.swift in Sources */,
 				A7E663F238A445819AC34103 /* KeyboardHapticFeedback.swift in Sources */,
 				OKVMUITEST0000000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */,
 				OKAIUITEST0000000002 /* OpenKeyboardExtension/KeyboardAIService.swift in Sources */,
@@ -500,6 +511,7 @@
 				OKNEXTPREDEXT000002 /* OpenKeyboardCore/Sources/OpenKeyboardCore/NextTextPrediction.swift in Sources */,
 				OKAICONNEXT0000000002 /* OpenKeyboard/Services/OpenKeyboardAIConnector.swift in Sources */,
 				OKAIADAPTEXT000000002 /* OpenKeyboard/Services/UniversalAIConnectorAdapter.swift in Sources */,
+				OKAIDIAGEXT00000002 /* OpenKeyboard/Services/AIOperationDiagnostics.swift in Sources */,
 				OKPLAN0000000000000002 /* OpenKeyboardExtension/KeyboardReplacementPlanner.swift in Sources */,
 				OKTOOLBAR000000000002 /* OpenKeyboardExtension/KeyboardToolbarState.swift in Sources */,
 				OKTOUCHLAYOUTEXT0002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */,
