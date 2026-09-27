@@ -141,9 +141,11 @@ class NetworkManager {
     ]
 
     private let connector: OpenKeyboardAIConnectorServing
+    private let diagnostics: AIOperationDiagnostics
 
-    init(connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared) {
+    init(connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared, diagnostics: AIOperationDiagnostics = .shared) {
         self.connector = connector
+        self.diagnostics = diagnostics
     }
 
     /// Run a correction smoke through the same plain-text chat completions contract
@@ -209,20 +211,20 @@ class NetworkManager {
         profile: OpenKeyboardGatewayProfile,
         preferredModel: String
     ) async -> GatewayDiagnosticReport {
-        let traceID = AIOperationDiagnostics.shared.begin(
+        let traceID = diagnostics.begin(
             operation: .gatewayDiagnostics,
             origin: .hostAppDiagnostics
         )
-        AIOperationDiagnostics.shared.record(traceID: traceID, stage: .contextCapture)
+        diagnostics.record(traceID: traceID, stage: .contextCapture)
         return await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
-            let report = await runGatewayDiagnosticsTracked(
+            let (report, wasCancelled) = await runGatewayDiagnosticsTracked(
                 profile: profile,
                 preferredModel: preferredModel
             )
-            AIOperationDiagnostics.shared.complete(
+            diagnostics.complete(
                 traceID: traceID,
-                outcome: report.hasFailures ? .failed : .succeeded,
-                failure: report.hasFailures ? .validationRejected : nil
+                outcome: wasCancelled ? .cancelled : (report.hasFailures ? .failed : .succeeded),
+                failure: wasCancelled ? .cancelled : (report.hasFailures ? .validationRejected : nil)
             )
             return report
         }
@@ -231,7 +233,7 @@ class NetworkManager {
     private func runGatewayDiagnosticsTracked(
         profile: OpenKeyboardGatewayProfile,
         preferredModel: String
-    ) async -> GatewayDiagnosticReport {
+    ) async -> (report: GatewayDiagnosticReport, wasCancelled: Bool) {
         let trimmedPreferredModel = preferredModel.trimmingCharacters(in: .whitespacesAndNewlines)
         var models: [String] = []
         var checks: [GatewayDiagnosticCheck] = []
@@ -248,7 +250,7 @@ class NetworkManager {
         }
         checks.append(modelsOutcome.check)
         guard !modelsOutcome.wasCancelled else {
-            return GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks)
+            return (GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks), true)
         }
 
         let selectedModel = trimmedPreferredModel
@@ -293,10 +295,12 @@ class NetworkManager {
                 return capability.success
             }
             checks.append(outcome.check)
-            if outcome.wasCancelled { break }
+            if outcome.wasCancelled {
+                return (GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks), true)
+            }
         }
 
-        return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
+        return (GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks), Task.isCancelled)
     }
 
     private func testDiagnosticCapability(
@@ -507,40 +511,40 @@ class NetworkManager {
             return try await work()
         }
 
-        let traceID = AIOperationDiagnostics.shared.begin(operation: operation, origin: origin)
-        AIOperationDiagnostics.shared.record(traceID: traceID, stage: .contextCapture)
+        let traceID = diagnostics.begin(operation: operation, origin: origin)
+        diagnostics.record(traceID: traceID, stage: .contextCapture)
         do {
             let value = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
                 try await work()
             }
-            AIOperationDiagnostics.shared.complete(traceID: traceID, outcome: .succeeded)
+            diagnostics.complete(traceID: traceID, outcome: .succeeded)
             return value
         } catch is CancellationError {
-            AIOperationDiagnostics.shared.record(
+            diagnostics.record(
                 traceID: traceID,
                 stage: .cancellation,
                 failure: .cancelled
             )
-            AIOperationDiagnostics.shared.complete(
+            diagnostics.complete(
                 traceID: traceID,
                 outcome: .cancelled,
                 failure: .cancelled
             )
             throw NetworkError.cancelled
         } catch NetworkError.cancelled {
-            AIOperationDiagnostics.shared.record(
+            diagnostics.record(
                 traceID: traceID,
                 stage: .cancellation,
                 failure: .cancelled
             )
-            AIOperationDiagnostics.shared.complete(
+            diagnostics.complete(
                 traceID: traceID,
                 outcome: .cancelled,
                 failure: .cancelled
             )
             throw NetworkError.cancelled
         } catch {
-            AIOperationDiagnostics.shared.complete(
+            diagnostics.complete(
                 traceID: traceID,
                 outcome: .failed,
                 failure: Self.diagnosticFailure(for: error)
@@ -554,7 +558,7 @@ class NetworkManager {
         let byteCount = request.messages.reduce(0) { partial, message in
             partial + message.content.lengthOfBytes(using: .utf8)
         }
-        AIOperationDiagnostics.shared.record(
+        diagnostics.record(
             traceID: traceID,
             stage: .promptConstruction,
             requestBytes: byteCount
@@ -565,7 +569,7 @@ class NetworkManager {
         failure: AIOperationDiagnosticFailure? = nil
     ) {
         guard let traceID = AIOperationDiagnosticContext.traceID else { return }
-        AIOperationDiagnostics.shared.record(
+        diagnostics.record(
             traceID: traceID,
             stage: .validation,
             failure: failure

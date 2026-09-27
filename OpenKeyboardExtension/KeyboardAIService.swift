@@ -439,47 +439,40 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
         }
         let maximumAttempts = action.isTranslation ? 2 : 1
         for attempt in 0..<maximumAttempts {
-            let result: KeyboardActionOperationResult
-            do {
-                result = try await AIOperationDiagnosticContext.$attempt.withValue(attempt + 1) {
-                    try await requestResult(
-                        action: action,
-                        text: text,
-                        rendering: rendering,
-                        config: config
-                    )
-                }
-            } catch let error as KeyboardAIError {
-                let scopedError: KeyboardAIError
-                if error == .modelCapability, let target = action.translationTarget {
-                    scopedError = .unreliableTranslation(target)
-                } else {
-                    scopedError = error
-                }
-                if case .unreliableTranslation = scopedError,
-                   attempt < maximumAttempts - 1 {
+            let result: KeyboardActionOperationResult? = try await AIOperationDiagnosticContext.$attempt.withValue(attempt + 1) {
+                try await AIOperationDiagnosticContext.$requestID.withValue(UUID().uuidString.lowercased()) {
+                    let result: KeyboardActionOperationResult
+                    do {
+                        result = try await requestResult(action: action, text: text, rendering: rendering, config: config)
+                    } catch let error as KeyboardAIError {
+                        let scopedError: KeyboardAIError
+                        if error == .modelCapability, let target = action.translationTarget {
+                            scopedError = .unreliableTranslation(target)
+                        } else {
+                            scopedError = error
+                        }
+                        if case .unreliableTranslation = scopedError,
+                           attempt < maximumAttempts - 1 {
+                            recordRetry(nextAttempt: attempt + 2)
+                            return nil
+                        }
+                        if attempt > 0 { recordValidation(failure: .retryFailed) }
+                        throw scopedError
+                    }
+                    guard let target = action.translationTarget else { return result }
+                    guard translationValidator.validationFailure(for: result.displayText, target: target) != nil else {
+                        return result
+                    }
+                    recordValidation(failure: .validationRejected)
+                    if attempt == maximumAttempts - 1 {
+                        recordValidation(failure: .retryFailed)
+                        throw KeyboardAIError.unreliableTranslation(target)
+                    }
                     recordRetry(nextAttempt: attempt + 2)
-                    continue
+                    return nil
                 }
-                if attempt > 0 {
-                    recordValidation(failure: .retryFailed)
-                }
-                throw scopedError
             }
-            guard let target = action.translationTarget else { return result }
-            let isUnusableTranslation = translationValidator.validationFailure(
-                for: result.displayText,
-                target: target
-            ) != nil
-            guard isUnusableTranslation else {
-                return result
-            }
-            recordValidation(failure: .validationRejected)
-            if attempt == maximumAttempts - 1 {
-                recordValidation(failure: .retryFailed)
-                throw KeyboardAIError.unreliableTranslation(target)
-            }
-            recordRetry(nextAttempt: attempt + 2)
+            if let result { return result }
         }
         recordValidation(failure: .retryFailed)
         throw KeyboardAIError.modelCapability

@@ -448,6 +448,57 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(completed.first?.contains("dog") == true, "Second chunk must complete first")
     }
 
+    func testHostDiagnosticCancellationDuringAndBetweenProbesIsAWarning() async throws {
+        for cancelBetweenProbes in [false, true] {
+            let ledger = AIOperationDiagnostics(defaults: defaults)
+            ledger.removeAll()
+            let connector = DiagnosticCancellationConnector()
+            let manager: NetworkManager = cancelBetweenProbes
+                ? DiagnosticCancelledAfterDiscoveryManager(connector: connector, diagnostics: ledger)
+                : NetworkManager(connector: connector, diagnostics: ledger)
+            let report = await Task {
+                await manager.runGatewayDiagnostics(gatewayURL: "https://gateway.example/v1", apiKey: "fixture-key", preferredModel: "fixture-model")
+            }.value
+            XCTAssertEqual(report.checks.count, cancelBetweenProbes ? 1 : 2)
+            XCTAssertEqual(report.checks.first?.status, .passed)
+            let record = try XCTUnwrap(ledger.records().first { $0.operation == .gatewayDiagnostics })
+            XCTAssertEqual(record.outcome, .cancelled)
+            XCTAssertEqual(record.failure, .cancelled)
+            XCTAssertTrue(AIOperationDiagnosticFilter.warnings.includes(record))
+            XCTAssertFalse(AIOperationDiagnosticFilter.errors.includes(record))
+        }
+    }
+
+    func testRejectedTranslationRetriesKeepAttemptAndRequestCorrelation() async throws {
+        let ledger = AIOperationDiagnostics(defaults: defaults)
+        let trace = ledger.begin(operation: .translate, origin: .keyboardManualAction)
+        let adapter = UniversalAIConnectorAdapter(factory: { _ in DiagnosticRuntime(completion: .stop) }, diagnostics: ledger)
+        let service = KeyboardAIService(connector: adapter, diagnostics: ledger)
+        let config = AppConfig(apiKey: "fixture-key", gatewayURL: "https://gateway.example/v1", selectedModel: "fixture-model", isConfigured: true, grammarCorrectionVerified: true, grammarCorrectionContractVersion: "fixture-contract")
+        do {
+            _ = try await AIOperationDiagnosticContext.$traceID.withValue(trace) {
+                try await service.performResult(action: .translate(.arabic), on: "Good morning, I hope you are well today.", config: config)
+            }
+            XCTFail("Expected two rejected translations")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .unreliableTranslation(.arabic))
+        }
+        let record = try XCTUnwrap(ledger.record(traceID: trace))
+        let requests = try XCTUnwrap(record.requests)
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(Set(requests.map(\.id)).count, 2)
+        for (offset, request) in requests.enumerated() {
+            let events = record.events.filter { $0.requestID == request.id }
+            XCTAssertTrue(Set(events.map(\.stage)).isSuperset(of: [.promptConstruction, .transport, .validation]))
+            let validation = events.filter { $0.stage == .validation && $0.failure != nil }
+            XCTAssertFalse(validation.isEmpty)
+            XCTAssertTrue(validation.allSatisfy { $0.attempt == offset + 1 })
+        }
+        let exhausted = try XCTUnwrap(record.events.last { $0.failure == .retryFailed })
+        XCTAssertEqual(exhausted.attempt, 2)
+        XCTAssertEqual(exhausted.requestID, requests.last?.id)
+    }
+
     @MainActor
     func testCaptureSwitchAndShareConfirmationRespectCancellationAndRevocation() {
         let ledger = AIOperationDiagnostics(defaults: defaults)
@@ -609,5 +660,24 @@ private actor DiagnosticChunkRuntime: UniversalAIConnectorRuntime {
             id: .init(rawValue: UUID().uuidString), target: request.target,
             outputs: [.init(id: .init(rawValue: UUID().uuidString), index: 0, kind: .text,
                             text: input.replacingOccurrences(of: " are ", with: " is "))], completionReason: .stop)
+    }
+}
+
+private final class DiagnosticCancellationConnector: OpenKeyboardAIConnectorServing, @unchecked Sendable {
+    func close() {}
+    func listModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        return ["fixture-model"]
+    }
+    func respond(to request: OpenKeyboardAIRequest, profile: OpenKeyboardGatewayProfile) async throws -> String {
+        throw CancellationError()
+    }
+}
+
+/// Completes discovery while marking the manager task cancelled, exercising the loop guard
+/// between probes without relying on timing in the connector deadline's child task.
+private final class DiagnosticCancelledAfterDiscoveryManager: NetworkManager {
+    override func fetchModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        withUnsafeCurrentTask { $0?.cancel() }
+        return ["fixture-model"]
     }
 }
