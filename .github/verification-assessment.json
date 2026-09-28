@@ -24,7 +24,7 @@
     "OpenKeyboard/Views/ContentView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "4ea1222f86a0310852bc5939f8cb8512cedf47f2"
+        "oid": "0bcee8ac19aba9165a17c0651a9ead623e80c7cf"
       },
       "before": {
         "mode": "100644",
@@ -54,7 +54,7 @@
     "OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "e764db5f20388af64db79d333c1dfaca4305469a"
+        "oid": "fbdf31fac12dc63a7bcbf7a585ee7c99c9296afe"
       },
       "before": {
         "mode": "100644",
@@ -83,8 +83,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "The deterministic UI-target suite passed 446 tests, including initial, awaiting-confirmation, and confirmed Home states, and the standard quick gate passed. Normal Simulator proof of the Settings return and extension confirmation remains a separate requirement before publication.",
-  "rationale": "The complete feature diff changes only the keyboard extension Full Access hint, App Group UI state, containing-app navigation and product copy, and focused regression tests. The extension preserves the original AI request and text-change call order. No gateway request, response parser, model selection, semantic contract, or AI capability behavior changes; a live gateway test would not verify Settings return visibility.",
+  "proof": "The deterministic UI-target suite passed 446 tests, including initial, awaiting-confirmation, and confirmed Home states. A focused real-extension UI regression passed after typing and dismissing the check sheet without relaunching the app, and the standard quick gate passed. Normal Simulator proof of the Settings return and extension confirmation is a separate requirement before publication.",
+  "rationale": "The complete feature diff changes only the keyboard extension Full Access hint, App Group UI state and pending-status refresh, containing-app navigation and product copy, and focused regression tests. The extension preserves the original AI request and text-change call order. No gateway request, response parser, model selection, semantic contract, or AI capability behavior changes; a live gateway test would not verify Settings return visibility.",
   "requirement_id": "R3",
   "schema": 1
 }
