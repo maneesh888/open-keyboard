@@ -32,6 +32,17 @@ not restate or weaken the repository's evidence, secret, git, or review gates.
    pinned semantic-contract submodule for prompt/schema/adapter work only after the needed
    repository mutation is authorized.
 
+## Select applicable evidence
+
+Apply `AGENTS.md` verification applicability before selecting or reviewing gates. Inspect the
+actual changed behavior and its dependencies, not just filenames. A non-applicable test is not a
+missing requirement. For a diff-bound assessment, read `docs/VERIFICATION_APPLICABILITY.md`, verify
+its complete bindings and named requirement row, and independently evaluate its rationale and
+alternative proof. Do not accept a manifest as self-approval or silently narrow acceptance criteria.
+Normal runtime evidence exercises the affected app surface; extension and live interactions are
+required only when the acceptance criterion involves them. Preserve valid equivalent evidence and
+escalate only actual gaps. Keep all applicable exact-head, review, and protected-check gates.
+
 ## Implement and verify
 
 1. Preserve unrelated work and keep edits inside the work order.
@@ -78,8 +89,9 @@ own verification and approve the exact head without granting device access.
 
 XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
 diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
-lifecycle, Apply/Copy/Back/Rerun, live gateway, and result-presentation changes require the normal
-runtime route in `AGENTS.md` and `docs/REAL_EXTENSION_SMOKE_PLAN.md`.
+lifecycle, Apply/Copy/Back/Rerun, and result-presentation changes require the applicable normal
+runtime route in `AGENTS.md` and `docs/REAL_EXTENSION_SMOKE_PLAN.md`. Nonvisual gateway criteria may
+use relevant live evidence without an unrelated UI walkthrough.
 
 Use a three-tier normal-Simulator escalation hierarchy. First use a purpose-built Simulator
 accessibility/control integration to inspect the normal app's accessibility hierarchy, operate

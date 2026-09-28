@@ -107,6 +107,7 @@ require_iphone_16_simulator() {
 
 require_standard_env
 require_command bash "Bash runs the committed repository scripts."
+require_command python3 "Install Python 3 for diff-bound verification assessments."
 require_command git "Git provides source and exact-head checks."
 require_command realpath "realpath enforces canonical local-seed containment."
 require_command rg "Ripgrep performs fail-closed policy and secret scanning."
