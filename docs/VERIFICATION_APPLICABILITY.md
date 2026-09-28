@@ -75,6 +75,24 @@ provider behavior. Keep privacy/consent regression coverage even when live model
 ## Rolling out policy changes
 
 A candidate cannot replace its trusted-base classifier/helper to approve its own assessment.
-An older base therefore continues to enforce its existing live requirement until the correction
-lands. Complete that existing gate for the policy PR, then use the merged policy for feature PRs.
-Do not disable protection, forge live assertions, or invent human approval to bootstrap a change.
+The live workflow additionally contains a narrow, literal policy-file allowlist. This is an
+explicit change to the workflow trust boundary: a complete policy-only diff can select no live
+execution even when the base classifier selects differential. The old live test is not claimed as
+executed or passed. This corrects the rollout requirement itself instead of requiring unrelated
+model calls to introduce the correction.
+
+The rule checks the entire merge-base-to-head diff with NUL-delimited paths and rename detection
+disabled. Existing allowlisted files must remain regular blobs with identical modes. Only the
+four explicitly designated documentation/helper/test files may be added, at their expected modes.
+Deletions, mode/type changes, unknown paths, shipping code, dependencies, runtime configuration,
+seeds, live runners, and assessment manifests cannot use this rule. Invalid Git objects or diff
+output fail the job; they never select a fallback. Every other diff uses the trusted-base result.
+Trusted classifier failures still fail the job, and evidence validators remain base-loaded.
+The inline boundary interpreter uses isolated mode so checkout modules and PYTHONPATH cannot
+replace its standard-library imports before the diff is checked.
+
+Path membership proves scope, not safety. Policy scripts can execute commands, so independent
+exact-head review must inspect their full contents and dependencies and explicitly assess this
+boundary. Full deterministic verification, protected technical and requirement checks, retained
+independent review, and guarded merge remain mandatory. The applicability rule grants no merge
+authorization. Do not disable protection, forge live assertions, or invent human approval.

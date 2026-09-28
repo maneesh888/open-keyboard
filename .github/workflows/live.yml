@@ -42,7 +42,7 @@ jobs:
             git show "$PR_BASE_SHA:scripts/$validator_name" > "$validator_path"
             chmod +x "$validator_path"
           done
-          # Older bases retain their existing classifier until this policy lands.
+          # Assessment decisions always use the base-owned helper when available.
           if git cat-file -e "$PR_BASE_SHA:scripts/verification-assessment.py" 2>/dev/null; then
             git show "$PR_BASE_SHA:scripts/verification-assessment.py" > "$validator_root/verification-assessment.py"
           fi
@@ -79,6 +79,68 @@ jobs:
 
           if [[ ! "$PR_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "The pull-request head is not a full commit SHA." >&2
+            exit 1
+          fi
+          # Policy code can change applicability without an unrelated model call.
+          # This is a candidate-workflow trust boundary, independently reviewed with
+          # the full contents; it never authorizes merge or replaces trusted validators.
+          policy_only="$(python3 -I <<'PY_POLICY'
+          import os
+          import subprocess
+
+          # This exact allowlist is a reviewed CI policy boundary, not proof of file safety.
+          # Existing entries may only be modified; additions are explicitly designated.
+          existing = {
+              ".agents/skills/develop-openkeyboard/SKILL.md": "100644",
+              ".agents/skills/review-verify-merge-pr/SKILL.md": "100644",
+              ".codex/agents/pr-reviewer.toml": "100644",
+              ".github/pull_request_template.md": "100644",
+              ".github/workflows/live.yml": "100644",
+              "AGENTS.md": "100644",
+              "docs/DEVELOPMENT_WORKFLOW.md": "100644",
+              "scripts/check-environment.sh": "100755",
+              "scripts/check.sh": "100755",
+              "scripts/live-impact.sh": "100755",
+              "scripts/tests/live-evidence-policy-test.sh": "100755",
+              "scripts/tests/live-impact-test.sh": "100755",
+              "scripts/tests/live-policy-bootstrap-test.sh": "100755",
+              "scripts/tests/workflow-policy-test.sh": "100755",
+          }
+          addable = {
+              "docs/VERIFICATION_APPLICABILITY.md": "100644",
+              "scripts/verification-assessment.py": "100644",
+              "scripts/tests/verification-assessment-test.py": "100644",
+              "scripts/tests/policy-only-workflow-test.py": "100644",
+          }
+
+          def git(*args):
+              return subprocess.check_output(["git", *args])
+
+          base = git("merge-base", os.environ["PR_BASE_SHA"], os.environ["PR_HEAD_SHA"]).decode().strip()
+          # Raw, NUL-delimited, no rename collapsing, and no pathspec: enumerate the whole diff.
+          raw = git("diff", "--raw", "--no-abbrev", "--no-renames", "-z", base, os.environ["PR_HEAD_SHA"], "--")
+          records = raw.split(b"\0")
+          if records.pop() != b"" or len(records) % 2:
+              raise SystemExit("Incomplete policy diff enumeration")
+          eligible = bool(records)
+          for index in range(0, len(records), 2):
+              fields = records[index].decode("ascii").split()
+              if len(fields) != 5 or not fields[0].startswith(":"):
+                  raise SystemExit("Malformed policy diff enumeration")
+              before, after, _, _, status = fields
+              path = os.fsdecode(records[index + 1])
+              expected = existing.get(path, addable.get(path))
+              modification = status == "M" and before[1:] == after == expected
+              addition = status == "A" and path in addable and before == ":000000" and after == expected
+              eligible = eligible and (modification or addition)
+          print("true" if eligible else "false")
+          PY_POLICY
+          )"
+          if [[ "$policy_only" == true ]]; then
+            echo "Live execution is not required by the revised policy-only applicability rule."
+            trusted_live_impact=none
+          elif [[ "$policy_only" != false ]]; then
+            echo "Invalid policy-only classification." >&2
             exit 1
           fi
           echo "LIVE_IMPACT=$trusted_live_impact" >> "$GITHUB_ENV"
