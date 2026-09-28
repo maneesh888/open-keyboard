@@ -295,6 +295,40 @@ final class KeyboardExtensionConfiguredUITests: XCTestCase {
         XCTAssertFalse(home.buttons["open_keyboard_settings_button"].waitForExistence(timeout: 2))
     }
 
+    func testHomeDismissesAccessCheckAfterRealKeyboardReportsFullAccessWithoutRelaunch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--uitesting", "--skip-onboarding", "--seed-keyboard-settings-visited"]
+        app.launch()
+
+        let checkButton = app.buttons["check_keyboard_access_button"]
+        XCTAssertTrue(checkButton.waitForExistence(timeout: 5))
+        checkButton.tap()
+
+        let input = app.textViews["keyboard_access_check_input"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        tapCenter(of: input)
+
+        let keyboardApp = XCUIApplication()
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        XCTAssertTrue(
+            waitForOpenKeyboard(keyboardApp: keyboardApp, hostInput: input, springboard: springboard),
+            "Open Keyboard extension did not appear"
+        )
+        XCTAssertFalse(keyboardApp.staticTexts["Full Access required"].exists)
+
+        let qKey = keyboardApp.buttons["q"]
+        XCTAssertTrue(qKey.waitForExistence(timeout: 2))
+        qKey.tap()
+        expectation(for: NSPredicate(format: "value == %@", "q"), evaluatedWith: input)
+        waitForExpectations(timeout: 3)
+
+        app.buttons["Done"].tap()
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: checkButton)
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(app.buttons["open_keyboard_settings_button"].exists)
+        app.terminate()
+    }
+
     func testRealKeyboardExtensionShowsConfiguredAIControlsWhenSharedConfigSeeded() throws {
         let sourceText = "All of these are no bulb in the universe."
         let encodedSource = sourceText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? sourceText

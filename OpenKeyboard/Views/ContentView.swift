@@ -5,6 +5,7 @@
 //  Main app view
 //
 
+import Combine
 import SwiftUI
 
 struct ContentView: View {
@@ -219,18 +220,34 @@ struct ContentView: View {
 private final class KeyboardAccessViewModel: ObservableObject {
     @Published private(set) var hasFullAccess = false
     @Published private(set) var needsConfirmation = false
+    private var confirmationMonitor: AnyCancellable?
 
     func refresh() {
         hasFullAccess = AppConfig.keyboardHasFullAccess()
         needsConfirmation = !hasFullAccess && AppConfig.keyboardAccessNeedsConfirmation()
         if hasFullAccess {
+            confirmationMonitor = nil
             AppConfig.updateKeyboardAccessNeedsConfirmation(false)
+        } else if needsConfirmation {
+            startConfirmationMonitor()
+        } else {
+            confirmationMonitor = nil
         }
     }
 
     func didOpenKeyboardSettings() {
         AppConfig.updateKeyboardAccessNeedsConfirmation(true)
         needsConfirmation = true
+        startConfirmationMonitor()
+    }
+
+    private func startConfirmationMonitor() {
+        guard confirmationMonitor == nil else { return }
+        confirmationMonitor = Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
     }
 }
 
