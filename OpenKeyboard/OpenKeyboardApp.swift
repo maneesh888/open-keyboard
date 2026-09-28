@@ -318,8 +318,13 @@ struct OpenKeyboardApp: App {
 
         if arguments.contains("--seed-keyboard-full-access") {
             AppConfig.updateKeyboardFullAccess(true, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(false, in: sharedDefaults)
         } else if arguments.contains("--clear-keyboard-full-access") {
             AppConfig.updateKeyboardFullAccess(false, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(false, in: sharedDefaults)
+        } else if arguments.contains("--seed-keyboard-settings-visited") {
+            AppConfig.updateKeyboardFullAccess(false, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(true, in: sharedDefaults)
         }
     }
 

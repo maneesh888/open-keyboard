@@ -720,6 +720,7 @@ struct AppConfig: Codable, Equatable {
     static let gatewayLegacyUnversionedSecretCleanupPendingKey = "gatewayProfile.legacyUnversionedSecretCleanupPending.v1"
     static let hasCompletedOnboardingKey = "hasCompletedOnboarding"
     static let keyboardFullAccessKey = "keyboardExtension.hasFullAccess"
+    static let keyboardAccessNeedsConfirmationKey = "keyboardAccess.needsConfirmation"
     static let gatewayConnectionRetestInterval: TimeInterval = 60 * 60
     private static let keyboardUITestConfigOriginKey = "keyboardExtension.gatewayConfigIsUITestSeed"
     private static let keyboardUITestConfigSeedIDKey = "keyboardExtension.gatewayConfigSeedID"
@@ -759,6 +760,25 @@ extension AppConfig {
         guard let defaults = sharedDefaults() else { return false }
         defaults.synchronize()
         return keyboardHasFullAccess(from: defaults)
+    }
+
+    static func keyboardAccessNeedsConfirmation(from defaults: UserDefaults) -> Bool {
+        defaults.bool(forKey: keyboardAccessNeedsConfirmationKey)
+    }
+
+    static func keyboardAccessNeedsConfirmation() -> Bool {
+        guard let defaults = sharedDefaults() else { return false }
+        defaults.synchronize()
+        return keyboardAccessNeedsConfirmation(from: defaults)
+    }
+
+    static func updateKeyboardAccessNeedsConfirmation(
+        _ needsConfirmation: Bool,
+        in defaults: UserDefaults? = sharedDefaults()
+    ) {
+        guard let defaults else { return }
+        defaults.set(needsConfirmation, forKey: keyboardAccessNeedsConfirmationKey)
+        defaults.synchronize()
     }
 
     static func updateKeyboardFullAccess(
