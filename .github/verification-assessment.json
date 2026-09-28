@@ -1,0 +1,38 @@
+{
+  "base": "a0889a06cbb0dcd7dec373f6ea99cfd0ed4bbc1d",
+  "changes": {
+    "OpenKeyboard/Models/AppConfig.swift": {
+      "after": {"mode": "100644", "oid": "12f377191bd8615a28a0cf46c645babf8d979b8d"},
+      "before": {"mode": "100644", "oid": "9747c0bb9908db1cda2efc6431c9f9f8e73d835a"}
+    },
+    "OpenKeyboard/OpenKeyboardApp.swift": {
+      "after": {"mode": "100644", "oid": "899fe50c48103422e557d72b814a654a79639106"},
+      "before": {"mode": "100644", "oid": "9ba6598db8a3f6ecaa3f3a911de32607544de28b"}
+    },
+    "OpenKeyboard/Views/ContentView.swift": {
+      "after": {"mode": "100644", "oid": "fe7f6447ad0f92efe1c7afa511ca1475d79b5eb7"},
+      "before": {"mode": "100644", "oid": "9a2cf516f4a9e42339e34c9bcd9fa7ff4fa4e9bb"}
+    },
+    "OpenKeyboardExtension/KeyboardViewController.swift": {
+      "after": {"mode": "100644", "oid": "242110243fd87598772a770441668b4c2875144f"},
+      "before": {"mode": "100644", "oid": "a3b105cecacfe0c798d95cf387d8173f8a93b6e8"}
+    },
+    "OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift": {
+      "after": {"mode": "100644", "oid": "e764db5f20388af64db79d333c1dfaca4305469a"},
+      "before": {"mode": "100644", "oid": "93be4288bfeec26286b14dafa1607c0f6dff0adc"}
+    },
+    "OpenKeyboardUITests/OnboardingScreenshotUITests.swift": {
+      "after": {"mode": "100644", "oid": "1907020eef731948439ae5a4f53ccf70e6060b6e"},
+      "before": {"mode": "100644", "oid": "9d5ff4135da2dd787aebb9fe53dda9054205bca2"}
+    },
+    "OpenKeyboardUITests/SharedAppConfigTests.swift": {
+      "after": {"mode": "100644", "oid": "dd38a5e96584ee950d4a4478f5cc89801f117305"},
+      "before": {"mode": "100644", "oid": "aeaf9c4115752f760fafbb3ee30641044da2ed84"}
+    }
+  },
+  "live_impact": "none",
+  "proof": "Automated App Group persistence and real-extension handoff regressions plus direct normal Simulator screenshots of Full Access enabled and Home after extension use support the after-report behavior at capture SHA f29dbcc. The merge commit changed shipping ContentView and requires fresh exact-head runtime proof; a fresh Settings grant before extension use still needs separate proof or a corrected implementation.",
+  "rationale": "The feature diff changes only the keyboard extension Full Access observation, its App Group UI hint, the Home shortcut and focused debug test controls. It does not alter gateway requests, response parsing, provider or model selection, semantic contracts, or AI capability behavior; live model calls would not test the changed visibility. The first return immediately after a fresh Settings grant remains a separate unverified acceptance gap because the hint is written only when the extension runs.",
+  "requirement_id": "R3",
+  "schema": 1
+}
