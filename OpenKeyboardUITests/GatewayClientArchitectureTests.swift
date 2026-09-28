@@ -298,6 +298,110 @@ final class GatewayClientArchitectureTests: XCTestCase {
         }
     }
 
+    func testUniversalConnectorClassifiesClosedMalformedResponseSubreasons() throws {
+        let expectedTarget = UniversalAiTarget(
+            providerId: UniversalAiProviderId(rawValue: "openai-compatible"),
+            modelId: UniversalAiModelId(rawValue: "exact-model")
+        )
+        let otherTarget = UniversalAiTarget(
+            providerId: UniversalAiProviderId(rawValue: "another-provider"),
+            modelId: UniversalAiModelId(rawValue: "another-model")
+        )
+        let textOutput = UniversalAiOutput(
+            id: UniversalAiOutputId(rawValue: "output-1"),
+            index: 0,
+            kind: .text,
+            text: "safe fixture"
+        )
+        let structuredOutput = UniversalAiOutput(
+            id: UniversalAiOutputId(rawValue: "output-1"),
+            index: 0,
+            kind: .text,
+            text: "safe fixture",
+            structuredJson: UniversalAiStructuredOutputValue(value: .object(UniversalAiJsonObject()))
+        )
+        let nonTextOutput = UniversalAiOutput(
+            id: UniversalAiOutputId(rawValue: "output-1"),
+            index: 0,
+            kind: .structuredJson,
+            text: nil
+        )
+        let unexpectedIndexOutput = UniversalAiOutput(
+            id: UniversalAiOutputId(rawValue: "output-1"),
+            index: 1,
+            kind: .text,
+            text: "safe fixture"
+        )
+        let emptyTextOutput = UniversalAiOutput(
+            id: UniversalAiOutputId(rawValue: "output-1"),
+            index: 0,
+            kind: .text,
+            text: " \n "
+        )
+        func response(
+            target: UniversalAiTarget = expectedTarget,
+            outputs: [UniversalAiOutput] = [textOutput],
+            completionReason: UniversalAiCompletionReason = .stop
+        ) -> UniversalAiResponse {
+            UniversalAiResponse(
+                contractVersion: UniversalAiRequest.currentContractVersion,
+                id: UniversalAiResponseId(rawValue: "response-1"),
+                target: target,
+                outputs: outputs,
+                completionReason: completionReason
+            )
+        }
+
+        let localCases: [(UniversalAiResponse, AIOperationDiagnosticSubreason)] = [
+            (response(target: otherTarget), .targetMismatch),
+            (response(completionReason: .contentFilter), .unexpectedCompletionReason),
+            (response(outputs: []), .invalidOutputCount),
+            (response(outputs: [textOutput, textOutput]), .invalidOutputCount),
+            (response(outputs: [unexpectedIndexOutput]), .unexpectedOutputIndex),
+            (response(outputs: [nonTextOutput]), .nonTextOutput),
+            (response(outputs: [structuredOutput]), .unexpectedStructuredOutput),
+            (response(outputs: [emptyTextOutput]), .missingOrEmptyText),
+        ]
+
+        for (response, expectedSubreason) in localCases {
+            XCTAssertThrowsError(
+                try UniversalAIConnectorAdapter.validatedPlainText(
+                    from: response,
+                    expectedTarget: expectedTarget
+                )
+            ) { error in
+                XCTAssertEqual(
+                    UniversalAIConnectorAdapter.diagnosticSubreason(for: error),
+                    expectedSubreason
+                )
+                XCTAssertEqual(
+                    UniversalAIConnectorAdapter.mappedError(error) as? OpenKeyboardAIConnectorError,
+                    .invalidResponse
+                )
+            }
+        }
+
+        let connectorCases: [(Error, AIOperationDiagnosticSubreason)] = [
+            (try connectorError(category: .protocol, code: "malformed_provider_response"), .malformedProviderResponse),
+            (try connectorError(category: .protocol, code: "malformed_provider_stream"), .malformedProviderStream),
+            (try connectorError(category: .protocol, code: "invalid_structured_provider_response"), .invalidStructuredProviderResponse),
+            (
+                UniversalAiContractValidationError(
+                    code: "invalid_contract",
+                    path: "/response",
+                    message: "Private connector contract detail."
+                ),
+                .connectorContractValidationFailure
+            ),
+        ]
+        for (error, expectedSubreason) in connectorCases {
+            XCTAssertEqual(
+                UniversalAIConnectorAdapter.diagnosticSubreason(for: error),
+                expectedSubreason
+            )
+        }
+    }
+
     func testUniversalConnectorMapsStablePublicErrorCategoriesAndCodes() throws {
         let cases: [(UniversalAiConnectorError, OpenKeyboardAIConnectorError)] = [
             (try connectorError(category: .authentication, code: "provider_authentication_failed"), .unauthorized),

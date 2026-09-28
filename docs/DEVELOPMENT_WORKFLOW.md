@@ -23,8 +23,10 @@ After initializing submodules, run `./scripts/bootstrap-universal-ai-connector.s
 Xcode build. Repository iOS test routes call it automatically. The bootstrap verifies the checkout
 against the recorded gitlink, refuses tracked connector modifications, invokes the connector's
 canonical XCFramework build, and validates its arm64 iOS device and Simulator slices. Connector
-gitlink, bootstrap, package-project, adapter, model-discovery, or generation-pipeline changes are
-gateway-differential and require the exact-head live matrix plus normal simulator runtime proof.
+gitlink changes require the exact-head differential live matrix. Bootstrap, package-project,
+adapter, model-discovery, and generation-pipeline changes default to live verification, subject to
+behavior-scoped assessment. Normal simulator proof applies when acceptance includes a user-visible
+workflow; nonvisual gateway criteria may use relevant live evidence.
 See `docs/UNIVERSAL_AI_CONNECTOR.md` for the runtime ownership boundary.
 
 ## Purpose
@@ -89,9 +91,9 @@ Every verification artifact belongs to one of three runtime evidence classes:
    launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. An
    XCUITest that installs and activates the real keyboard extension remains automated evidence.
 2. **Normal simulator runtime proof:** a normally installed and launched app, without
-   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. The actual
-   extension is exercised through an ordinary host-app text field and visible production UI, with
-   screenshots captured directly from Simulator/Xcode outside XCTest.
+   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. Exercise the
+   affected normal app surface; extension/handoff criteria use the actual extension through an
+   ordinary host-app text field. Capture screenshots directly from Simulator/Xcode outside XCTest.
 3. **Physical-device proof:** the exact signed build is installed on the configured device and
    exercised through the normal extension lifecycle. AI verification requires screenshots that the
    AI captures and inspects. Human verification uses explicit exact-head owner approval and never
@@ -137,15 +139,19 @@ credential-free push gate.
 
 ## Targeted routing
 
+Select the smallest route that covers the acceptance criterion. These are starting points, not
+blanket requirements for every edit in a shared file; apply verification applicability first.
+
 | Changed surface | Targeted verification |
 |---|---|
 | Model, parser, or core service | `./scripts/ios/test.sh core` |
 | Host app or extension compilation | `./scripts/ios/test.sh build` |
-| Host app user flow | `./scripts/ios/test.sh ui` for automated regression; normal simulator runtime proof before push |
+| Host app user flow | Focused affected UI regression; normal simulator proof of the affected flow |
 | Visual layout | `./scripts/ios/test.sh screenshots` for automated regression; direct Simulator screenshots from a normal launch before push |
-| Keyboard extension/App Group behavior | `./scripts/ios/test.sh real-keyboard-live` for automated real-extension regression; normal host-app runtime route before push |
+| Keyboard extension/App Group behavior | Focused extension/persistence regression and normal handoff proof; `real-keyboard-live` only when verifying live AI behavior |
 | Gateway runtime or contract | `./scripts/check-live.sh gateway` for automated transport/contract evidence; normal runtime proof when user-visible semantic behavior changes |
-| Model capability, long input, parser compatibility, retry, or operation-scoped warnings | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
+| Parser compatibility or retry | Relevant live schema/semantic/failure evidence; assess whether the gateway or differential route fits the changed behavior |
+| Model capability boundary, model-role comparison, or requested matrix | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
 ## Persistent local configuration
@@ -249,14 +255,16 @@ The path must be `.githooks`.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
 - The exact-head impact classifier selects `gateway-differential` only for changes touching
   model-capability classification, long-input handling, parser compatibility, retry behavior,
-  automatic-analysis warnings, manual-action scope, Translate warning scope, or the matrix workflow
-  itself. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
+  automatic-analysis warnings, manual-action scope, Translate warning scope, or runtime matrix
+  execution itself. Policy-only classification is covered by deterministic tests. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
   explicitly. Unrelated pull requests do not run the two-profile matrix.
 
 ## Normal simulator and device proof gate
 
-Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, live gateway
-behavior, or result presentation require normal simulator runtime proof before push. Local
+Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun behavior, or result
+presentation require normal simulator runtime proof of the affected surface before push. Nonvisual
+gateway criteria may use relevant live transport/schema/semantic evidence without an unrelated UI
+walkthrough. Local
 implementation and commits may proceed after deterministic tests only when explicitly authorized
 and no proof-first constraint remains. Proof-first model-capability, long-input, parser, retry, or
 semantic-behavior work requires the requested live result and later implementation authority before
@@ -264,11 +272,11 @@ production edits or commit.
 
 Normal simulator runtime proof must:
 
-- install and normally launch the actual app and bundled keyboard extension;
+- install and normally launch the actual app; exercise its bundled extension when relevant;
 - avoid `--uitesting`, debug-state injection, seeded result panels, component/test hosts, and
   XCTest-driven interaction;
-- focus an ordinary host-app text field and activate OpenKeyboard through the normal keyboard
-  lifecycle;
+- for extension requirements, focus an ordinary host-app text field and activate OpenKeyboard
+  through the normal keyboard lifecycle; otherwise exercise the affected normal app surface;
 - invoke the action through visible production UI and use the configured live gateway when
   semantic behavior is being verified;
 - capture screenshots directly from Simulator/Xcode, never from `XCTAttachment`;
@@ -406,9 +414,12 @@ bodies.
 The exact trusted base must expose the private-schema marker. Missing and legacy validators
 fail closed without candidate fallbacks, compatibility projections, or fabricated measurements.
 
-The classifier treats every file under `OpenKeyboard/`, `OpenKeyboardCore/Sources/`, and
-`OpenKeyboardExtension/` as runtime-sensitive regardless of extension. This deliberately favors a
-live recheck over allowing a new resource or configuration format to bypass gateway verification.
+The classifier keeps conservative defaults for shipping paths, with diff-bound assessments for
+changes whose actual behavior needs a smaller gate. Policy-only classifier, validator, workflow,
+hook, and documentation changes do not themselves require model calls. See
+[Verification applicability](VERIFICATION_APPLICABILITY.md) for assessment creation, freshness,
+independent review, and trusted-base rollout. Runtime proof follows the affected surface: a local
+app screen does not require an unrelated extension or gateway interaction.
 
 ## Independent pull-request review
 

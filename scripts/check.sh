@@ -72,6 +72,8 @@ run_script_policy_tests() {
   "$ROOT/scripts/tests/simulator-credential-bootstrap-policy-test.sh"
   "$ROOT/scripts/tests/universal-ai-connector-policy-test.sh"
   "$ROOT/scripts/tests/live-impact-test.sh"
+  python3 "$ROOT/scripts/tests/verification-assessment-test.py"
+  python3 "$ROOT/scripts/tests/policy-only-workflow-test.py"
   "$ROOT/scripts/tests/live-policy-bootstrap-test.sh"
   "$ROOT/scripts/tests/live-test-safety-test.sh"
   "$ROOT/scripts/tests/live-evidence-policy-test.sh"

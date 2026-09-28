@@ -11,10 +11,12 @@ git -C "$FIXTURE/repo" config user.name Fixture
 git -C "$FIXTURE/repo" config user.email fixture@example.invalid
 printf '#!/bin/bash\necho gateway-differential\n' > "$FIXTURE/repo/scripts/live-impact.sh"
 printf '#!/bin/bash\nreadonly OPEN_KEYBOARD_REDACTED_LIVE_EVIDENCE_SCHEMA=1\nexit 37\n' > "$FIXTURE/repo/scripts/validate-pr-live-evidence.sh"
+cp "$ROOT/scripts/verification-assessment.py" "$FIXTURE/repo/scripts/verification-assessment.py"
 git -C "$FIXTURE/repo" add .
 git -C "$FIXTURE/repo" -c core.hooksPath=/dev/null commit -qm trusted
 base="$(git -C "$FIXTURE/repo" rev-parse HEAD)"
 # Candidate files must never replace trusted policy.
+printf "untrusted candidate\n" > "$FIXTURE/repo/scripts/verification-assessment.py"
 printf '#!/bin/bash\necho none\n' > "$FIXTURE/repo/scripts/live-impact.sh"
 printf '#!/bin/bash\nexit 0\n' > "$FIXTURE/repo/scripts/validate-pr-live-evidence.sh"
 prepare() (
@@ -23,6 +25,7 @@ prepare() (
    bash -e -o pipefail "$FIXTURE/prepare.sh" > "$FIXTURE/log" 2>&1
 )
 prepare "$base"
+cmp "$ROOT/scripts/verification-assessment.py" "$FIXTURE/tmp/live-policy-validators/verification-assessment.py"
 [[ "$(bash "$FIXTURE/tmp/live-policy-validators/live-impact.sh")" == gateway-differential ]]
 status=0
 bash "$FIXTURE/tmp/live-policy-validators/validate-pr-live-evidence.sh" || status=$?
