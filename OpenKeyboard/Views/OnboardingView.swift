@@ -43,6 +43,16 @@ struct OnboardingView: View {
                     .padding(.top, 6)
                     .padding(.bottom, 14)
             }
+#if DEBUG
+            .overlay(alignment: .top) {
+                HStack {
+                    debugPageButton(direction: -1, label: "Previous onboarding page", identifier: "onboarding_debug_previous")
+                    Spacer()
+                    debugPageButton(direction: 1, label: "Next onboarding page", identifier: "onboarding_debug_next")
+                }
+                .padding(.horizontal, 8)
+            }
+#endif
         }
         .sheet(isPresented: $showingSettings) {
             SettingsView()
@@ -50,6 +60,23 @@ struct OnboardingView: View {
         }
         .tint(OpenKeyboardTheme.Brand.cyan)
     }
+
+#if DEBUG
+    // Invisible corner controls provide a touch/accessibility fallback without covering the swipe area.
+    private func debugPageButton(direction: Int, label: String, identifier: String) -> some View {
+        Button {
+            currentPage = min(max(currentPage + direction, 0), 3)
+        } label: {
+            Color.clear
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
+        .disabled(direction < 0 ? currentPage == 0 : currentPage == 3)
+    }
+#endif
 }
 
 struct WelcomePage: View {
