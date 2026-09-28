@@ -40,17 +40,11 @@ live_required="false"
 differential_required="false"
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
-    .github/pull_request_template.md | \
-      .github/workflows/live.yml | \
-      .gitmodules | \
-      .githooks/pre-push | \
+    .gitmodules | \
       scripts/check-live.sh | \
-      scripts/check.sh | \
       scripts/check-semantic-prompt-contract.sh | \
       scripts/bootstrap-universal-ai-connector.sh | \
       scripts/tests/universal-ai-connector-policy-test.sh | \
-      scripts/live-impact.sh | \
-      scripts/validate-pr-live-evidence.sh | \
       scripts/ios/enable-openkeyboard-simulator-keyboard.sh | \
       scripts/ios/live-test-safety.sh | \
       scripts/ios/openkeyboard-gateway.seed.env.example | \
@@ -70,16 +64,12 @@ while IFS= read -r -d '' changed_path; do
   esac
 
   case "$changed_path" in
-    .github/workflows/live.yml | \
-      .gitmodules | \
+    .gitmodules | \
       Vendor/semantic-prompt-contract | \
       Vendor/universal-ai-connector | \
       scripts/bootstrap-universal-ai-connector.sh | \
       scripts/tests/universal-ai-connector-policy-test.sh | \
       scripts/check-live.sh | \
-      scripts/live-impact.sh | \
-      scripts/live-policy-bootstrap.sh | \
-      scripts/validate-pr-live-evidence.sh | \
       scripts/ios/live-test-safety.sh | \
       scripts/ios/openkeyboard-gateway.seed.env.example | \
       scripts/ios/seed-simulator-gateway-config.sh | \
@@ -110,9 +100,13 @@ while IFS= read -r -d '' changed_path; do
 done < "$changed_paths_file"
 
 if [[ "$differential_required" == "true" ]]; then
-  echo "gateway-differential"
+  default_impact="gateway-differential"
 elif [[ "$live_required" == "true" ]]; then
-  echo "gateway"
+  default_impact="gateway"
 else
-  echo "none"
+  default_impact="none"
 fi
+
+# Use the helper beside this classifier so CI runs the trusted-base implementation.
+python3 "$(dirname "${BASH_SOURCE[0]}")/verification-assessment.py" \
+  "$ROOT" "$BASE_SHA" "$HEAD_SHA" "$default_impact"

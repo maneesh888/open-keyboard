@@ -141,9 +141,11 @@ class NetworkManager {
     ]
 
     private let connector: OpenKeyboardAIConnectorServing
+    private let diagnostics: AIOperationDiagnostics
 
-    init(connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared) {
+    init(connector: OpenKeyboardAIConnectorServing = UniversalAIConnectorAdapter.shared, diagnostics: AIOperationDiagnostics = .shared) {
         self.connector = connector
+        self.diagnostics = diagnostics
     }
 
     /// Run a correction smoke through the same plain-text chat completions contract
@@ -158,25 +160,32 @@ class NetworkManager {
     }
 
     func testCorrectionSmoke(profile: OpenKeyboardGatewayProfile, model: String) async throws {
-        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
-        let preset = Self.requiredGatewayPreset(id: Self.grammarDiagnosticPresetID)
-        let smokeInput = preset.input
-        let grammarRendering = preset.rendering
-        let content = try await connectorResponseContent(
-            profile: profile,
-            model: trimmedModel,
-            rendering: grammarRendering,
-            timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
-        )
-        do {
-            _ = try await Self.validatePlainTextCorrectionContent(
-                content,
-                inputText: smokeInput,
-                minimumCount: 1
+        try await performDiagnosed(
+            operation: .gatewayConnectionCheck,
+            origin: .hostAppGatewayCheck
+        ) {
+            let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedModel.isEmpty else { throw NetworkError.modelUnavailable }
+            let preset = Self.requiredGatewayPreset(id: Self.grammarDiagnosticPresetID)
+            let smokeInput = preset.input
+            let grammarRendering = preset.rendering
+            let content = try await connectorResponseContent(
+                profile: profile,
+                model: trimmedModel,
+                rendering: grammarRendering,
+                timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
             )
-        } catch {
-            throw NetworkError.unusableCorrection
+            do {
+                _ = try await Self.validatePlainTextCorrectionContent(
+                    content,
+                    inputText: smokeInput,
+                    minimumCount: 1
+                )
+                recordValidation()
+            } catch {
+                recordValidation(failure: .validationRejected)
+                throw NetworkError.unusableCorrection
+            }
         }
     }
 
@@ -202,6 +211,29 @@ class NetworkManager {
         profile: OpenKeyboardGatewayProfile,
         preferredModel: String
     ) async -> GatewayDiagnosticReport {
+        let traceID = diagnostics.begin(
+            operation: .gatewayDiagnostics,
+            origin: .hostAppDiagnostics
+        )
+        diagnostics.record(traceID: traceID, stage: .contextCapture)
+        return await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+            let (report, wasCancelled) = await runGatewayDiagnosticsTracked(
+                profile: profile,
+                preferredModel: preferredModel
+            )
+            diagnostics.complete(
+                traceID: traceID,
+                outcome: wasCancelled ? .cancelled : (report.hasFailures ? .failed : .succeeded),
+                failure: wasCancelled ? .cancelled : (report.hasFailures ? .validationRejected : nil)
+            )
+            return report
+        }
+    }
+
+    private func runGatewayDiagnosticsTracked(
+        profile: OpenKeyboardGatewayProfile,
+        preferredModel: String
+    ) async -> (report: GatewayDiagnosticReport, wasCancelled: Bool) {
         let trimmedPreferredModel = preferredModel.trimmingCharacters(in: .whitespacesAndNewlines)
         var models: [String] = []
         var checks: [GatewayDiagnosticCheck] = []
@@ -218,7 +250,7 @@ class NetworkManager {
         }
         checks.append(modelsOutcome.check)
         guard !modelsOutcome.wasCancelled else {
-            return GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks)
+            return (GatewayDiagnosticReport(selectedModel: trimmedPreferredModel, checks: checks), true)
         }
 
         let selectedModel = trimmedPreferredModel
@@ -263,10 +295,12 @@ class NetworkManager {
                 return capability.success
             }
             checks.append(outcome.check)
-            if outcome.wasCancelled { break }
+            if outcome.wasCancelled {
+                return (GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks), true)
+            }
         }
 
-        return GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks)
+        return (GatewayDiagnosticReport(selectedModel: selectedModel, checks: checks), Task.isCancelled)
     }
 
     private func testDiagnosticCapability(
@@ -294,9 +328,12 @@ class NetworkManager {
                       ) != nil {
                 throw NetworkError.unusableCapability("Dutch translation")
             }
+            recordValidation()
         } catch let error as NetworkError {
+            recordValidation(failure: .validationRejected)
             throw error
         } catch {
+            recordValidation(failure: .validationRejected)
             if presetID == Self.rewriteDiagnosticPresetID {
                 throw NetworkError.unusableCapability("Rewrite and Improve")
             }
@@ -406,24 +443,29 @@ class NetworkManager {
     }
 
     func fetchModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
-        do {
-            return try await OpenKeyboardRequestDeadline.value(
-                timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
-            ) {
-                try await self.connector.listModels(profile: profile)
+        try await performDiagnosed(
+            operation: .modelDiscovery,
+            origin: .hostAppModelDiscovery
+        ) {
+            do {
+                return try await OpenKeyboardRequestDeadline.value(
+                    timeoutInterval: GatewayRequestTimeouts.modelCheckAttempt
+                ) {
+                    try await self.connector.listModels(profile: profile)
+                }
+            } catch let error as NetworkError {
+                throw error
+            } catch is CancellationError {
+                throw NetworkError.cancelled
+            } catch let error as URLError where error.code == .cancelled {
+                throw NetworkError.cancelled
+            } catch let error as URLError where error.code == .timedOut {
+                throw NetworkError.timeout
+            } catch let error as OpenKeyboardAIConnectorError {
+                throw Self.networkError(from: error, responseOperation: false)
+            } catch {
+                throw NetworkError.networkError(error)
             }
-        } catch let error as NetworkError {
-            throw error
-        } catch is CancellationError {
-            throw NetworkError.cancelled
-        } catch let error as URLError where error.code == .cancelled {
-            throw NetworkError.cancelled
-        } catch let error as URLError where error.code == .timedOut {
-            throw NetworkError.timeout
-        } catch let error as OpenKeyboardAIConnectorError {
-            throw Self.networkError(from: error, responseOperation: false)
-        } catch {
-            throw NetworkError.networkError(error)
         }
     }
 
@@ -439,6 +481,7 @@ class NetworkManager {
                 modelID: model,
                 timeoutInterval: timeoutInterval
             )
+            recordPromptConstruction(for: request)
             return try await OpenKeyboardRequestDeadline.value(
                 timeoutInterval: timeoutInterval
             ) {
@@ -456,6 +499,97 @@ class NetworkManager {
             throw Self.networkError(from: error, responseOperation: true)
         } catch {
             throw NetworkError.networkError(error)
+        }
+    }
+
+    private func performDiagnosed<Value>(
+        operation: AIOperationDiagnosticOperation,
+        origin: AIOperationDiagnosticOrigin,
+        work: () async throws -> Value
+    ) async throws -> Value {
+        if AIOperationDiagnosticContext.traceID != nil {
+            return try await work()
+        }
+
+        let traceID = diagnostics.begin(operation: operation, origin: origin)
+        diagnostics.record(traceID: traceID, stage: .contextCapture)
+        do {
+            let value = try await AIOperationDiagnosticContext.$traceID.withValue(traceID) {
+                try await work()
+            }
+            diagnostics.complete(traceID: traceID, outcome: .succeeded)
+            return value
+        } catch is CancellationError {
+            diagnostics.record(
+                traceID: traceID,
+                stage: .cancellation,
+                failure: .cancelled
+            )
+            diagnostics.complete(
+                traceID: traceID,
+                outcome: .cancelled,
+                failure: .cancelled
+            )
+            throw NetworkError.cancelled
+        } catch NetworkError.cancelled {
+            diagnostics.record(
+                traceID: traceID,
+                stage: .cancellation,
+                failure: .cancelled
+            )
+            diagnostics.complete(
+                traceID: traceID,
+                outcome: .cancelled,
+                failure: .cancelled
+            )
+            throw NetworkError.cancelled
+        } catch {
+            diagnostics.complete(
+                traceID: traceID,
+                outcome: .failed,
+                failure: Self.diagnosticFailure(for: error)
+            )
+            throw error
+        }
+    }
+
+    private func recordPromptConstruction(for request: OpenKeyboardAIRequest) {
+        guard let traceID = AIOperationDiagnosticContext.traceID else { return }
+        let byteCount = request.messages.reduce(0) { partial, message in
+            partial + message.content.lengthOfBytes(using: .utf8)
+        }
+        diagnostics.record(
+            traceID: traceID,
+            stage: .promptConstruction,
+            requestBytes: byteCount
+        )
+    }
+
+    private func recordValidation(
+        failure: AIOperationDiagnosticFailure? = nil
+    ) {
+        guard let traceID = AIOperationDiagnosticContext.traceID else { return }
+        diagnostics.record(
+            traceID: traceID,
+            stage: .validation,
+            failure: failure
+        )
+    }
+
+    private static func diagnosticFailure(for error: Error) -> AIOperationDiagnosticFailure {
+        if error is CancellationError { return .cancelled }
+        guard let error = error as? NetworkError else { return .transportFailure }
+        switch error {
+        case .timeout:
+            return .transportTimeout
+        case .noData, .networkError:
+            return .gatewayNonresponse
+        case .unusableCorrection, .unusableCapability:
+            return .validationRejected
+        case .cancelled:
+            return .cancelled
+        case .serverError, .unauthorized, .modelUnavailable, .unsupportedModelDiscovery, .invalidURL:
+            return .gatewayRejected
         }
     }
 

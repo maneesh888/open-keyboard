@@ -28,6 +28,8 @@
 
 ## Verification summary
 
+<!-- Decide applicability from changed behavior. For an assessment, cite its exact Git blob in -->
+<!-- the named requirement row's evidence, and include rationale and alternative proof for review. -->
 -
 
 ## Runtime evidence

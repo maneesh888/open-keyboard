@@ -60,6 +60,17 @@ row `UNVERIFIED`; do not silently narrow the task so the pull request can pass.
 Do not include expected findings or a desired conclusion. Keep secrets, gateway response bodies,
 private user text, generated artifacts, and raw logs out of the packet.
 
+## Select applicable evidence
+
+Apply `AGENTS.md` verification applicability before selecting or reviewing gates. Inspect the
+actual changed behavior and its dependencies, not just filenames. A non-applicable test is not a
+missing requirement. For a diff-bound assessment, read `docs/VERIFICATION_APPLICABILITY.md`, verify
+its complete bindings and named requirement row, and independently evaluate its rationale and
+alternative proof. Do not accept a manifest as self-approval or silently narrow acceptance criteria.
+Normal runtime evidence exercises the affected app surface; extension and live interactions are
+required only when the acceptance criterion involves them. Preserve valid equivalent evidence and
+escalate only actual gaps. Keep all applicable exact-head, review, and protected-check gates.
+
 ## Review and verify
 
 1. Spawn the project `pr-reviewer` with no inherited conversation when available. Pass only the PR identity, exact SHA, neutral packet, diff, and source paths.
@@ -73,9 +84,11 @@ private user text, generated artifacts, and raw logs out of the packet.
 7. Classify unit tests, XCTest/XCUITest, mocks, debug or seeded UI states, component hosts, and
    `XCTAttachment` screenshots as automated regression evidence. An XCUITest that activates the
    installed extension is not normal simulator runtime proof. For proof-sensitive UI, extension
-   lifecycle, Apply/Copy/Back/Rerun, live gateway, or result-presentation changes, require an
-   exact-head normal runtime record from a normally launched app, ordinary host-app text field,
-   visible production UI, and direct Simulator/Xcode screenshots. A complete ancestor-capture
+   lifecycle, Apply/Copy/Back/Rerun, or result-presentation changes, require an exact-head normal
+   runtime record of the affected normally launched app surface, visible production UI, and direct
+   Simulator/Xcode screenshots. Use an ordinary host-app text field and real extension for
+   extension/handoff requirements. Nonvisual gateway criteria may use relevant live evidence
+   without an unrelated UI walkthrough. A complete ancestor-capture
    record may satisfy the current head only when
    `./scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <current-sha>` passes on the clean
    head and the reviewer independently inspects both SHAs, the identical non-test Git-tree digest,

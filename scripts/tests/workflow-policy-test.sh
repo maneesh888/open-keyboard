@@ -1234,15 +1234,9 @@ if rg --fixed-strings --quiet 'clean-validated.\\(UUID().uuidString)' "$ROOT/Ope
 fi
 
 live_impact_patterns=(
-  '.github/pull_request_template.md'
-  '.github/workflows/live.yml'
   '.gitmodules'
-  '.githooks/pre-push'
   'scripts/check-live.sh'
-  'scripts/check.sh'
   'scripts/check-semantic-prompt-contract.sh'
-  'scripts/live-impact.sh'
-  'scripts/validate-pr-live-evidence.sh'
   'scripts/ios/enable-openkeyboard-simulator-keyboard.sh'
   'scripts/ios/live-test-safety.sh'
   'scripts/ios/openkeyboard-gateway.seed.env.example'

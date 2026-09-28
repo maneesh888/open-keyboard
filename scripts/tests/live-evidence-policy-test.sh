@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+while IFS= read -r name; do unset "$name"; done < <(git -C "$ROOT" rev-parse --local-env-vars)
 FIXTURE="$(mktemp -d)"
 OUTPUT="$FIXTURE/output"
 VALIDATOR="$ROOT/scripts/validate-pr-live-evidence.sh"
@@ -61,7 +62,15 @@ jq -n \
 MOCK_GH
 chmod +x "$MOCK_BIN/gh"
 
-HEAD_SHA="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+# Snapshot enforcement now validates applicability against real Git objects as well.
+SNAPSHOT_REPO="$FIXTURE/repo"
+mkdir -p "$SNAPSHOT_REPO"
+git -C "$SNAPSHOT_REPO" init -q
+printf 'fixture\n' > "$SNAPSHOT_REPO/README.md"
+git -C "$SNAPSHOT_REPO" add README.md
+git -C "$SNAPSHOT_REPO" -c user.name=Fixture -c user.email=fixture@example.invalid \
+  -c core.hooksPath=/dev/null commit -qm fixture
+HEAD_SHA="$(git -C "$SNAPSHOT_REPO" rev-parse HEAD)"
 STALE_SHA="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 PROVIDER_BINDINGS='openai=true, anthropic=true, openrouter=true, gateway=true'
 PROVIDER_OUTCOMES='openai=passed, anthropic=passed, openrouter=passed, gateway=passed'
@@ -171,7 +180,8 @@ run_snapshot_gate() {
   CURRENT_BODY_FILE="$CURRENT_BODY_FILE" \
     EVENT_BODY_FILE="$EVENT_BODY_FILE" \
     EVENT_HEAD_SHA="$HEAD_SHA" \
-    GITHUB_WORKSPACE="$ROOT" \
+    GITHUB_WORKSPACE="$SNAPSHOT_REPO" \
+    PR_BASE_SHA="$HEAD_SHA" \
     LIVE_IMPACT=gateway \
     RUNNER_TEMP="$FIXTURE" \
     VALIDATOR_ROOT="$ROOT/scripts" \
