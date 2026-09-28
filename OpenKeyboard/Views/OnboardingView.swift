@@ -138,8 +138,7 @@ struct KeyboardSetupPage: View {
             }
         } footer: {
             PrimaryButton(title: "Open Keyboard Settings", systemImage: "gearshape.fill") {
-                AppConfig.updateKeyboardAccessNeedsConfirmation(true)
-                settingsViewModel.openKeyboardSettings()
+                settingsViewModel.openKeyboardSettingsForAccessSetup()
             }
         }
     }

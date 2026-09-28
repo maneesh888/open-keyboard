@@ -21,6 +21,16 @@
         "oid": "9ba6598db8a3f6ecaa3f3a911de32607544de28b"
       }
     },
+    "OpenKeyboard/ViewModels/SettingsViewModel.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "14fc64b72a6224b18263642a38c921e696d2c147"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "94aee20cbb0f44be6c0f0c7717c0ce9a70019a79"
+      }
+    },
     "OpenKeyboard/Views/ContentView.swift": {
       "after": {
         "mode": "100644",
@@ -34,7 +44,7 @@
     "OpenKeyboard/Views/OnboardingView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "b80c0c59cdc3fd5e220baca1b849c22fce9beec6"
+        "oid": "b78653db5f4e64676b666fbcf9b0232d0ef7631c"
       },
       "before": {
         "mode": "100644",
@@ -83,8 +93,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "The deterministic UI-target suite passed 446 tests, including initial, awaiting-confirmation, and confirmed Home states. A focused real-extension UI regression passed after typing and dismissing the check sheet without relaunching the app, and the standard quick gate passed. Normal Simulator proof of the Settings return and extension confirmation is a separate requirement before publication.",
-  "rationale": "The complete feature diff changes only the keyboard extension Full Access hint, App Group UI state and pending-status refresh, containing-app navigation and product copy, and focused regression tests. The extension preserves the original AI request and text-change call order. No gateway request, response parser, model selection, semantic contract, or AI capability behavior changes; a live gateway test would not verify Settings return visibility.",
+  "proof": "The deterministic UI-target suite and focused real-extension UI regression cover initial, awaiting-confirmation, and confirmed Home states. Exact-head normal Simulator proof of the Settings return and extension confirmation remains a separate requirement before publication.",
+  "rationale": "The complete feature diff changes only the keyboard extension Full Access hint, App Group UI state and pending-status refresh, containing-app navigation and product copy, and focused regression tests. The onboarding button delegates access-setup state and Settings navigation to its view model. The extension preserves the original AI request and text-change call order. No gateway request, response parser, model selection, semantic contract, or AI capability behavior changes; a live gateway test would not verify Settings return visibility.",
   "requirement_id": "R3",
   "schema": 1
 }
