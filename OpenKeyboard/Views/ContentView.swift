@@ -10,8 +10,7 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage(AppConfig.keyboardFullAccessKey, store: UserDefaults(suiteName: AppConfig.appGroupIdentifier))
-    private var keyboardHasFullAccess = false
+    @StateObject private var keyboardAccessViewModel = KeyboardAccessViewModel()
     @State private var showingSettings = false
     @State private var showingPlayground = false
     @State private var showingAIDiagnostics = false
@@ -41,7 +40,7 @@ struct ContentView: View {
                         StatusCard(viewModel: settingsViewModel)
 
                         VStack(spacing: 12) {
-                            if !keyboardHasFullAccess {
+                            if !keyboardAccessViewModel.hasFullAccess {
                                 Button {
                                     settingsViewModel.openKeyboardSettings()
                                 } label: {
@@ -192,18 +191,20 @@ struct ContentView: View {
             await settingsViewModel.validateSavedGatewayOnceOnLaunch()
         }
         .onAppear {
-            refreshKeyboardFullAccess()
+            keyboardAccessViewModel.refresh()
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
-            refreshKeyboardFullAccess()
+            keyboardAccessViewModel.refresh()
         }
     }
+}
 
-    private func refreshKeyboardFullAccess() {
-        guard let defaults = AppConfig.sharedDefaults() else { return }
-        defaults.synchronize()
-        keyboardHasFullAccess = AppConfig.keyboardHasFullAccess(from: defaults)
+private final class KeyboardAccessViewModel: ObservableObject {
+    @Published private(set) var hasFullAccess = false
+
+    func refresh() {
+        hasFullAccess = AppConfig.keyboardHasFullAccess()
     }
 }
 

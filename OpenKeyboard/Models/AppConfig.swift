@@ -755,6 +755,12 @@ extension AppConfig {
         defaults.bool(forKey: keyboardFullAccessKey)
     }
 
+    static func keyboardHasFullAccess() -> Bool {
+        guard let defaults = sharedDefaults() else { return false }
+        defaults.synchronize()
+        return keyboardHasFullAccess(from: defaults)
+    }
+
     static func updateKeyboardFullAccess(
         _ hasFullAccess: Bool,
         in defaults: UserDefaults? = sharedDefaults()
