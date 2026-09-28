@@ -42,6 +42,8 @@ enum AIOperationDiagnosticSubreason: String, Codable, CaseIterable, Sendable {
     case providerIncompleteResponse = "provider_incomplete_response"
     case incompleteStream = "incomplete_stream"
     case connectorContractValidationFailure = "connector_contract_validation_failure"
+    case connectorProtocolFailure = "connector_protocol_failure"
+    case connectorValidationFailure = "connector_validation_failure"
     case targetMismatch = "target_mismatch"
     case unexpectedCompletionReason = "unexpected_completion_reason"
     case invalidOutputCount = "invalid_output_count"
@@ -172,6 +174,7 @@ struct AIOperationDiagnosticRecord: Codable, Equatable, Sendable, Identifiable {
 
     // Optional additions keep old v1 exports readable.
     var binaryID: String? = nil
+    var sourceRevision: String? = nil
     var captureSessionID: String? = nil
     var sourceText: AIOperationDiagnosticText? = nil
     var requests: [AIOperationDiagnosticRequest]? = nil
@@ -255,6 +258,9 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         let didPersist = withExclusiveStorageAccess {
             var records = prunedRecords(from: readRecords(), at: timestamp)
             record.binaryID = Self.binaryIdentifier()
+            record.sourceRevision = Self.validatedSourceRevision(
+                Bundle.main.object(forInfoDictionaryKey: "OpenKeyboardSourceRevision") as? String
+            )
             if let consent = activeConsent(at: timestamp) {
                 record.captureSessionID = consent.id
                 record.sourceText = sourceText.map(AIOperationDiagnosticText.init)
@@ -411,7 +417,7 @@ final class AIOperationDiagnostics: @unchecked Sendable {
         ]
         let dateFormat = ISO8601DateFormatter()
         for record in selected {
-            lines.append("trace=\(record.traceID) operation=\(record.operation.rawValue) origin=\(record.origin.rawValue) outcome=\(record.outcome?.rawValue ?? "in_progress") failure=\(record.failure?.rawValue ?? "none") app=\(record.appVersion) build=\(record.buildVersion) binary=\(record.binaryID ?? "unknown") os=\(record.operatingSystemVersion) started_at=\(dateFormat.string(from: record.startedAt))")
+            lines.append("trace=\(record.traceID) operation=\(record.operation.rawValue) origin=\(record.origin.rawValue) outcome=\(record.outcome?.rawValue ?? "in_progress") failure=\(record.failure?.rawValue ?? "none") app=\(record.appVersion) build=\(record.buildVersion) binary=\(record.binaryID ?? "unknown") source_revision=\(record.sourceRevision ?? "unknown") os=\(record.operatingSystemVersion) started_at=\(dateFormat.string(from: record.startedAt))")
             if let count = record.requestsOmitted { lines.append("  request_records_omitted=\(count)") }
             if includeText, let source = record.sourceText { lines.append(Self.textLine("source_text", source)) }
             for request in record.requests ?? [] {
@@ -534,6 +540,14 @@ final class AIOperationDiagnostics: @unchecked Sendable {
             record.requests = requests
         }
         return record
+    }
+
+    static func validatedSourceRevision(_ value: String?) -> String? {
+        guard let value,
+              value.range(of: "^[0-9a-f]{40}(\\+dirty)?$", options: .regularExpression) != nil else {
+            return nil
+        }
+        return value
     }
 
     private static func binaryIdentifier() -> String? {

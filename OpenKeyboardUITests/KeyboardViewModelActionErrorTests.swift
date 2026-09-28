@@ -1846,6 +1846,59 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.currentCorrectionCard?.categoryTitle, "Subject-verb agreement")
     }
 
+    func testAutomaticAnalysisSkipsTinyFragmentsWhileManualGrammarStaysAvailable() async {
+        XCTAssertFalse(KeyboardAutomaticAnalysisPolicy.isEligible("abc"))
+        XCTAssertFalse(KeyboardAutomaticAnalysisPolicy.isEligible("singlelongfragment"))
+        XCTAssertFalse(KeyboardAutomaticAnalysisPolicy.isEligible("short word"))
+        XCTAssertTrue(KeyboardAutomaticAnalysisPolicy.isEligible("This is ready."))
+
+        let sourceText = "abc"
+        let proxy = FakeTextDocumentProxy(text: sourceText)
+        let service = SequencedKeyboardAIService(results: [Self.noIssueGrammarResult()])
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0
+        )
+
+        viewModel.startAutomaticAnalysis()
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertTrue(service.requestedActions.isEmpty)
+        XCTAssertTrue(viewModel.canOpenGrammarCorrection)
+
+        viewModel.openGrammarCorrection()
+        await waitUntil { service.requestedActions == [.fixGrammar] && !viewModel.isPerformingAIAction }
+        XCTAssertEqual(proxy.text, sourceText)
+    }
+
+    func testTypingPastAutomaticAnalysisFloorThenDeletingBelowItCancelsRequest() async {
+        let proxy = FakeTextDocumentProxy(text: "tiny")
+        let service = CancellableDelayedRecordingKeyboardAIService(result: Self.noIssueGrammarResult())
+        let viewModel = KeyboardViewModel(
+            textDocumentProxy: proxy,
+            aiService: service,
+            loadConfig: { Self.configuredGateway },
+            productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 100_000_000
+        )
+
+        viewModel.startAutomaticAnalysis()
+        try? await Task.sleep(nanoseconds: 130_000_000)
+        XCTAssertTrue(service.requestedActions.isEmpty)
+
+        viewModel.insert(" words are ready")
+        await waitUntil { service.requestedActions == [.fixGrammar] && viewModel.isPerformingAIAction }
+        for _ in " words are ready" { viewModel.deleteBackward() }
+        try? await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertEqual(proxy.text, "tiny")
+        XCTAssertEqual(service.requestedActions, [.fixGrammar])
+        XCTAssertFalse(viewModel.isPerformingAIAction)
+        XCTAssertNil(viewModel.automaticAnalysisWarning)
+    }
+
     func testLeftGrammarCorrectionButtonReopensSameTextCorrectionsWithoutRequestingAgain() async {
         let sourceText = "i has a apple and ths"
         let proxy = FakeTextDocumentProxy(text: sourceText)

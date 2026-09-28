@@ -57,6 +57,16 @@ final class AIOperationDiagnosticsTests: XCTestCase {
         XCTAssertTrue(exported.contains("request_bytes="))
         XCTAssertFalse(exported.contains("apiKey"))
         XCTAssertFalse(exported.contains("gatewayURL"))
+        XCTAssertTrue(exported.contains("source_revision="))
+    }
+
+    func testSourceRevisionMetadataAcceptsOnlyExactCommitOrExplicitDirtyBuild() {
+        let sha = String(repeating: "a", count: 40)
+        XCTAssertEqual(AIOperationDiagnostics.validatedSourceRevision(sha), sha)
+        XCTAssertEqual(AIOperationDiagnostics.validatedSourceRevision(sha + "+dirty"), sha + "+dirty")
+        XCTAssertNil(AIOperationDiagnostics.validatedSourceRevision(""))
+        XCTAssertNil(AIOperationDiagnostics.validatedSourceRevision("provider-message"))
+        XCTAssertNil(AIOperationDiagnostics.validatedSourceRevision(sha + " private text"))
     }
 
     func testLedgerExpiresRecordsAfterSevenDays() {
