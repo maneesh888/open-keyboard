@@ -120,6 +120,8 @@ struct GatewaySetupPage: View {
 }
 
 struct KeyboardSetupPage: View {
+    @EnvironmentObject var settingsViewModel: SettingsViewModel
+
     var body: some View {
         ModernOnboardingPage(
             icon: "keyboard",
@@ -136,9 +138,7 @@ struct KeyboardSetupPage: View {
             }
         } footer: {
             PrimaryButton(title: "Open Keyboard Settings", systemImage: "gearshape.fill") {
-                if let url = URL(string: "App-Prefs:root=General&path=Keyboard") {
-                    UIApplication.shared.open(url)
-                }
+                settingsViewModel.openKeyboardSettingsForAccessSetup()
             }
         }
     }

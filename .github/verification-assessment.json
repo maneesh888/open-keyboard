@@ -1,0 +1,100 @@
+{
+  "base": "a0889a06cbb0dcd7dec373f6ea99cfd0ed4bbc1d",
+  "changes": {
+    "OpenKeyboard/Models/AppConfig.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "cfb36afa409af92207c0c879a4894da88f7d8dec"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "9747c0bb9908db1cda2efc6431c9f9f8e73d835a"
+      }
+    },
+    "OpenKeyboard/OpenKeyboardApp.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "4392fed7dd838d57080be9b1a7d01dcab430afbf"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "9ba6598db8a3f6ecaa3f3a911de32607544de28b"
+      }
+    },
+    "OpenKeyboard/ViewModels/SettingsViewModel.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "14fc64b72a6224b18263642a38c921e696d2c147"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "94aee20cbb0f44be6c0f0c7717c0ce9a70019a79"
+      }
+    },
+    "OpenKeyboard/Views/ContentView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "0bcee8ac19aba9165a17c0651a9ead623e80c7cf"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "9a2cf516f4a9e42339e34c9bcd9fa7ff4fa4e9bb"
+      }
+    },
+    "OpenKeyboard/Views/OnboardingView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "b78653db5f4e64676b666fbcf9b0232d0ef7631c"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "991836dd94064ea9bde3981f502c72cd0653a3b8"
+      }
+    },
+    "OpenKeyboardExtension/KeyboardViewController.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "ef68835e3fa4382e34e8b23cf336f467feb40a9c"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "a3b105cecacfe0c798d95cf387d8173f8a93b6e8"
+      }
+    },
+    "OpenKeyboardUITests/KeyboardExtensionConfiguredUITests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "fbdf31fac12dc63a7bcbf7a585ee7c99c9296afe"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "93be4288bfeec26286b14dafa1607c0f6dff0adc"
+      }
+    },
+    "OpenKeyboardUITests/OnboardingScreenshotUITests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "bfcb74ab708637f6947434654fd18e9030c6f388"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "9d5ff4135da2dd787aebb9fe53dda9054205bca2"
+      }
+    },
+    "OpenKeyboardUITests/SharedAppConfigTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "583fe2760fc5960da2a2dbe9fb8ed18d11775772"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "aeaf9c4115752f760fafbb3ee30641044da2ed84"
+      }
+    }
+  },
+  "live_impact": "none",
+  "proof": "The deterministic UI-target suite and focused real-extension UI regression cover initial, awaiting-confirmation, and confirmed Home states. Exact-head normal Simulator proof of the Settings return and extension confirmation remains a separate requirement before publication.",
+  "rationale": "The complete feature diff changes only the keyboard extension Full Access hint, App Group UI state and pending-status refresh, containing-app navigation and product copy, and focused regression tests. The onboarding button delegates access-setup state and Settings navigation to its view model. The extension preserves the original AI request and text-change call order. No gateway request, response parser, model selection, semantic contract, or AI capability behavior changes; a live gateway test would not verify Settings return visibility.",
+  "requirement_id": "R3",
+  "schema": 1
+}

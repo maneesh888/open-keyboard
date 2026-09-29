@@ -215,6 +215,33 @@ final class SharedAppConfigTests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    func testKeyboardFullAccessHintTracksExtensionAccessState() {
+        XCTAssertFalse(AppConfig.keyboardHasFullAccess(from: defaults))
+
+        AppConfig.updateKeyboardFullAccess(true, in: defaults)
+
+        XCTAssertTrue(AppConfig.keyboardHasFullAccess(from: defaults))
+
+        AppConfig.updateKeyboardFullAccess(false, in: defaults)
+
+        XCTAssertFalse(AppConfig.keyboardHasFullAccess(from: defaults))
+    }
+
+    func testKeyboardSettingsVisitRequiresExtensionConfirmation() {
+        XCTAssertFalse(AppConfig.keyboardAccessNeedsConfirmation(from: defaults))
+
+        AppConfig.updateKeyboardAccessNeedsConfirmation(true, in: defaults)
+
+        XCTAssertTrue(AppConfig.keyboardAccessNeedsConfirmation(from: defaults))
+        XCTAssertFalse(AppConfig.keyboardHasFullAccess(from: defaults))
+
+        AppConfig.updateKeyboardFullAccess(true, in: defaults)
+        AppConfig.updateKeyboardAccessNeedsConfirmation(false, in: defaults)
+
+        XCTAssertTrue(AppConfig.keyboardHasFullAccess(from: defaults))
+        XCTAssertFalse(AppConfig.keyboardAccessNeedsConfirmation(from: defaults))
+    }
+
     func testProviderMetadataUsesCanonicalEditableDefaults() throws {
         let expectedProviders: [(OpenKeyboardAIProvider, String, String)] = [
             (.openAI, "OpenAI", "https://api.openai.com/v1"),

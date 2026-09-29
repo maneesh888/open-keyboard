@@ -39,6 +39,8 @@ struct OpenKeyboardApp: App {
         Self.seedUITestGatewayErrorAtLaunchIfNeeded()
         Self.seedUITestKeyboardPanelModeAtLaunchIfNeeded()
         Self.seedUITestKeyboardSuggestionStateAtLaunchIfNeeded()
+        Self.resetUITestOnboardingStateAtLaunchIfNeeded()
+        Self.seedUITestKeyboardFullAccessAtLaunchIfNeeded()
         #endif
     }
 
@@ -304,6 +306,37 @@ struct OpenKeyboardApp: App {
             sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionStateSeedID")
             sharedDefaults.removeObject(forKey: "keyboardExtension.suggestionStateSeededAt")
         }
+        sharedDefaults.synchronize()
+    }
+
+    private static func seedUITestKeyboardFullAccessAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+
+        if arguments.contains("--seed-keyboard-full-access") {
+            AppConfig.updateKeyboardFullAccess(true, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(false, in: sharedDefaults)
+        } else if arguments.contains("--clear-keyboard-full-access") {
+            AppConfig.updateKeyboardFullAccess(false, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(false, in: sharedDefaults)
+        } else if arguments.contains("--seed-keyboard-settings-visited") {
+            AppConfig.updateKeyboardFullAccess(false, in: sharedDefaults)
+            AppConfig.updateKeyboardAccessNeedsConfirmation(true, in: sharedDefaults)
+        }
+    }
+
+    private static func resetUITestOnboardingStateAtLaunchIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("--uitesting"),
+              arguments.contains("--reset-onboarding"),
+              let sharedDefaults = AppConfig.sharedDefaults() else {
+            return
+        }
+
+        sharedDefaults.set(false, forKey: AppConfig.hasCompletedOnboardingKey)
         sharedDefaults.synchronize()
     }
 
