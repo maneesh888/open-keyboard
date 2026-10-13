@@ -5,12 +5,16 @@
 //  Main app view
 //
 
+import Combine
 import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var settingsViewModel: SettingsViewModel
+    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var keyboardAccessViewModel = KeyboardAccessViewModel()
     @State private var showingSettings = false
     @State private var showingPlayground = false
+    @State private var showingKeyboardAccessCheck = false
     @State private var showingAIDiagnostics = false
 
     var body: some View {
@@ -38,8 +42,55 @@ struct ContentView: View {
                         StatusCard(viewModel: settingsViewModel)
 
                         VStack(spacing: 12) {
-                            PrimaryButton(title: "Open Keyboard Settings", systemImage: "keyboard") {
-                                settingsViewModel.openKeyboardSettings()
+                            if !keyboardAccessViewModel.hasFullAccess {
+                                Button {
+                                    if keyboardAccessViewModel.needsConfirmation {
+                                        showingKeyboardAccessCheck = true
+                                    } else {
+                                        keyboardAccessViewModel.didOpenKeyboardSettings()
+                                        settingsViewModel.openKeyboardSettings()
+                                    }
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: keyboardAccessViewModel.needsConfirmation ? "checkmark.shield" : "keyboard")
+                                            .font(.title3.weight(.semibold))
+                                            .foregroundColor(OpenKeyboardTheme.Brand.cyan)
+                                            .frame(width: 36, height: 36)
+                                            .background(OpenKeyboardTheme.Brand.cyan.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(keyboardAccessViewModel.needsConfirmation ? "Check Keyboard Access" : "Open Keyboard Settings")
+                                                .font(.headline)
+                                            Text(keyboardAccessViewModel.needsConfirmation
+                                                 ? "Select Open Keyboard in a text field to confirm Allow Full Access."
+                                                 : "Allow Full Access is needed for AI actions. Open the keyboard once afterward to confirm access.")
+                                                .font(.caption)
+                                                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                                .fixedSize(horizontal: false, vertical: true)
+                                                .accessibilityIdentifier(keyboardAccessViewModel.needsConfirmation ? "keyboard_access_check_note" : "keyboard_full_access_note")
+                                        }
+
+                                        Spacer(minLength: 8)
+
+                                        Image(systemName: "chevron.right")
+                                            .font(.footnote.weight(.semibold))
+                                            .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                                    }
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.vertical, 14)
+                                    .padding(.horizontal, 16)
+                                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                            .stroke(OpenKeyboardTheme.Semantic.warning.opacity(0.42), lineWidth: 1.2)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityIdentifier(keyboardAccessViewModel.needsConfirmation ? "check_keyboard_access_button" : "open_keyboard_settings_button")
+                                .accessibilityHint(keyboardAccessViewModel.needsConfirmation
+                                                   ? "Opens a text field where Open Keyboard can confirm its access"
+                                                   : "Opens Keyboard Settings to enable Full Access for AI actions")
                             }
 
                             if settingsViewModel.trustedModelLoaded {
@@ -142,6 +193,12 @@ struct ContentView: View {
                 }
                     .environmentObject(settingsViewModel)
             }
+            .sheet(isPresented: $showingKeyboardAccessCheck, onDismiss: {
+                keyboardAccessViewModel.refresh()
+            }) {
+                KeyboardAccessCheckView()
+                    .environmentObject(settingsViewModel)
+            }
             .sheet(isPresented: $showingAIDiagnostics) {
                 AIOperationDiagnosticsView()
             }
@@ -149,6 +206,94 @@ struct ContentView: View {
         .tint(OpenKeyboardTheme.Brand.cyan)
         .task {
             await settingsViewModel.validateSavedGatewayOnceOnLaunch()
+        }
+        .onAppear {
+            keyboardAccessViewModel.refresh()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            keyboardAccessViewModel.refresh()
+        }
+    }
+}
+
+private final class KeyboardAccessViewModel: ObservableObject {
+    @Published private(set) var hasFullAccess = false
+    @Published private(set) var needsConfirmation = false
+    private var confirmationMonitor: AnyCancellable?
+
+    func refresh() {
+        hasFullAccess = AppConfig.keyboardHasFullAccess()
+        needsConfirmation = !hasFullAccess && AppConfig.keyboardAccessNeedsConfirmation()
+        if hasFullAccess {
+            confirmationMonitor = nil
+            AppConfig.updateKeyboardAccessNeedsConfirmation(false)
+        } else if needsConfirmation {
+            startConfirmationMonitor()
+        } else {
+            confirmationMonitor = nil
+        }
+    }
+
+    func didOpenKeyboardSettings() {
+        AppConfig.updateKeyboardAccessNeedsConfirmation(true)
+        needsConfirmation = true
+        startConfirmationMonitor()
+    }
+
+    private func startConfirmationMonitor() {
+        guard confirmationMonitor == nil else { return }
+        confirmationMonitor = Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refresh()
+            }
+    }
+}
+
+private struct KeyboardAccessCheckView: View {
+    @EnvironmentObject private var settingsViewModel: SettingsViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                AppBackground()
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Tap the field and select Open Keyboard using the globe key. Then return to Home to see whether Allow Full Access was confirmed.")
+                        .font(.subheadline)
+                        .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    TextEditor(text: $text)
+                        .frame(minHeight: 150)
+                        .padding(12)
+                        .scrollContentBackground(.hidden)
+                        .background(OpenKeyboardTheme.Surface.panelBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(OpenKeyboardTheme.Stroke.subtle, lineWidth: 1)
+                        )
+                        .accessibilityIdentifier("keyboard_access_check_input")
+
+                    Button("Open Keyboard Settings") {
+                        settingsViewModel.openKeyboardSettings()
+                    }
+                    .accessibilityIdentifier("keyboard_access_check_settings_button")
+
+                    Spacer(minLength: 0)
+                }
+                .padding(20)
+            }
+            .navigationTitle("Check Keyboard Access")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

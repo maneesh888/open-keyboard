@@ -1047,6 +1047,11 @@ class SettingsViewModel: ObservableObject {
         openKeyboardSettingsCandidate(at: 0)
     }
 
+    func openKeyboardSettingsForAccessSetup() {
+        AppConfig.updateKeyboardAccessNeedsConfirmation(true, in: defaults)
+        openKeyboardSettings()
+    }
+
     private func openKeyboardSettingsCandidate(at index: Int) {
         guard index < keyboardSettingsURLCandidates.count else { return }
         let url = keyboardSettingsURLCandidates[index]

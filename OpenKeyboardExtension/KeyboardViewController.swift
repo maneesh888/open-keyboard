@@ -92,7 +92,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshRuntimeState() {
-        viewModel?.updateFullAccess(hasFullAccess)
+        let fullAccess = hasFullAccess
+        viewModel?.updateFullAccess(fullAccess)
+        AppConfig.updateKeyboardFullAccess(fullAccess)
     }
 
     private var currentKeyboardHeight: CGFloat {
