@@ -528,19 +528,7 @@ final class KeyboardAIService: KeyboardAIServiceProviding {
             throw KeyboardAIError.invalidResponse
         }
 
-        var validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
-        if validatedChunks.map(\.text).joined() == text {
-            recordRetry(nextAttempt: 2)
-            do {
-                validatedChunks = try await AIOperationDiagnosticContext.$attempt.withValue(2) {
-                    try await requestGrammarCorrections(for: chunks, config: config)
-                }
-            } catch {
-                recordValidation(failure: .retryFailed)
-                throw error
-            }
-        }
-
+        let validatedChunks = try await requestGrammarCorrections(for: chunks, config: config)
         let corrected = validatedChunks.map(\.text).joined()
         do {
             let validatedWholeResponse = try await GrammarCorrectionResponseValidator.classified(

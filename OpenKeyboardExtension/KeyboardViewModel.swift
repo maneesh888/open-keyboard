@@ -2382,7 +2382,7 @@ final class KeyboardViewModel: ObservableObject {
             clearAutomaticAnalysisState()
             return
         }
-        guard analysisText.count >= 3 else {
+        guard KeyboardAutomaticAnalysisPolicy.isEligible(analysisText) else {
             clearAutomaticAnalysisState()
             return
         }
@@ -3329,5 +3329,15 @@ private extension KeyboardAIAction {
         case .summarize: return "Summary"
         case .translate(let target): return target.map { "\($0.displayName) translation" } ?? "Translation"
         }
+    }
+}
+
+enum KeyboardAutomaticAnalysisPolicy {
+    /// A debounce handles active typing; this floor keeps partial words and tiny fragments
+    /// from becoming gateway requests. Manual grammar remains available below the floor.
+    static func isEligible(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.count >= 12
+            && trimmed.split(whereSeparator: \.isWhitespace).count >= 2
     }
 }

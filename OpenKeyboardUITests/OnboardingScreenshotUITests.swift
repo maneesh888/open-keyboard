@@ -28,6 +28,39 @@ final class OnboardingScreenshotUITests: BaseOpenKeyboardUITestCase {
         XCTAssertLessThan(aiDescription.frame.maxY, pageIndicator.frame.minY, "Page indicator should not overlap the final feature row")
         attachScreenshot(named: "onboarding-welcome-iPhone")
     }
+
+    func testDebugPageControlsPreserveSwipeNavigationAndPageBoundaries() {
+        let previous = app.buttons["onboarding_debug_previous"]
+        let next = app.buttons["onboarding_debug_next"]
+        let indicator = app.descendants(matching: .any)["onboarding_page_indicator"].firstMatch
+
+        func assertPage(_ number: Int) {
+            let expected = NSPredicate(format: "label == %@", "Page \(number) of 4")
+            expectation(for: expected, evaluatedWith: indicator)
+            waitForExpectations(timeout: 5)
+        }
+
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        assertPage(1)
+        XCTAssertFalse(previous.isEnabled)
+        next.tap()
+        assertPage(2)
+        app.swipeLeft()
+        assertPage(3)
+        previous.tap()
+        assertPage(2)
+        app.swipeRight()
+        assertPage(1)
+        XCTAssertFalse(previous.isEnabled)
+        for page in 2...4 {
+            next.tap()
+            assertPage(page)
+        }
+        XCTAssertFalse(next.isEnabled)
+        previous.tap()
+        assertPage(3)
+    }
+
 }
 
 final class OnboardingNavigationUITests: BaseOpenKeyboardUITestCase {

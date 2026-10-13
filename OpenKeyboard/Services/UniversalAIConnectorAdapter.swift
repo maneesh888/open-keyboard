@@ -79,7 +79,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                     traceID: traceID,
                     stage: diagnostic.stage,
                     durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
-                    httpStatusCategory: (error as? UniversalAiConnectorError).flatMap { Self.statusCode(from: $0) }.map(AIOperationDiagnosticHTTPStatusCategory.init(statusCode:)),
+                    httpStatusCategory: (error as? UniversalAiConnectorError).flatMap { Self.statusCode(from: $0) }.map(AIOperationDiagnosticHTTPStatusCategory.init(statusCode:)) ?? diagnostic.statusCategory,
                     failure: diagnostic.failure,
                     subreason: diagnostic.subreason,
                     requestID: requestID,
@@ -158,7 +158,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
                     traceID: traceID,
                     stage: diagnostic.stage,
                     durationMilliseconds: Self.durationMilliseconds(since: transportStarted),
-                    httpStatusCategory: (error as? UniversalAiConnectorError).flatMap { Self.statusCode(from: $0) }.map(AIOperationDiagnosticHTTPStatusCategory.init(statusCode:)),
+                    httpStatusCategory: (error as? UniversalAiConnectorError).flatMap { Self.statusCode(from: $0) }.map(AIOperationDiagnosticHTTPStatusCategory.init(statusCode:)) ?? diagnostic.statusCategory,
                     failure: diagnostic.failure,
                     subreason: diagnostic.subreason,
                     requestID: requestID,
@@ -387,7 +387,7 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         max(0, Int(Date().timeIntervalSince(started) * 1_000))
     }
 
-    private static func diagnosticFailure(
+    static func diagnosticFailure(
         for error: Error,
         subreason: AIOperationDiagnosticSubreason?
     ) -> (
@@ -404,7 +404,9 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
         case .timeout:
             return (.transport, .transportTimeout, nil, nil)
         case .invalidResponse, .truncatedResponse:
-            return (.decoding, .malformedResponse, nil, subreason)
+            let stage: AIOperationDiagnosticStage = subreason == .connectorContractValidationFailure
+                || subreason == .connectorValidationFailure ? .validation : .decoding
+            return (stage, .malformedResponse, nil, subreason)
         case .transport:
             return (.transport, .gatewayNonresponse, nil, nil)
         case .serverStatus(let statusCode):
@@ -451,11 +453,14 @@ final class UniversalAIConnectorAdapter: OpenKeyboardAIConnectorServing, @unchec
             break
         }
 
-        guard connectorError.category == .validation,
-              !isClosedConnectorError(connectorError) else {
-            return nil
+        if connectorError.category == .protocol {
+            return .connectorProtocolFailure
         }
-        return .connectorContractValidationFailure
+        if connectorError.category == .validation,
+           !isClosedConnectorError(connectorError) {
+            return .connectorValidationFailure
+        }
+        return nil
     }
 
     private static func isClosedConnectorError(_ error: UniversalAiConnectorError) -> Bool {

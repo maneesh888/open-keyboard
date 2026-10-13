@@ -296,6 +296,7 @@
 				C3B61026B4B857CF532189C5 /* Sources */,
 				27D6499381ABC205D16C80A7 /* Frameworks */,
 				3DDA42D724FCBBBA2C59D1B7 /* Resources */,
+				OKREVSTAMP0000000002 /* Stamp Source Revision */,
 			);
 			buildRules = (
 			);
@@ -312,11 +313,12 @@
 		6969AE0C0DACA9F77BE12409 /* OpenKeyboard */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AD68C5BFA78393E20996BDA3 /* Build configuration list for PBXNativeTarget "OpenKeyboard" */;
-			buildPhases = (
+				buildPhases = (
 				02021F3DA6D315C6903BEA79 /* Sources */,
 				DD684E1831AD60E76CDC5FEA /* Frameworks */,
 				C9A5745812E6FCEA649C7E0B /* Resources */,
 				429A1EC1379593EF1FF5148A /* Embed App Extensions */,
+				OKREVSTAMP0000000001 /* Stamp Source Revision */,
 			);
 			buildRules = (
 			);
@@ -353,6 +355,41 @@
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		OKREVSTAMP0000000001 /* Stamp Source Revision */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Stamp Source Revision";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"$SRCROOT/scripts/ios/stamp-source-revision.sh\"";
+		};
+		OKREVSTAMP0000000002 /* Stamp Source Revision */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Stamp Source Revision";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"$SRCROOT/scripts/ios/stamp-source-revision.sh\"";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXProject section */
 		6D9882797250F9A619D27D03 /* Project object */ = {

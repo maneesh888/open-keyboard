@@ -385,6 +385,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
             (try connectorError(category: .protocol, code: "malformed_provider_response"), .malformedProviderResponse),
             (try connectorError(category: .protocol, code: "malformed_provider_stream"), .malformedProviderStream),
             (try connectorError(category: .protocol, code: "invalid_structured_provider_response"), .invalidStructuredProviderResponse),
+            (try connectorError(category: .protocol, code: "future_private_code"), .connectorProtocolFailure),
+            (try connectorError(category: .validation, code: "future_private_code"), .connectorValidationFailure),
             (
                 UniversalAiContractValidationError(
                     code: "invalid_contract",
@@ -421,6 +423,24 @@ final class GatewayClientArchitectureTests: XCTestCase {
                 error.code.rawValue
             )
         }
+    }
+
+    func testDiagnosticFailureKeepsValidationStageAndSafeHTTPFallback() {
+        let validation = UniversalAIConnectorAdapter.diagnosticFailure(
+            for: OpenKeyboardAIConnectorError.invalidResponse,
+            subreason: .connectorValidationFailure
+        )
+        XCTAssertEqual(validation.stage, .validation)
+        XCTAssertEqual(validation.failure, .malformedResponse)
+        XCTAssertEqual(validation.subreason, .connectorValidationFailure)
+
+        let throttled = UniversalAIConnectorAdapter.diagnosticFailure(
+            for: OpenKeyboardAIConnectorError.rateLimited,
+            subreason: nil
+        )
+        XCTAssertEqual(throttled.stage, .transport)
+        XCTAssertEqual(throttled.failure, .gatewayRejected)
+        XCTAssertEqual(throttled.statusCategory, .clientError)
     }
 
     func testUniversalConnectorReusesRuntimeAndClosesItOnProfileChangeAndExplicitClose() async throws {
@@ -630,8 +650,8 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(result.displayText, source)
         XCTAssertEqual(
             connector.requests.count,
-            expectedChunks.count * 2,
-            "A completely unchanged first grammar pass is retried once with the same connector profile."
+            expectedChunks.count,
+            "Validated unchanged chunks should not request a second pass."
         )
         XCTAssertEqual(connector.maximumActiveResponses, 2)
         XCTAssertTrue(connector.requests.allSatisfy { $0.modelID == "test-model" })
@@ -1140,6 +1160,37 @@ final class GatewayClientArchitectureTests: XCTestCase {
         XCTAssertEqual(transport.requests.first?.timeoutInterval, 0.02)
     }
 
+    func testDefaultKeyboardDeadlineCancelsInFlightConnectorAtFifteenSeconds() async throws {
+        let connector = CancellationObservingConnector()
+        let service = KeyboardAIService(connector: connector)
+        let started = Date()
+
+        do {
+            _ = try await service.performResult(
+                action: .rewrite,
+                on: "Please make this sentence clearer.",
+                config: configuredGateway
+            )
+            XCTFail("Expected the keyboard deadline")
+        } catch let error as KeyboardAIError {
+            XCTAssertEqual(error, .timeout)
+        }
+
+        let elapsed = Date().timeIntervalSince(started)
+        XCTAssertGreaterThanOrEqual(elapsed, 14.5)
+        XCTAssertLessThan(elapsed, 18)
+        for _ in 0..<100 {
+            if await connector.activeRequests == 0 { break }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let timeout = await connector.requestTimeout
+        let active = await connector.activeRequests
+        let cancelled = await connector.cancelledRequests
+        XCTAssertEqual(timeout, GatewayRequestTimeouts.keyboardAction)
+        XCTAssertEqual(active, 0)
+        XCTAssertEqual(cancelled, 1)
+    }
+
     func testKeyboardAIServiceEnforcesWallClockTimeoutForAutomaticSuggestions() async throws {
         let transport = ConnectorResponseTestDouble(
             data: Data(#"{"choices":[{"message":{"content":"{}"}}]}"#.utf8),
@@ -1237,10 +1288,10 @@ final class GatewayClientArchitectureTests: XCTestCase {
         )
     }
 
-    func testKeyboardAIServiceRetriesOneCompletelyUnchangedGrammarPass() async throws {
+    func testKeyboardAIServiceAcceptsUnchangedGrammarWithoutASecondFallibleCall() async throws {
         let source = "Our support team definately needs the corrected refund note."
-        let corrected = "Our support team definitely needs the corrected refund note."
-        let connector = SequencedConnectorResponseTestDouble(contents: [source, corrected])
+        // This connector throws if called after its sole valid response.
+        let connector = SequencedConnectorResponseTestDouble(contents: [source])
         let service = KeyboardAIService(connector: connector)
 
         let result = try await service.performResult(
@@ -1249,10 +1300,11 @@ final class GatewayClientArchitectureTests: XCTestCase {
             config: configuredGateway
         )
 
-        XCTAssertEqual(result.displayText, corrected)
-        XCTAssertEqual(connector.requests.count, 2)
+        XCTAssertTrue(result.isNoChangeResult)
+        XCTAssertEqual(result.displayText, source)
+        XCTAssertEqual(connector.requests.count, 1)
         let requestInputs = connector.requests.compactMap { $0.messages.last?.content }
-        XCTAssertEqual(requestInputs, [source, source])
+        XCTAssertEqual(requestInputs, [source])
     }
 
     private func assertModelCapabilityFailure(
@@ -2614,6 +2666,35 @@ private final class SequencedConnectorResponseTestDouble: OpenKeyboardAIConnecto
     }
 
     func close() {}
+}
+
+private actor CancellationObservingConnector: OpenKeyboardAIConnectorServing {
+    private(set) var requestTimeout: TimeInterval?
+    private(set) var activeRequests = 0
+    private(set) var cancelledRequests = 0
+
+    func listModels(profile: OpenKeyboardGatewayProfile) async throws -> [String] {
+        throw OpenKeyboardAIConnectorError.unsupportedModelDiscovery
+    }
+
+    func respond(
+        to request: OpenKeyboardAIRequest,
+        profile: OpenKeyboardGatewayProfile
+    ) async throws -> String {
+        requestTimeout = request.timeoutInterval
+        activeRequests += 1
+        do {
+            try await Task.sleep(nanoseconds: 60_000_000_000)
+            activeRequests -= 1
+            return "Unexpected response"
+        } catch {
+            activeRequests -= 1
+            if error is CancellationError { cancelledRequests += 1 }
+            throw error
+        }
+    }
+
+    nonisolated func close() {}
 }
 
 private actor InputMappedConnectorResponseTestDouble: OpenKeyboardAIConnectorServing {
