@@ -12,9 +12,13 @@ names and optional skin-tone variants. Empty IDs, names and payloads are rejecte
 duplicate IDs within a category use the first entry. Base IDs must identify the same
 content across categories. The generic renderer supports custom text smileys too.
 
+The categories form one continuous horizontal browser. Scrolling updates the selected
+category; tapping a category requests its beginning without a scroll-selection feedback loop.
+Automated navigation tests activate their host scene before checking category jumps.
+Normal Simulator touch verification remains a separate requirement.
 `SmileyState` preserves category selection on snapshot updates. Category changes do
 not insert text. Activation emits one exact insertion payload; the host never applies
-letter-case conversion to it. Long-press opens a bounded horizontal strip for the base emoji and skin tones,
+letter-case conversion to it. Long-press opens an anchored popup for the base emoji and skin tones over the existing grid,
 inside the browser. It does not create a system context menu above the typing keys.
 Search is local, case/diacritic-insensitive and matches all words against English
 Unicode names. It is not Apple's multilingual search or ranking engine.

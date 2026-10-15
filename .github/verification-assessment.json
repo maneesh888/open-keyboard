@@ -25,14 +25,14 @@
     "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "bb21732029217855a823db05a6ff79c1c10976b2"
+        "oid": "2e33f0962efdc6ca7765947b69c6bf567e9f6db0"
       },
       "before": null
     },
     "KeyboardLayout/Sources/KeyboardLayout/SmileyState.swift": {
       "after": {
         "mode": "100644",
-        "oid": "10a4fe41b76961d35711cd973d01ea4208662fd2"
+        "oid": "292d660378a76b7c4bfcc455f894d1a419c72398"
       },
       "before": null
     },
@@ -67,7 +67,7 @@
     "KeyboardLayout/Tests/KeyboardLayoutTests/SmileyStateTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "109bf6ce11b5d2b4e717991391a1e5c5a4997af3"
+        "oid": "3030808598bdf320f8607a5ac868ba0fcda9fe13"
       },
       "before": null
     },
@@ -131,7 +131,7 @@
     "OpenKeyboardUITests/KeyboardToolbarStateTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a7efbb143b5a838db44c19526ebd117808598fc3"
+        "oid": "a76f4c642e9c3c1e1d326b8fc0a121025f36092e"
       },
       "before": {
         "mode": "100644",
@@ -151,7 +151,7 @@
     "docs/SMILEY_KEYBOARD_PACKAGE.md": {
       "after": {
         "mode": "100644",
-        "oid": "101c0869a18df6ac7c8826842b1e2b7c72b908b0"
+        "oid": "5c6cf48c24b1221d74ed69b514a334866f30d41b"
       },
       "before": null
     },

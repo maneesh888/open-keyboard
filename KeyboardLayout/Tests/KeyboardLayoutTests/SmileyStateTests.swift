@@ -29,6 +29,30 @@ final class SmileyStateTests: XCTestCase {
         XCTAssertEqual(state.send(.activateItem("happy")), .insertText("🙂", sectionID: "faces", itemID: "happy"))
     }
 
+    func testScrollSelectionDoesNotRequestAnotherJumpOrInsert() {
+        var state = SmileyState(snapshot: snapshot)
+        let revision = state.categoryScrollRevision
+        XCTAssertNil(state.send(.browseCategory("custom")))
+        XCTAssertEqual(state.selectedCategoryID, "custom")
+        XCTAssertEqual(state.categoryScrollRevision, revision)
+        XCTAssertNil(state.send(.browseCategory("faces")))
+        XCTAssertEqual(state.selectedCategoryID, "faces")
+        XCTAssertEqual(state.categoryScrollRevision, revision)
+        XCTAssertNil(state.send(.selectCategory("faces")))
+        XCTAssertEqual(state.categoryScrollRevision, revision + 1, "Tapping the active tab still requests its beginning")
+        XCTAssertEqual(state.categoryScrollRequest?.categoryID, "faces")
+        _ = state.send(.selectCategory("custom"))
+        XCTAssertEqual(state.categoryScrollRequest?.categoryID, "custom")
+        _ = state.send(.browseCategory("faces"))
+        XCTAssertEqual(state.categoryScrollRequest?.categoryID, "custom", "Swipe observations never request a feedback jump")
+        _ = state.send(.beginSearch)
+        _ = state.send(.browseCategory("custom"))
+        XCTAssertEqual(state.selectedCategoryID, "faces", "Search does not follow browser scroll callbacks")
+        _ = state.send(.endSearch)
+        _ = state.send(.browseCategory("unknown"))
+        XCTAssertEqual(state.selectedCategoryID, "faces")
+    }
+
     func testSnapshotUpdatesPreserveSelectionOrRecover() {
         var state = SmileyState(snapshot: snapshot)
         _ = state.send(.selectCategory("custom"))

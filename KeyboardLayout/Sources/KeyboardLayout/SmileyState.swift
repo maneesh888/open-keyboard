@@ -51,7 +51,7 @@ public struct SmileySnapshot: Equatable, Sendable {
 }
 
 public enum SmileyAction: Equatable, Sendable {
-    case selectCategory(String), activateItem(String)
+    case selectCategory(String), browseCategory(String), activateItem(String)
     case beginSearch, endSearch, setSearchQuery(String)
     case showVariants(String), dismissVariants
     case deleteBackward, returnToTyping, nextSystemKeyboard
@@ -62,11 +62,18 @@ public enum SmileyIntent: Equatable, Sendable {
     case deleteBackward, returnToTyping, nextSystemKeyboard
 }
 
+public struct SmileyCategoryScrollRequest: Equatable, Sendable {
+    public let categoryID: String
+    public let revision: UInt
+}
+
 public struct SmileyState: Equatable, Sendable {
     public private(set) var snapshot: SmileySnapshot
     public private(set) var selectedCategoryID: String?
     public private(set) var isSearching = false
     public private(set) var searchQuery = ""
+    public private(set) var categoryScrollRequest: SmileyCategoryScrollRequest?
+    public var categoryScrollRevision: UInt { categoryScrollRequest?.revision ?? 0 }
     public private(set) var variantItemID: String?
     public var variantItem: SmileyItem? { visibleItems.first { $0.id == variantItemID } }
 
@@ -103,8 +110,14 @@ public struct SmileyState: Equatable, Sendable {
         case .showVariants(let id):
             if visibleItems.contains(where: { $0.id == id && !$0.variants.isEmpty }) { variantItemID = id }
         case .dismissVariants: variantItemID = nil
+        case .browseCategory(let id):
+            guard !isSearching, selectedCategoryID != id,
+                  snapshot.sections.contains(where: { $0.id == id }) else { return nil }
+            selectedCategoryID = id; variantItemID = nil
         case .selectCategory(let id):
-            if snapshot.sections.contains(where: { $0.id == id }) { selectedCategoryID = id }
+            guard snapshot.sections.contains(where: { $0.id == id }) else { return nil }
+            selectedCategoryID = id
+            categoryScrollRequest = .init(categoryID: id, revision: categoryScrollRevision &+ 1)
             isSearching = false; searchQuery = ""; variantItemID = nil
         case .beginSearch: isSearching = true; variantItemID = nil
         case .endSearch: isSearching = false; searchQuery = ""; variantItemID = nil
