@@ -1,6 +1,6 @@
 # Smiley keyboard package
 
-`Packages/KeyboardLayout` is the bounded smiley slice of the M1 package boundary.
+`KeyboardLayout` is the bounded smiley slice of the M1 package boundary.
 It does not extract the existing typing engine or the whole panel. M2 and the
 remaining M3/M4 work remain separate. The package depends on no OpenKeyboard or AI
 module and bundles no catalogue, networking, search, or persistence.

@@ -625,8 +625,8 @@ case "$MODE" in
     echo -e "${YELLOW}Running OpenKeyboardCore package tests...${NC}"
     require_swift
     swift test --package-path "$CORE_PACKAGE"
-    swift test --package-path "$REPO_ROOT/Packages/KeyboardLayout"
-    swift build --package-path "$REPO_ROOT/Packages/KeyboardLayout/Examples/SmileyConsumer"
+    swift test --package-path "$REPO_ROOT/KeyboardLayout"
+    swift build --package-path "$REPO_ROOT/KeyboardLayout/Examples/SmileyConsumer"
     echo -e "${GREEN}✓ Core tests complete${NC}"
     ;;
 

@@ -430,7 +430,7 @@
 			);
 			mainGroup = 1907F0F8DF9C0B5C3BCFA307;
 			packageReferences = (
-				OKSMILEYREF /* XCLocalSwiftPackageReference "Packages/KeyboardLayout" */,
+				OKSMILEYREF /* XCLocalSwiftPackageReference "KeyboardLayout" */,
 				OKAIPKGREF00000000001 /* XCLocalSwiftPackageReference "Vendor/universal-ai-connector/swift-package" */,
 			);
 			productRefGroup = 31FF30F881C179EC5AEBB66C /* Products */;
@@ -763,9 +763,9 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Vendor/universal-ai-connector/swift-package";
 		};
-        OKSMILEYREF /* XCLocalSwiftPackageReference "Packages/KeyboardLayout" */ = {
+        OKSMILEYREF /* XCLocalSwiftPackageReference "KeyboardLayout" */ = {
             isa = XCLocalSwiftPackageReference;
-            relativePath = Packages/KeyboardLayout;
+            relativePath = KeyboardLayout;
         };
 /* End XCLocalSwiftPackageReference section */
 
@@ -787,17 +787,17 @@
 		};
 		OKSMILEYPRODAPP /* KeyboardLayout */ = {
             isa = XCSwiftPackageProductDependency;
-            package = OKSMILEYREF /* XCLocalSwiftPackageReference "Packages/KeyboardLayout" */;
+            package = OKSMILEYREF /* XCLocalSwiftPackageReference "KeyboardLayout" */;
             productName = KeyboardLayout;
         };
 		OKSMILEYPRODEXT /* KeyboardLayout */ = {
             isa = XCSwiftPackageProductDependency;
-            package = OKSMILEYREF /* XCLocalSwiftPackageReference "Packages/KeyboardLayout" */;
+            package = OKSMILEYREF /* XCLocalSwiftPackageReference "KeyboardLayout" */;
             productName = KeyboardLayout;
         };
 		OKSMILEYPRODTEST /* KeyboardLayout */ = {
             isa = XCSwiftPackageProductDependency;
-            package = OKSMILEYREF /* XCLocalSwiftPackageReference "Packages/KeyboardLayout" */;
+            package = OKSMILEYREF /* XCLocalSwiftPackageReference "KeyboardLayout" */;
             productName = KeyboardLayout;
         };
 /* End XCSwiftPackageProductDependency section */

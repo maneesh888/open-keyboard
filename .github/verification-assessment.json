@@ -1,10 +1,52 @@
 {
   "base": "99bc28e5bcee1019871ac4d07eaaf3b9a107397b",
   "changes": {
+    "KeyboardLayout/Examples/SmileyConsumer/Package.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "eef0da8b7130e5cc64d96710bb69ca9044516938"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Examples/SmileyConsumer/Sources/SmileyConsumer/SmileyConsumer.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "6556428fb9413782101556b6c59cf9a84d525f34"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Package.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "8fa56fc9e5469c9e96ccd0b0b46aff2ed3b8a3c4"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "0fe2cd2feceb720e9f2485825cfc7295da9336df"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/KeyboardLayout/SmileyState.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "838e8baf13a6db1901c5fb3ad63b65d19d4b0285"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Tests/KeyboardLayoutTests/SmileyStateTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "4ab97bdadc5d7f3d4fed954be5cb7714c904a0c0"
+      },
+      "before": null
+    },
     "OpenKeyboard.xcodeproj/project.pbxproj": {
       "after": {
         "mode": "100644",
-        "oid": "7c3358e6279d058d4185c55c5caf11b062132342"
+        "oid": "dca3c512f50d115b49c1898543ff564a142de99a"
       },
       "before": {
         "mode": "100644",
@@ -71,59 +113,17 @@
         "oid": "ead83df63c8b3702a990199fde463f616a3aed0d"
       }
     },
-    "Packages/KeyboardLayout/Examples/SmileyConsumer/Package.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "eef0da8b7130e5cc64d96710bb69ca9044516938"
-      },
-      "before": null
-    },
-    "Packages/KeyboardLayout/Examples/SmileyConsumer/Sources/SmileyConsumer/SmileyConsumer.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "6556428fb9413782101556b6c59cf9a84d525f34"
-      },
-      "before": null
-    },
-    "Packages/KeyboardLayout/Package.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "8fa56fc9e5469c9e96ccd0b0b46aff2ed3b8a3c4"
-      },
-      "before": null
-    },
-    "Packages/KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "0fe2cd2feceb720e9f2485825cfc7295da9336df"
-      },
-      "before": null
-    },
-    "Packages/KeyboardLayout/Sources/KeyboardLayout/SmileyState.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "838e8baf13a6db1901c5fb3ad63b65d19d4b0285"
-      },
-      "before": null
-    },
-    "Packages/KeyboardLayout/Tests/KeyboardLayoutTests/SmileyStateTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "4ab97bdadc5d7f3d4fed954be5cb7714c904a0c0"
-      },
-      "before": null
-    },
     "docs/SMILEY_KEYBOARD_PACKAGE.md": {
       "after": {
         "mode": "100644",
-        "oid": "83794bc299b9fe26923dfe97c147863268760c2e"
+        "oid": "bc6781b1bcc9fa579773967f35256c0ae90673a1"
       },
       "before": null
     },
     "scripts/ios/test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "834dde7ee91ce7490ce79fb2e74c277dbe56521b"
+        "oid": "78f16f5908b56c3ab804e8d2a7c68cdbcad35e59"
       },
       "before": {
         "mode": "100755",
