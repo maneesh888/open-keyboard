@@ -26,6 +26,7 @@ class VerificationScopeTests(unittest.TestCase):
         self.git("config", "core.hooksPath", "/dev/null")
         self.write("README.md", "hello\n")
         self.write("docs/plans/feature.md", "plan\n")
+        self.write("docs/plans/second.md", "another plan\n")
         self.write("OpenKeyboard/App.swift", "app\n")
         self.write("AGENTS.md", "policy\n")
         self.base = self.commit()
@@ -53,9 +54,9 @@ class VerificationScopeTests(unittest.TestCase):
         self.assertEqual(self.scope("--range", self.base, head), expected)
 
     def test_markdown_modification_addition_deletion_and_staged(self):
-        self.write("docs/plans/feature.md", "revised plan\n")
+        self.write("docs/plans/second.md", "revised plan\n")
         self.write("docs/new-guide.md", "new guide\n")
-        (self.root / "README.md").unlink()
+        (self.root / "docs/plans/feature.md").unlink()
         self.git("add", "-A")
         self.assertEqual(self.scope("--staged"), "docs")
         self.assert_range("docs")
@@ -78,6 +79,7 @@ class VerificationScopeTests(unittest.TestCase):
                      "docs/VERIFICATION_APPLICABILITY.md", "docs/RELEASE_HARDENING.md",
                      "docs/AI_KEYBOARD_TEST_PLAN.md", "docs/new-policy.md",
                      "docs/release-notes.md", "docs/workflow-guide.md",
+                     "docs/policy/guide.md", "docs/verification/guide.md", "README.md",
                      ".github/workflows/ci.yml",
                      "scripts/check.sh", "Package.swift", ".gitmodules"):
             with self.subTest(name=name):

@@ -32,13 +32,13 @@ def git(*args):
 def documentation_path(path):
     if "\n" in path or "\r" in path:
         return False
-    if path == "README.md":
-        return True
     parts = Path(path).parts
     if len(parts) < 2 or parts[0] != "docs" or not path.endswith(".md"):
         return False
-    name = parts[-1].lower().replace("-", "_")
-    return path not in POLICY_DOCUMENTS and not any(part in name for part in POLICY_NAME_PARTS)
+    names = (component.lower().replace("-", "_") for component in parts[1:])
+    return path not in POLICY_DOCUMENTS and not any(
+        marker in name for name in names for marker in POLICY_NAME_PARTS
+    )
 
 
 def classify(raw):
