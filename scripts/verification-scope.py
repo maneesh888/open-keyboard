@@ -7,16 +7,27 @@ unknown path, unusual Git mode, malformed record, or empty diff selects full.
 
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 
-POLICY_DOCUMENTS = {
-    "docs/DEVELOPMENT_WORKFLOW.md",
-    "docs/LIVE_EVIDENCE_PRIVACY.md",
-    "docs/REAL_EXTENSION_SMOKE_PLAN.md",
-    "docs/TESTING_GUIDE.md",
-    "docs/VERIFICATION_APPLICABILITY.md",
+DOCUMENTATION_FILES = {
+    "README.md",
+    "docs/AI_KEYBOARD_RESEARCH.md",
+    "docs/AI_KEYBOARD_TODO.md",
+    "docs/AI_OPERATION_DIAGNOSTICS.md",
+    "docs/CI_LOG_INDEX.md",
+    "docs/KEYBOARD_LAYOUT_PACKAGE_MILESTONE_PLAN.md",
+    "docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md",
+    "docs/M2_PROGRESS.md",
+    "docs/MACOS_MILESTONE_2_PLAN.md",
+    "docs/PR_PROOF_AUDIT_2026-08-14.md",
+    "docs/PROMPT_EVALS.md",
+    "docs/TDD_BACKEND_PLAN.md",
+    "docs/TDD_STATUS.md",
+    "docs/UNIVERSAL_AI_CONNECTOR.md",
+    "docs/WORK_QUEUE.md",
 }
 
 
@@ -25,12 +36,12 @@ def git(*args):
 
 
 def documentation_path(path):
-    if "\n" in path or "\r" in path or path in POLICY_DOCUMENTS:
+    if "\n" in path or "\r" in path:
         return False
-    if path == "README.md":
+    if path in DOCUMENTATION_FILES:
         return True
     parts = Path(path).parts
-    return len(parts) >= 2 and parts[0] == "docs" and path.endswith(".md")
+    return len(parts) >= 3 and parts[:2] == ("docs", "plans") and path.endswith(".md")
 
 
 def classify(raw):
@@ -54,7 +65,8 @@ def classify(raw):
                 valid = before == ":100644" and after == "100644"
             else:
                 return "full"
-            if not valid or len(old_oid) != 40 or len(new_oid) != 40:
+            if (not valid or re.fullmatch(r"[0-9a-f]{40}", old_oid) is None
+                    or re.fullmatch(r"[0-9a-f]{40}", new_oid) is None):
                 return "full"
         except (UnicodeDecodeError, ValueError):
             return "full"

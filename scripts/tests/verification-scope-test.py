@@ -54,7 +54,7 @@ class VerificationScopeTests(unittest.TestCase):
 
     def test_markdown_modification_addition_deletion_and_staged(self):
         self.write("docs/plans/feature.md", "revised plan\n")
-        self.write("docs/new.md", "new guide\n")
+        self.write("docs/plans/new.md", "new plan\n")
         (self.root / "README.md").unlink()
         self.git("add", "-A")
         self.assertEqual(self.scope("--staged"), "docs")
@@ -65,9 +65,19 @@ class VerificationScopeTests(unittest.TestCase):
         self.write("OpenKeyboard/App.swift", "changed app\n")
         self.assert_range("full")
 
+    def test_existing_ordinary_documents_are_docs(self):
+        for name in ("docs/AI_OPERATION_DIAGNOSTICS.md", "docs/UNIVERSAL_AI_CONNECTOR.md",
+                     "docs/PROMPT_EVALS.md", "docs/TDD_BACKEND_PLAN.md"):
+            with self.subTest(name=name):
+                self.write(name, "ordinary documentation\n")
+                self.assert_range("docs")
+                self.git("reset", "--hard", self.base)
+
     def test_policy_and_workflow_are_full(self):
         for name in ("AGENTS.md", "docs/DEVELOPMENT_WORKFLOW.md",
-                     "docs/VERIFICATION_APPLICABILITY.md", ".github/workflows/ci.yml",
+                     "docs/VERIFICATION_APPLICABILITY.md", "docs/RELEASE_HARDENING.md",
+                     "docs/AI_KEYBOARD_TEST_PLAN.md", "docs/new-policy.md",
+                     ".github/workflows/ci.yml",
                      "scripts/check.sh", "Package.swift", ".gitmodules"):
             with self.subTest(name=name):
                 self.write(name, "change\n")
@@ -104,7 +114,9 @@ class VerificationScopeTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("scope", CLASSIFIER)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
-        for raw in (b"", b"broken\0", b":100644 100644 a b M\0", b"invalid\0docs/a.md\0"):
+        malformed_oid = b":100644 100644 " + b"x" * 40 + b" " + b"x" * 40 + b" M\0README.md\0"
+        for raw in (b"", b"broken\0", b":100644 100644 a b M\0",
+                    b"invalid\0docs/a.md\0", malformed_oid):
             with self.subTest(raw=raw):
                 self.assertEqual(module.classify(raw), "full")
 

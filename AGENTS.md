@@ -461,11 +461,13 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
   unless the user explicitly requests staging without a commit.
 - Before push, stop if the branch would publish earlier unrelated commits whose ownership or scope
   is ambiguous.
-- Documentation-only classification accepts regular Markdown under `docs/` and the root `README.md`,
-  excluding verification and workflow policy documents. Mixed, unknown, source, dependency, build,
+- Documentation-only classification accepts reviewed planning/status Markdown paths and the root
+  `README.md`; new files qualify under `docs/plans/`. Active policy and unknown documentation
+  require full verification. Mixed, source, dependency, build,
   workflow, policy, non-regular, or malformed changes require full verification. The commit hook
   classifies the staged candidate; the push gate and GitHub CI classify the complete exact-head
-  diff against the base. Hygiene, secret, whitespace, and policy tests remain required in both paths.
+  diff against the base. Hygiene, secret, working/staged/committed whitespace, and policy tests
+  remain required in both paths.
 - Local implementation and commits may proceed after deterministic tests for a bounded
   implementation request under standing lifecycle authority, or under separate explicit edit and
   commit authority, when no active proof-first or commit opt-out remains.

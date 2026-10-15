@@ -67,6 +67,7 @@ env \
   -u OPEN_KEYBOARD_TEST_API_KEY \
   -u OPEN_KEYBOARD_TEST_MODEL \
   -u OPEN_KEYBOARD_LIVE_EXPECTED_SHA \
+  OPEN_KEYBOARD_CHECK_BASE_REF="$LIVE_BASE_SHA" \
   "$ROOT/scripts/check.sh" "$check_mode"
 require_clean_tree
 

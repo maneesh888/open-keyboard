@@ -127,10 +127,12 @@ Release readiness additionally requires exact-head GitHub checks and an independ
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
 
 The staged commit and complete branch diff are classified by `scripts/verification-scope.py`.
-Only regular Markdown in `docs/` or the root `README.md` qualifies as documentation-only;
-verification and workflow policy documents are excluded. Empty, mixed, unknown, source,
+Only reviewed planning/status Markdown paths, new plans under `docs/plans/`, or the root
+`README.md` qualify as documentation-only. Policy and unknown documentation are excluded. Empty, mixed, source,
 dependency, build, workflow, policy, unusual-mode, and malformed diffs use the full route.
-Documentation-only work still runs environment, shell/YAML, secret, whitespace, and policy checks.
+Documentation-only work still runs environment, shell/YAML, secret, working/staged/committed
+whitespace, and policy checks. The committed check uses the complete base-to-head diff on a clean
+checkout, including in GitHub CI.
 
 The deterministic UI gate uses one worktree-scoped Xcode session with parallel testing disabled
 for its fixed iPhone 16 destination.

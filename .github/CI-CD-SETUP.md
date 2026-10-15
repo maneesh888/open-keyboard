@@ -59,7 +59,8 @@ validate both its immutable body snapshot and current GitHub state. A canceled, 
 invalid event remains visible under the protected name and blocks. If GitHub schedules an older
 event late, current-state validation makes it fail rather than authorizing invalid current metadata.
 Technical jobs aggregate independently as `Required technical checks`; the protected aggregator
-requires hygiene for every diff and the Core, build, and semantic-contract jobs for every diff
+requires hygiene, including committed-diff whitespace validation, for every diff and the Core,
+build, and semantic-contract jobs for every diff
 outside strict documentation-only classification. Branch protection requires
 that name plus `Required checks` and `Required live verification`.
 

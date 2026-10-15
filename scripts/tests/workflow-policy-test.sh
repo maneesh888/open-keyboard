@@ -202,6 +202,13 @@ ruby -e '
   end
   abort "Protected technical aggregation must include scope and hygiene." unless
     %w[verification-scope hygiene].all? { |name| technical.fetch("needs").include?(name) }
+  hygiene = jobs.fetch("hygiene")
+  checkout = hygiene.fetch("steps").first
+  abort "Hygiene needs complete history for committed whitespace." unless
+    checkout.fetch("with").fetch("fetch-depth") == 0
+  hygiene_run = hygiene.fetch("steps").last
+  abort "Hygiene must bind the committed whitespace base." unless
+    hygiene_run.fetch("env").fetch("OPEN_KEYBOARD_CHECK_BASE_REF").include?("github.event.pull_request.base.sha")
   aggregate = technical.fetch("steps").first.fetch("run")
   abort "Documentation-only aggregation must require skipped heavyweight jobs." unless
     aggregate.include?(%q{"$SCOPE" == "docs"}) &&
@@ -221,6 +228,8 @@ ruby -e '
   abort "The live check has the wrong protected name." unless live.fetch("name") == "Required live verification"
   abort "The protected live check must be a root job so cancellation cannot hide behind a prerequisite." if live.key?("needs")
 ' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet '"$ROOT/scripts/verify-committed-whitespace.sh"' "$ROOT/scripts/check.sh"
+rg --fixed-strings --quiet 'OPEN_KEYBOARD_CHECK_BASE_REF="$LIVE_BASE_SHA"' "$PRE_PUSH_HOOK"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"
