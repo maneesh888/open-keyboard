@@ -1576,7 +1576,12 @@ private struct CorrectionCompletePanel: View {
             Text(state.title)
                 .font(.headline.weight(.bold))
 
-            HStack(alignment: .top, spacing: 16) {
+            Text(state.message)
+                .font(.subheadline)
+                .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 16) {
                 if state.allowsGrammarCheckAgain {
                     completionButton(
                         "Check Again",
@@ -1610,25 +1615,17 @@ private struct CorrectionCompletePanel: View {
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(
-                        width: KeyboardPanelLayout.actionControlButtonHeight,
-                        height: KeyboardPanelLayout.actionControlButtonHeight
-                    )
-                    .overlay(
-                        Circle()
-                            .strokeBorder(OpenKeyboardTheme.Text.primary, lineWidth: 1.5)
-                    )
-
-                Text(title)
-                    .font(.caption2.weight(.medium))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: 112)
-            .contentShape(Rectangle())
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(
+                    width: KeyboardPanelLayout.actionControlButtonHeight,
+                    height: KeyboardPanelLayout.actionControlButtonHeight
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(OpenKeyboardTheme.Text.primary, lineWidth: 1.5)
+                )
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .foregroundColor(OpenKeyboardTheme.Text.primary)
