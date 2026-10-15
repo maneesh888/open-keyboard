@@ -27,6 +27,7 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshRuntimeState()
+        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
@@ -104,7 +105,8 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshRuntimeState() {
-        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
+        // Host document traits are unavailable during viewDidLoad. Read them only
+        // after appearance or a host text/selection callback.
         let fullAccess = hasFullAccess
         viewModel?.updateFullAccess(fullAccess)
         AppConfig.updateKeyboardFullAccess(fullAccess)

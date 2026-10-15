@@ -46,7 +46,7 @@
     "OpenKeyboard.xcodeproj/project.pbxproj": {
       "after": {
         "mode": "100644",
-        "oid": "837142c5c80e399fed04129a0217333d45e5e02e"
+        "oid": "6fdf12edd49f89df9baf73e1e0a46cae0134ba85"
       },
       "before": {
         "mode": "100644",
@@ -76,7 +76,7 @@
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "50d42d7ca05991f787f2f14a4449a345b6267236"
+        "oid": "bf63cd214260634b4244d70a7c403b59e7f30b2f"
       },
       "before": {
         "mode": "100644",
@@ -86,7 +86,7 @@
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "3bf1f7cbb81a87f0c6ca469562f9652c4d3052e2"
+        "oid": "3cf5c8ba89d60daf55b7f8ed95ea47003ef80452"
       },
       "before": {
         "mode": "100644",
@@ -106,7 +106,7 @@
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "acc8c18b11ca0c1b605b8a0dc9f4f843f0a49336"
+        "oid": "2387005efbc2a5755034f6194fbe240b22410158"
       },
       "before": {
         "mode": "100644",

@@ -18,6 +18,23 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testKeyboardControllerLoadsBeforeHostDocumentConnects() {
+        let controller = KeyboardViewController()
+        controller.loadViewIfNeeded()
+        XCTAssertTrue(controller.isViewLoaded)
+        XCTAssertFalse(controller.view.subviews.isEmpty)
+    }
+
+    func testNumberPadToleratesDisconnectedUIKitDocumentProxy() {
+        let controller = UIInputViewController()
+        let model = KeyboardViewModel(textDocumentProxy: controller.textDocumentProxy, loadConfig: { .default })
+        let interaction = model.numberPadInteractionID
+        model.refreshNumberPadContext()
+        XCTAssertNotEqual(model.numberPadInteractionID, interaction)
+        model.showNumberPad()
+        XCTAssertFalse(model.isNumberPadVisible)
+    }
+
     func testNumberPadPreservesLeadingZerosAndPreviousSymbolsMode() {
         let proxy = FakeTextDocumentProxy(text: "")
         let feedback = RecordingKeyboardHapticFeedback()

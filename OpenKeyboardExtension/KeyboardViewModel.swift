@@ -601,8 +601,18 @@ final class KeyboardViewModel: ObservableObject {
         KeyboardActiveProfileObserverRegistry.shared.unregister(activeProfileObserverToken)
     }
 
+    private var currentNumberPadDocumentID: UUID? {
+        // UIKit can return nil while attaching/detaching a host, despite the
+        // nonnull Swift import. Read the public ObjC getter before bridging.
+        textDocumentProxy.perform(#selector(getter: UITextDocumentProxy.documentIdentifier))?
+            .takeUnretainedValue() as? UUID
+    }
+
     func refreshNumberPadContext(needsSystemKeyboardSwitch: Bool = true) {
-        let documentID = textDocumentProxy.documentIdentifier
+        guard let documentID = currentNumberPadDocumentID else {
+            cancelNumberPadInteraction()
+            return
+        }
         let keyboardType = textDocumentProxy.keyboardType ?? .default
         if numberPadDocumentID != documentID || numberPadKeyboardType != keyboardType {
             numberPadDocumentID = documentID
@@ -635,8 +645,9 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func showNumberPad() {
+        guard let documentID = currentNumberPadDocumentID else { return }
         // Capture field identity before opening manually, so the next edit does not close the pad.
-        numberPadDocumentID = textDocumentProxy.documentIdentifier
+        numberPadDocumentID = documentID
         numberPadKeyboardType = textDocumentProxy.keyboardType ?? .default
         hapticFeedback.keyTapped()
         numberPadAnalysisGeneration &+= 1

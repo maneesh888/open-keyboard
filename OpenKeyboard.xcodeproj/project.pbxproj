@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		OKPADCONTROLLERTEST2 /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA7F5EC8066C0C5DAC5080A /* OpenKeyboardExtension/KeyboardViewController.swift */; };
+		OKPADVIEWTEST000002 /* KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 572626087CD519914B6B58B5 /* OpenKeyboardExtension/KeyboardView.swift */; };
         A7E663F238A445819AC34102 /* KeyboardHapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */; };
         A7E663F238A445819AC34103 /* KeyboardHapticFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E663F238A445819AC34101 /* KeyboardHapticFeedback.swift */; };
 		2012167C7CC2E3BB270F0D60B /* OpenKeyboard/Models/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 582E49DC7350041B2D2D135D /* OpenKeyboard/Models/AppConfig.swift */; };
@@ -501,6 +503,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				OKPADCONTROLLERTEST2 /* KeyboardViewController.swift in Sources */,
+				OKPADVIEWTEST000002 /* KeyboardView.swift in Sources */,
 				OKSEMCONTEST0000002 /* SemanticPromptContract.generated.swift in Sources */,
 				OKSEMVALTEST0000002 /* SemanticPlainTextResponseValidator.swift in Sources */,
 				OKCGARCHTEST0000000002 /* OpenKeyboardUITests/GatewayClientArchitectureTests.swift in Sources */,
