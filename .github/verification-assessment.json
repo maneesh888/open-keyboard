@@ -4,7 +4,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "9755a9ce9570aa4d4d0e2da39783a1d881c4a7ee"
+        "oid": "a01fc3c74816f48b7aa7a74829ae40b605088000"
       },
       "before": {
         "mode": "100644",
@@ -14,7 +14,7 @@
   },
   "live_impact": "none",
   "proof": "Automated deterministic checks plus normal Simulator completion-panel screenshots and visible retry/back interactions verify the changed UI. Independent review checks this assessment against the bound diff.",
-  "rationale": "Only completion-panel button symbols, outline styling, and fixed tap-target geometry change. Production callbacks, request construction, response parsing, model selection, and the pinned contracts are unchanged.",
+  "rationale": "Only completion-panel button symbols, unfilled theme-aware outlines, captions, subtitle visibility, and tap-target geometry change. Production callbacks, request construction, response parsing, model selection, and the pinned contracts are unchanged.",
   "requirement_id": "R4",
   "schema": 1
 }
