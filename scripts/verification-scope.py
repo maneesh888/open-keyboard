@@ -12,23 +12,17 @@ import subprocess
 import sys
 
 
-DOCUMENTATION_FILES = {
-    "README.md",
-    "docs/AI_KEYBOARD_RESEARCH.md",
-    "docs/AI_KEYBOARD_TODO.md",
-    "docs/AI_OPERATION_DIAGNOSTICS.md",
-    "docs/CI_LOG_INDEX.md",
-    "docs/KEYBOARD_LAYOUT_PACKAGE_MILESTONE_PLAN.md",
-    "docs/KEYBOARD_PRODUCT_COMPLETION_PLAN.md",
-    "docs/M2_PROGRESS.md",
-    "docs/MACOS_MILESTONE_2_PLAN.md",
-    "docs/PR_PROOF_AUDIT_2026-08-14.md",
-    "docs/PROMPT_EVALS.md",
-    "docs/TDD_BACKEND_PLAN.md",
-    "docs/TDD_STATUS.md",
-    "docs/UNIVERSAL_AI_CONNECTOR.md",
-    "docs/WORK_QUEUE.md",
+POLICY_DOCUMENTS = {
+    "docs/AI_KEYBOARD_TEST_PLAN.md",
+    "docs/DEVELOPMENT_WORKFLOW.md",
+    "docs/LIVE_EVIDENCE_PRIVACY.md",
+    "docs/REAL_EXTENSION_SMOKE_PLAN.md",
+    "docs/RELEASE_HARDENING.md",
+    "docs/TESTING_GUIDE.md",
+    "docs/VERIFICATION_APPLICABILITY.md",
 }
+POLICY_NAME_PARTS = ("policy", "workflow", "verification", "release", "testing",
+                     "security", "privacy", "test_plan", "smoke_plan")
 
 
 def git(*args):
@@ -38,10 +32,13 @@ def git(*args):
 def documentation_path(path):
     if "\n" in path or "\r" in path:
         return False
-    if path in DOCUMENTATION_FILES:
+    if path == "README.md":
         return True
     parts = Path(path).parts
-    return len(parts) >= 3 and parts[:2] == ("docs", "plans") and path.endswith(".md")
+    if len(parts) < 2 or parts[0] != "docs" or not path.endswith(".md"):
+        return False
+    name = parts[-1].lower().replace("-", "_")
+    return path not in POLICY_DOCUMENTS and not any(part in name for part in POLICY_NAME_PARTS)
 
 
 def classify(raw):

@@ -127,8 +127,9 @@ Release readiness additionally requires exact-head GitHub checks and an independ
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
 
 The staged commit and complete branch diff are classified by `scripts/verification-scope.py`.
-Only reviewed planning/status Markdown paths, new plans under `docs/plans/`, or the root
-`README.md` qualify as documentation-only. Policy and unknown documentation are excluded. Empty, mixed, source,
+Regular Markdown under `docs/` and the root `README.md` qualifies as documentation-only,
+including new ordinary guides. Active policy documents and policy-named paths are excluded.
+Empty, mixed, unknown non-documentation, source,
 dependency, build, workflow, policy, unusual-mode, and malformed diffs use the full route.
 Documentation-only work still runs environment, shell/YAML, secret, working/staged/committed
 whitespace, and policy checks. The committed check uses the complete base-to-head diff on a clean

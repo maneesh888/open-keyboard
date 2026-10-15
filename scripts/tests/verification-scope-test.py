@@ -54,7 +54,7 @@ class VerificationScopeTests(unittest.TestCase):
 
     def test_markdown_modification_addition_deletion_and_staged(self):
         self.write("docs/plans/feature.md", "revised plan\n")
-        self.write("docs/plans/new.md", "new plan\n")
+        self.write("docs/new-guide.md", "new guide\n")
         (self.root / "README.md").unlink()
         self.git("add", "-A")
         self.assertEqual(self.scope("--staged"), "docs")
@@ -77,6 +77,7 @@ class VerificationScopeTests(unittest.TestCase):
         for name in ("AGENTS.md", "docs/DEVELOPMENT_WORKFLOW.md",
                      "docs/VERIFICATION_APPLICABILITY.md", "docs/RELEASE_HARDENING.md",
                      "docs/AI_KEYBOARD_TEST_PLAN.md", "docs/new-policy.md",
+                     "docs/release-notes.md", "docs/workflow-guide.md",
                      ".github/workflows/ci.yml",
                      "scripts/check.sh", "Package.swift", ".gitmodules"):
             with self.subTest(name=name):
