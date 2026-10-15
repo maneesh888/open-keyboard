@@ -4,11 +4,10 @@
 
 ```text
 Pull request
-  -> Exact-head local full gate
+  -> Exact-head diff-classified local deterministic gate
   -> Independent read-only PR reviewer
   -> GitHub repository hygiene
-  -> GitHub OpenKeyboardCore tests
-  -> GitHub iOS app + keyboard extension build
+  -> GitHub OpenKeyboardCore tests and iOS app + extension build for non-documentation changes
   -> Required technical checks
   -> Required checks (passes only with complete event-and-current exact-head review evidence)
   -> Required live verification
@@ -59,7 +58,10 @@ merge authorization. It contains no project-reviewer identity marker. Its review
 validate both its immutable body snapshot and current GitHub state. A canceled, pending, stale, or
 invalid event remains visible under the protected name and blocks. If GitHub schedules an older
 event late, current-state validation makes it fail rather than authorizing invalid current metadata.
-Technical jobs aggregate independently as `Required technical checks`; branch protection requires
+Technical jobs aggregate independently as `Required technical checks`; the protected aggregator
+requires hygiene, including committed-diff whitespace validation, for every diff and the Core,
+build, and semantic-contract jobs for every diff
+outside strict documentation-only classification. Branch protection requires
 that name plus `Required checks` and `Required live verification`.
 
 The linked COMMENTED submission must be the newest same-head report that identifies itself as the

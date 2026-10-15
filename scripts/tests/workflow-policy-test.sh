@@ -189,6 +189,32 @@ ruby -e '
   jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
   technical = jobs.fetch("required-technical-checks")
   abort "Technical aggregation has the wrong protected name." unless technical.fetch("name") == "Required technical checks"
+  scope = jobs.fetch("verification-scope")
+  abort "Exact-head scope must be a root job." if scope.key?("needs")
+  abort "Scope must use the base-owned classifier." unless
+    scope.fetch("steps").last.fetch("run").include?(%q{git show "$BASE_SHA:scripts/verification-scope.py"})
+  %w[core-tests ios-build semantic-contract].each do |name|
+    job = jobs.fetch(name)
+    abort "#{name} must depend on the scope result." unless job.fetch("needs") == "verification-scope"
+    abort "#{name} must run for every non-documentation change." unless
+      job.fetch("if").include?("needs.verification-scope.outputs.scope") &&
+      job.fetch("if").include?("full")
+  end
+  abort "Protected technical aggregation must include scope and hygiene." unless
+    %w[verification-scope hygiene].all? { |name| technical.fetch("needs").include?(name) }
+  hygiene = jobs.fetch("hygiene")
+  checkout = hygiene.fetch("steps").first
+  abort "Hygiene needs complete history for committed whitespace." unless
+    checkout.fetch("with").fetch("fetch-depth") == 0
+  hygiene_run = hygiene.fetch("steps").last
+  abort "Hygiene must bind the committed whitespace base." unless
+    hygiene_run.fetch("env").fetch("OPEN_KEYBOARD_CHECK_BASE_REF").include?("github.event.pull_request.base.sha")
+  aggregate = technical.fetch("steps").first.fetch("run")
+  abort "Documentation-only aggregation must require skipped heavyweight jobs." unless
+    aggregate.include?(%q{"$SCOPE" == "docs"}) &&
+    aggregate.include?(%q{"$CORE_TESTS_RESULT" != "skipped"}) &&
+    aggregate.include?(%q{"$IOS_BUILD_RESULT" != "skipped"}) &&
+    aggregate.include?(%q{"$SEMANTIC_CONTRACT_RESULT" != "skipped"})
   abort "Technical aggregation must not depend on review classification." if
     Array(technical.fetch("needs")).include?("required-review-evidence")
 
@@ -202,6 +228,8 @@ ruby -e '
   abort "The live check has the wrong protected name." unless live.fetch("name") == "Required live verification"
   abort "The protected live check must be a root job so cancellation cannot hide behind a prerequisite." if live.key?("needs")
 ' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
+rg --fixed-strings --quiet '"$ROOT/scripts/verify-committed-whitespace.sh"' "$ROOT/scripts/check.sh"
+rg --fixed-strings --quiet 'OPEN_KEYBOARD_CHECK_BASE_REF="$LIVE_BASE_SHA"' "$PRE_PUSH_HOOK"
 rg --quiet 'name: Semantic prompt contract' "$CI_WORKFLOW"
 rg --quiet 'submodules:[[:space:]]*recursive' "$CI_WORKFLOW"
 rg --quiet 'check-semantic-prompt-contract\.sh' "$CI_WORKFLOW"

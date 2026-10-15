@@ -113,18 +113,27 @@ Run targeted tests while editing, then run the highest cumulative gate required 
 | Mode | Final gate | Use |
 |---|---|---|
 | Fast | Affected tests, then `./scripts/check.sh --hygiene` | Bounded local change |
-| Standard | `./scripts/check.sh --quick` | Normal completed implementation or commit |
-| Release | `./scripts/check.sh --full` on exact `HEAD` | PR readiness, tag, or release |
+| Standard | `./scripts/check.sh --hygiene` for classified documentation-only changes; `--quick` otherwise | Normal completed implementation or commit |
+| Release | `./scripts/check.sh --hygiene` for classified documentation-only changes; `--full` otherwise, on exact `HEAD` | PR readiness, tag, or release |
 
 Calling `./scripts/check.sh` without an argument runs `--full`.
 
 Release readiness additionally requires exact-head GitHub checks and an independent review through
-`$review-verify-merge-pr`; the local full gate alone is insufficient.
+`$review-verify-merge-pr`; the local deterministic gate alone is insufficient.
 
 - `--hygiene`: environment preflight, shell/YAML syntax, secret and policy regressions,
   tracked and untracked whitespace.
 - `--quick`: hygiene, OpenKeyboardCore tests, and app plus keyboard-extension build.
 - `--full`: quick plus deterministic UI-target tests on iPhone 16.
+
+The staged commit and complete branch diff are classified by `scripts/verification-scope.py`.
+Regular Markdown under `docs/` qualifies as documentation-only, including new ordinary guides.
+The root `README.md`, active policy documents, and policy-named paths are excluded.
+Empty, mixed, unknown non-documentation, source,
+dependency, build, workflow, policy, unusual-mode, and malformed diffs use the full route.
+Documentation-only work still runs environment, shell/YAML, secret, working/staged/committed
+whitespace, and policy checks. The committed check uses the complete base-to-head diff on a clean
+checkout, including in GitHub CI.
 
 The deterministic UI gate uses one worktree-scoped Xcode session with parallel testing disabled
 for its fixed iPhone 16 destination.
@@ -222,10 +231,12 @@ git config --local --get core.hooksPath
 
 The path must be `.githooks`.
 
-- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --quick`. It can
+- Pre-commit requires an exact staged candidate and runs `./scripts/check.sh --hygiene` for
+  classified documentation-only changes, or `--quick` otherwise. It can
   establish `DETERMINISTIC_VERIFIED` only; it cannot grant commit authority or establish
   `LIVE_VERIFIED`/`RUNTIME_VERIFIED`.
-- Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --full`, and
+- Pre-push requires a clean exact `HEAD`, runs `./scripts/check.sh --hygiene` for a classified
+  documentation-only branch diff, or `--full` otherwise, and
   classifies gateway impact against `origin/main`.
 - Gateway-impacting pushes additionally run `./scripts/check-live.sh gateway`. Credentials stay in
   `<primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env`, which live scripts resolve from
@@ -364,9 +375,11 @@ approval, with the missing AI evidence disclosed.
 ## GitHub checks
 
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
-It validates the requirement ledger and durable independent-review link, then runs repository
-hygiene, OpenKeyboardCore tests, semantic-contract checks, and the iOS app/extension build. The
-stable `Required technical checks` job covers the ordinary build and test gates. Every review/body
+It validates the requirement ledger and durable independent-review link, then classifies the
+exact-head diff against the base-owned classifier. Repository hygiene always runs. For a
+documentation-only diff, Core tests, semantic-contract checks, and app/extension builds are
+skipped; every other diff requires all three. The stable `Required technical checks` job validates
+the expected result for the selected scope. Every review/body
 event creates the fixed protected `Required checks` root job. That job accepts only when the trusted
 validators accept both the immutable event snapshot and a separately fetched current snapshot of
 the exact-head requirement ledger, durable independent-review link, and selected automatic-or-human
