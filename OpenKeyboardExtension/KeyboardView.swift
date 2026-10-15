@@ -1592,8 +1592,11 @@ private struct CorrectionCompletePanel: View {
                             .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
-                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                    .background(OpenKeyboardTheme.Semantic.primaryAction, in: Circle())
+                    .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
+                    .overlay(
+                        Circle()
+                            .strokeBorder(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
+                    )
                     .accessibilityLabel("Check Again")
                     .accessibilityIdentifier("grammar_check_again")
                 }
