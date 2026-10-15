@@ -77,6 +77,7 @@ class VerificationScopeTests(unittest.TestCase):
     def test_policy_and_workflow_are_full(self):
         for name in ("AGENTS.md", "docs/DEVELOPMENT_WORKFLOW.md",
                      "docs/VERIFICATION_APPLICABILITY.md", "docs/RELEASE_HARDENING.md",
+                     "docs/ADVISORY_REVIEW_WORKFLOW.md", "docs/SECURITY_THREAT_MODEL.md",
                      "docs/AI_KEYBOARD_TEST_PLAN.md", "docs/new-policy.md",
                      "docs/release-notes.md", "docs/workflow-guide.md",
                      "docs/policy/guide.md", "docs/verification/guide.md", "README.md",

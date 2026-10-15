@@ -56,6 +56,17 @@
 - Physical-device interaction authorization: not requested
 - Physical-device proof: not required
 
+## Advisory reviews
+
+<!-- Use docs/ADVISORY_REVIEW_WORKFLOW.md. Keep private reports and findings outside GitHub. -->
+<!-- Record only sanitized service status, scope/revision, and disposition summary here. -->
+- Code Review route and status: pending
+- Security review trigger, route, and status: pending
+- Advisory base/head: pending
+- Advisory findings disposition: pending
+- Private evidence: retained locally when available; no private report content or paths published
+- Account activation changes: none
+
 ## Independent review
 
 <!-- Link the newest same-head project-reviewer COMMENTED report; later reports supersede it. -->

@@ -71,6 +71,21 @@ Normal runtime evidence exercises the affected app surface; extension and live i
 required only when the acceptance criterion involves them. Preserve valid equivalent evidence and
 escalate only actual gaps. Keep all applicable exact-head, review, and protected-check gates.
 
+## Advisory review intake
+
+Before the independent review, follow `docs/ADVISORY_REVIEW_WORKFLOW.md`. Select one routine
+Code Review route, assess the security triggers, and record exact base/head, service status,
+coverage, private report reference, and finding dispositions. Reuse an inspected same-head result
+instead of launching a duplicate. Pending, failed, unavailable, and not-applicable statuses are
+not completed reviews; advisory service availability is not a new mandatory check.
+
+Pass inspected external findings and their supporting evidence to the project reviewer separately
+from the neutral requirement ledger. The reviewer must investigate each finding independently;
+validated correctness/security issues enter the existing blocker rules. Do not relabel app/cloud
+output as the custom project-reviewer report. A new head or changed base invalidates advisory
+records; refresh affected reviews and all existing exact-head gates. Never post private scan details
+or provider review comments without the applicable explicit authorization.
+
 ## Review and verify
 
 1. Spawn the project `pr-reviewer` with no inherited conversation when available. Pass only the PR identity, exact SHA, neutral packet, diff, and source paths.
