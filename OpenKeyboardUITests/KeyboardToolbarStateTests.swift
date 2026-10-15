@@ -157,7 +157,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
         await Task.detached { XCUIApplication(bundleIdentifier: runnerID).activate() }.value
         XCTAssertEqual(UIApplication.shared.applicationState, .active)
         let sections = ["faces", "food", "animals"].map { category in
-            SmileySection(id: category, label: category, items: (0..<6).map {
+            SmileySection(id: category, label: category, items: (0..<(category == "food" ? 90 : 6)).map {
                 SmileyItem(id: "\(category)-\($0)", text: "🙂", label: "\(category) \($0)")
             })
         }
@@ -176,12 +176,22 @@ final class KeyboardToolbarStateTests: XCTestCase {
             (view as? UIScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews)
         }
         let scroll = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
-        XCTAssertGreaterThanOrEqual(scroll.contentSize.width, 1125)
+        XCTAssertGreaterThan(scroll.contentSize.width, 1500)
+        let lastCategoryOffset = scroll.contentSize.width - scroll.bounds.width
+        // Jump before visiting the wide middle section: estimated lazy-section
+        // offsets previously landed in the wrong category in the real catalogue.
+        model.send(.selectCategory("animals"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(scroll.contentOffset.x, lastCategoryOffset, accuracy: 1)
+        XCTAssertEqual(model.state.selectedCategoryID, "animals")
+        model.send(.selectCategory("faces"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(scroll.contentOffset.x, 0, accuracy: 1)
         scroll.setContentOffset(CGPoint(x: 375, y: 0), animated: false)
         try await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertTrue(model.actions.contains(.browseCategory("food")))
         XCTAssertEqual(model.state.selectedCategoryID, "food")
-        scroll.setContentOffset(CGPoint(x: 750, y: 0), animated: false)
+        scroll.setContentOffset(CGPoint(x: lastCategoryOffset, y: 0), animated: false)
         try await Task.sleep(nanoseconds: 150_000_000)
         XCTAssertTrue(model.actions.contains(.browseCategory("animals")))
         XCTAssertEqual(model.state.selectedCategoryID, "animals")
@@ -194,7 +204,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
         model.send(.selectCategory("animals"))
         try await Task.sleep(nanoseconds: 150_000_000)
         let lastCategory = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
-        XCTAssertEqual(lastCategory.contentOffset.x, 750, accuracy: 1)
+        XCTAssertEqual(lastCategory.contentOffset.x, lastCategoryOffset, accuracy: 1)
         XCTAssertEqual(model.state.selectedCategoryID, "animals")
         model.send(.selectCategory("faces"))
         try await Task.sleep(nanoseconds: 150_000_000)

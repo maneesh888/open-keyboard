@@ -199,7 +199,7 @@ public struct SmileyKeyboardView: View {
     private func categoryBrowser(width: CGFloat, rows: Int, cellWidth: Double) -> some View {
         ScrollViewReader { scroll in
             ScrollView(.horizontal) {
-                LazyHStack(alignment: .top, spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     ForEach(state.snapshot.sections) { section in
                         let columns = max(1, (section.items.count + rows - 1) / rows)
                         let sectionWidth = max(width, CGFloat(columns) * cellWidth + CGFloat(columns - 1) * style.spacing + 8)

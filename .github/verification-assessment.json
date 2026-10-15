@@ -25,7 +25,7 @@
     "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "2e33f0962efdc6ca7765947b69c6bf567e9f6db0"
+        "oid": "78e82322419fb56a6536352c750579a4fcb8c912"
       },
       "before": null
     },
@@ -131,7 +131,7 @@
     "OpenKeyboardUITests/KeyboardToolbarStateTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a76f4c642e9c3c1e1d326b8fc0a121025f36092e"
+        "oid": "f8d762ed78ff47519087d77d6cf9ee552192828c"
       },
       "before": {
         "mode": "100644",
