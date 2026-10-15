@@ -503,6 +503,22 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
 handling, automatic-versus-human authorization record, and guarded merge command. Do not duplicate
 or improvise those mechanics here.
 
+## Code Review Rules
+
+- Preserve the keyboard extension's Full Access and cross-process credential boundaries. Inspect
+  App Group/Keychain migration, clearing, failure handling, and stale callbacks; permission hints
+  must not become authorization or expose a previous profile.
+- Treat typed text, diagnostics, exports, provider credentials, and endpoint configuration as
+  sensitive. Check consent, expiry, deletion, redaction, and late-response behavior at each boundary.
+- Inspect command execution, pinned dependencies, signing, and CI permission changes for untrusted
+  input or candidate-controlled verification. Keep deterministic, secret, independent-review,
+  exact-head, and guarded-merge gates intact.
+
+Use `docs/ADVISORY_REVIEW_WORKFLOW.md` for the advisory Code Review/security route and private
+records. External findings are evidence to investigate independently, never a replacement for the
+project `pr-reviewer` report. Service unavailability is not a clean review. Repository guidance
+neither activates account settings nor authorizes public vulnerability disclosure.
+
 ## Reporting
 
 Lead with the outcome. Include changed areas, checks and pass/fail results, evidence class and proof

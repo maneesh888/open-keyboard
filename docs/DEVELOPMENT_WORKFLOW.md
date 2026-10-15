@@ -434,6 +434,14 @@ hook, and documentation changes do not themselves require model calls. See
 independent review, and trusted-base rollout. Runtime proof follows the affected surface: a local
 app screen does not require an unrelated extension or gateway interaction.
 
+## Advisory Code Review and security review
+
+Follow [Advisory review workflow](ADVISORY_REVIEW_WORKFLOW.md) for one routine PR Code Review
+route, security-trigger assessment, private exact-revision records, and independent disposition
+of findings. [Security threat model](SECURITY_THREAT_MODEL.md) supplies the initial repository
+context and baseline scan route. This rollout changes neither mandatory checks nor branch
+protection. Optional service status and actual account activation must be reported separately.
+
 ## Independent pull-request review
 
 The repository-owned `.codex/agents/pr-reviewer.toml` defines a read-only reviewer specialized for

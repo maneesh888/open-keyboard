@@ -74,6 +74,7 @@ run_script_policy_tests() {
   "$ROOT/scripts/tests/universal-ai-connector-policy-test.sh"
   "$ROOT/scripts/tests/live-impact-test.sh"
   python3 -I "$ROOT/scripts/tests/verification-scope-test.py"
+  python3 -I "$ROOT/scripts/tests/advisory-review-record-test.py"
   python3 -I "$ROOT/scripts/tests/committed-whitespace-test.py"
   python3 "$ROOT/scripts/tests/verification-assessment-test.py"
   python3 "$ROOT/scripts/tests/policy-only-workflow-test.py"
