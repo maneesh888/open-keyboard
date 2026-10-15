@@ -31,7 +31,19 @@ final class KeyboardViewController: UIInputViewController {
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
         viewModel?.documentDidChange()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        viewModel?.cancelNumberPadInteraction()
+        super.viewWillDisappear(animated)
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        viewModel?.cancelNumberPadInteraction()
+        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
     }
 
     override func updateViewConstraints() {
@@ -92,6 +104,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshRuntimeState() {
+        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
         let fullAccess = hasFullAccess
         viewModel?.updateFullAccess(fullAccess)
         AppConfig.updateKeyboardFullAccess(fullAccess)

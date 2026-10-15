@@ -88,6 +88,8 @@
 		OKTOUCHLAYOUTTEST002 /* OpenKeyboardExtension/KeyboardTouchLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKTOUCHLAYOUT000001 /* OpenKeyboardExtension/KeyboardTouchLayout.swift */; };
 		OKVISPREV000000000002 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OKVISPREV000000000001 /* OpenKeyboard/Views/KeyboardVisualPreviewView.swift */; };
 		OKVMUITEST0000000002 /* OpenKeyboardExtension/KeyboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39D261B1DB017C6BA7680468 /* OpenKeyboardExtension/KeyboardViewModel.swift */; };
+		OKPADBUILDEXT00001 /* KeyboardLayout in Frameworks */ = {isa = PBXBuildFile; productRef = OKPADPRODEXT000001 /* KeyboardLayout */; };
+		OKPADBUILDTEST00001 /* KeyboardLayout in Frameworks */ = {isa = PBXBuildFile; productRef = OKPADPRODTEST000001 /* KeyboardLayout */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -186,6 +188,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				OKAIPKGEXT00000000002 /* UniversalAiConnector in Frameworks */,
+				OKPADBUILDEXT00001 /* KeyboardLayout in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +197,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				OKAIPKGTEST0000000002 /* UniversalAiConnector in Frameworks */,
+				OKPADBUILDTEST00001 /* KeyboardLayout in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,6 +309,7 @@
 			name = OpenKeyboardExtension;
 			packageProductDependencies = (
 				OKAIPKGPRODEXT0000001 /* UniversalAiConnector */,
+				OKPADPRODEXT000001 /* KeyboardLayout */,
 			);
 			productName = OpenKeyboardExtension;
 			productReference = DB6DC819E4A61132A86EEAE8 /* OpenKeyboardExtension.appex */;
@@ -349,6 +354,7 @@
 			name = OpenKeyboardUITests;
 			packageProductDependencies = (
 				OKAIPKGPRODTEST000001 /* UniversalAiConnector */,
+				OKPADPRODTEST000001 /* KeyboardLayout */,
 			);
 			productName = OpenKeyboardUITests;
 			productReference = AB0000000000000000000001 /* OpenKeyboardUITests.xctest */;
@@ -421,6 +427,7 @@
 			);
 			mainGroup = 1907F0F8DF9C0B5C3BCFA307;
 			packageReferences = (
+				OKPADPKGREF00000001 /* KeyboardLayout */,
 				OKAIPKGREF00000000001 /* XCLocalSwiftPackageReference "Vendor/universal-ai-connector/swift-package" */,
 			);
 			productRefGroup = 31FF30F881C179EC5AEBB66C /* Products */;
@@ -753,6 +760,7 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "Vendor/universal-ai-connector/swift-package";
 		};
+		OKPADPKGREF00000001 /* KeyboardLayout */ = {isa = XCLocalSwiftPackageReference; relativePath = KeyboardLayout; };
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -771,6 +779,8 @@
 			package = OKAIPKGREF00000000001 /* XCLocalSwiftPackageReference "Vendor/universal-ai-connector/swift-package" */;
 			productName = UniversalAiConnector;
 		};
+		OKPADPRODEXT000001 /* KeyboardLayout */ = {isa = XCSwiftPackageProductDependency; package = OKPADPKGREF00000001; productName = KeyboardLayout; };
+		OKPADPRODTEST000001 /* KeyboardLayout */ = {isa = XCSwiftPackageProductDependency; package = OKPADPKGREF00000001; productName = KeyboardLayout; };
 /* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6D9882797250F9A619D27D03 /* Project object */;

@@ -169,11 +169,15 @@ struct KeyboardKeyPositions {
     }
 
     func controlRow(keyIDs: [String], keyHeight: CGFloat) -> KeyboardTouchRow {
-        precondition(keyIDs.count == 4, "The control row requires four keys.")
+        precondition(keyIDs.count == 4 || keyIDs.count == 5, "The control row requires four or five keys.")
+        let widths = keyIDs.count == 5
+            ? [bottomControlWidth, bottomControlWidth, bottomControlWidth,
+               spaceWidth - bottomControlWidth - Self.horizontalSpacing, returnWidth]
+            : [bottomControlWidth, bottomControlWidth, spaceWidth, returnWidth]
         return row(
             keyIDs: keyIDs,
-            widths: [bottomControlWidth, bottomControlWidth, spaceWidth, returnWidth],
-            gaps: Array(repeating: Self.horizontalSpacing, count: 3),
+            widths: widths,
+            gaps: Array(repeating: Self.horizontalSpacing, count: keyIDs.count - 1),
             leadingInset: 0,
             keyHeight: keyHeight
         )

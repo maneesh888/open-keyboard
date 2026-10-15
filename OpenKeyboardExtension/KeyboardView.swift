@@ -4,13 +4,16 @@
 //
 
 import SwiftUI
+import KeyboardLayout
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
 
     var body: some View {
-        let showsToolbar = viewModel.panelMode != .actions
+        let numberPadInteractionID = viewModel.numberPadInteractionID
+        let showsToolbar = !viewModel.isNumberPadVisible
+            && viewModel.panelMode != .actions
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
         let viewportHeight = KeyboardPanelLayout.keyboardHeight(
@@ -39,7 +42,20 @@ struct KeyboardView: View {
 
             switch viewModel.panelMode {
             case .keyboard:
-                if let error = viewModel.actionError {
+                if viewModel.isNumberPadVisible {
+                    NumberPadView(
+                        configuration: viewModel.numberPadConfiguration,
+                        style: NumberPadStyle(
+                            key: OpenKeyboardTheme.Surface.keyBackground,
+                            control: OpenKeyboardTheme.Surface.modifierKeyBackground
+                        ),
+                        interactionID: numberPadInteractionID
+                    ) { intent in
+                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID, advance: onNextKeyboard)
+                    }
+                    .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    .onDisappear { viewModel.cancelNumberPadInteraction() }
+                } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
                         onBackToTyping: { viewModel.retryAfterActionError() },
@@ -203,7 +219,9 @@ struct KeyboardView: View {
                 .accessibilityIdentifier("keyboard_row_bottom_letters")
 
                 let controlLayout = positions.controlRow(
-                    keyIDs: ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
+                    keyIDs: inputMode == .letters
+                        ? ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"]
+                        : ["keyboard_numbers", "keyboard_emoji", "keyboard_pad", "keyboard_space", "keyboard_return"],
                     keyHeight: KeyboardPanelLayout.controlKeyHeight
                 )
                 HStack(spacing: 0) {
@@ -219,6 +237,12 @@ struct KeyboardView: View {
                                 viewModel.nextKeyboard(using: onNextKeyboard)
                             }
                             .accessibilityIdentifier("keyboard_key_emoji")
+                        case "keyboard_pad":
+                            KeyButton(label: "Pad", role: .modifier, target: target) {
+                                viewModel.showNumberPad()
+                            }
+                            .accessibilityLabel("Number pad")
+                            .accessibilityIdentifier("keyboard_key_pad")
                         case "keyboard_space":
                             KeyButton(label: "space", role: .space, target: target) {
                                 viewModel.insertSpace()

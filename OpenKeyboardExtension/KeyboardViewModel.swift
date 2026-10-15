@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import KeyboardLayout
 
 private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
     private final class ObserverBox {
@@ -371,6 +372,15 @@ final class KeyboardViewModel: ObservableObject {
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
+    @Published private(set) var isNumberPadVisible = false
+    @Published private(set) var numberPadInteractionID = UUID()
+    @Published private(set) var numberPadConfiguration = NumberPadConfiguration(
+        decimalSeparator: Locale.current.decimalSeparator ?? "."
+    )
+    private var numberPadDocumentID: UUID?
+    private var numberPadKeyboardType: UIKeyboardType?
+    private var numberPadAnalysisGeneration: UInt = 0
+
     @Published private(set) var config = AppConfig.default
     @Published private(set) var hasFullAccess = false
     @Published private(set) var gatewayConnectionError: String?
@@ -589,6 +599,81 @@ final class KeyboardViewModel: ObservableObject {
             nil
         )
         KeyboardActiveProfileObserverRegistry.shared.unregister(activeProfileObserverToken)
+    }
+
+    func refreshNumberPadContext(needsSystemKeyboardSwitch: Bool = true) {
+        let documentID = textDocumentProxy.documentIdentifier
+        let keyboardType = textDocumentProxy.keyboardType ?? .default
+        if numberPadDocumentID != documentID || numberPadKeyboardType != keyboardType {
+            numberPadDocumentID = documentID
+            numberPadKeyboardType = keyboardType
+            numberPadInteractionID = UUID()
+            numberPadConfiguration.variant = keyboardType == .numberPad || keyboardType == .asciiCapableNumberPad
+                ? .digits : .decimal
+            if [.numberPad, .asciiCapableNumberPad, .decimalPad].contains(keyboardType) {
+                showNumberPad()
+            } else {
+                isNumberPadVisible = false
+            }
+        }
+        numberPadConfiguration.decimalSeparator = Locale.current.decimalSeparator ?? "."
+        numberPadConfiguration.needsSystemKeyboardSwitch = needsSystemKeyboardSwitch
+        numberPadConfiguration.submitEnabled = !(textDocumentProxy.enablesReturnKeyAutomatically ?? false)
+            || textDocumentProxy.hasText
+        switch textDocumentProxy.returnKeyType ?? .default {
+        case .go: numberPadConfiguration.submitLabel = "Go"
+        case .next: numberPadConfiguration.submitLabel = "Next"
+        case .search, .google, .yahoo: numberPadConfiguration.submitLabel = "Search"
+        case .send: numberPadConfiguration.submitLabel = "Send"
+        case .done: numberPadConfiguration.submitLabel = "Done"
+        case .join: numberPadConfiguration.submitLabel = "Join"
+        case .route: numberPadConfiguration.submitLabel = "Route"
+        case .continue: numberPadConfiguration.submitLabel = "Continue"
+        case .emergencyCall: numberPadConfiguration.submitLabel = "Call"
+        default: numberPadConfiguration.submitLabel = "Return"
+        }
+    }
+
+    func showNumberPad() {
+        // Capture field identity before opening manually, so the next edit does not close the pad.
+        numberPadDocumentID = textDocumentProxy.documentIdentifier
+        numberPadKeyboardType = textDocumentProxy.keyboardType ?? .default
+        hapticFeedback.keyTapped()
+        numberPadAnalysisGeneration &+= 1
+        clearAutomaticAnalysisState()
+        aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
+        actionError = nil
+        typingPredictions = []
+        isShiftEnabled = false
+        panelMode = .keyboard
+        isNumberPadVisible = true
+        numberPadInteractionID = UUID()
+    }
+
+    func cancelNumberPadInteraction() { numberPadInteractionID = UUID() }
+
+    func handleNumberPadIntent(_ intent: NumberPadIntent, interactionID: UUID? = nil, advance: () -> Void = {}) {
+        guard isNumberPadVisible else { return }
+        guard interactionID == nil || interactionID == numberPadInteractionID else { return }
+        switch intent {
+        case .insertText(let text): insert(text)
+        case .deleteBackward: deleteBackward()
+        case .submit:
+            guard numberPadConfiguration.showsSubmit, numberPadConfiguration.submitEnabled else { return }
+            insertReturn()
+        case .back:
+            hapticFeedback.keyTapped()
+            isNumberPadVisible = false
+            cancelNumberPadInteraction()
+        case .advanceToNextInputMode:
+            cancelNumberPadInteraction()
+            nextKeyboard(using: advance)
+        case .selectVariant(let variant):
+            hapticFeedback.keyTapped()
+            numberPadConfiguration.variant = variant
+            cancelNumberPadInteraction()
+        }
+        refreshNumberPadContext(needsSystemKeyboardSwitch: numberPadConfiguration.needsSystemKeyboardSwitch)
     }
 
     func insert(_ character: String) {
@@ -2016,6 +2101,11 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func scheduleAutomaticAnalysisAfterTextChange() {
+        if isNumberPadVisible {
+            typingPredictions = []
+            clearAutomaticAnalysisState()
+            return
+        }
         if actionError?.scope == .grammar {
             actionError = nil
         }
@@ -2336,7 +2426,7 @@ final class KeyboardViewModel: ObservableObject {
 
     private func scheduleAutomaticAnalysis(delayNanoseconds: UInt64) {
         automaticAnalysisTask?.cancel()
-        guard panelMode == .keyboard else { return }
+        guard panelMode == .keyboard, !isNumberPadVisible else { return }
         guard actionError == nil else { return }
         guard automaticAnalysisWarning == nil else { return }
         guard canRunAIAction else { return }
@@ -2371,6 +2461,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     private func runAutomaticAnalysis() async {
+        guard !Task.isCancelled, !isNumberPadVisible else { return }
         guard !isPerformingAIAction,
               canRunAIAction,
               panelMode == .keyboard,
@@ -2388,6 +2479,7 @@ final class KeyboardViewModel: ObservableObject {
         }
         if lastAnalyzedText == analysisText, canOpenAnalysisResult { return }
 
+        let padGenerationAtRequest = numberPadAnalysisGeneration
         let currentConfig = config
         let profileGenerationAtRequest = activeProfileGeneration
         let documentTextAtRequest = currentDocumentTextForAnalysis()
@@ -2410,6 +2502,12 @@ final class KeyboardViewModel: ObservableObject {
                     on: analysisText,
                     config: currentConfig
                 )
+            }
+            // Entering the local pad cancels this request even if the provider ignores cancellation.
+            // A late result must not restore AI state after Pad -> Back either.
+            guard numberPadAnalysisGeneration == padGenerationAtRequest, !isNumberPadVisible else {
+                markDiagnosticStaleResult(traceID)
+                return
             }
             // A profile/error transition already installed the correct replacement state. An
             // old-generation completion must not run the ordinary document-change recovery path,
@@ -2462,7 +2560,8 @@ final class KeyboardViewModel: ObservableObject {
             recordDebugEvent("automatic_analysis_success")
         } catch is CancellationError {
             markDiagnosticCancellation(traceID)
-            guard activeProfileGeneration == profileGenerationAtRequest else { return }
+            guard activeProfileGeneration == profileGenerationAtRequest,
+                  numberPadAnalysisGeneration == padGenerationAtRequest else { return }
             recordDebugEvent("automatic_analysis_cancelled")
             if lastAnalyzedText == analysisText, !isGrammarCorrectionLoading {
                 isPerformingAIAction = false

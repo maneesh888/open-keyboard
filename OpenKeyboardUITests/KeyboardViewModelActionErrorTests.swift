@@ -1,5 +1,7 @@
 import XCTest
 import UIKit
+@testable import KeyboardLayout
+import SwiftUI
 
 @MainActor
 final class KeyboardViewModelActionErrorTests: XCTestCase {
@@ -14,6 +16,207 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         AppConfig.clearGatewayConnectionError()
         AIOperationDiagnostics.shared.removeAll()
         super.tearDown()
+    }
+
+    func testNumberPadPreservesLeadingZerosAndPreviousSymbolsMode() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let feedback = RecordingKeyboardHapticFeedback()
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                      hapticFeedback: feedback, loadConfig: { .default })
+        model.toggleNumbers()
+        model.toggleSymbols()
+        model.showNumberPad()
+        model.handleNumberPadIntent(.insertText("0"))
+        model.handleNumberPadIntent(.insertText("0"))
+        model.handleNumberPadIntent(.insertText("1"))
+        model.handleNumberPadIntent(.insertText(","))
+        model.handleNumberPadIntent(.insertText("2"))
+        XCTAssertEqual(proxy.text, "001,2")
+        model.handleNumberPadIntent(.deleteBackward)
+        XCTAssertEqual(proxy.text, "001,")
+        model.handleNumberPadIntent(.submit)
+        XCTAssertEqual(proxy.text, "001,\n")
+        let count = feedback.tapCount
+        var switches = 0
+        model.handleNumberPadIntent(.advanceToNextInputMode) { switches += 1 }
+        XCTAssertEqual(switches, 1)
+        XCTAssertEqual(feedback.tapCount, count + 1)
+        model.handleNumberPadIntent(.back)
+        XCTAssertFalse(model.isNumberPadVisible)
+        XCTAssertEqual(model.inputMode, .symbols)
+        model.handleNumberPadIntent(.insertText("9"))
+        XCTAssertEqual(proxy.text, "001,\n", "A stale hidden-pad action must be ignored")
+    }
+
+    func testNumberPadInsertionReplacesSelectionThroughTheHostProxy() {
+        let proxy = FakeTextDocumentProxy(text: "a123b")
+        proxy.selectedRangeForTest = 1..<4
+        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
+        model.showNumberPad()
+        model.handleNumberPadIntent(.insertText("0"))
+        model.handleNumberPadIntent(.insertText("4"))
+        XCTAssertEqual(proxy.text, "a04b")
+        model.handleNumberPadIntent(.deleteBackward)
+        XCTAssertEqual(proxy.text, "a0b")
+    }
+
+    func testNumberPadContextResetsOnlyForNewFieldOrTraits() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        proxy.keyboardType = .decimalPad
+        proxy.enablesReturnKeyAutomatically = true
+        proxy.returnKeyType = .done
+        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
+        model.refreshNumberPadContext(needsSystemKeyboardSwitch: false)
+        XCTAssertTrue(model.isNumberPadVisible)
+        XCTAssertEqual(model.numberPadConfiguration.variant, .decimal)
+        XCTAssertEqual(model.numberPadConfiguration.submitLabel, "Done")
+        XCTAssertFalse(model.numberPadConfiguration.needsSystemKeyboardSwitch)
+        XCTAssertFalse(model.numberPadConfiguration.submitEnabled)
+        model.handleNumberPadIntent(.submit)
+        XCTAssertEqual(proxy.text, "")
+        model.handleNumberPadIntent(.selectVariant(.phone))
+        let interaction = model.numberPadInteractionID
+        model.handleNumberPadIntent(.insertText("+"))
+        model.refreshNumberPadContext()
+        XCTAssertEqual(model.numberPadConfiguration.variant, .phone)
+        XCTAssertEqual(model.numberPadInteractionID, interaction)
+        XCTAssertTrue(model.numberPadConfiguration.submitEnabled)
+        proxy.documentIdentifier = UUID()
+        proxy.keyboardType = .numberPad
+        model.refreshNumberPadContext()
+        XCTAssertEqual(model.numberPadConfiguration.variant, .digits)
+        XCTAssertNotEqual(model.numberPadInteractionID, interaction)
+        model.handleNumberPadIntent(.deleteBackward, interactionID: interaction)
+        XCTAssertEqual(proxy.text, "+", "Old-field repeats must not edit a new field")
+        proxy.documentIdentifier = UUID()
+        proxy.keyboardType = .default
+        model.refreshNumberPadContext()
+        XCTAssertFalse(model.isNumberPadVisible)
+    }
+
+    func testOpeningNumberPadCancelsQueuedZeroDelayAnalysis() async throws {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let service = ProfileChangeIgnoringCancellationAIService(result: Self.grammarCorrectionResult())
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0)
+        model.startAutomaticAnalysis()
+        model.showNumberPad()
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertEqual(service.requestCount, 0)
+        XCTAssertNil(model.suggestionState)
+    }
+
+    func testOpeningNumberPadDiscardsCancellationIgnoringAnalysisEvenAfterBack() async throws {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let service = ProfileChangeIgnoringCancellationAIService(result: Self.grammarCorrectionResult())
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0)
+        model.startAutomaticAnalysis()
+        await waitUntil { service.requestCount == 1 }
+        model.showNumberPad()
+        model.handleNumberPadIntent(.back)
+        try await Task.sleep(nanoseconds: 250_000_000)
+        XCTAssertEqual(service.requestCount, 1)
+        XCTAssertNil(model.suggestionState)
+        XCTAssertNil(model.automaticAnalysisWarning)
+        XCTAssertFalse(model.isPerformingAIAction)
+        XCTAssertNotEqual(model.aiStatus, "Analyzing…")
+        XCTAssertEqual(model.panelMode, .keyboard)
+    }
+
+    func testNumberPadCancellationBoundaryPreservesOrdinaryAnalysisRefresh() async throws {
+        let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
+        let service = ProfileChangeIgnoringCancellationAIService(result: Self.grammarCorrectionResult())
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0)
+        model.startAutomaticAnalysis()
+        await waitUntil { service.requestCount == 1 }
+        model.startAutomaticAnalysis()
+        try await Task.sleep(nanoseconds: 250_000_000)
+        XCTAssertFalse(model.isPerformingAIAction)
+        XCTAssertNotNil(model.suggestionState)
+    }
+
+    func testNumberPadDeleteTapAndAccessibilityActivationAreSingleActions() async throws {
+        let button = NumberPadDeleteButton(frame: .zero)
+        var count = 0
+        button.action = { count += 1 }
+        button.sendActions(for: .touchDown)
+        button.sendActions(for: .touchUpInside)
+        XCTAssertEqual(count, 1)
+        try await Task.sleep(nanoseconds: 450_000_000)
+        XCTAssertEqual(count, 1)
+        XCTAssertTrue(button.accessibilityActivate())
+        XCTAssertEqual(count, 2)
+    }
+
+    func testNumberPadDeleteRepeatsThenStopsForEveryTouchCancellation() async throws {
+        for event: UIControl.Event in [.touchUpInside, .touchUpOutside, .touchCancel, .touchDragExit] {
+            let button = NumberPadDeleteButton(frame: .zero)
+            var count = 0
+            button.action = { count += 1 }
+            button.sendActions(for: .touchDown)
+            try await Task.sleep(nanoseconds: 550_000_000)
+            XCTAssertGreaterThan(count, 1)
+            button.sendActions(for: event)
+            let stoppedCount = count
+            try await Task.sleep(nanoseconds: 150_000_000)
+            XCTAssertEqual(count, stoppedCount)
+        }
+    }
+
+    func testNumberPadDeleteIdentityReplacementAndWindowRemovalCancelRepeat() async throws {
+        var count = 0
+        let state = NumberPadControlTestState()
+        state.action = { _ in count += 1 }
+        let host = UIHostingController(rootView: NumberPadControlTestHost(state: state))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        func findDelete(_ view: UIView) -> NumberPadDeleteButton? {
+            if let button = view as? NumberPadDeleteButton { return button }
+            return view.subviews.lazy.compactMap { findDelete($0) }.first
+        }
+        let oldButton = try XCTUnwrap(findDelete(host.view))
+        oldButton.sendActions(for: .touchDown)
+        XCTAssertEqual(count, 1)
+        state.configuration.submitEnabled = false
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 550_000_000)
+        XCTAssertGreaterThan(count, 1, "An ordinary config update must not interrupt held delete")
+        let beforeFieldChange = count
+        state.interactionID = UUID()
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(count, beforeFieldChange, "Replacing field identity must stop held delete")
+        let newButton = try XCTUnwrap(findDelete(host.view))
+        newButton.sendActions(for: .touchDown)
+        XCTAssertEqual(count, beforeFieldChange + 1)
+        newButton.removeFromSuperview()
+        try await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(count, beforeFieldChange + 1, "Removing the control from its window must stop repeat")
+    }
+
+    func testNumberPadTypingDoesNotScheduleAIRequests() async throws {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let service = ProfileChangeIgnoringCancellationAIService(result: Self.grammarCorrectionResult())
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true,
+            automaticAnalysisDelayNanoseconds: 0)
+        model.showNumberPad()
+        model.handleNumberPadIntent(.insertText("001234567890"))
+        model.startAutomaticAnalysis()
+        model.documentDidChange()
+        try await Task.sleep(nanoseconds: 80_000_000)
+        XCTAssertEqual(service.requestCount, 0)
+        XCTAssertEqual(proxy.text, "001234567890")
+        XCTAssertTrue(model.typingPredictions.isEmpty)
     }
 
     func testEveryTypingKeyEmitsOneHapticAndPreservesItsAction() {
@@ -3898,6 +4101,7 @@ private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {
     var documentContextBeforeInputOverride: String?
     var documentContextAfterInputOverride: String?
     private var cursorOffset: Int
+    var selectedRangeForTest: Range<Int>?
 
     init(text: String, cursorOffset: Int? = nil) {
         self.text = text
@@ -3918,10 +4122,15 @@ private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {
     var documentContextAfterInput: String? {
         documentContextAfterInputOverride ?? String(text.dropFirst(cursorOffset))
     }
-    var selectedText: String? { nil }
+    var selectedText: String? {
+        guard let selection = selectedRangeForTest else { return nil }
+        return String(text.dropFirst(selection.lowerBound).prefix(selection.count))
+    }
     var documentInputMode: UITextInputMode? { nil }
-    var documentIdentifier: UUID { UUID(uuidString: "00000000-0000-0000-0000-000000000001")! }
-    var keyboardType: UIKeyboardType { .default }
+    var documentIdentifier = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    var keyboardType: UIKeyboardType = .default
+    var returnKeyType: UIReturnKeyType = .default
+    var enablesReturnKeyAutomatically = false
     var hasText: Bool { !text.isEmpty }
 
     func adjustTextPosition(byCharacterOffset offset: Int) {
@@ -3931,6 +4140,13 @@ private final class FakeTextDocumentProxy: NSObject, UITextDocumentProxy {
     func unmarkText() {}
 
     func insertText(_ text: String) {
+        if let selection = selectedRangeForTest {
+            let lower = self.text.index(self.text.startIndex, offsetBy: selection.lowerBound)
+            let upper = self.text.index(self.text.startIndex, offsetBy: selection.upperBound)
+            self.text.removeSubrange(lower..<upper)
+            cursorOffset = selection.lowerBound
+            selectedRangeForTest = nil
+        }
         let index = self.text.index(self.text.startIndex, offsetBy: cursorOffset)
         self.text.insert(contentsOf: text, at: index)
         cursorOffset += text.count
@@ -3950,5 +4166,20 @@ private final class RecordingKeyboardHapticFeedback: KeyboardHapticFeedbackProvi
 
     func keyTapped() {
         tapCount += 1
+    }
+}
+
+@MainActor
+private final class NumberPadControlTestState: ObservableObject {
+    @Published var configuration = NumberPadConfiguration(decimalSeparator: ".")
+    @Published var interactionID = UUID()
+    var action: (NumberPadIntent) -> Void = { _ in }
+}
+
+private struct NumberPadControlTestHost: View {
+    @ObservedObject var state: NumberPadControlTestState
+    var body: some View {
+        NumberPadView(configuration: state.configuration, interactionID: state.interactionID,
+                      onIntent: state.action)
     }
 }
