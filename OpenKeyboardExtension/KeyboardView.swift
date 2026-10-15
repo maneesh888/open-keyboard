@@ -1583,34 +1583,37 @@ private struct CorrectionCompletePanel: View {
             HStack(spacing: 12) {
                 if state.allowsGrammarCheckAgain {
                     Button(action: onCheckAgain) {
-                        Text("Check Again")
-                            .font(.subheadline.weight(.bold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                            .contentShape(Rectangle())
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                            .frame(
+                                width: KeyboardPanelLayout.actionControlButtonHeight,
+                                height: KeyboardPanelLayout.actionControlButtonHeight
+                            )
+                            .contentShape(Circle())
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                    .background(OpenKeyboardTheme.Semantic.primaryAction)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .background(OpenKeyboardTheme.Semantic.primaryAction, in: Circle())
+                    .accessibilityLabel("Check Again")
                     .accessibilityIdentifier("grammar_check_again")
                 }
 
                 Button(action: onBackToKeyboard) {
-                    Text("Back to Keyboard")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                        .contentShape(Rectangle())
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 16, weight: .semibold))
+                        .frame(
+                            width: KeyboardPanelLayout.actionControlButtonHeight,
+                            height: KeyboardPanelLayout.actionControlButtonHeight
+                        )
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
+                    Circle()
+                        .strokeBorder(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
                 )
+                .accessibilityLabel("Back to Keyboard")
                 .accessibilityIdentifier("back_to_keyboard")
             }
             .padding(.top, 2)
