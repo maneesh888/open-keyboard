@@ -76,12 +76,11 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
-        Publishers.CombineLatest(viewModel.$panelMode, viewModel.$actionPanelState)
-            .map { panelMode, actionPanelState in
-                KeyboardPanelLayout.keyboardHeight(
-                    for: panelMode,
-                    actionPanelState: actionPanelState
-                )
+        Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState,
+                                  viewModel.$isShowingSmileys, viewModel.$smileyState)
+            .map { panelMode, actionPanelState, showing, smileys in
+                KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
+                                                     searchingSmileys: showing && smileys.isSearching)
             }
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -101,10 +100,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private var currentKeyboardHeight: CGFloat {
         guard let viewModel else { return KeyboardPanelLayout.preferredKeyboardHeight }
-        return KeyboardPanelLayout.keyboardHeight(
-            for: viewModel.panelMode,
-            actionPanelState: viewModel.actionPanelState
-        )
+        return viewModel.keyboardPresentationHeight
     }
 
     private func ensureKeyboardHeightConstraint() {

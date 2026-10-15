@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import KeyboardLayout
 
 final class KeyboardToolbarStateTests: XCTestCase {
     func testFullAccessRequiredStateBlocksActions() {
@@ -106,6 +108,28 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 216)
         XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 267)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
+    }
+
+    @MainActor
+    func testEmojiCatalogueRetainsHorizontalScrollableContent() async throws {
+        let items = (0..<90).map { SmileyItem(id: "emoji-\($0)", text: "🙂", label: "Emoji \($0)") }
+        let state = SmileyState(snapshot: .init(sections: [.init(id: "faces", label: "Faces", items: items)]))
+        let host = UIHostingController(rootView: SmileyKeyboardView(state: state) { _ in })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 267))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 150_000_000)
+        host.view.layoutIfNeeded()
+        func scrollViews(_ view: UIView) -> [UIScrollView] {
+            (view as? UIScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews)
+        }
+        let scroll = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
+        XCTAssertGreaterThan(scroll.contentSize.width, scroll.bounds.width * 2)
+        scroll.setContentOffset(CGPoint(x: 300, y: 0), animated: false)
+        XCTAssertGreaterThan(scroll.contentOffset.x, 0)
     }
 
     func testSeparateSmileyAndSystemSwitchTargetsFitCompactAndDockedWidths() {

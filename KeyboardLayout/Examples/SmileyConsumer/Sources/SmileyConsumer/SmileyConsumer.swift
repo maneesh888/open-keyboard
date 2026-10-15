@@ -15,6 +15,9 @@ public struct SmileyConsumer: View {
     public var body: some View {
         VStack {
             TextField("Text", text: $text)
+            if state.isSearching {
+                TextField("Search Emoji", text: Binding(get: { state.searchQuery }, set: { _ = state.send(.setSearchQuery($0)) }))
+            }
             if isOpen {
                 SmileyKeyboardView(state: state, showsSystemKeyboardSwitch: false) { action in
                     switch state.send(action) {

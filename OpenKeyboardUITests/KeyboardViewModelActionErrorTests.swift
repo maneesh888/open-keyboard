@@ -105,6 +105,45 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "aab")
     }
 
+    func testEmojiSearchEditsOnlyQueryAndPreservesOriginalTypingMode() {
+        let proxy = FakeTextDocumentProxy(text: "message")
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: [
+            .init(id: "people", label: "People", items: [
+                .init(id: "thumb", text: "👍", label: "Thumbs up", variants: [
+                    .init(id: "tone", text: "👍🏽", label: "Thumbs up: medium skin tone")])])
+        ]))
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.beginSearch) {}
+        XCTAssertEqual(viewModel.displayedInputMode, .letters)
+        viewModel.toggleShift()
+        viewModel.insert("thumbs")
+        viewModel.insertSpace()
+        viewModel.insert("upx")
+        viewModel.deleteBackward()
+        XCTAssertEqual(viewModel.smileyState.searchQuery, "THUMBS up")
+        XCTAssertEqual(proxy.text, "message")
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        viewModel.handleSmileyAction(.activateItem("tone")) {}
+        XCTAssertEqual(proxy.text, "message👍🏽")
+        viewModel.insertReturn()
+        XCTAssertFalse(viewModel.isSearchingSmileys)
+        XCTAssertEqual(proxy.text, "message👍🏽", "Done ends search without inserting a newline")
+        viewModel.handleSmileyAction(.returnToTyping) {}
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.beginSearch) {}
+        viewModel.insert("no match")
+        viewModel.handleSmileyAction(.endSearch) {}
+        XCTAssertEqual(viewModel.smileyState.searchQuery, "")
+        XCTAssertEqual(proxy.text, "message👍🏽")
+    }
+
     func testEmptySmileysAllowReturnAndSystemSwitchWithoutDocumentEdits() {
         let proxy = FakeTextDocumentProxy(text: "hello")
         let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),

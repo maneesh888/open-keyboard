@@ -17,6 +17,18 @@ final class SmileyStateTests: XCTestCase {
         XCTAssertEqual(state.selectedCategoryID, "custom")
     }
 
+    func testCategoryMetadataUsesTheCategoryActuallyBrowsed() {
+        let item = SmileyItem(id: "happy", text: "🙂", label: "Smile")
+        var state = SmileyState(snapshot: .init(sections: [
+            .init(id: "recent", label: "Recently Used", items: [item]),
+            .init(id: "faces", label: "Faces", items: [item])]))
+        _ = state.send(.selectCategory("faces"))
+        XCTAssertEqual(state.send(.activateItem("happy")), .insertText("🙂", sectionID: "faces", itemID: "happy"))
+        _ = state.send(.beginSearch)
+        _ = state.send(.setSearchQuery(" "))
+        XCTAssertEqual(state.send(.activateItem("happy")), .insertText("🙂", sectionID: "faces", itemID: "happy"))
+    }
+
     func testSnapshotUpdatesPreserveSelectionOrRecover() {
         var state = SmileyState(snapshot: snapshot)
         _ = state.send(.selectCategory("custom"))
