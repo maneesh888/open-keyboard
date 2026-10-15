@@ -64,6 +64,10 @@ final class KeyboardViewController: UIInputViewController {
             viewModel: viewModel,
             onNextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
+            },
+            onInputModeList: { [weak self] sender, event in
+                self?.viewModel?.cancelNumberPadInteraction()
+                self?.handleInputModeList(from: sender, with: event)
             }
         )
         let controller = UIHostingController(rootView: keyboardView)

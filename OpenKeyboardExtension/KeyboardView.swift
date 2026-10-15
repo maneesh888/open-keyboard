@@ -5,10 +5,12 @@
 
 import SwiftUI
 import KeyboardLayout
+import UIKit
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
+    let onInputModeList: (UIView, UIEvent) -> Void
 
     var body: some View {
         let numberPadInteractionID = viewModel.numberPadInteractionID
@@ -58,18 +60,8 @@ struct KeyboardView: View {
                     .onDisappear { viewModel.cancelNumberPadInteraction() }
                     if viewModel.needsSystemKeyboardSwitch {
                         HStack {
-                            Button {
-                                viewModel.cancelNumberPadInteraction()
-                                viewModel.nextKeyboard(using: onNextKeyboard)
-                            } label: {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 22))
-                                    .frame(width: 44, height: 44)
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.primary)
-                            .accessibilityLabel("Next keyboard")
-                            .accessibilityIdentifier("number_pad_next_keyboard")
+                            SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
+                                .frame(width: 44, height: 44)
                             Spacer()
                         }
                         .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
@@ -1752,4 +1744,40 @@ private enum KeyboardColors {
     static let overlayBackground = OpenKeyboardTheme.Surface.overlayBackground
     static let keyBackground = OpenKeyboardTheme.Surface.keyBackground
     static let modifierKeyBackground = OpenKeyboardTheme.Surface.modifierKeyBackground
+}
+
+/// UIKit receives the full touch sequence so the standard globe supports both
+/// tapping to advance and holding to choose an installed keyboard.
+struct SystemKeyboardSwitchButton: UIViewRepresentable {
+    let onInputModeList: (UIView, UIEvent) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onInputModeList: onInputModeList)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "globe", withConfiguration: UIImage.SymbolConfiguration(pointSize: 22)), for: .normal)
+        button.tintColor = .label
+        button.accessibilityLabel = "Next keyboard"
+        button.accessibilityIdentifier = "number_pad_next_keyboard"
+        button.addTarget(context.coordinator, action: #selector(Coordinator.handleInputModeList(_:event:)), for: .allTouchEvents)
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.onInputModeList = onInputModeList
+    }
+
+    final class Coordinator: NSObject {
+        var onInputModeList: (UIView, UIEvent) -> Void
+
+        init(onInputModeList: @escaping (UIView, UIEvent) -> Void) {
+            self.onInputModeList = onInputModeList
+        }
+
+        @objc func handleInputModeList(_ sender: UIButton, event: UIEvent) {
+            onInputModeList(sender, event)
+        }
+    }
 }

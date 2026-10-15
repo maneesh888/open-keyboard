@@ -56,7 +56,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "4a783f525457808edc677d6a7352951552648d82"
+        "oid": "d7e4ec1e8f357c781055a1765cf8ef91d93c8d4c"
       },
       "before": {
         "mode": "100644",
@@ -66,7 +66,7 @@
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "81f29bbf9814f917038b632bc09563857209014a"
+        "oid": "548e4b14161bda53d99c37877198d25949fad5d3"
       },
       "before": {
         "mode": "100644",
@@ -86,7 +86,7 @@
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "51749b03bca5b4ca4387b7c4117bd008e9b7f743"
+        "oid": "5caca7de83f2bfbfbe088e4c9fb5978dd711b49e"
       },
       "before": {
         "mode": "100644",

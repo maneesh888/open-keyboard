@@ -42,6 +42,32 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(model.numberPadHeight, 246)
     }
 
+    func testNumberPadGlobeUsesNativeTouchSequenceAndAccessibleHitArea() async throws {
+        let host = UIHostingController(rootView: SystemKeyboardSwitchButton { _, _ in }
+            .frame(width: 44, height: 44))
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        func findGlobe(_ view: UIView) -> UIButton? {
+            if let button = view as? UIButton,
+               button.accessibilityIdentifier == "number_pad_next_keyboard" { return button }
+            return view.subviews.lazy.compactMap { findGlobe($0) }.first
+        }
+        let button = try XCTUnwrap(findGlobe(host.view))
+        XCTAssertEqual(button.accessibilityLabel, "Next keyboard")
+        XCTAssertGreaterThanOrEqual(button.bounds.width, 44)
+        XCTAssertGreaterThanOrEqual(button.bounds.height, 44)
+        let target = try XCTUnwrap(button.allTargets.first)
+        // A touch-up-only SwiftUI action cannot provide iOS's hold/drag picker.
+        for event: UIControl.Event in [.touchDown, .touchDragInside, .touchDragOutside,
+                                       .touchUpInside, .touchUpOutside, .touchCancel] {
+            XCTAssertFalse((button.actions(forTarget: target, forControlEvent: event) ?? []).isEmpty)
+        }
+    }
+
     func testNumberPadToleratesDisconnectedUIKitDocumentProxy() {
         let controller = UIInputViewController()
         let model = KeyboardViewModel(textDocumentProxy: controller.textDocumentProxy, loadConfig: { .default })
