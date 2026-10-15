@@ -11,42 +11,77 @@
     "KeyboardLayout/Examples/SmileyConsumer/Sources/SmileyConsumer/SmileyConsumer.swift": {
       "after": {
         "mode": "100644",
-        "oid": "6556428fb9413782101556b6c59cf9a84d525f34"
+        "oid": "e55532c39aa1a250183a38b65341f86cbed2201b"
       },
       "before": null
     },
     "KeyboardLayout/Package.swift": {
       "after": {
         "mode": "100644",
-        "oid": "8fa56fc9e5469c9e96ccd0b0b46aff2ed3b8a3c4"
+        "oid": "89dde8fff762350c7e8c37a7bdb39836b6c6cae2"
       },
       "before": null
     },
     "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "0fe2cd2feceb720e9f2485825cfc7295da9336df"
+        "oid": "bb21732029217855a823db05a6ff79c1c10976b2"
       },
       "before": null
     },
     "KeyboardLayout/Sources/KeyboardLayout/SmileyState.swift": {
       "after": {
         "mode": "100644",
-        "oid": "838e8baf13a6db1901c5fb3ad63b65d19d4b0285"
+        "oid": "10a4fe41b76961d35711cd973d01ea4208662fd2"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/OpenKeyboardEmoji/CATALOGUE.md": {
+      "after": {
+        "mode": "100644",
+        "oid": "918919ca4cabefc7e51673c95ffbbf5a111995ea"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/OpenKeyboardEmoji/EmojiCatalogue.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "4f548508a0f60fd886be01e96c544d632cb8e796"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/OpenKeyboardEmoji/Resources/UNICODE-LICENSE.txt": {
+      "after": {
+        "mode": "100644",
+        "oid": "56da58912807030b451a4700687d5bd02c72d6ed"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/OpenKeyboardEmoji/Resources/emoji.json": {
+      "after": {
+        "mode": "100644",
+        "oid": "3d36163691738de3066fc1a09f7fbfdd2da69aef"
       },
       "before": null
     },
     "KeyboardLayout/Tests/KeyboardLayoutTests/SmileyStateTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "4ab97bdadc5d7f3d4fed954be5cb7714c904a0c0"
+        "oid": "109bf6ce11b5d2b4e717991391a1e5c5a4997af3"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Tests/OpenKeyboardEmojiTests/EmojiCatalogueTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "8bd6d5a022eaffab51ab015843b46e3a9743a8e6"
       },
       "before": null
     },
     "OpenKeyboard.xcodeproj/project.pbxproj": {
       "after": {
         "mode": "100644",
-        "oid": "dca3c512f50d115b49c1898543ff564a142de99a"
+        "oid": "581748d0146eec7126280360d54de86933bef24e"
       },
       "before": {
         "mode": "100644",
@@ -66,7 +101,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a9b64ab195096936916ffe7d83a72786943db781"
+        "oid": "8f9d82d26fb4ac55c5b2083810c0b8a969173365"
       },
       "before": {
         "mode": "100644",
@@ -76,7 +111,7 @@
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a8bd22eaa0d5a7bd8b8ae4c473b16be3f5c51104"
+        "oid": "e588a70846f61bf8c17868e8c8ba59b6f3e666ef"
       },
       "before": {
         "mode": "100644",
@@ -86,7 +121,7 @@
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "0b1565fb379f5ebd2972fbed217079530de6d54f"
+        "oid": "4990a9c2539dc90927e03d4ced68fb1a97fbf3c9"
       },
       "before": {
         "mode": "100644",
@@ -96,7 +131,7 @@
     "OpenKeyboardUITests/KeyboardToolbarStateTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "6d396532f7ed0a5b6961f17e51b9a7121bfabeeb"
+        "oid": "a7efbb143b5a838db44c19526ebd117808598fc3"
       },
       "before": {
         "mode": "100644",
@@ -106,7 +141,7 @@
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "557ab714ca0dd105a3b470091d1d54f32023d8c7"
+        "oid": "093ec4590ad309c77b1cfdb73260e755d02661a3"
       },
       "before": {
         "mode": "100644",
@@ -116,7 +151,7 @@
     "docs/SMILEY_KEYBOARD_PACKAGE.md": {
       "after": {
         "mode": "100644",
-        "oid": "bc6781b1bcc9fa579773967f35256c0ae90673a1"
+        "oid": "101c0869a18df6ac7c8826842b1e2b7c72b908b0"
       },
       "before": null
     },
@@ -132,8 +167,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Package and host regression tests cover data validation, literal Unicode insertion, cursor position, deletion, mode return and distinct system switching; app/extension and independent-consumer builds establish linkage. Normal Simulator proof must establish the actual extension smiley journey on compact and docked layouts. Exact-head independent review must inspect these boundaries and this assessment.",
-  "rationale": "The new source-only KeyboardLayout package has no external dependencies, network, persistence, or AI imports. Host changes add local smiley navigation and exact literal text insertion through the existing document-edit bookkeeping. Existing letter insertion retains its casing and analysis scheduling. Model requests, response parsing, providers, credentials, canonical contract and pinned dependencies are unchanged. The core runner adds only local package tests and an independent-consumer build.",
-  "requirement_id": "R7",
+  "proof": "Package and host regression tests cover literal insertion, search isolation, variant selection, recent-history retention, prior-mode restoration and scroll content. Normal extension captures cover the revised picker, enlarged text and docked iPad; horizontal swipe and final exact-head runtime acceptance remain pending. No model call can establish these local UI requirements.",
+  "rationale": "Changes add a local emoji catalogue, recent-selection storage, search, skin-tone browser, and keyboard presentation. Search input stays in dedicated local state. AI requests, responses, parsers, provider/model selection, gateway configuration and pinned semantic contracts are unchanged.",
+  "requirement_id": "R2",
   "schema": 1
 }
