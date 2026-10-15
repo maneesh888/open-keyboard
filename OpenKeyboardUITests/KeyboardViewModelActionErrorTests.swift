@@ -1,5 +1,6 @@
 import XCTest
 import UIKit
+import KeyboardLayout
 
 @MainActor
 final class KeyboardViewModelActionErrorTests: XCTestCase {
@@ -69,6 +70,59 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
         XCTAssertEqual(advanceCount, 1)
         XCTAssertEqual(proxy.text, "aB 1#")
+    }
+
+    func testSmileysInsertLiteralUnicodeAtCursorAndReturnToPriorMode() {
+        let proxy = FakeTextDocumentProxy(text: "ab", cursorOffset: 1)
+        let feedback = RecordingKeyboardHapticFeedback()
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          hapticFeedback: feedback, loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: [
+            .init(id: "custom", label: "Custom", items: [.init(id: "item", text: "a👩🏽‍💻", label: "Custom smiley")])
+        ]))
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        viewModel.toggleShift()
+        viewModel.showSmileys()
+        let taps = feedback.tapCount
+        var switches = 0
+        viewModel.handleSmileyAction(.activateItem("item")) { switches += 1 }
+        XCTAssertEqual(proxy.text, "aa👩🏽‍💻b")
+        XCTAssertEqual(feedback.tapCount, taps + 1)
+        XCTAssertTrue(viewModel.isShowingSmileys)
+        XCTAssertTrue(viewModel.isShiftEnabled)
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        XCTAssertEqual(switches, 0)
+        viewModel.handleSmileyAction(.deleteBackward) { switches += 1 }
+        XCTAssertEqual(proxy.text, "aab", "Delete preserves the multi-scalar grapheme boundary")
+        viewModel.handleSmileyAction(.returnToTyping) { switches += 1 }
+        XCTAssertFalse(viewModel.isShowingSmileys)
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        XCTAssertEqual(switches, 0)
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.nextSystemKeyboard) { switches += 1 }
+        XCTAssertEqual(switches, 1)
+        XCTAssertEqual(proxy.text, "aab")
+    }
+
+    func testEmptySmileysAllowReturnAndSystemSwitchWithoutDocumentEdits() {
+        let proxy = FakeTextDocumentProxy(text: "hello")
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: []))
+        viewModel.showSmileys()
+        var switches = 0
+        viewModel.handleSmileyAction(.activateItem("missing")) { switches += 1 }
+        viewModel.handleSmileyAction(.selectCategory("missing")) { switches += 1 }
+        XCTAssertEqual(proxy.text, "hello")
+        XCTAssertEqual(switches, 0)
+        viewModel.handleSmileyAction(.nextSystemKeyboard) { switches += 1 }
+        XCTAssertEqual(switches, 1)
+        viewModel.handleSmileyAction(.returnToTyping) { switches += 1 }
+        XCTAssertFalse(viewModel.isShowingSmileys)
+        XCTAssertEqual(viewModel.inputMode, .letters)
+        viewModel.handleSmileyAction(.deleteBackward) { switches += 1 }
+        XCTAssertEqual(proxy.text, "hello", "Stale actions from the hidden grid are ignored")
     }
 
     func testDeletingEmptyDocumentStillEmitsOneHaptic() {

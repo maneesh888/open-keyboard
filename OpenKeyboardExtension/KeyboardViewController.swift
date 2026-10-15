@@ -50,7 +50,8 @@ final class KeyboardViewController: UIInputViewController {
             viewModel: viewModel,
             onNextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
-            }
+            },
+            showsSystemKeyboardSwitch: needsInputModeSwitchKey
         )
         let controller = UIHostingController(rootView: keyboardView)
 
@@ -92,6 +93,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshRuntimeState() {
+        hostingController?.rootView.showsSystemKeyboardSwitch = needsInputModeSwitchKey
         let fullAccess = hasFullAccess
         viewModel?.updateFullAccess(fullAccess)
         AppConfig.updateKeyboardFullAccess(fullAccess)

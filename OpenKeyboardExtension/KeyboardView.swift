@@ -4,10 +4,12 @@
 //
 
 import SwiftUI
+import KeyboardLayout
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
+    var showsSystemKeyboardSwitch = true
 
     var body: some View {
         let showsToolbar = viewModel.panelMode != .actions
@@ -136,7 +138,24 @@ struct KeyboardView: View {
         }
     }
 
+    @ViewBuilder
     private var keyGrid: some View {
+        if viewModel.isShowingSmileys {
+            SmileyKeyboardView(
+                state: viewModel.smileyState,
+                showsSystemKeyboardSwitch: showsSystemKeyboardSwitch,
+                style: .init(keyBackground: KeyboardColors.keyBackground,
+                             controlBackground: KeyboardColors.modifierKeyBackground)
+            ) { action in
+                viewModel.handleSmileyAction(action, advance: onNextKeyboard)
+            }
+            .frame(height: KeyboardPanelLayout.keyGridHeight)
+        } else {
+            typingGrid
+        }
+    }
+
+    private var typingGrid: some View {
         GeometryReader { geometry in
             let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
             let inputMode = viewModel.inputMode
@@ -203,7 +222,9 @@ struct KeyboardView: View {
                 .accessibilityIdentifier("keyboard_row_bottom_letters")
 
                 let controlLayout = positions.controlRow(
-                    keyIDs: ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
+                    keyIDs: showsSystemKeyboardSwitch
+                        ? ["keyboard_numbers", "keyboard_emoji", "keyboard_next", "keyboard_space", "keyboard_return"]
+                        : ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
                     keyHeight: KeyboardPanelLayout.controlKeyHeight
                 )
                 HStack(spacing: 0) {
@@ -216,9 +237,14 @@ struct KeyboardView: View {
                             .accessibilityIdentifier("keyboard_key_numbers")
                         case "keyboard_emoji":
                             KeyButton(label: "Emoji", systemImage: "face.smiling", role: .modifier, target: target) {
-                                viewModel.nextKeyboard(using: onNextKeyboard)
+                                viewModel.showSmileys()
                             }
                             .accessibilityIdentifier("keyboard_key_emoji")
+                        case "keyboard_next":
+                            KeyButton(label: "Next keyboard", systemImage: "globe", role: .modifier, target: target) {
+                                viewModel.nextKeyboard(using: onNextKeyboard)
+                            }
+                            .accessibilityIdentifier("keyboard_key_next")
                         case "keyboard_space":
                             KeyButton(label: "space", role: .space, target: target) {
                                 viewModel.insertSpace()

@@ -108,6 +108,19 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
+    func testSeparateSmileyAndSystemSwitchTargetsFitCompactAndDockedWidths() {
+        for width: CGFloat in [280, 308, 381, 808, 1180] {
+            let row = KeyboardKeyPositions(availableWidth: width).controlRow(
+                keyIDs: ["numbers", "emoji", "next", "space", "return"], keyHeight: 54)
+            XCTAssertEqual(row.keys.count, 5)
+            XCTAssertEqual(row.keys.last!.visualFrame.maxX, width, accuracy: 0.001)
+            for key in row.keys {
+                XCTAssertGreaterThanOrEqual(key.visualFrame.width, 44)
+                XCTAssertEqual(row.keyID(at: CGPoint(x: key.touchFrame.midX, y: 27)), key.id)
+            }
+        }
+    }
+
     func testKeyboardVisualMeasurementsRemainAtReferenceGeometry() throws {
         let positions = KeyboardKeyPositions(availableWidth: 381)
 

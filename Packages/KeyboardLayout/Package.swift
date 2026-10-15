@@ -1,0 +1,12 @@
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "KeyboardLayout",
+    platforms: [.iOS(.v16), .macOS(.v13)],
+    products: [.library(name: "KeyboardLayout", targets: ["KeyboardLayout"])],
+    targets: [
+        .target(name: "KeyboardLayout"),
+        .testTarget(name: "KeyboardLayoutTests", dependencies: ["KeyboardLayout"])
+    ]
+)

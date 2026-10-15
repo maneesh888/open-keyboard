@@ -5,6 +5,7 @@
 
 import SwiftUI
 import UIKit
+import KeyboardLayout
 
 private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
     private final class ObserverBox {
@@ -371,6 +372,8 @@ final class KeyboardViewModel: ObservableObject {
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
+    @Published private(set) var isShowingSmileys = false
+    @Published private(set) var smileyState = SmileyState(snapshot: OpenKeyboardSmileyContent.snapshot)
     @Published private(set) var config = AppConfig.default
     @Published private(set) var hasFullAccess = false
     @Published private(set) var gatewayConnectionError: String?
@@ -592,18 +595,45 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insert(_ character: String) {
+        let output = isShiftEnabled ? character.uppercased() : character
+        insertLiteralText(output)
+        if isShiftEnabled { isShiftEnabled = false }
+    }
+
+    private func insertLiteralText(_ text: String) {
         hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
-        let output = isShiftEnabled ? character.uppercased() : character
-        textDocumentProxy.insertText(output)
+        textDocumentProxy.insertText(text)
         documentRevision += 1
-        composingBuffer.append(output)
+        composingBuffer.append(text)
         persistComposingBuffer()
         scheduleAutomaticAnalysisAfterTextChange()
+    }
 
-        if isShiftEnabled {
-            isShiftEnabled = false
+    func showSmileys() {
+        hapticFeedback.keyTapped()
+        // Leave the typing mode and one-shot shift intact for an explicit return.
+        isShowingSmileys = true
+    }
+
+    func updateSmileys(_ snapshot: SmileySnapshot) {
+        smileyState.update(snapshot)
+    }
+
+    func handleSmileyAction(_ action: SmileyAction, advance: () -> Void) {
+        guard isShowingSmileys else { return }
+        guard let intent = smileyState.send(action) else {
+            if case .selectCategory = action { hapticFeedback.keyTapped() }
+            return
+        }
+        switch intent {
+        case .insertText(let text, _, _): insertLiteralText(text)
+        case .deleteBackward: deleteBackward()
+        case .returnToTyping:
+            hapticFeedback.keyTapped()
+            isShowingSmileys = false
+        case .nextSystemKeyboard: nextKeyboard(using: advance)
         }
     }
 
@@ -3340,4 +3370,37 @@ enum KeyboardAutomaticAnalysisPolicy {
         return trimmed.count >= 12
             && trimmed.split(whereSeparator: \.isWhitespace).count >= 2
     }
+}
+
+/// Small host configuration, intentionally outside the reusable package. Consumers may
+/// replace it with their own localized sections; there is no catalogue or recents store.
+private enum OpenKeyboardSmileyContent {
+    static let snapshot = SmileySnapshot(sections: [
+        SmileySection(id: "faces", label: "Faces", items: [
+            .init(id: "smile", text: "🙂", label: "Slightly smiling face"),
+            .init(id: "grin", text: "😀", label: "Grinning face"),
+            .init(id: "laugh", text: "😂", label: "Face with tears of joy"),
+            .init(id: "love", text: "🥰", label: "Smiling face with hearts"),
+            .init(id: "wink", text: "😉", label: "Winking face"),
+            .init(id: "cool", text: "😎", label: "Smiling face with sunglasses"),
+            .init(id: "think", text: "🤔", label: "Thinking face"),
+            .init(id: "sad", text: "😢", label: "Crying face")
+        ]),
+        SmileySection(id: "gestures", label: "Gestures", items: [
+            .init(id: "wave", text: "👋", label: "Waving hand"),
+            .init(id: "yes", text: "👍", label: "Thumbs up"),
+            .init(id: "clap", text: "👏", label: "Clapping hands"),
+            .init(id: "thanks", text: "🙏", label: "Folded hands"),
+            .init(id: "celebrate", text: "🙌", label: "Raising hands"),
+            .init(id: "peace", text: "✌️", label: "Victory hand")
+        ]),
+        SmileySection(id: "symbols", label: "Symbols", items: [
+            .init(id: "heart", text: "❤️", label: "Red heart"),
+            .init(id: "sparkles", text: "✨", label: "Sparkles"),
+            .init(id: "party", text: "🎉", label: "Party popper"),
+            .init(id: "check", text: "✅", label: "Check mark"),
+            .init(id: "fire", text: "🔥", label: "Fire"),
+            .init(id: "star", text: "⭐", label: "Star")
+        ])
+    ])
 }
