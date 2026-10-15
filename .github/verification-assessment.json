@@ -1,117 +1,20 @@
 {
-  "base": "a2846e9f87167a8f7f1d3b93133e5dcf8664b229",
+  "base": "99bc28e5bcee1019871ac4d07eaaf3b9a107397b",
   "changes": {
-    "OpenKeyboard.xcodeproj/project.pbxproj": {
+    "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "bf22d266fbd8852b4a1e519f98bb2d9f6849648e"
+        "oid": "f46cf5e4b2ca2dbd1cdd5aa8acbacca3049d6feb"
       },
       "before": {
         "mode": "100644",
-        "oid": "7c74e3534ce48658ec97ff05b379441f74ec2651"
+        "oid": "713467946b61ca49f332a24e3bd0d96f28659849"
       }
-    },
-    "OpenKeyboard/Services/AIOperationDiagnostics.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "8de6358679ee0487008a469b8cbf8b15ce99a27e"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "9fea74241ef868a9a630d287b58c658546d1ea11"
-      }
-    },
-    "OpenKeyboard/Services/UniversalAIConnectorAdapter.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "1775c1d53cf2502dc3b81748b8fb1449630402c7"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "3cd42cda7825614480914b021a4fe623495d3961"
-      }
-    },
-    "OpenKeyboard/Views/OnboardingView.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "407f5317a156d3165954e2d499e1ec34cd58cf9d"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "b78653db5f4e64676b666fbcf9b0232d0ef7631c"
-      }
-    },
-    "OpenKeyboardExtension/KeyboardAIService.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "23751de8da4f78f191c96f1d8fab1908d61978f8"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "035c87779f6cf84da903af9858409dd3f93a52b8"
-      }
-    },
-    "OpenKeyboardExtension/KeyboardViewModel.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "5a9a7188abf9729afa74e8399f34a25d8939d847"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "e00b867346da4c6f14864265b788f194c8bfb2f6"
-      }
-    },
-    "OpenKeyboardUITests/AIOperationDiagnosticsTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "09fcfe4dca2e0f935deec3824ea887d93b05ec8f"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "51a21b1b761968af25f385019df8fafa7f1e8a86"
-      }
-    },
-    "OpenKeyboardUITests/GatewayClientArchitectureTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "d90dee4ca9c49f03032abcb041cdfc7cb46c6ea0"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "c126096f9565fd1716cc2834562fdd56e8c5cb46"
-      }
-    },
-    "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "ead83df63c8b3702a990199fde463f616a3aed0d"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "c4114a470997efdec26de899ed429f1c91562e38"
-      }
-    },
-    "OpenKeyboardUITests/OnboardingScreenshotUITests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "2c5d15059aa01d70f241a09d047c32d96aed634c"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "bfcb74ab708637f6947434654fd18e9030c6f388"
-      }
-    },
-    "scripts/ios/stamp-source-revision.sh": {
-      "after": {
-        "mode": "100755",
-        "oid": "80d26eeb939d6809bbb4a2f5fc40445f1bdae0ce"
-      },
-      "before": null
     }
   },
-  "live_impact": "gateway",
-  "proof": "Full deterministic regression covers one-request unchanged grammar, all chunks, validation, scheduling and cancellation, diagnostic privacy and source revision, plus Debug navigation. The exact-head gateway gate proves configured transport and connector semantics across providers. Focused live unchanged and multichunk grammar checks and normal extension/UI proof cover the affected workflow.",
-  "rationale": "Grammar processing removes an unconditional second whole-input pass after a valid unchanged result; automatic scheduling adds a minimum text floor. Connector changes only classify privacy-safe diagnostic metadata and HTTP status categories, and source stamping plus Debug onboarding controls do not alter semantic requests. Canonical contracts, dependencies, parsers, model selection, role bindings, capability classification, and response validation are unchanged. A low/high capability boundary comparison is not acceptance evidence for these changes.",
-  "requirement_id": "R7",
+  "live_impact": "none",
+  "proof": "Automated deterministic checks plus normal Simulator completion-panel screenshots and visible retry/back interactions verify the changed UI. Independent review checks this assessment against the bound diff.",
+  "rationale": "Only completion-panel button symbols, unfilled theme-aware outlines, and tap-target geometry change; the existing subtitle remains visible. Production callbacks, request construction, response parsing, model selection, and the pinned contracts are unchanged.",
+  "requirement_id": "R4",
   "schema": 1
 }

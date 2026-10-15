@@ -1579,37 +1579,22 @@ private struct CorrectionCompletePanel: View {
             Text(state.message)
                 .font(.subheadline)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .multilineTextAlignment(.center)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 if state.allowsGrammarCheckAgain {
-                    Button(action: onCheckAgain) {
-                        Text("Check Again")
-                            .font(.subheadline.weight(.bold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                    .background(OpenKeyboardTheme.Semantic.primaryAction)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    completionButton(
+                        "Check Again",
+                        systemImage: "arrow.clockwise",
+                        action: onCheckAgain
+                    )
                     .accessibilityIdentifier("grammar_check_again")
                 }
 
-                Button(action: onBackToKeyboard) {
-                    Text("Back to Keyboard")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
+                completionButton(
+                    "Back to Keyboard",
+                    systemImage: "keyboard",
+                    action: onBackToKeyboard
                 )
                 .accessibilityIdentifier("back_to_keyboard")
             }
@@ -1623,6 +1608,30 @@ private struct CorrectionCompletePanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("correction_complete_panel")
     }
+
+    private func completionButton(
+        _ title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(
+                    width: KeyboardPanelLayout.actionControlButtonHeight,
+                    height: KeyboardPanelLayout.actionControlButtonHeight
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(OpenKeyboardTheme.Text.primary, lineWidth: 1.5)
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(OpenKeyboardTheme.Text.primary)
+        .accessibilityLabel(title)
+    }
+
 }
 
 private enum KeyRole {
