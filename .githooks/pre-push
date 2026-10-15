@@ -40,6 +40,25 @@ require_clean_tree
 require_pushed_refs_match_head < "$PUSH_REFS_FILE"
 
 echo "Running OpenKeyboard pre-push checks..."
+LIVE_BASE_REF="${OPEN_KEYBOARD_LIVE_BASE_REF:-origin/main}"
+LIVE_BASE_SHA="$(git -C "$ROOT" rev-parse --verify "$LIVE_BASE_REF^{commit}" 2>/dev/null)" || {
+  echo "Live-impact classification could not resolve $LIVE_BASE_REF." >&2
+  echo "Fetch the base branch or set OPEN_KEYBOARD_LIVE_BASE_REF." >&2
+  exit 1
+}
+HEAD_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
+scope=full
+if git -C "$ROOT" cat-file -e "$LIVE_BASE_SHA:scripts/verification-scope.py" 2>/dev/null; then
+  trusted_classifier="$(mktemp)"
+  trap 'rm -f "$PUSH_REFS_FILE" "$trusted_classifier"' EXIT
+  git -C "$ROOT" show "$LIVE_BASE_SHA:scripts/verification-scope.py" > "$trusted_classifier"
+  scope="$(cd "$ROOT" && python3 -I "$trusted_classifier" --range "$LIVE_BASE_SHA" "$HEAD_SHA")"
+fi
+case "$scope" in
+  docs) check_mode=--hygiene ;;
+  full) check_mode=--full ;;
+  *) echo "Verification scope returned an invalid result." >&2; exit 1 ;;
+esac
 env \
   -u OPEN_KEYBOARD_LIVE_GATEWAY_URL \
   -u OPEN_KEYBOARD_LIVE_API_KEY \
@@ -48,16 +67,9 @@ env \
   -u OPEN_KEYBOARD_TEST_API_KEY \
   -u OPEN_KEYBOARD_TEST_MODEL \
   -u OPEN_KEYBOARD_LIVE_EXPECTED_SHA \
-  "$ROOT/scripts/check.sh" --full
+  "$ROOT/scripts/check.sh" "$check_mode"
 require_clean_tree
 
-LIVE_BASE_REF="${OPEN_KEYBOARD_LIVE_BASE_REF:-origin/main}"
-LIVE_BASE_SHA="$(git -C "$ROOT" rev-parse --verify "$LIVE_BASE_REF^{commit}" 2>/dev/null)" || {
-  echo "Live-impact classification could not resolve $LIVE_BASE_REF." >&2
-  echo "Fetch the base branch or set OPEN_KEYBOARD_LIVE_BASE_REF." >&2
-  exit 1
-}
-HEAD_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
 LIVE_IMPACT="$("$ROOT/scripts/live-impact.sh" "$LIVE_BASE_SHA" "$HEAD_SHA")"
 
 case "$LIVE_IMPACT" in

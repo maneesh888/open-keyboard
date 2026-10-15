@@ -48,7 +48,8 @@ it.
    their own verification and explicitly approve the exact head without granting Codex device
    access. Follow the evidence and interaction rules below.
 8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
-   authorized push, run `./scripts/check.sh --full` and the
+   authorized push, run the exact-head diff-classified deterministic gate
+   (`./scripts/check.sh --hygiene` for documentation-only changes; `--full` otherwise) and the
    classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
    `$review-verify-merge-pr` for exact-head review, readiness, and guarded merge.
 9. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
@@ -376,9 +377,10 @@ Prefer repository scripts to equivalent hand-written commands:
 | Need | Command / evidence |
 |---|---|
 | Hygiene or policy-only change | `./scripts/check.sh --hygiene` |
+| Documentation-only commit/push | `./scripts/check.sh --hygiene` after strict staged/exact-head diff classification |
 | Standard deterministic gate | `./scripts/check.sh --quick` |
 | Default local CI (`core` + `build`) | `./scripts/local-ci.sh --quick` |
-| Exact-head release/pre-push gate | `./scripts/check.sh --full` |
+| Exact-head release/pre-push gate | `./scripts/check.sh --hygiene` for classified documentation-only changes; `--full` otherwise |
 | Core model/parser/service | `./scripts/ios/test.sh core` |
 | App + keyboard-extension build | `./scripts/ios/test.sh build` |
 | Deterministic UI targets | `./scripts/ios/test.sh deterministic-ui` |
@@ -459,6 +461,11 @@ None proves normal simulator UI, physical-device behavior, signing, deployment, 
   unless the user explicitly requests staging without a commit.
 - Before push, stop if the branch would publish earlier unrelated commits whose ownership or scope
   is ambiguous.
+- Documentation-only classification accepts regular Markdown under `docs/` and the root `README.md`,
+  excluding verification and workflow policy documents. Mixed, unknown, source, dependency, build,
+  workflow, policy, non-regular, or malformed changes require full verification. The commit hook
+  classifies the staged candidate; the push gate and GitHub CI classify the complete exact-head
+  diff against the base. Hygiene, secret, whitespace, and policy tests remain required in both paths.
 - Local implementation and commits may proceed after deterministic tests for a bounded
   implementation request under standing lifecycle authority, or under separate explicit edit and
   commit authority, when no active proof-first or commit opt-out remains.

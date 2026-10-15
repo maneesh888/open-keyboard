@@ -19,4 +19,23 @@ fi
 
 echo "Running OpenKeyboard deterministic pre-commit checks..."
 echo "Evidence boundary: this hook can establish DETERMINISTIC_VERIFIED only; it does not grant commit authority or establish LIVE_VERIFIED or RUNTIME_VERIFIED."
-"$ROOT/scripts/check.sh" --quick
+scope=full
+if git -C "$ROOT" cat-file -e HEAD:scripts/verification-scope.py 2>/dev/null; then
+  trusted_classifier="$(mktemp)"
+  trap 'rm -f "$trusted_classifier"' EXIT
+  git -C "$ROOT" show HEAD:scripts/verification-scope.py > "$trusted_classifier"
+  scope="$(cd "$ROOT" && python3 -I "$trusted_classifier" --staged)"
+fi
+case "$scope" in
+  docs)
+    echo "Documentation-only staged diff: running repository hygiene and policy checks."
+    "$ROOT/scripts/check.sh" --hygiene
+    ;;
+  full)
+    "$ROOT/scripts/check.sh" --quick
+    ;;
+  *)
+    echo "Verification scope returned an invalid result." >&2
+    exit 1
+    ;;
+esac
