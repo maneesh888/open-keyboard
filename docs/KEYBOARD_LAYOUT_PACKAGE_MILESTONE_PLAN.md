@@ -9,52 +9,61 @@ Create a separate, source-based Swift package for OpenKeyboard's complete render
 keyboard panel and local typing experience. It should work as an iOS/iPadOS custom
 keyboard on supported iPhones, iPads, and iPhone Duo, and as a reusable view in an
 independent consumer. The package owns the panel frame, key layouts, hit regions,
-typing state, and customizable spaces for accessory and emoji experiences. It has no
-dependency on OpenKeyboard's AI connector, gateway, credentials, or product panels.
+typing state, a dedicated number pad, a smiley keyboard surface, and customizable
+spaces for accessory content. It has no dependency on OpenKeyboard's AI connector,
+gateway, credentials, or product panels.
 
 Success means a second consumer can render and type with the package without linking
 OpenKeyboard AI code; the OpenKeyboard extension retains its current typing and AI
 behavior; and normal Simulator proof shows the real extension on compact iPhone,
-docked iPad, and floating iPad layouts. Duo outer/inner acceptance follows the
-device-specific evidence gate below.
+docked iPad, and floating iPad layouts, including switching to and typing with the
+number pad and smiley keyboard. Duo outer/inner acceptance follows the device-specific
+evidence gate below.
 
 ## Boundary and current state
 
 | Owner | Responsibility |
 | --- | --- |
-| Layout package | Rendered panel background and inset border; keys, touch targets, shift/symbol/return/delete behavior and repeat; adaptive compact/wide arrangements; configurable accessory, suggestion, emoji, and optional action slots; styling and key-event API. |
-| OpenKeyboard extension | `UIInputViewController`, `textDocumentProxy` adapter, height constraints, next-input-mode action, haptics, Full Access, host configuration, AI ViewModels and services, and content injected into slots. |
+| Layout package | Rendered panel background and inset border; alphabetic, symbol, dedicated number-pad, and smiley keyboard layouts; keys, touch targets, shift/return/delete behavior and repeat; mode switching; adaptive compact/wide arrangements; configurable accessory, suggestion, smiley-content, and optional action slots; styling and key-event API. |
+| OpenKeyboard extension | `UIInputViewController`, `textDocumentProxy` adapter, height constraints, next-input-mode action, haptics, Full Access, host input context, AI ViewModels and services, smiley catalogue/recent-item providers, and content injected into slots. |
 | iOS/iPadOS | Placement and size of the keyboard window, floating/docked transition, and system-managed areas outside the extension's view. |
 
 The package's "whole panel" is the entire UI inside the bounds supplied to the
 extension, including reserved space for optional content. It cannot take ownership
 of the system's lower strip or move the floating keyboard window. A distinct border
 and gap must remain visible between the rendered panel and surrounding system UI.
-Emoji entry is a customizable slot/action contract, not a bundled emoji picker.
+The package renders the smiley keyboard grid and handles selection/navigation; the
+host supplies the smileys or emoji catalogue, category labels, and optional recents.
+The package does not bundle an emoji library, search service, or persistence. The
+system next-keyboard action remains available separately. The number pad is distinct
+from the existing `123` symbols layer; its available decimal/phone controls and
+submit label come from host configuration or input context.
 
 Today, `KeyboardView` measures available width for `KeyboardKeyPositions`, while
 `KeyboardPanelLayout` supplies fixed row and panel heights. `KeyboardViewModel`
 mixes typing with OpenKeyboard AI state, so moving it wholesale would violate the
 package boundary. The local UniversalAiConnector package is a binary-wrapper
 integration example, not a requirement that this visual package be binary.
+Currently the `123` mode mixes digits with punctuation across letter-style rows;
+it is not a 3-by-4 number pad. The `Emoji` key calls the host's next-input-mode
+action rather than opening an OpenKeyboard smiley surface.
 
 The separate `codex/keyboard-border` worktree has the 2-point inset teal border at
 `632586547010616d66f8552408602c8a264c5ba6`; it is not part of this plan-only
 change. Earlier direct Simulator screenshots covered the docked iPad appearance,
 but floating iPad typing and Duo extension behavior remain `RUNTIME_UNVERIFIED`.
 
-The local `main` commit `f087933b388444d98679ca5e8fd4aaaadaad4ce1` is not
-an ancestor of the inspected remote-tracking `main`. Its macOS plan has the same
-Git blob on both branches, and its added TODO requirements are already present
-upstream. Refresh the remote and compare content before implementation; do not
-merge that commit into the keyboard package branch merely to preserve its ancestry.
+The earlier local `main` commit `f087933b388444d98679ca5e8fd4aaaadaad4ce1`
+was not merged; the plan landed through PR #60. Refresh the remote and compare
+content before implementation rather than importing that old commit's ancestry.
 
 ## Scope and exclusions
 
-In scope: the package boundary and API, typing and visual extraction, panel slots,
-border, iPhone layouts, iPad docked/floating behavior, Duo width transitions,
-independent consumer, tests, and integration proof. Apple Watch, macOS, visionOS,
-gateway or semantic-contract changes, a built-in emoji library, deployment, and
+In scope: the package boundary and API, typing and visual extraction, a configurable
+smiley keyboard, a dedicated number pad, panel slots, border, iPhone layouts, iPad
+docked/floating behavior, Duo width transitions, independent consumer, tests, and
+integration proof. Apple Watch, macOS, visionOS, gateway or semantic-contract
+changes, a bundled emoji catalogue, search or recents persistence, deployment, and
 ownership of system keyboard chrome are outside this milestone. The package may be
 portable to another platform later, but only iOS/iPadOS custom-keyboard use is an
 acceptance target now.
@@ -66,10 +75,11 @@ acceptance target now.
 - **Deliverables:** Annotate direct iPhone and iPad Simulator screenshots to show
   package-owned panel, border, optional slots, host-owned adapter, and system-owned
   gap/window. Inventory imports, source dependencies, target membership, and current
-  input actions; specify the package's public intents and slot contract.
-- **Entry:** Refresh `origin/main`, reconcile the existing border change and the
-  content of local `main` without importing unrelated history.
-- **Exclusions:** No layout migration, new emoji UI, or behavior change.
+  input actions; specify the package's public intents, input-mode contract, number-pad
+  variants, smiley-content provider, and slot contract.
+- **Entry:** Refresh `origin/main`, review the separate border work, and use the
+  merged plan without importing the old local commit's history.
+- **Exclusions:** No layout migration, new smiley UI, or behavior change.
 - **Verification:** Source/object-digest audit and inspected direct screenshots.
   **GO** when every visible region and dependency has an owner; **REWORK** if the
   proposed package still depends on the AI connector or `UIInputViewController`;
@@ -80,15 +90,19 @@ acceptance target now.
 ### M2 — Package the typing engine and key geometry
 
 - **Deliverables:** Source Swift package for keys, hit regions, local typing state,
-  shift/symbol modes, delete repeat, space and return behavior, and semantic key
-  intents. Host adapters apply intents to `textDocumentProxy` and handle haptics.
-  Add a small independent consumer that needs no OpenKeyboard AI component.
+  shift/symbol modes, a separate 3-by-4 number pad with digits 0–9 and delete,
+  configurable decimal/phone and submit controls, delete repeat, space and return
+  behavior, and semantic key intents. Host adapters apply intents to
+  `textDocumentProxy`, provide input context, and handle haptics. Add a small
+  independent consumer that needs no OpenKeyboard AI component.
 - **Entry:** M1 package contract is accepted. **Exclusions:** AI state, network,
   persistence, Keychain, App Group, and system window control.
-- **Verification:** Focused package tests over compact and regular widths, typing
-  regression tests, independent-consumer build, and app/extension build.
+- **Verification:** Focused package tests over compact and regular widths, alphabetic,
+  symbols, number-pad variants, mode transitions, insertion/delete/submit intents,
+  typing regression tests, independent-consumer build, and app/extension build.
   **GO** when the package stands alone and phone typing remains equivalent;
-  **REWORK** for lost keys, unsafe touch regions, or leaked product dependencies.
+  **REWORK** for lost keys, incorrect numeric output, unsafe touch regions, or
+  leaked product dependencies.
 - **Risk/containment:** `KeyboardViewModel` is large and mixed-purpose. Extract the
   typing slice behind intents incrementally; retain the extension adapter until
   parity is demonstrated.
@@ -96,15 +110,21 @@ acceptance target now.
 ### M3 — Package the panel and customization slots
 
 - **Deliverables:** Move the rendered panel shell, key view, and border into the
-  package. Expose configurable theme, spacing, toolbar/accessory and emoji spaces,
-  and optional actions. Inject OpenKeyboard's AI toolbar and panels from the host.
-  Keep the border around the full panel, with a visible inset from its outer edge.
-- **Entry:** M2 typing API is stable. **Exclusions:** AI feature implementations
-  and a bundled emoji picker.
-- **Verification:** Slot/default/empty-state tests and normal Simulator screenshots
-  of the actual extension in an ordinary host text field. **GO** when the sample
-  renders without AI and OpenKeyboard's controls remain usable; **REWORK** for
-  clipping, lost accessibility, or a border overlapping system chrome.
+  package. Expose configurable theme, spacing, toolbar/accessory spaces, and
+  optional actions. Render a smiley keyboard with host-supplied sections/items,
+  category navigation, insertion intents, a smiley-mode key, and an explicit return
+  to the prior typing mode. Preserve a distinct system next-keyboard action. Inject
+  OpenKeyboard's AI toolbar and panels from the host. Keep the border around the
+  full panel, with a visible inset from its outer edge.
+- **Entry:** M2 typing API is stable. **Exclusions:** AI feature implementations,
+  a bundled emoji catalogue, search, and recents persistence.
+- **Verification:** Slot/default/empty-state and smiley-provider tests, plus normal
+  Simulator screenshots of the actual extension in an ordinary host text field.
+  Exercise number-pad typing and smiley selection, deletion, category navigation,
+  return-to-typing, and the separate system next-keyboard action. **GO** when the
+  sample renders without AI, configured smileys insert correctly, and OpenKeyboard's
+  controls remain usable; **REWORK** for clipping, lost accessibility, a mode that
+  traps the user, or a border overlapping system chrome.
 - **Risk/containment:** Panel height and host constraints can disagree. Keep height
   negotiation explicit in the extension adapter and revert the UI switch if the
   normal extension no longer fits.
@@ -113,13 +133,15 @@ acceptance target now.
 
 - **Deliverables:** Use the phone-style compact arrangement when iPadOS supplies
   a floating width; use a deliberate wide arrangement with bounded key sizes when
-  docked. Reflow slots and height as width changes, preserving typing state.
+  docked. Reflow slots, number-pad keys, smiley grid, and height as width changes,
+  preserving typing mode and text state.
 - **Entry:** M3 integrated panel. **Exclusions:** Programmatically forcing the
-  floating window or copying the system's emoji keyboard.
+  floating window or copying the system's emoji catalogue.
 - **Verification:** Geometry and transition tests plus direct portrait, landscape,
-  docked, floating, typing, and return-to-docked screenshots from the normally
-  installed extension. **GO** only when those real transitions are visible and
-  usable; **REWORK** for stretched keys, clipped slots, or lost text state;
+  docked, floating, typing, number-pad and smiley keyboard, and return-to-docked
+  screenshots from the normally installed extension. **GO** only when those real
+  transitions are visible and usable; **REWORK** for stretched keys, clipped slots,
+  inaccessible smileys, or lost mode/text state;
   **BLOCKED** if iPadOS does not offer the transition in the chosen test host.
 - **Risk/containment:** Width can change while visible. Select from actual layout
   space rather than the device model, and keep one typing engine across layouts.
@@ -127,8 +149,8 @@ acceptance target now.
 ### M5 — Adaptive iPhone Duo experience
 
 - **Deliverables:** Exercise compact outer, regular inner, split-width, orientation,
-  and live-resize cases without hard-coded Duo dimensions. Preserve input and panel
-  state when the available width changes.
+  and live-resize cases without hard-coded Duo dimensions. Preserve input mode,
+  number-pad/smiley selection, and panel state when the available width changes.
 - **Entry:** M4 responsive layout. **Exclusions:** A separate keyboard for each
   physical pose or hinge geometry inferred from screen size.
 - **Verification:** Deterministic width/height transition tests, then normal
@@ -144,7 +166,8 @@ acceptance target now.
 ### M6 — Integrate, verify, and publish
 
 - **Deliverables:** Pin the package dependency, remove duplicate layout code,
-  document its public API and platform matrix, and complete exact-head review.
+  document its public API, mode/content-provider contract and platform matrix,
+  and complete exact-head review.
 - **Entry:** M2–M5 acceptance and a clean integration base. **Exclusions:** App
   deployment and destructive cleanup.
 - **Verification:** Affected regression tests, `./scripts/check.sh --full`, the
@@ -162,24 +185,29 @@ bounded implementation work package, not authorization to start the next one.
 
 ## Evidence and completion
 
-Automated regression evidence covers package logic, geometry, and host adapters.
+Automated regression evidence covers package logic, geometry, all typing modes,
+smiley-provider handling, and host adapters.
 Normal simulator runtime proof covers the actual installed extension, visible
-typing, panel, and docked/floating transitions. A component preview or XCTest
-attachment cannot replace normal runtime proof. Physical-device interaction is
+typing, number-pad and smiley entry, panel, and docked/floating transitions. A
+component preview or XCTest attachment cannot replace normal runtime proof.
+Physical-device interaction is
 not authorized by this plan; add it only after an explicit request. Live model
 evidence is not applicable to layout-only changes unless an implementation diff
 also changes request, response, model, or semantic behavior.
 
 The milestone is complete when an independent consumer compiles and types without
 OpenKeyboard AI dependencies, OpenKeyboard preserves its typing and injected AI
-controls, the border and host gap are visually correct, iPad compact and wide
-transitions are verified, Duo evidence is resolved or explicitly qualified, and
-all applicable exact-head release gates pass.
+controls, the configured smiley keyboard and dedicated number pad insert through
+the host adapter, the border and host gap are visually correct, iPad compact and
+wide transitions preserve those modes, Duo evidence is resolved or explicitly
+qualified, and all applicable exact-head release gates pass.
 
 ## Sources and refresh points
 
 Requirement source: the keyboard package, border, iPad, floating, Duo, and
-customization requests in the 2026-09-29 through 2026-10-01 conversation.
+customization requests in the 2026-09-29 through 2026-10-01 conversation, plus
+the smiley keyboard and number-pad request on 2026-10-15. The current-mode findings
+above were checked against `origin/main` at `be0432b1157e2984882bca204a7c3d12e3d572d3`.
 Repository source digests at the baseline above (Git blob SHA prefixes):
 
 | Source | Digest |
