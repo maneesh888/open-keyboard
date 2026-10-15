@@ -372,6 +372,14 @@ final class KeyboardViewModel: ObservableObject {
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
+    var numberPadHeight: CGFloat {
+        NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemKeyboardSwitch ? 44 : 0)
+    }
+    @Published private(set) var needsSystemKeyboardSwitch = false
+
+    func updateSystemKeyboardSwitchRequirement(_ required: Bool) {
+        needsSystemKeyboardSwitch = required
+    }
     @Published private(set) var isNumberPadVisible = false
     @Published private(set) var numberPadInteractionID = UUID()
     @Published private(set) var numberPadConfiguration = NumberPadConfiguration(
@@ -608,7 +616,7 @@ final class KeyboardViewModel: ObservableObject {
             .takeUnretainedValue() as? UUID
     }
 
-    func refreshNumberPadContext(needsSystemKeyboardSwitch: Bool = true) {
+    func refreshNumberPadContext() {
         guard let documentID = currentNumberPadDocumentID else {
             cancelNumberPadInteraction()
             return
@@ -627,29 +635,13 @@ final class KeyboardViewModel: ObservableObject {
             }
         }
         numberPadConfiguration.decimalSeparator = Locale.current.decimalSeparator ?? "."
-        numberPadConfiguration.needsSystemKeyboardSwitch = needsSystemKeyboardSwitch
-        numberPadConfiguration.submitEnabled = !(textDocumentProxy.enablesReturnKeyAutomatically ?? false)
-            || textDocumentProxy.hasText
-        switch textDocumentProxy.returnKeyType ?? .default {
-        case .go: numberPadConfiguration.submitLabel = "Go"
-        case .next: numberPadConfiguration.submitLabel = "Next"
-        case .search, .google, .yahoo: numberPadConfiguration.submitLabel = "Search"
-        case .send: numberPadConfiguration.submitLabel = "Send"
-        case .done: numberPadConfiguration.submitLabel = "Done"
-        case .join: numberPadConfiguration.submitLabel = "Join"
-        case .route: numberPadConfiguration.submitLabel = "Route"
-        case .continue: numberPadConfiguration.submitLabel = "Continue"
-        case .emergencyCall: numberPadConfiguration.submitLabel = "Call"
-        default: numberPadConfiguration.submitLabel = "Return"
-        }
     }
 
-    func showNumberPad() {
+    private func showNumberPad() {
         guard let documentID = currentNumberPadDocumentID else { return }
-        // Capture field identity before opening manually, so the next edit does not close the pad.
+        // Keep held-key identity stable during edits in the same numeric field.
         numberPadDocumentID = documentID
         numberPadKeyboardType = textDocumentProxy.keyboardType ?? .default
-        hapticFeedback.keyTapped()
         numberPadAnalysisGeneration &+= 1
         clearAutomaticAnalysisState()
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
@@ -663,28 +655,14 @@ final class KeyboardViewModel: ObservableObject {
 
     func cancelNumberPadInteraction() { numberPadInteractionID = UUID() }
 
-    func handleNumberPadIntent(_ intent: NumberPadIntent, interactionID: UUID? = nil, advance: () -> Void = {}) {
+    func handleNumberPadIntent(_ intent: NumberPadIntent, interactionID: UUID? = nil) {
         guard isNumberPadVisible else { return }
         guard interactionID == nil || interactionID == numberPadInteractionID else { return }
         switch intent {
         case .insertText(let text): insert(text)
         case .deleteBackward: deleteBackward()
-        case .submit:
-            guard numberPadConfiguration.showsSubmit, numberPadConfiguration.submitEnabled else { return }
-            insertReturn()
-        case .back:
-            hapticFeedback.keyTapped()
-            isNumberPadVisible = false
-            cancelNumberPadInteraction()
-        case .advanceToNextInputMode:
-            cancelNumberPadInteraction()
-            nextKeyboard(using: advance)
-        case .selectVariant(let variant):
-            hapticFeedback.keyTapped()
-            numberPadConfiguration.variant = variant
-            cancelNumberPadInteraction()
         }
-        refreshNumberPadContext(needsSystemKeyboardSwitch: numberPadConfiguration.needsSystemKeyboardSwitch)
+        refreshNumberPadContext()
     }
 
     func insert(_ character: String) {
@@ -2515,7 +2493,7 @@ final class KeyboardViewModel: ObservableObject {
                 )
             }
             // Entering the local pad cancels this request even if the provider ignores cancellation.
-            // A late result must not restore AI state after Pad -> Back either.
+            // A late result must not restore AI state after returning to a text field either.
             guard numberPadAnalysisGeneration == padGenerationAtRequest, !isNumberPadVisible else {
                 markDiagnosticStaleResult(traceID)
                 return

@@ -42,38 +42,7 @@ public struct NumberPadView: View {
                         }
                     }
                 }
-                HStack(spacing: metrics.gap) {
-                    key("Back", label: "Back to typing", id: "number_pad_back", intent: .back)
-                    if configuration.needsSystemKeyboardSwitch {
-                        Button { onIntent(.advanceToNextInputMode) } label: {
-                            Image(systemName: "globe").frame(maxWidth: .infinity, maxHeight: .infinity)
-                        }
-                        .accessibilityLabel("Next keyboard")
-                        .accessibilityIdentifier("number_pad_next_keyboard")
-                    }
-                    Menu {
-                        variant("Digits", .digits)
-                        variant("Decimal", .decimal)
-                        variant("Phone", .phone)
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .accessibilityLabel("Number pad type")
-                    .accessibilityValue(configuration.variant.rawValue.capitalized)
-                    .accessibilityIdentifier("number_pad_type")
-                    ForEach(configuration.phoneControls, id: \.self) { symbol in
-                        key(symbol, label: symbol == "*" ? "Asterisk" : "Number sign",
-                            id: "number_pad_\(symbol)", intent: .insertText(symbol))
-                    }
-                    if configuration.showsSubmit {
-                        key(configuration.submitLabel, label: configuration.submitLabel,
-                            id: "number_pad_submit", intent: .submit)
-                            .disabled(!configuration.submitEnabled)
-                    }
-                }
-                .frame(height: metrics.rowHeight)
-                .background(style.control, in: RoundedRectangle(cornerRadius: 8))
+
             }
             .buttonStyle(.plain)
             .font(.system(size: 16))
@@ -83,10 +52,6 @@ public struct NumberPadView: View {
         }
         .frame(height: NumberPadGeometry(availableWidth: 0).height)
         .accessibilityIdentifier("keyboard_number_pad")
-    }
-
-    private func variant(_ label: String, _ variant: NumberPadVariant) -> some View {
-        Button(label) { onIntent(.selectVariant(variant)) }
     }
 
     @ViewBuilder private func cell(_ intent: NumberPadIntent?) -> some View {

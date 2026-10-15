@@ -9,7 +9,7 @@ struct NumberPadDemo: App {
 
 private struct Demo: View {
     @State private var text = ""
-    @State private var configuration = NumberPadConfiguration(decimalSeparator: ".", needsSystemKeyboardSwitch: false)
+    @State private var configuration = NumberPadConfiguration(decimalSeparator: ".")
     @State private var session = UUID()
     var body: some View {
         VStack {
@@ -18,10 +18,6 @@ private struct Demo: View {
                 switch intent {
                 case .insertText(let value): text += value
                 case .deleteBackward: if !text.isEmpty { text.removeLast() }
-                case .submit: text += "\n"
-                case .selectVariant(let variant): configuration.variant = variant
-                case .back: text = ""; session = UUID()
-                case .advanceToNextInputMode: break
                 }
             }
         }.padding().frame(minWidth: 320, minHeight: 330)

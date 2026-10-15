@@ -16,7 +16,7 @@ struct KeyboardView: View {
             && viewModel.panelMode != .actions
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
-        let viewportHeight = KeyboardPanelLayout.keyboardHeight(
+        let viewportHeight = viewModel.isNumberPadVisible ? viewModel.numberPadHeight : KeyboardPanelLayout.keyboardHeight(
             for: viewModel.panelMode,
             actionPanelState: viewModel.actionPanelState
         )
@@ -51,10 +51,29 @@ struct KeyboardView: View {
                         ),
                         interactionID: numberPadInteractionID
                     ) { intent in
-                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID, advance: onNextKeyboard)
+                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID)
                     }
                     .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    .padding(.vertical, 6)
                     .onDisappear { viewModel.cancelNumberPadInteraction() }
+                    if viewModel.needsSystemKeyboardSwitch {
+                        HStack {
+                            Button {
+                                viewModel.cancelNumberPadInteraction()
+                                viewModel.nextKeyboard(using: onNextKeyboard)
+                            } label: {
+                                Image(systemName: "globe")
+                                    .font(.system(size: 22))
+                                    .frame(width: 44, height: 44)
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.primary)
+                            .accessibilityLabel("Next keyboard")
+                            .accessibilityIdentifier("number_pad_next_keyboard")
+                            Spacer()
+                        }
+                        .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    }
                 } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
@@ -219,9 +238,7 @@ struct KeyboardView: View {
                 .accessibilityIdentifier("keyboard_row_bottom_letters")
 
                 let controlLayout = positions.controlRow(
-                    keyIDs: inputMode == .letters
-                        ? ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"]
-                        : ["keyboard_numbers", "keyboard_emoji", "keyboard_pad", "keyboard_space", "keyboard_return"],
+                    keyIDs: ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
                     keyHeight: KeyboardPanelLayout.controlKeyHeight
                 )
                 HStack(spacing: 0) {
@@ -237,12 +254,6 @@ struct KeyboardView: View {
                                 viewModel.nextKeyboard(using: onNextKeyboard)
                             }
                             .accessibilityIdentifier("keyboard_key_emoji")
-                        case "keyboard_pad":
-                            KeyButton(label: "Pad", role: .modifier, target: target) {
-                                viewModel.showNumberPad()
-                            }
-                            .accessibilityLabel("Number pad")
-                            .accessibilityIdentifier("keyboard_key_pad")
                         case "keyboard_space":
                             KeyButton(label: "space", role: .space, target: target) {
                                 viewModel.insertSpace()

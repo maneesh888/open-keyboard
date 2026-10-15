@@ -4,6 +4,7 @@
 //
 
 import Combine
+import KeyboardLayout
 import SwiftUI
 import UIKit
 
@@ -27,12 +28,12 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshRuntimeState()
-        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
+        refreshNumberPadHostContext()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
-        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
+        refreshNumberPadHostContext()
         viewModel?.documentDidChange()
     }
 
@@ -44,7 +45,7 @@ final class KeyboardViewController: UIInputViewController {
     override func selectionDidChange(_ textInput: UITextInput?) {
         super.selectionDidChange(textInput)
         viewModel?.cancelNumberPadInteraction()
-        viewModel?.refreshNumberPadContext(needsSystemKeyboardSwitch: needsInputModeSwitchKey)
+        refreshNumberPadHostContext()
     }
 
     override func updateViewConstraints() {
@@ -88,9 +89,9 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
-        Publishers.CombineLatest(viewModel.$panelMode, viewModel.$actionPanelState)
-            .map { panelMode, actionPanelState in
-                KeyboardPanelLayout.keyboardHeight(
+        Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState, viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch)
+            .map { panelMode, actionPanelState, isNumberPadVisible, needsSystemSwitch in
+                isNumberPadVisible ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0) : KeyboardPanelLayout.keyboardHeight(
                     for: panelMode,
                     actionPanelState: actionPanelState
                 )
@@ -104,9 +105,15 @@ final class KeyboardViewController: UIInputViewController {
             .store(in: &cancellables)
     }
 
+    private func refreshNumberPadHostContext() {
+        viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
+        viewModel?.refreshNumberPadContext()
+    }
+
     private func refreshRuntimeState() {
         // Host document traits are unavailable during viewDidLoad. Read them only
         // after appearance or a host text/selection callback.
+        viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
         let fullAccess = hasFullAccess
         viewModel?.updateFullAccess(fullAccess)
         AppConfig.updateKeyboardFullAccess(fullAccess)
@@ -114,7 +121,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private var currentKeyboardHeight: CGFloat {
         guard let viewModel else { return KeyboardPanelLayout.preferredKeyboardHeight }
-        return KeyboardPanelLayout.keyboardHeight(
+        return viewModel.isNumberPadVisible ? viewModel.numberPadHeight : KeyboardPanelLayout.keyboardHeight(
             for: viewModel.panelMode,
             actionPanelState: viewModel.actionPanelState
         )

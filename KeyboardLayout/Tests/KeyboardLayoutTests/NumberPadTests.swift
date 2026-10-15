@@ -12,18 +12,13 @@ final class NumberPadTests: XCTestCase {
         }
     }
 
-    func testAuxiliaryAndPhoneControlsAreExactAndDoNotReplaceDelete() {
+    func testOnlyDecimalFieldsHaveAnAuxiliaryKey() {
         var config = NumberPadConfiguration(variant: .digits, decimalSeparator: "٫")
         XCTAssertNil(config.cells[9])
         config.variant = .decimal
         XCTAssertEqual(config.cells[9], .insertText("٫"))
         config.decimalSeparator = ""
         XCTAssertNil(config.cells[9])
-        config.variant = .phone
-        XCTAssertEqual(config.cells[9], .insertText("+"))
-        XCTAssertEqual(config.phoneControls, ["*", "#"])
-        config.variant = .digits
-        XCTAssertTrue(config.phoneControls.isEmpty)
     }
 
     func testNumberTextIsNotParsedOrReformatted() {
@@ -36,15 +31,15 @@ final class NumberPadTests: XCTestCase {
         XCTAssertEqual(text, "001,2")
     }
 
-    func testCompactAndWideGeometryIsBoundedWithUsableUtilityTargets() {
+    func testCompactAndWideGeometryIsBoundedWithUsableTargets() {
         for width: CGFloat in [308, 363, 390, 480, 808, 1024] {
             let metrics = NumberPadGeometry(availableWidth: width)
             XCTAssertLessThanOrEqual(metrics.contentWidth, width)
             XCTAssertLessThanOrEqual(metrics.contentWidth, 480)
             XCTAssertEqual(metrics.cellWidth * 3 + metrics.gap * 2, metrics.contentWidth, accuracy: 0.001)
             XCTAssertGreaterThanOrEqual(metrics.rowHeight, 44)
-            XCTAssertGreaterThanOrEqual((metrics.contentWidth - metrics.gap * 5) / 6, 44)
-            XCTAssertEqual(metrics.height, 264)
+            XCTAssertGreaterThanOrEqual(metrics.cellWidth, 44)
+            XCTAssertEqual(metrics.height, 234)
         }
     }
 

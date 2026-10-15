@@ -267,23 +267,6 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(bottomRow.keys[bottomRow.keys.count - 1].touchFrame.maxX, 381)
     }
 
-    func testNumberPadEntryControlFitsCompactAndWideSymbolRows() {
-        for width: CGFloat in [308, 381, 808] {
-            let row = KeyboardKeyPositions(availableWidth: width).controlRow(
-                keyIDs: ["numbers", "emoji", "pad", "space", "return"], keyHeight: 54)
-            XCTAssertEqual(row.keys.count, 5)
-            XCTAssertEqual(row.keys.last?.visualFrame.maxX ?? 0, width, accuracy: 0.001)
-            for key in row.keys {
-                XCTAssertGreaterThan(key.visualFrame.width, 0)
-                XCTAssertGreaterThan(key.touchFrame.width, 0)
-            }
-            for index in row.keys.indices.dropLast() {
-                XCTAssertLessThan(row.keys[index].visualFrame.maxX, row.keys[index + 1].visualFrame.minX)
-                XCTAssertEqual(row.keys[index].touchFrame.maxX, row.keys[index + 1].touchFrame.minX)
-            }
-        }
-    }
-
     func testControlRowPreservesWidthsAndRejectsTouchesOutsideItsBounds() throws {
         let positions = KeyboardKeyPositions(availableWidth: 381)
         let row = positions.controlRow(
