@@ -1,10 +1,10 @@
 {
-  "base": "99bc28e5bcee1019871ac4d07eaaf3b9a107397b",
+  "base": "e46cf4b856b597cdbff6f721424a1bc0f902dbed",
   "changes": {
     "KeyboardLayout/Examples/SmileyConsumer/Package.swift": {
       "after": {
         "mode": "100644",
-        "oid": "eef0da8b7130e5cc64d96710bb69ca9044516938"
+        "oid": "32f850f10c6fd74868bc383bdddf8e3d283cb3b1"
       },
       "before": null
     },
@@ -18,9 +18,12 @@
     "KeyboardLayout/Package.swift": {
       "after": {
         "mode": "100644",
-        "oid": "89dde8fff762350c7e8c37a7bdb39836b6c6cae2"
+        "oid": "31a50943406665c3c4106790b7fe2abae07f2358"
       },
-      "before": null
+      "before": {
+        "mode": "100644",
+        "oid": "3ac7772683b56540586dc6f0d4638b1cfa147e6f"
+      }
     },
     "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
       "after": {
@@ -81,11 +84,11 @@
     "OpenKeyboard.xcodeproj/project.pbxproj": {
       "after": {
         "mode": "100644",
-        "oid": "581748d0146eec7126280360d54de86933bef24e"
+        "oid": "c58905351eaa7d471ee9bbb1e901f30ac2092f52"
       },
       "before": {
         "mode": "100644",
-        "oid": "bf22d266fbd8852b4a1e519f98bb2d9f6849648e"
+        "oid": "6fdf12edd49f89df9baf73e1e0a46cae0134ba85"
       }
     },
     "OpenKeyboardExtension/KeyboardTouchLayout.swift": {
@@ -101,31 +104,31 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "8f9d82d26fb4ac55c5b2083810c0b8a969173365"
+        "oid": "a950487e7b974d6771c328475c3f2359859d62fe"
       },
       "before": {
         "mode": "100644",
-        "oid": "713467946b61ca49f332a24e3bd0d96f28659849"
+        "oid": "d7e4ec1e8f357c781055a1765cf8ef91d93c8d4c"
       }
     },
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "e588a70846f61bf8c17868e8c8ba59b6f3e666ef"
+        "oid": "14d314177081fedfb0d48a1429879e164144c09a"
       },
       "before": {
         "mode": "100644",
-        "oid": "ef68835e3fa4382e34e8b23cf336f467feb40a9c"
+        "oid": "548e4b14161bda53d99c37877198d25949fad5d3"
       }
     },
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "4990a9c2539dc90927e03d4ced68fb1a97fbf3c9"
+        "oid": "7afb96e03aa91a0fcaec4628f184a71200a7eb3f"
       },
       "before": {
         "mode": "100644",
-        "oid": "5a9a7188abf9729afa74e8399f34a25d8939d847"
+        "oid": "2656720a61486aaac0366c5caaf044d98ef03baa"
       }
     },
     "OpenKeyboardUITests/KeyboardToolbarStateTests.swift": {
@@ -141,11 +144,11 @@
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "093ec4590ad309c77b1cfdb73260e755d02661a3"
+        "oid": "aec4afe7ec3311c1b06fd1c4946d78e8422cd16f"
       },
       "before": {
         "mode": "100644",
-        "oid": "ead83df63c8b3702a990199fde463f616a3aed0d"
+        "oid": "5caca7de83f2bfbfbe088e4c9fb5978dd711b49e"
       }
     },
     "docs/SMILEY_KEYBOARD_PACKAGE.md": {
@@ -162,13 +165,13 @@
       },
       "before": {
         "mode": "100755",
-        "oid": "445e9462dc85db8bf1680f1f0e55c17e1301a3a2"
+        "oid": "c449f33e17f5581061a65180a1196f784a145e67"
       }
     }
   },
   "live_impact": "none",
-  "proof": "Package and host regression tests cover literal insertion, search isolation, variant selection, recent-history retention, prior-mode restoration and scroll content. Normal extension captures cover the revised picker, enlarged text and docked iPad; horizontal swipe and final exact-head runtime acceptance remain pending. No model call can establish these local UI requirements.",
-  "rationale": "Changes add a local emoji catalogue, recent-selection storage, search, skin-tone browser, and keyboard presentation. Search input stays in dedicated local state. AI requests, responses, parsers, provider/model selection, gateway configuration and pinned semantic contracts are unchanged.",
+  "proof": "Package and host regression tests cover literal insertion, isolated search, variants, retention, prior-mode restoration, category offsets and numeric-field transitions. Normal extension proof or explicit exact-head owner approval covers visual acceptance. Live model calls cannot establish these local UI requirements.",
+  "rationale": "Adds local emoji catalogue, recent-selection storage, search, skin-tone browser and keyboard presentation. Integration closes emoji search before entering the existing numeric keyboard. AI requests, responses, parsers, model selection, gateway configuration and pinned contracts are unchanged.",
   "requirement_id": "R2",
   "schema": 1
 }

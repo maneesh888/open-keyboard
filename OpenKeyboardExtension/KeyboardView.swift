@@ -5,14 +5,17 @@
 
 import SwiftUI
 import KeyboardLayout
+import UIKit
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
     var showsSystemKeyboardSwitch = true
+    var onInputModeList: (UIView, UIEvent) -> Void = { _, _ in }
 
     var body: some View {
-        let showsToolbar = !(viewModel.panelMode == .keyboard && viewModel.isShowingSmileys)
+        let numberPadInteractionID = viewModel.numberPadInteractionID
+        let showsToolbar = !viewModel.isNumberPadVisible && !(viewModel.panelMode == .keyboard && viewModel.isShowingSmileys)
             && viewModel.panelMode != .actions
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
@@ -39,7 +42,29 @@ struct KeyboardView: View {
 
             switch viewModel.panelMode {
             case .keyboard:
-                if let error = viewModel.actionError {
+                if viewModel.isNumberPadVisible {
+                    NumberPadView(
+                        configuration: viewModel.numberPadConfiguration,
+                        style: NumberPadStyle(
+                            key: OpenKeyboardTheme.Surface.keyBackground,
+                            control: OpenKeyboardTheme.Surface.modifierKeyBackground
+                        ),
+                        interactionID: numberPadInteractionID
+                    ) { intent in
+                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID)
+                    }
+                    .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    .padding(.vertical, 6)
+                    .onDisappear { viewModel.cancelNumberPadInteraction() }
+                    if viewModel.needsSystemKeyboardSwitch {
+                        HStack {
+                            SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
+                                .frame(width: 44, height: 44)
+                            Spacer()
+                        }
+                        .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    }
+                } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
                         onBackToTyping: { viewModel.retryAfterActionError() },
@@ -1615,37 +1640,22 @@ private struct CorrectionCompletePanel: View {
             Text(state.message)
                 .font(.subheadline)
                 .foregroundColor(OpenKeyboardTheme.Text.secondaryStrong)
+                .multilineTextAlignment(.center)
 
-            HStack(spacing: 12) {
+            HStack(spacing: 16) {
                 if state.allowsGrammarCheckAgain {
-                    Button(action: onCheckAgain) {
-                        Text("Check Again")
-                            .font(.subheadline.weight(.bold))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 9)
-                            .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundColor(OpenKeyboardTheme.Text.inverse)
-                    .background(OpenKeyboardTheme.Semantic.primaryAction)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    completionButton(
+                        "Check Again",
+                        systemImage: "arrow.clockwise",
+                        action: onCheckAgain
+                    )
                     .accessibilityIdentifier("grammar_check_again")
                 }
 
-                Button(action: onBackToKeyboard) {
-                    Text("Back to Keyboard")
-                        .font(.subheadline.weight(.semibold))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .frame(minHeight: KeyboardPanelLayout.actionControlButtonHeight)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundColor(OpenKeyboardTheme.Semantic.primaryAction)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(OpenKeyboardTheme.Semantic.primaryAction, lineWidth: 1.5)
+                completionButton(
+                    "Back to Keyboard",
+                    systemImage: "keyboard",
+                    action: onBackToKeyboard
                 )
                 .accessibilityIdentifier("back_to_keyboard")
             }
@@ -1659,6 +1669,30 @@ private struct CorrectionCompletePanel: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityIdentifier("correction_complete_panel")
     }
+
+    private func completionButton(
+        _ title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 16, weight: .semibold))
+                .frame(
+                    width: KeyboardPanelLayout.actionControlButtonHeight,
+                    height: KeyboardPanelLayout.actionControlButtonHeight
+                )
+                .overlay(
+                    Circle()
+                        .strokeBorder(OpenKeyboardTheme.Text.primary, lineWidth: 1.5)
+                )
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(OpenKeyboardTheme.Text.primary)
+        .accessibilityLabel(title)
+    }
+
 }
 
 private enum KeyRole {
@@ -1744,4 +1778,40 @@ private enum KeyboardColors {
     static let overlayBackground = OpenKeyboardTheme.Surface.overlayBackground
     static let keyBackground = OpenKeyboardTheme.Surface.keyBackground
     static let modifierKeyBackground = OpenKeyboardTheme.Surface.modifierKeyBackground
+}
+
+/// UIKit receives the full touch sequence so the standard globe supports both
+/// tapping to advance and holding to choose an installed keyboard.
+struct SystemKeyboardSwitchButton: UIViewRepresentable {
+    let onInputModeList: (UIView, UIEvent) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onInputModeList: onInputModeList)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "globe", withConfiguration: UIImage.SymbolConfiguration(pointSize: 22)), for: .normal)
+        button.tintColor = .label
+        button.accessibilityLabel = "Next keyboard"
+        button.accessibilityIdentifier = "number_pad_next_keyboard"
+        button.addTarget(context.coordinator, action: #selector(Coordinator.handleInputModeList(_:event:)), for: .allTouchEvents)
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.onInputModeList = onInputModeList
+    }
+
+    final class Coordinator: NSObject {
+        var onInputModeList: (UIView, UIEvent) -> Void
+
+        init(onInputModeList: @escaping (UIView, UIEvent) -> Void) {
+            self.onInputModeList = onInputModeList
+        }
+
+        @objc func handleInputModeList(_ sender: UIButton, event: UIEvent) {
+            onInputModeList(sender, event)
+        }
+    }
 }

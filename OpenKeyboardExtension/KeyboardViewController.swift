@@ -4,6 +4,7 @@
 //
 
 import Combine
+import KeyboardLayout
 import SwiftUI
 import UIKit
 
@@ -27,11 +28,24 @@ final class KeyboardViewController: UIInputViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         refreshRuntimeState()
+        refreshNumberPadHostContext()
     }
 
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
+        refreshNumberPadHostContext()
         viewModel?.documentDidChange()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        viewModel?.cancelNumberPadInteraction()
+        super.viewWillDisappear(animated)
+    }
+
+    override func selectionDidChange(_ textInput: UITextInput?) {
+        super.selectionDidChange(textInput)
+        viewModel?.cancelNumberPadInteraction()
+        refreshNumberPadHostContext()
     }
 
     override func updateViewConstraints() {
@@ -51,7 +65,11 @@ final class KeyboardViewController: UIInputViewController {
             onNextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
             },
-            showsSystemKeyboardSwitch: needsInputModeSwitchKey
+            showsSystemKeyboardSwitch: needsInputModeSwitchKey,
+            onInputModeList: { [weak self] sender, event in
+                self?.viewModel?.cancelNumberPadInteraction()
+                self?.handleInputModeList(from: sender, with: event)
+            }
         )
         let controller = UIHostingController(rootView: keyboardView)
 
@@ -76,11 +94,18 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
-        Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState,
-                                  viewModel.$isShowingSmileys, viewModel.$smileyState)
-            .map { panelMode, actionPanelState, showing, smileys in
-                KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
-                                                     searchingSmileys: showing && smileys.isSearching)
+        Publishers.CombineLatest(
+            Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState,
+                                      viewModel.$isShowingSmileys, viewModel.$smileyState),
+            Publishers.CombineLatest(viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch)
+        )
+            .map { presentation, numberPad in
+                let (panelMode, actionPanelState, showing, smileys) = presentation
+                let (isNumberPadVisible, needsSystemSwitch) = numberPad
+                return isNumberPadVisible
+                    ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0)
+                    : KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
+                                                           searchingSmileys: showing && smileys.isSearching)
             }
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -91,8 +116,16 @@ final class KeyboardViewController: UIInputViewController {
             .store(in: &cancellables)
     }
 
+    private func refreshNumberPadHostContext() {
+        viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
+        viewModel?.refreshNumberPadContext()
+    }
+
     private func refreshRuntimeState() {
         hostingController?.rootView.showsSystemKeyboardSwitch = needsInputModeSwitchKey
+        // Host document traits are unavailable during viewDidLoad. Read them only
+        // after appearance or a host text/selection callback.
+        viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
         let fullAccess = hasFullAccess
         viewModel?.updateFullAccess(fullAccess)
         AppConfig.updateKeyboardFullAccess(fullAccess)
