@@ -1,20 +1,112 @@
 {
-  "base": "99bc28e5bcee1019871ac4d07eaaf3b9a107397b",
+  "base": "9f75a29e4c4e0c06e69bfd535982870d2eed037c",
   "changes": {
-    "OpenKeyboardExtension/KeyboardView.swift": {
+    "KeyboardLayout/Package.swift": {
       "after": {
         "mode": "100644",
-        "oid": "f46cf5e4b2ca2dbd1cdd5aa8acbacca3049d6feb"
+        "oid": "3ac7772683b56540586dc6f0d4638b1cfa147e6f"
+      },
+      "before": null
+    },
+    "KeyboardLayout/README.md": {
+      "after": {
+        "mode": "100644",
+        "oid": "f4311bf427fb678ed62d5546a1c0d2111833c013"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/KeyboardLayout/NumberPad.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "c31778fdbc6ee819ea0b3751b8d2291c30738346"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/KeyboardLayout/NumberPadView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "1a2c9d263e6ad906365eeca5c247795355b1f3e3"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Sources/NumberPadDemo/main.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "cebd40a0b7cc826ab8e31ce5ce76df3ae07dc863"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Tests/KeyboardLayoutTests/NumberPadTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "8471082d70247009ec7afcaf3abfb5eff34f5e48"
+      },
+      "before": null
+    },
+    "OpenKeyboard.xcodeproj/project.pbxproj": {
+      "after": {
+        "mode": "100644",
+        "oid": "6fdf12edd49f89df9baf73e1e0a46cae0134ba85"
       },
       "before": {
         "mode": "100644",
-        "oid": "713467946b61ca49f332a24e3bd0d96f28659849"
+        "oid": "bf22d266fbd8852b4a1e519f98bb2d9f6849648e"
+      }
+    },
+    "OpenKeyboardExtension/KeyboardView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "d7e4ec1e8f357c781055a1765cf8ef91d93c8d4c"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "f46cf5e4b2ca2dbd1cdd5aa8acbacca3049d6feb"
+      }
+    },
+    "OpenKeyboardExtension/KeyboardViewController.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "548e4b14161bda53d99c37877198d25949fad5d3"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "ef68835e3fa4382e34e8b23cf336f467feb40a9c"
+      }
+    },
+    "OpenKeyboardExtension/KeyboardViewModel.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "2656720a61486aaac0366c5caaf044d98ef03baa"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "5a9a7188abf9729afa74e8399f34a25d8939d847"
+      }
+    },
+    "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "5caca7de83f2bfbfbe088e4c9fb5978dd711b49e"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "ead83df63c8b3702a990199fde463f616a3aed0d"
+      }
+    },
+    "scripts/ios/test.sh": {
+      "after": {
+        "mode": "100755",
+        "oid": "c449f33e17f5581061a65180a1196f784a145e67"
+      },
+      "before": {
+        "mode": "100755",
+        "oid": "445e9462dc85db8bf1680f1f0e55c17e1301a3a2"
       }
     }
   },
   "live_impact": "none",
-  "proof": "Automated deterministic checks plus normal Simulator completion-panel screenshots and visible retry/back interactions verify the changed UI. Independent review checks this assessment against the bound diff.",
-  "rationale": "Only completion-panel button symbols, unfilled theme-aware outlines, and tap-target geometry change; the existing subtitle remains visible. Production callbacks, request construction, response parsing, model selection, and the pinned contracts are unchanged.",
-  "requirement_id": "R4",
+  "proof": "Package cell/geometry/repeat tests, the independent consumer build, app/extension builds, deterministic host adapter and UIKit repeat-control tests, queued and cancellation-ignoring analysis regressions, and normal Simulator proof through the actual extension in ordinary host fields. Independent review must inspect the complete bound diff and these evidence boundaries.",
+  "rationale": "The diff adds a source-only local number-pad package, UI geometry, exact insertion/delete intents, host trait adaptation, and focused regression coverage. Project wiring and the core test route consume only this repository-owned package with no external dependencies. Pad entry cancels existing automatic analysis and invalidates its late results; request construction, prompt contracts, responses/parsing, provider/model selection, gateway transport, and capability behavior are unchanged. Live model calls add no evidence for these local controls or cancellation boundaries.",
+  "requirement_id": "R9",
   "schema": 1
 }

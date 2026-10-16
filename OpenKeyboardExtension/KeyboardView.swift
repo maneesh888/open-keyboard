@@ -4,16 +4,21 @@
 //
 
 import SwiftUI
+import KeyboardLayout
+import UIKit
 
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
+    let onInputModeList: (UIView, UIEvent) -> Void
 
     var body: some View {
-        let showsToolbar = viewModel.panelMode != .actions
+        let numberPadInteractionID = viewModel.numberPadInteractionID
+        let showsToolbar = !viewModel.isNumberPadVisible
+            && viewModel.panelMode != .actions
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
-        let viewportHeight = KeyboardPanelLayout.keyboardHeight(
+        let viewportHeight = viewModel.isNumberPadVisible ? viewModel.numberPadHeight : KeyboardPanelLayout.keyboardHeight(
             for: viewModel.panelMode,
             actionPanelState: viewModel.actionPanelState
         )
@@ -39,7 +44,29 @@ struct KeyboardView: View {
 
             switch viewModel.panelMode {
             case .keyboard:
-                if let error = viewModel.actionError {
+                if viewModel.isNumberPadVisible {
+                    NumberPadView(
+                        configuration: viewModel.numberPadConfiguration,
+                        style: NumberPadStyle(
+                            key: OpenKeyboardTheme.Surface.keyBackground,
+                            control: OpenKeyboardTheme.Surface.modifierKeyBackground
+                        ),
+                        interactionID: numberPadInteractionID
+                    ) { intent in
+                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID)
+                    }
+                    .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    .padding(.vertical, 6)
+                    .onDisappear { viewModel.cancelNumberPadInteraction() }
+                    if viewModel.needsSystemKeyboardSwitch {
+                        HStack {
+                            SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
+                                .frame(width: 44, height: 44)
+                            Spacer()
+                        }
+                        .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                    }
+                } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
                         onBackToTyping: { viewModel.retryAfterActionError() },
@@ -1717,4 +1744,40 @@ private enum KeyboardColors {
     static let overlayBackground = OpenKeyboardTheme.Surface.overlayBackground
     static let keyBackground = OpenKeyboardTheme.Surface.keyBackground
     static let modifierKeyBackground = OpenKeyboardTheme.Surface.modifierKeyBackground
+}
+
+/// UIKit receives the full touch sequence so the standard globe supports both
+/// tapping to advance and holding to choose an installed keyboard.
+struct SystemKeyboardSwitchButton: UIViewRepresentable {
+    let onInputModeList: (UIView, UIEvent) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onInputModeList: onInputModeList)
+    }
+
+    func makeUIView(context: Context) -> UIButton {
+        let button = UIButton(type: .system)
+        button.setImage(UIImage(systemName: "globe", withConfiguration: UIImage.SymbolConfiguration(pointSize: 22)), for: .normal)
+        button.tintColor = .label
+        button.accessibilityLabel = "Next keyboard"
+        button.accessibilityIdentifier = "number_pad_next_keyboard"
+        button.addTarget(context.coordinator, action: #selector(Coordinator.handleInputModeList(_:event:)), for: .allTouchEvents)
+        return button
+    }
+
+    func updateUIView(_ button: UIButton, context: Context) {
+        context.coordinator.onInputModeList = onInputModeList
+    }
+
+    final class Coordinator: NSObject {
+        var onInputModeList: (UIView, UIEvent) -> Void
+
+        init(onInputModeList: @escaping (UIView, UIEvent) -> Void) {
+            self.onInputModeList = onInputModeList
+        }
+
+        @objc func handleInputModeList(_ sender: UIButton, event: UIEvent) {
+            onInputModeList(sender, event)
+        }
+    }
 }
