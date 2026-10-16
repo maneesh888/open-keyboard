@@ -169,7 +169,16 @@ struct KeyboardKeyPositions {
     }
 
     func controlRow(keyIDs: [String], keyHeight: CGFloat) -> KeyboardTouchRow {
-        precondition(keyIDs.count == 4, "The control row requires four keys.")
+        precondition(keyIDs.count == 4 || keyIDs.count == 5, "The control row requires four or five keys.")
+        if keyIDs.count == 5 {
+            // Keep mode/switch targets usable at compact widths and bounded on iPad.
+            let modifier = min(56, max(44, availableWidth * 0.13))
+            let returnKey = min(88, max(54, availableWidth * 0.2))
+            let space = max(0, availableWidth - modifier * 3 - returnKey - Self.horizontalSpacing * 4)
+            return row(keyIDs: keyIDs, widths: [modifier, modifier, modifier, space, returnKey],
+                       gaps: Array(repeating: Self.horizontalSpacing, count: 4),
+                       leadingInset: 0, keyHeight: keyHeight)
+        }
         return row(
             keyIDs: keyIDs,
             widths: [bottomControlWidth, bottomControlWidth, spaceWidth, returnWidth],

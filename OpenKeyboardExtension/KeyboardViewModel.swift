@@ -6,6 +6,7 @@
 import SwiftUI
 import UIKit
 import KeyboardLayout
+import OpenKeyboardEmoji
 
 private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
     private final class ObserverBox {
@@ -372,6 +373,28 @@ final class KeyboardViewModel: ObservableObject {
 
     @Published var isShiftEnabled = false
     @Published private(set) var inputMode: KeyboardInputMode = .letters
+    @Published private(set) var isShowingSmileys = false
+    @Published private(set) var smileyState = SmileyState(snapshot: EmojiCatalogue.standard.snapshot())
+    @Published private(set) var smileySearchInputMode: KeyboardInputMode = .letters
+    @Published private(set) var smileySearchShift = false
+    private var usesCustomSmileyContent = false
+    private let emojiHistory: EmojiHistoryStore
+    var isSearchingSmileys: Bool { isShowingSmileys && smileyState.isSearching }
+    var displayedInputMode: KeyboardInputMode { isSearchingSmileys ? smileySearchInputMode : inputMode }
+    var displayedShift: Bool { isSearchingSmileys ? smileySearchShift : isShiftEnabled }
+    var keyboardPresentationHeight: CGFloat {
+        isNumberPadVisible ? numberPadHeight : Self.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
+                                searchingSmileys: isSearchingSmileys)
+    }
+    static func presentationHeight(panelMode: KeyboardPanelMode, actionPanelState: KeyboardActionPanelState?,
+                                   searchingSmileys: Bool) -> CGFloat {
+        if panelMode == .keyboard && searchingSmileys {
+            let searchHeader = max(44, UIFont.preferredFont(forTextStyle: .callout).lineHeight + 12)
+            let caption = UIFont.preferredFont(forTextStyle: .caption1).lineHeight
+            return KeyboardPanelLayout.keyGridHeight + max(148, searchHeader + caption + 52 + 24)
+        }
+        return KeyboardPanelLayout.keyboardHeight(for: panelMode, actionPanelState: actionPanelState)
+    }
     var numberPadHeight: CGFloat {
         NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemKeyboardSwitch ? 44 : 0)
     }
@@ -555,8 +578,10 @@ final class KeyboardViewModel: ObservableObject {
         loadConfig: @escaping () -> AppConfig = AppConfig.load,
         loadGatewayConnectionError: @escaping () -> String? = AppConfig.sharedGatewayConnectionError,
         productionTestFullAccess: Bool = false,
-        automaticAnalysisDelayNanoseconds: UInt64 = 2_500_000_000
+        automaticAnalysisDelayNanoseconds: UInt64 = 2_500_000_000,
+        emojiHistory: EmojiHistoryStore? = nil
     ) {
+        self.emojiHistory = emojiHistory ?? EmojiHistoryStore(defaults: AppConfig.sharedDefaults() ?? .standard)
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
         self.hapticFeedback = hapticFeedback ?? KeyboardHapticFeedback()
@@ -649,6 +674,8 @@ final class KeyboardViewModel: ObservableObject {
         typingPredictions = []
         isShiftEnabled = false
         panelMode = .keyboard
+        _ = smileyState.send(.endSearch)
+        isShowingSmileys = false
         isNumberPadVisible = true
         numberPadInteractionID = UUID()
     }
@@ -666,22 +693,77 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insert(_ character: String) {
+        if isSearchingSmileys {
+            appendEmojiSearch(smileySearchShift ? character.uppercased() : character)
+            smileySearchShift = false
+            return
+        }
+        let output = isShiftEnabled ? character.uppercased() : character
+        insertLiteralText(output)
+        if isShiftEnabled { isShiftEnabled = false }
+    }
+
+    private func insertLiteralText(_ text: String) {
         hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
-        let output = isShiftEnabled ? character.uppercased() : character
-        textDocumentProxy.insertText(output)
+        textDocumentProxy.insertText(text)
         documentRevision += 1
-        composingBuffer.append(output)
+        composingBuffer.append(text)
         persistComposingBuffer()
         scheduleAutomaticAnalysisAfterTextChange()
+    }
 
-        if isShiftEnabled {
-            isShiftEnabled = false
+    private func appendEmojiSearch(_ text: String) {
+        hapticFeedback.keyTapped()
+        _ = smileyState.send(.setSearchQuery(smileyState.searchQuery + text))
+    }
+
+    func showSmileys() {
+        if isSearchingSmileys { _ = smileyState.send(.endSearch); return }
+        if !usesCustomSmileyContent {
+            smileyState.update(EmojiCatalogue.standard.snapshot(recentIDs: emojiHistory.recentIDs()))
+        }
+        hapticFeedback.keyTapped()
+        // Leave the typing mode and one-shot shift intact for an explicit return.
+        isShowingSmileys = true
+    }
+
+    func updateSmileys(_ snapshot: SmileySnapshot) {
+        usesCustomSmileyContent = true
+        smileyState.update(snapshot)
+    }
+
+    func handleSmileyAction(_ action: SmileyAction, advance: () -> Void) {
+        guard isShowingSmileys else { return }
+        if case .selectCategory("recent") = action, !usesCustomSmileyContent {
+            smileyState.update(EmojiCatalogue.standard.snapshot(recentIDs: emojiHistory.recentIDs()))
+        }
+        if case .beginSearch = action {
+            smileySearchInputMode = .letters
+            smileySearchShift = false
+        }
+        guard let intent = smileyState.send(action) else {
+            if case .selectCategory = action { hapticFeedback.keyTapped() }
+            return
+        }
+        switch intent {
+        case .insertText(let text, _, let id):
+            insertLiteralText(text)
+            if !usesCustomSmileyContent {
+                emojiHistory.record(id)
+                // Keep visible recents stable during selection; refresh when browsing again.
+            }
+        case .deleteBackward: deleteBackward()
+        case .returnToTyping:
+            hapticFeedback.keyTapped()
+            isShowingSmileys = false
+        case .nextSystemKeyboard: nextKeyboard(using: advance)
         }
     }
 
     func insertSpace() {
+        if isSearchingSmileys { appendEmojiSearch(" "); return }
         hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
@@ -693,6 +775,7 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func insertReturn() {
+        if isSearchingSmileys { _ = smileyState.send(.endSearch); return }
         hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
@@ -708,6 +791,11 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func deleteBackward() {
+        if isSearchingSmileys {
+            hapticFeedback.keyTapped()
+            _ = smileyState.send(.setSearchQuery(String(smileyState.searchQuery.dropLast())))
+            return
+        }
         hapticFeedback.keyTapped()
         invalidateGrammarSessionForDocumentEdit()
         clearKeyboardReplacementTracking()
@@ -721,17 +809,20 @@ final class KeyboardViewModel: ObservableObject {
     }
 
     func toggleShift() {
+        if isSearchingSmileys { smileySearchShift.toggle(); return }
         hapticFeedback.keyTapped()
         isShiftEnabled.toggle()
     }
 
     func toggleNumbers() {
+        if isSearchingSmileys { smileySearchInputMode = smileySearchInputMode.togglingNumbers; smileySearchShift = false; return }
         hapticFeedback.keyTapped()
         inputMode = inputMode.togglingNumbers
         isShiftEnabled = false
     }
 
     func toggleSymbols() {
+        if isSearchingSmileys { smileySearchInputMode = smileySearchInputMode.togglingSymbols; smileySearchShift = false; return }
         hapticFeedback.keyTapped()
         inputMode = inputMode.togglingSymbols
         isShiftEnabled = false
@@ -3429,3 +3520,6 @@ enum KeyboardAutomaticAnalysisPolicy {
             && trimmed.split(whereSeparator: \.isWhitespace).count >= 2
     }
 }
+
+/// Small host configuration, intentionally outside the reusable package. Consumers may
+/// replace it with their own localized sections; there is no catalogue or recents store.

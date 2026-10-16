@@ -65,6 +65,7 @@ final class KeyboardViewController: UIInputViewController {
             onNextKeyboard: { [weak self] in
                 self?.advanceToNextInputMode()
             },
+            showsSystemKeyboardSwitch: needsInputModeSwitchKey,
             onInputModeList: { [weak self] sender, event in
                 self?.viewModel?.cancelNumberPadInteraction()
                 self?.handleInputModeList(from: sender, with: event)
@@ -93,12 +94,18 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func bindKeyboardHeight(to viewModel: KeyboardViewModel) {
-        Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState, viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch)
-            .map { panelMode, actionPanelState, isNumberPadVisible, needsSystemSwitch in
-                isNumberPadVisible ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0) : KeyboardPanelLayout.keyboardHeight(
-                    for: panelMode,
-                    actionPanelState: actionPanelState
-                )
+        Publishers.CombineLatest(
+            Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState,
+                                      viewModel.$isShowingSmileys, viewModel.$smileyState),
+            Publishers.CombineLatest(viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch)
+        )
+            .map { presentation, numberPad in
+                let (panelMode, actionPanelState, showing, smileys) = presentation
+                let (isNumberPadVisible, needsSystemSwitch) = numberPad
+                return isNumberPadVisible
+                    ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0)
+                    : KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
+                                                           searchingSmileys: showing && smileys.isSearching)
             }
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -115,6 +122,7 @@ final class KeyboardViewController: UIInputViewController {
     }
 
     private func refreshRuntimeState() {
+        hostingController?.rootView.showsSystemKeyboardSwitch = needsInputModeSwitchKey
         // Host document traits are unavailable during viewDidLoad. Read them only
         // after appearance or a host text/selection callback.
         viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
@@ -125,10 +133,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private var currentKeyboardHeight: CGFloat {
         guard let viewModel else { return KeyboardPanelLayout.preferredKeyboardHeight }
-        return viewModel.isNumberPadVisible ? viewModel.numberPadHeight : KeyboardPanelLayout.keyboardHeight(
-            for: viewModel.panelMode,
-            actionPanelState: viewModel.actionPanelState
-        )
+        return viewModel.keyboardPresentationHeight
     }
 
     private func ensureKeyboardHeightConstraint() {

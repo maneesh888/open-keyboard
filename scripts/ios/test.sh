@@ -626,6 +626,7 @@ case "$MODE" in
     require_swift
     swift test --package-path "$CORE_PACKAGE"
     swift test --package-path "$REPO_ROOT/KeyboardLayout"
+    swift build --package-path "$REPO_ROOT/KeyboardLayout/Examples/SmileyConsumer"
     echo -e "${GREEN}✓ Core tests complete${NC}"
     ;;
 

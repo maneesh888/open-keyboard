@@ -103,6 +103,39 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(proxy.text, "001,", "A stale hidden-pad action must be ignored")
     }
 
+    func testNumberPadEndsEmojiSearchAndRestoresTypingAfterFieldChange() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
+        model.toggleNumbers()
+        model.toggleSymbols()
+        model.showSmileys()
+        model.handleSmileyAction(.beginSearch, advance: {})
+        model.insert("fish")
+        XCTAssertTrue(model.isSearchingSmileys)
+        XCTAssertEqual(proxy.text, "")
+
+        proxy.keyboardType = .numberPad
+        proxy.documentIdentifier = UUID()
+        model.refreshNumberPadContext()
+        XCTAssertFalse(model.isShowingSmileys)
+        XCTAssertFalse(model.isSearchingSmileys)
+        XCTAssertEqual(model.keyboardPresentationHeight, model.numberPadHeight)
+        model.handleNumberPadIntent(.insertText("7"))
+        XCTAssertEqual(proxy.text, "7", "Numeric entry must reach the host, not the old emoji query")
+        model.handleNumberPadIntent(.deleteBackward)
+        XCTAssertEqual(proxy.text, "")
+
+        proxy.keyboardType = .default
+        proxy.documentIdentifier = UUID()
+        model.refreshNumberPadContext()
+        XCTAssertFalse(model.isNumberPadVisible)
+        XCTAssertFalse(model.isShowingSmileys)
+        XCTAssertEqual(model.inputMode, .symbols)
+        model.showSmileys()
+        XCTAssertTrue(model.isShowingSmileys)
+        XCTAssertFalse(model.isSearchingSmileys)
+    }
+
     func testNumberPadInsertionReplacesSelectionThroughTheHostProxy() {
         let proxy = FakeTextDocumentProxy(text: "a123b")
         proxy.selectedRangeForTest = 1..<4
@@ -329,6 +362,98 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         }
         XCTAssertEqual(advanceCount, 1)
         XCTAssertEqual(proxy.text, "aB 1#")
+    }
+
+    func testSmileysInsertLiteralUnicodeAtCursorAndReturnToPriorMode() {
+        let proxy = FakeTextDocumentProxy(text: "ab", cursorOffset: 1)
+        let feedback = RecordingKeyboardHapticFeedback()
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          hapticFeedback: feedback, loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: [
+            .init(id: "custom", label: "Custom", items: [.init(id: "item", text: "a👩🏽‍💻", label: "Custom smiley")])
+        ]))
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        viewModel.toggleShift()
+        viewModel.showSmileys()
+        let taps = feedback.tapCount
+        var switches = 0
+        viewModel.handleSmileyAction(.activateItem("item")) { switches += 1 }
+        XCTAssertEqual(proxy.text, "aa👩🏽‍💻b")
+        XCTAssertEqual(feedback.tapCount, taps + 1)
+        XCTAssertTrue(viewModel.isShowingSmileys)
+        XCTAssertTrue(viewModel.isShiftEnabled)
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        XCTAssertEqual(switches, 0)
+        viewModel.handleSmileyAction(.deleteBackward) { switches += 1 }
+        XCTAssertEqual(proxy.text, "aab", "Delete preserves the multi-scalar grapheme boundary")
+        viewModel.handleSmileyAction(.returnToTyping) { switches += 1 }
+        XCTAssertFalse(viewModel.isShowingSmileys)
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        XCTAssertEqual(switches, 0)
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.nextSystemKeyboard) { switches += 1 }
+        XCTAssertEqual(switches, 1)
+        XCTAssertEqual(proxy.text, "aab")
+    }
+
+    func testEmojiSearchEditsOnlyQueryAndPreservesOriginalTypingMode() {
+        let proxy = FakeTextDocumentProxy(text: "message")
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: [
+            .init(id: "people", label: "People", items: [
+                .init(id: "thumb", text: "👍", label: "Thumbs up", variants: [
+                    .init(id: "tone", text: "👍🏽", label: "Thumbs up: medium skin tone")])])
+        ]))
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.beginSearch) {}
+        XCTAssertEqual(viewModel.displayedInputMode, .letters)
+        viewModel.toggleShift()
+        viewModel.insert("thumbs")
+        viewModel.insertSpace()
+        viewModel.insert("upx")
+        viewModel.deleteBackward()
+        XCTAssertEqual(viewModel.smileyState.searchQuery, "THUMBS up")
+        XCTAssertEqual(proxy.text, "message")
+        viewModel.toggleNumbers()
+        viewModel.toggleSymbols()
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        viewModel.handleSmileyAction(.activateItem("tone")) {}
+        XCTAssertEqual(proxy.text, "message👍🏽")
+        viewModel.insertReturn()
+        XCTAssertFalse(viewModel.isSearchingSmileys)
+        XCTAssertEqual(proxy.text, "message👍🏽", "Done ends search without inserting a newline")
+        viewModel.handleSmileyAction(.returnToTyping) {}
+        XCTAssertEqual(viewModel.inputMode, .symbols)
+        viewModel.showSmileys()
+        viewModel.handleSmileyAction(.beginSearch) {}
+        viewModel.insert("no match")
+        viewModel.handleSmileyAction(.endSearch) {}
+        XCTAssertEqual(viewModel.smileyState.searchQuery, "")
+        XCTAssertEqual(proxy.text, "message👍🏽")
+    }
+
+    func testEmptySmileysAllowReturnAndSystemSwitchWithoutDocumentEdits() {
+        let proxy = FakeTextDocumentProxy(text: "hello")
+        let viewModel = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                          loadConfig: { Self.configuredGateway })
+        viewModel.updateSmileys(.init(sections: []))
+        viewModel.showSmileys()
+        var switches = 0
+        viewModel.handleSmileyAction(.activateItem("missing")) { switches += 1 }
+        viewModel.handleSmileyAction(.selectCategory("missing")) { switches += 1 }
+        XCTAssertEqual(proxy.text, "hello")
+        XCTAssertEqual(switches, 0)
+        viewModel.handleSmileyAction(.nextSystemKeyboard) { switches += 1 }
+        XCTAssertEqual(switches, 1)
+        viewModel.handleSmileyAction(.returnToTyping) { switches += 1 }
+        XCTAssertFalse(viewModel.isShowingSmileys)
+        XCTAssertEqual(viewModel.inputMode, .letters)
+        viewModel.handleSmileyAction(.deleteBackward) { switches += 1 }
+        XCTAssertEqual(proxy.text, "hello", "Stale actions from the hidden grid are ignored")
     }
 
     func testDeletingEmptyDocumentStillEmitsOneHaptic() {

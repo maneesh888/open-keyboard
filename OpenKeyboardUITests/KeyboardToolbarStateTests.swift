@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import KeyboardLayout
 
 final class KeyboardToolbarStateTests: XCTestCase {
     func testFullAccessRequiredStateBlocksActions() {
@@ -106,6 +108,128 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 216)
         XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 267)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
+    }
+
+    @MainActor
+    func testEmojiCatalogueRetainsHorizontalScrollableContent() async throws {
+        let items = (0..<90).map { SmileyItem(id: "emoji-\($0)", text: "👍", label: "Emoji \($0)",
+            variants: [.init(id: "tone-\($0)", text: "👍🏽", label: "Medium skin tone")]) }
+        var state = SmileyState(snapshot: .init(sections: [.init(id: "faces", label: "Faces", items: items)]))
+        let host = UIHostingController(rootView: SmileyKeyboardView(state: state) { _ in })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 375, height: 267))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 150_000_000)
+        host.view.layoutIfNeeded()
+        func scrollViews(_ view: UIView) -> [UIScrollView] {
+            (view as? UIScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews)
+        }
+        let scroll = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
+        XCTAssertGreaterThan(scroll.contentSize.width, scroll.bounds.width * 2)
+        scroll.setContentOffset(CGPoint(x: 300, y: 0), animated: false)
+        XCTAssertGreaterThan(scroll.contentOffset.x, 0)
+        let offset = scroll.contentOffset.x
+        // Showing and dismissing choices must preserve the actual scrolling grid,
+        // not replace it with a strip or recreate it at the beginning.
+        _ = state.send(.showVariants("emoji-21"))
+        host.rootView = SmileyKeyboardView(state: state) { _ in }
+        try await Task.sleep(nanoseconds: 150_000_000)
+        host.view.layoutIfNeeded()
+        XCTAssertTrue(scrollViews(host.view).contains { $0 === scroll })
+        XCTAssertGreaterThan(scroll.contentSize.width, scroll.bounds.width * 2)
+        XCTAssertEqual(scroll.contentOffset.x, offset, accuracy: 1)
+        _ = state.send(.dismissVariants)
+        host.rootView = SmileyKeyboardView(state: state) { _ in }
+        try await Task.sleep(nanoseconds: 150_000_000)
+        host.view.layoutIfNeeded()
+        XCTAssertTrue(scrollViews(host.view).contains { $0 === scroll })
+        XCTAssertEqual(scroll.contentOffset.x, offset, accuracy: 1)
+    }
+
+    @MainActor
+    func testEmojiScrollingAndCategoryTapsStaySynchronized() async throws {
+        // SwiftUI scroll commands need an active scene. Keep the main UI thread
+        // available while XCTest activates its runner (quiescence may time out).
+        let runnerID = try XCTUnwrap(Bundle.main.bundleIdentifier)
+        await Task.detached { XCUIApplication(bundleIdentifier: runnerID).activate() }.value
+        XCTAssertEqual(UIApplication.shared.applicationState, .active)
+        let sections = ["faces", "food", "animals"].map { category in
+            SmileySection(id: category, label: category, items: (0..<(category == "food" ? 90 : 6)).map {
+                SmileyItem(id: "\(category)-\($0)", text: "🙂", label: "\(category) \($0)")
+            })
+        }
+        let model = SmileyBrowserTestModel(state: .init(snapshot: .init(sections: sections)))
+        let host = UIHostingController(rootView: SmileyBrowserTestView(model: model))
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 375, height: 267)
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; window.rootViewController = nil }
+        host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 150_000_000)
+        func scrollViews(_ view: UIView) -> [UIScrollView] {
+            (view as? UIScrollView).map { [$0] } ?? view.subviews.flatMap(scrollViews)
+        }
+        let scroll = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
+        XCTAssertGreaterThan(scroll.contentSize.width, 1500)
+        let lastCategoryOffset = scroll.contentSize.width - scroll.bounds.width
+        // Jump before visiting the wide middle section: estimated lazy-section
+        // offsets previously landed in the wrong category in the real catalogue.
+        model.send(.selectCategory("animals"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(scroll.contentOffset.x, lastCategoryOffset, accuracy: 1)
+        XCTAssertEqual(model.state.selectedCategoryID, "animals")
+        model.send(.selectCategory("faces"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(scroll.contentOffset.x, 0, accuracy: 1)
+        scroll.setContentOffset(CGPoint(x: 375, y: 0), animated: false)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(model.actions.contains(.browseCategory("food")))
+        XCTAssertEqual(model.state.selectedCategoryID, "food")
+        scroll.setContentOffset(CGPoint(x: lastCategoryOffset, y: 0), animated: false)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(model.actions.contains(.browseCategory("animals")))
+        XCTAssertEqual(model.state.selectedCategoryID, "animals")
+        scroll.setContentOffset(CGPoint(x: 375, y: 0), animated: false)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(model.state.selectedCategoryID, "food")
+        scroll.setContentOffset(.zero, animated: false)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(model.state.selectedCategoryID, "faces")
+        model.send(.selectCategory("animals"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        let lastCategory = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
+        XCTAssertEqual(lastCategory.contentOffset.x, lastCategoryOffset, accuracy: 1)
+        XCTAssertEqual(model.state.selectedCategoryID, "animals")
+        model.send(.selectCategory("faces"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        let firstCategory = try XCTUnwrap(scrollViews(host.view).max { $0.contentSize.width < $1.contentSize.width })
+        XCTAssertEqual(firstCategory.contentOffset.x, 0, accuracy: 1)
+        XCTAssertEqual(model.state.selectedCategoryID, "faces")
+        firstCategory.setContentOffset(CGPoint(x: 80, y: 0), animated: false)
+        try await Task.sleep(nanoseconds: 150_000_000)
+        model.send(.selectCategory("faces"))
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertEqual(firstCategory.contentOffset.x, 0, accuracy: 1, "Retapping the active category returns to its beginning")
+
+    }
+
+    func testSeparateSmileyAndSystemSwitchTargetsFitCompactAndDockedWidths() {
+        for width: CGFloat in [280, 308, 381, 808, 1180] {
+            let row = KeyboardKeyPositions(availableWidth: width).controlRow(
+                keyIDs: ["numbers", "emoji", "next", "space", "return"], keyHeight: 54)
+            XCTAssertEqual(row.keys.count, 5)
+            XCTAssertEqual(row.keys.last!.visualFrame.maxX, width, accuracy: 0.001)
+            for key in row.keys {
+                XCTAssertGreaterThanOrEqual(key.visualFrame.width, 44)
+                XCTAssertEqual(row.keyID(at: CGPoint(x: key.touchFrame.midX, y: 27)), key.id)
+            }
+        }
     }
 
     func testKeyboardVisualMeasurementsRemainAtReferenceGeometry() throws {
@@ -353,5 +477,23 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertFalse(state.showsBrandMark)
         XCTAssertFalse(state.showsIssueCount)
         XCTAssertEqual(state.issueCount, 0)
+    }
+}
+
+// Match the production @Published state path, including scroll feedback into the reducer.
+private final class SmileyBrowserTestModel: ObservableObject {
+    @Published var state: SmileyState
+    var actions: [SmileyAction] = []
+    init(state: SmileyState) { self.state = state }
+    func send(_ action: SmileyAction) {
+        actions.append(action)
+        _ = state.send(action)
+    }
+}
+
+private struct SmileyBrowserTestView: View {
+    @ObservedObject var model: SmileyBrowserTestModel
+    var body: some View {
+        SmileyKeyboardView(state: model.state, onAction: model.send)
     }
 }

@@ -10,18 +10,16 @@ import UIKit
 struct KeyboardView: View {
     @ObservedObject var viewModel: KeyboardViewModel
     let onNextKeyboard: () -> Void
-    let onInputModeList: (UIView, UIEvent) -> Void
+    var showsSystemKeyboardSwitch = true
+    var onInputModeList: (UIView, UIEvent) -> Void = { _, _ in }
 
     var body: some View {
         let numberPadInteractionID = viewModel.numberPadInteractionID
-        let showsToolbar = !viewModel.isNumberPadVisible
+        let showsToolbar = !viewModel.isNumberPadVisible && !(viewModel.panelMode == .keyboard && viewModel.isShowingSmileys)
             && viewModel.panelMode != .actions
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
-        let viewportHeight = viewModel.isNumberPadVisible ? viewModel.numberPadHeight : KeyboardPanelLayout.keyboardHeight(
-            for: viewModel.panelMode,
-            actionPanelState: viewModel.actionPanelState
-        )
+        let viewportHeight = viewModel.keyboardPresentationHeight
         let contentHeight = showsToolbar
             ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
             : viewportHeight
@@ -163,10 +161,39 @@ struct KeyboardView: View {
         }
     }
 
+    @ViewBuilder
     private var keyGrid: some View {
+        if viewModel.isShowingSmileys {
+            VStack(spacing: 4) {
+                SmileyKeyboardView(
+                    state: viewModel.smileyState,
+                    showsSystemKeyboardSwitch: showsSystemKeyboardSwitch,
+                    style: .init(controlBackground: KeyboardColors.modifierKeyBackground),
+                    labels: .init(back: smileyBackLabel, backAccessibility: smileyBackLabel + ", back to typing")
+                ) { action in
+                    viewModel.handleSmileyAction(action, advance: onNextKeyboard)
+                }
+                .frame(maxHeight: .infinity)
+                if viewModel.isSearchingSmileys { typingGrid }
+            }
+            .padding(6)
+        } else {
+            typingGrid
+        }
+    }
+
+    private var smileyBackLabel: String {
+        switch viewModel.inputMode {
+        case .letters: return "ABC"
+        case .numbers: return "123"
+        case .symbols: return "#+="
+        }
+    }
+
+    private var typingGrid: some View {
         GeometryReader { geometry in
             let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
-            let inputMode = viewModel.inputMode
+            let inputMode = viewModel.displayedInputMode
 
             VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
                 keyRow(
@@ -203,7 +230,7 @@ struct KeyboardView: View {
                                 label: inputMode.leadingBottomKeyLabel,
                                 role: .modifier,
                                 target: target,
-                                isAccent: viewModel.isShiftEnabled
+                                isAccent: viewModel.displayedShift
                             ) {
                                 if inputMode == .letters {
                                     viewModel.toggleShift()
@@ -217,7 +244,7 @@ struct KeyboardView: View {
                             }
                         } else {
                             KeyButton(
-                                label: viewModel.isShiftEnabled ? target.id.uppercased() : target.id,
+                                label: viewModel.displayedShift ? target.id.uppercased() : target.id,
                                 role: .letter,
                                 target: target
                             ) {
@@ -230,7 +257,9 @@ struct KeyboardView: View {
                 .accessibilityIdentifier("keyboard_row_bottom_letters")
 
                 let controlLayout = positions.controlRow(
-                    keyIDs: ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
+                    keyIDs: showsSystemKeyboardSwitch
+                        ? ["keyboard_numbers", "keyboard_emoji", "keyboard_next", "keyboard_space", "keyboard_return"]
+                        : ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
                     keyHeight: KeyboardPanelLayout.controlKeyHeight
                 )
                 HStack(spacing: 0) {
@@ -243,16 +272,21 @@ struct KeyboardView: View {
                             .accessibilityIdentifier("keyboard_key_numbers")
                         case "keyboard_emoji":
                             KeyButton(label: "Emoji", systemImage: "face.smiling", role: .modifier, target: target) {
-                                viewModel.nextKeyboard(using: onNextKeyboard)
+                                viewModel.showSmileys()
                             }
                             .accessibilityIdentifier("keyboard_key_emoji")
+                        case "keyboard_next":
+                            KeyButton(label: "Next keyboard", systemImage: "globe", role: .modifier, target: target) {
+                                viewModel.nextKeyboard(using: onNextKeyboard)
+                            }
+                            .accessibilityIdentifier("keyboard_key_next")
                         case "keyboard_space":
                             KeyButton(label: "space", role: .space, target: target) {
                                 viewModel.insertSpace()
                             }
                             .accessibilityIdentifier("keyboard_key_space")
                         default:
-                            KeyButton(label: "return", role: .returnKey, target: target) {
+                            KeyButton(label: viewModel.isSearchingSmileys ? "done" : "return", role: .returnKey, target: target) {
                                 viewModel.insertReturn()
                             }
                             .accessibilityIdentifier("keyboard_key_return")
@@ -271,7 +305,7 @@ struct KeyboardView: View {
         HStack(spacing: 0) {
             ForEach(layout.keys) { target in
                 KeyButton(
-                    label: viewModel.isShiftEnabled ? target.id.uppercased() : target.id,
+                    label: viewModel.displayedShift ? target.id.uppercased() : target.id,
                     role: .letter,
                     target: target
                 ) {
