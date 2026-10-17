@@ -6,7 +6,7 @@
 import SwiftUI
 import UIKit
 import KeyboardLayout
-import OpenKeyboardEmoji
+import KeyboardEmoji
 
 private final class KeyboardActiveProfileObserverRegistry: @unchecked Sendable {
     private final class ObserverBox {
@@ -65,73 +65,6 @@ private let keyboardActiveProfileDidChangeCallback: CFNotificationCallback = {
     }
     Task { @MainActor [weak viewModel] in
         viewModel?.handleActiveProfileDidChange()
-    }
-}
-
-enum KeyboardInputMode: Equatable {
-    case letters
-    case numbers
-    case symbols
-
-    var topRowKeys: [String] {
-        switch self {
-        case .letters:
-            return ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"]
-        case .numbers:
-            return ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
-        case .symbols:
-            return ["[", "]", "{", "}", "#", "%", "^", "*", "+", "="]
-        }
-    }
-
-    var middleRowKeys: [String] {
-        switch self {
-        case .letters:
-            return ["a", "s", "d", "f", "g", "h", "j", "k", "l"]
-        case .numbers:
-            return ["-", "/", ":", ";", "(", ")", "$", "&", "@"]
-        case .symbols:
-            return ["_", "\\", "|", "~", "<", ">", "$", "£", "€", "•"]
-        }
-    }
-
-    var bottomRowKeys: [String] {
-        switch self {
-        case .letters:
-            return ["z", "x", "c", "v", "b", "n", "m"]
-        case .numbers:
-            return [".", ",", "?", "!", "'", "\"", "_"]
-        case .symbols:
-            return [".", ",", "?", "!", "'"]
-        }
-    }
-
-    var leadingBottomKeyLabel: String {
-        switch self {
-        case .letters: return "⇧"
-        case .numbers: return "#+="
-        case .symbols: return "123"
-        }
-    }
-
-    var bottomControlKeyLabel: String {
-        self == .letters ? "123" : "ABC"
-    }
-
-    var usesMiddleRowInset: Bool {
-        self != .symbols
-    }
-
-    var togglingNumbers: KeyboardInputMode {
-        self == .letters ? .numbers : .letters
-    }
-
-    var togglingSymbols: KeyboardInputMode {
-        switch self {
-        case .letters: return .letters
-        case .numbers: return .symbols
-        case .symbols: return .numbers
-        }
     }
 }
 
@@ -371,12 +304,27 @@ final class KeyboardViewModel: ObservableObject {
     private let loadGatewayConnectionError: () -> String?
     private var activeProfileObserverToken: UnsafeMutableRawPointer?
 
-    @Published var isShiftEnabled = false
-    @Published private(set) var inputMode: KeyboardInputMode = .letters
+    @Published private(set) var typingState = KeyboardTypingState()
+    var isShiftEnabled: Bool {
+        get { typingState.isShiftEnabled }
+        set { typingState.isShiftEnabled = newValue }
+    }
+    private(set) var inputMode: KeyboardInputMode {
+        get { typingState.mode }
+        set { typingState.mode = newValue }
+    }
     @Published private(set) var isShowingSmileys = false
     @Published private(set) var smileyState = SmileyState(snapshot: EmojiCatalogue.standard.snapshot())
-    @Published private(set) var smileySearchInputMode: KeyboardInputMode = .letters
-    @Published private(set) var smileySearchShift = false
+    @Published private(set) var searchTypingState = KeyboardTypingState()
+    private(set) var smileySearchInputMode: KeyboardInputMode {
+        get { searchTypingState.mode }
+        set { searchTypingState.mode = newValue }
+    }
+    private(set) var smileySearchShift: Bool {
+        get { searchTypingState.isShiftEnabled }
+        set { searchTypingState.isShiftEnabled = newValue }
+    }
+    var displayedTypingState: KeyboardTypingState { isSearchingSmileys ? searchTypingState : typingState }
     private var usesCustomSmileyContent = false
     private let emojiHistory: EmojiHistoryStore
     var isSearchingSmileys: Bool { isShowingSmileys && smileyState.isSearching }
@@ -581,7 +529,7 @@ final class KeyboardViewModel: ObservableObject {
         automaticAnalysisDelayNanoseconds: UInt64 = 2_500_000_000,
         emojiHistory: EmojiHistoryStore? = nil
     ) {
-        self.emojiHistory = emojiHistory ?? EmojiHistoryStore(defaults: AppConfig.sharedDefaults() ?? .standard)
+        self.emojiHistory = emojiHistory ?? EmojiHistoryStore(defaults: AppConfig.sharedDefaults() ?? .standard, key: "openkeyboard.emoji.recent.v1")
         self.textDocumentProxy = textDocumentProxy
         self.aiService = aiService
         self.hapticFeedback = hapticFeedback ?? KeyboardHapticFeedback()
@@ -692,15 +640,26 @@ final class KeyboardViewModel: ObservableObject {
         refreshNumberPadContext()
     }
 
+    func handleTypingAction(_ action: KeyboardTypingAction, advance: () -> Void) {
+        switch action {
+        case .character(let text): insert(text)
+        case .space: insertSpace()
+        case .return: insertReturn()
+        case .deleteBackward: deleteBackward()
+        case .shift: toggleShift()
+        case .numbers: toggleNumbers()
+        case .symbols: toggleSymbols()
+        case .smileys: showSmileys()
+        case .nextKeyboard: nextKeyboard(using: advance)
+        }
+    }
+
     func insert(_ character: String) {
         if isSearchingSmileys {
-            appendEmojiSearch(smileySearchShift ? character.uppercased() : character)
-            smileySearchShift = false
-            return
+            if case .insertText(let text) = searchTypingState.send(.character(character)) { appendEmojiSearch(text) }
+        } else if case .insertText(let text) = typingState.send(.character(character)) {
+            insertLiteralText(text)
         }
-        let output = isShiftEnabled ? character.uppercased() : character
-        insertLiteralText(output)
-        if isShiftEnabled { isShiftEnabled = false }
     }
 
     private func insertLiteralText(_ text: String) {
@@ -808,24 +767,16 @@ final class KeyboardViewModel: ObservableObject {
         scheduleAutomaticAnalysisAfterTextChange()
     }
 
-    func toggleShift() {
-        if isSearchingSmileys { smileySearchShift.toggle(); return }
-        hapticFeedback.keyTapped()
-        isShiftEnabled.toggle()
-    }
+    func toggleShift() { updateTypingState(.shift) }
+    func toggleNumbers() { updateTypingState(.numbers) }
+    func toggleSymbols() { updateTypingState(.symbols) }
 
-    func toggleNumbers() {
-        if isSearchingSmileys { smileySearchInputMode = smileySearchInputMode.togglingNumbers; smileySearchShift = false; return }
-        hapticFeedback.keyTapped()
-        inputMode = inputMode.togglingNumbers
-        isShiftEnabled = false
-    }
-
-    func toggleSymbols() {
-        if isSearchingSmileys { smileySearchInputMode = smileySearchInputMode.togglingSymbols; smileySearchShift = false; return }
-        hapticFeedback.keyTapped()
-        inputMode = inputMode.togglingSymbols
-        isShiftEnabled = false
+    private func updateTypingState(_ action: KeyboardTypingAction) {
+        if isSearchingSmileys { _ = searchTypingState.send(action) }
+        else {
+            hapticFeedback.keyTapped()
+            _ = typingState.send(action)
+        }
     }
 
     func nextKeyboard(using advance: () -> Void) {

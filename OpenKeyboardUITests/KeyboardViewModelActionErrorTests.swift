@@ -309,6 +309,37 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertTrue(model.typingPredictions.isEmpty)
     }
 
+    func testPackageActionsRouteToHostDocumentAndKeepSearchPrivate() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: FailingKeyboardAIService(),
+                                      loadConfig: { Self.configuredGateway })
+        var switches = 0
+        func send(_ action: KeyboardTypingAction) {
+            model.handleTypingAction(action) { switches += 1 }
+        }
+        send(.shift)
+        send(.character("a"))
+        send(.space)
+        send(.character("b"))
+        send(.deleteBackward)
+        send(.return)
+        XCTAssertEqual(proxy.text, "A \n")
+        send(.numbers)
+        send(.symbols)
+        XCTAssertEqual(model.inputMode, .symbols)
+        send(.smileys)
+        model.handleSmileyAction(.beginSearch) {}
+        send(.character("cat"))
+        XCTAssertEqual(model.smileyState.searchQuery, "cat")
+        XCTAssertEqual(proxy.text, "A \n")
+        send(.return)
+        XCTAssertFalse(model.isSearchingSmileys)
+        model.handleSmileyAction(.returnToTyping) {}
+        XCTAssertEqual(model.inputMode, .symbols)
+        send(.nextKeyboard)
+        XCTAssertEqual(switches, 1)
+    }
+
     func testEveryTypingKeyEmitsOneHapticAndPreservesItsAction() {
         let proxy = FakeTextDocumentProxy(text: "")
         let feedback = RecordingKeyboardHapticFeedback()

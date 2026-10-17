@@ -20,50 +20,39 @@ struct KeyboardView: View {
             && viewModel.panelMode != .rewriteOptions
             && viewModel.panelMode != .grammarWholeVersionProposal
         let viewportHeight = viewModel.keyboardPresentationHeight
-        let contentHeight = showsToolbar
-            ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
-            : viewportHeight
-
-        VStack(spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0) {
-            if showsToolbar {
-                KeyboardAIToolbar(
-                    state: viewModel.toolbarState,
-                    typingPredictions: viewModel.typingPredictions,
-                    isPerformingAIAction: viewModel.isPerformingAIAction,
-                    actionsEnabled: viewModel.canOpenActionPanel,
-                    statusActionEnabled: viewModel.canOpenGrammarCorrection,
-                    onPrediction: { viewModel.applyTypingPrediction(id: $0) },
-                    onStatus: { viewModel.openGrammarCorrection() },
-                    onSparkle: { viewModel.showActionPanel() }
-                )
-                .frame(height: KeyboardPanelLayout.toolbarRenderedHeight)
-                .layoutPriority(1)
-            }
-
+        let layout = KeyboardSurfaceLayout(
+            contentHeight: showsToolbar
+                ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
+                    - KeyboardPanelLayout.toolbarRenderedHeight - KeyboardPanelLayout.toolbarSpacing
+                : viewportHeight,
+            toolbarHeight: showsToolbar ? KeyboardPanelLayout.toolbarRenderedHeight : 0,
+            spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0,
+            horizontalPadding: showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0,
+            topPadding: showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0,
+            bottomPadding: showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0
+        )
+        KeyboardSurface(layout: layout, style: packageStyle,
+                        showsReplacement: viewModel.panelMode != .keyboard || viewModel.actionError != nil) {
+            if viewModel.isNumberPadVisible { numberPadContent(interactionID: numberPadInteractionID) }
+            else { keyGrid }
+        } toolbar: {
+            KeyboardAIToolbar(
+                state: viewModel.toolbarState,
+                typingPredictions: viewModel.typingPredictions,
+                isPerformingAIAction: viewModel.isPerformingAIAction,
+                actionsEnabled: viewModel.canOpenActionPanel,
+                statusActionEnabled: viewModel.canOpenGrammarCorrection,
+                onPrediction: { viewModel.applyTypingPrediction(id: $0) },
+                onStatus: { viewModel.openGrammarCorrection() },
+                onSparkle: { viewModel.showActionPanel() }
+            )
+            .frame(height: KeyboardPanelLayout.toolbarRenderedHeight)
+            .layoutPriority(1)
+        } replacement: {
             switch viewModel.panelMode {
             case .keyboard:
                 if viewModel.isNumberPadVisible {
-                    NumberPadView(
-                        configuration: viewModel.numberPadConfiguration,
-                        style: NumberPadStyle(
-                            key: OpenKeyboardTheme.Surface.keyBackground,
-                            control: OpenKeyboardTheme.Surface.modifierKeyBackground
-                        ),
-                        interactionID: numberPadInteractionID
-                    ) { intent in
-                        viewModel.handleNumberPadIntent(intent, interactionID: numberPadInteractionID)
-                    }
-                    .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
-                    .padding(.vertical, 6)
-                    .onDisappear { viewModel.cancelNumberPadInteraction() }
-                    if viewModel.needsSystemKeyboardSwitch {
-                        HStack {
-                            SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
-                                .frame(width: 44, height: 44)
-                            Spacer()
-                        }
-                        .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
-                    }
+                    numberPadContent(interactionID: numberPadInteractionID)
                 } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
@@ -147,13 +136,7 @@ struct KeyboardView: View {
                     onBackToKeyboard: { viewModel.showKeyboardPanel() }
                 )
             }
-
         }
-        .frame(maxWidth: .infinity, minHeight: contentHeight, maxHeight: contentHeight, alignment: .top)
-        .padding(.horizontal, showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0)
-        .padding(.top, showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0)
-        .padding(.bottom, showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0)
-        .background(KeyboardColors.keyboardBackground)
         .onAppear {
             viewModel.reloadConfig()
             viewModel.refreshSeededSuggestionStateForUITests()
@@ -161,159 +144,46 @@ struct KeyboardView: View {
         }
     }
 
-    @ViewBuilder
     private var keyGrid: some View {
-        if viewModel.isShowingSmileys {
-            VStack(spacing: 4) {
-                SmileyKeyboardView(
-                    state: viewModel.smileyState,
-                    showsSystemKeyboardSwitch: showsSystemKeyboardSwitch,
-                    style: .init(controlBackground: KeyboardColors.modifierKeyBackground),
-                    labels: .init(back: smileyBackLabel, backAccessibility: smileyBackLabel + ", back to typing")
-                ) { action in
-                    viewModel.handleSmileyAction(action, advance: onNextKeyboard)
-                }
-                .frame(maxHeight: .infinity)
-                if viewModel.isSearchingSmileys { typingGrid }
-            }
-            .padding(6)
-        } else {
-            typingGrid
-        }
+        KeyboardContentView(typing: viewModel.typingState, smileys: viewModel.smileyState,
+                            showsSmileys: viewModel.isShowingSmileys,
+                            searchTyping: viewModel.searchTypingState,
+                            interactionID: viewModel.numberPadInteractionID,
+                            showsSystemKeyboardSwitch: showsSystemKeyboardSwitch, style: packageStyle,
+                            onTyping: { viewModel.handleTypingAction($0, advance: onNextKeyboard) },
+                            onSmiley: { viewModel.handleSmileyAction($0, advance: onNextKeyboard) })
     }
 
-    private var smileyBackLabel: String {
-        switch viewModel.inputMode {
-        case .letters: return "ABC"
-        case .numbers: return "123"
-        case .symbols: return "#+="
-        }
-    }
-
-    private var typingGrid: some View {
-        GeometryReader { geometry in
-            let positions = KeyboardKeyPositions(availableWidth: geometry.size.width)
-            let inputMode = viewModel.displayedInputMode
-
-            VStack(spacing: KeyboardPanelLayout.keyRowSpacing) {
-                keyRow(
-                    positions.topRow(
-                        keyIDs: inputMode.topRowKeys,
-                        keyHeight: KeyboardPanelLayout.letterKeyHeight
-                    )
-                )
-                .accessibilityIdentifier("keyboard_row_qwerty")
-
-                keyRow(
-                    positions.middleRow(
-                        keyIDs: inputMode.middleRowKeys,
-                        usesInset: inputMode.usesMiddleRowInset,
-                        keyHeight: KeyboardPanelLayout.letterKeyHeight
-                    )
-                )
-                .accessibilityIdentifier("keyboard_row_home")
-
-                let bottomKeyWidth = inputMode == .symbols
-                    ? positions.symbolBottomKeyWidth
-                    : positions.letterWidth
-                let bottomLetterLayout = positions.bottomLetterRow(
-                    leadingKeyID: "keyboard_shift",
-                    letterKeyIDs: inputMode.bottomRowKeys,
-                    trailingKeyID: "keyboard_delete",
-                    keyWidth: bottomKeyWidth,
-                    keyHeight: KeyboardPanelLayout.letterKeyHeight
-                )
-                HStack(spacing: 0) {
-                    ForEach(bottomLetterLayout.keys) { target in
-                        if target.id == "keyboard_shift" {
-                            KeyButton(
-                                label: inputMode.leadingBottomKeyLabel,
-                                role: .modifier,
-                                target: target,
-                                isAccent: viewModel.displayedShift
-                            ) {
-                                if inputMode == .letters {
-                                    viewModel.toggleShift()
-                                } else {
-                                    viewModel.toggleSymbols()
-                                }
-                            }
-                        } else if target.id == "keyboard_delete" {
-                            KeyButton(label: "⌫", role: .modifier, target: target) {
-                                viewModel.deleteBackward()
-                            }
-                        } else {
-                            KeyButton(
-                                label: viewModel.displayedShift ? target.id.uppercased() : target.id,
-                                role: .letter,
-                                target: target
-                            ) {
-                                viewModel.insert(target.id)
-                            }
-                        }
-                    }
+    private func numberPadContent(interactionID: UUID) -> some View {
+        VStack(spacing: 0) {
+            KeyboardContentView(typing: viewModel.typingState, numberPad: viewModel.numberPadConfiguration,
+                                interactionID: interactionID, style: packageStyle,
+                                onTyping: { _ in }, onNumberPad: {
+                                    viewModel.handleNumberPadIntent($0, interactionID: interactionID)
+                                })
+                .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
+                .padding(.vertical, 6)
+                .onDisappear { viewModel.cancelNumberPadInteraction() }
+            if viewModel.needsSystemKeyboardSwitch {
+                HStack {
+                    SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
+                        .frame(width: 44, height: 44)
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity)
-                .accessibilityIdentifier("keyboard_row_bottom_letters")
-
-                let controlLayout = positions.controlRow(
-                    keyIDs: showsSystemKeyboardSwitch
-                        ? ["keyboard_numbers", "keyboard_emoji", "keyboard_next", "keyboard_space", "keyboard_return"]
-                        : ["keyboard_numbers", "keyboard_emoji", "keyboard_space", "keyboard_return"],
-                    keyHeight: KeyboardPanelLayout.controlKeyHeight
-                )
-                HStack(spacing: 0) {
-                    ForEach(controlLayout.keys) { target in
-                        switch target.id {
-                        case "keyboard_numbers":
-                            KeyButton(label: inputMode.bottomControlKeyLabel, role: .modifier, target: target) {
-                                viewModel.toggleNumbers()
-                            }
-                            .accessibilityIdentifier("keyboard_key_numbers")
-                        case "keyboard_emoji":
-                            KeyButton(label: "Emoji", systemImage: "face.smiling", role: .modifier, target: target) {
-                                viewModel.showSmileys()
-                            }
-                            .accessibilityIdentifier("keyboard_key_emoji")
-                        case "keyboard_next":
-                            KeyButton(label: "Next keyboard", systemImage: "globe", role: .modifier, target: target) {
-                                viewModel.nextKeyboard(using: onNextKeyboard)
-                            }
-                            .accessibilityIdentifier("keyboard_key_next")
-                        case "keyboard_space":
-                            KeyButton(label: "space", role: .space, target: target) {
-                                viewModel.insertSpace()
-                            }
-                            .accessibilityIdentifier("keyboard_key_space")
-                        default:
-                            KeyButton(label: viewModel.isSearchingSmileys ? "done" : "return", role: .returnKey, target: target) {
-                                viewModel.insertReturn()
-                            }
-                            .accessibilityIdentifier("keyboard_key_return")
-                        }
-                    }
-                }
-                .accessibilityIdentifier("keyboard_row_controls")
-            }
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.bottom, KeyboardPanelLayout.keyShadowAllowance)
-        .frame(height: KeyboardPanelLayout.keyGridHeight, alignment: .top)
-    }
-
-    private func keyRow(_ layout: KeyboardTouchRow) -> some View {
-        HStack(spacing: 0) {
-            ForEach(layout.keys) { target in
-                KeyButton(
-                    label: viewModel.displayedShift ? target.id.uppercased() : target.id,
-                    role: .letter,
-                    target: target
-                ) {
-                    viewModel.insert(target.id)
-                }
+                .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
             }
         }
     }
+
+    private var packageStyle: KeyboardStyle {
+        KeyboardStyle(key: OpenKeyboardTheme.Surface.keyBackground,
+                      control: OpenKeyboardTheme.Surface.modifierKeyBackground,
+                      foreground: OpenKeyboardTheme.Text.primary,
+                      accent: OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32),
+                      shadow: OpenKeyboardTheme.Shadow.key,
+                      background: OpenKeyboardTheme.Surface.keyboardBackground)
+    }
+
 }
 
 private struct KeyboardAIToolbar: View {
@@ -1693,82 +1563,6 @@ private struct CorrectionCompletePanel: View {
         .accessibilityLabel(title)
     }
 
-}
-
-private enum KeyRole {
-    case letter
-    case modifier
-    case space
-    case returnKey
-}
-
-private struct KeyButton: View {
-    let label: String
-    var systemImage: String?
-    var role: KeyRole = .letter
-    let target: KeyboardTouchKey
-    var isAccent = false
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack(alignment: .topLeading) {
-                Rectangle()
-                    .fill(Color.primary.opacity(0.001))
-
-                Group {
-                    if let systemImage {
-                        Image(systemName: systemImage)
-                            .font(.system(size: 22, weight: .regular))
-                            .symbolRenderingMode(.monochrome)
-                    } else {
-                        Text(label)
-                            .font(font)
-                    }
-                }
-                .foregroundColor(.primary)
-                .frame(
-                    width: target.visualFrame.width,
-                    height: KeyboardPanelLayout.keyCapHeight
-                )
-                .background(backgroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .shadow(color: OpenKeyboardTheme.Shadow.key, radius: 0, x: 0, y: 1)
-                .offset(x: target.leadingTouchInset)
-            }
-            .frame(
-                width: target.touchFrame.width,
-                height: target.touchFrame.height,
-                alignment: .topLeading
-            )
-        }
-        .buttonStyle(.plain)
-        .frame(
-            width: target.touchFrame.width,
-            height: target.touchFrame.height,
-            alignment: .topLeading
-        )
-        .contentShape(Rectangle())
-        .accessibilityLabel(label)
-    }
-
-    private var font: Font {
-        switch role {
-        case .letter: return .system(size: 25, weight: .regular)
-        case .space: return .system(size: 16, weight: .regular)
-        case .returnKey, .modifier: return .system(size: label.count > 2 ? 16 : 22, weight: .regular)
-        }
-    }
-
-    private var backgroundColor: Color {
-        if isAccent { return OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32) }
-        switch role {
-        case .letter, .space:
-            return KeyboardColors.keyBackground
-        case .modifier, .returnKey:
-            return KeyboardColors.modifierKeyBackground
-        }
-    }
 }
 
 private enum KeyboardColors {

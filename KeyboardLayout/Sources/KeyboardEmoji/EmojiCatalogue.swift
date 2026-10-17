@@ -1,7 +1,7 @@
 import Foundation
 import KeyboardLayout
 
-/// OpenKeyboard's local content adapter. The renderer remains catalogue-independent.
+/// Optional bundled Unicode content adapter. The renderer remains catalogue-independent.
 public struct EmojiCatalogue: Sendable {
     private struct Entry: Decodable, Sendable {
         let id: String
@@ -71,10 +71,10 @@ public final class EmojiHistoryStore {
     private let defaults: UserDefaults
     private let now: () -> Date
     private let validIDs: Set<String>
-    private let key = "openkeyboard.emoji.recent.v1"
+    private let key: String
     public init(defaults: UserDefaults, validIDs: Set<String> = EmojiCatalogue.standard.validIDs,
-                now: @escaping () -> Date = Date.init) {
-        self.defaults = defaults; self.validIDs = validIDs; self.now = now
+                key: String = "keyboard.emoji.recent.v1", now: @escaping () -> Date = Date.init) {
+        self.key = key; self.defaults = defaults; self.validIDs = validIDs; self.now = now
     }
     public func recentIDs() -> [String] {
         let records = retainedRecords()
