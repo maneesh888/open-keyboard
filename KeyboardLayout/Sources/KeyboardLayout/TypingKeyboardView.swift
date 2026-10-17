@@ -167,7 +167,7 @@ private struct KeyButton: View {
                 Group {
                     if let systemImage {
                         Image(systemName: systemImage)
-                            .font(.system(size: 22, weight: .regular))
+                            .font(style.symbolFont)
                             .symbolRenderingMode(.monochrome)
                     } else {
                         Text(label)
@@ -206,7 +206,7 @@ private struct KeyButton: View {
         switch role {
         case .letter: return style.letterFont
         case .space: return style.controlFont
-        case .returnKey, .modifier: return label.count > 2 ? style.controlFont : .system(size: 22)
+        case .returnKey, .modifier: return label.count > 2 ? style.controlFont : style.symbolFont
         }
     }
 

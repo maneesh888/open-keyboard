@@ -181,7 +181,8 @@ struct KeyboardView: View {
                       foreground: OpenKeyboardTheme.Text.primary,
                       accent: OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32),
                       shadow: OpenKeyboardTheme.Shadow.key,
-                      background: OpenKeyboardTheme.Surface.keyboardBackground)
+                      background: OpenKeyboardTheme.Surface.keyboardBackground,
+                      smileyStyle: .init(controlBackground: OpenKeyboardTheme.Surface.modifierKeyBackground))
     }
 
 }

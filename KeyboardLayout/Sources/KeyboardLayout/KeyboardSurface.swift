@@ -31,15 +31,24 @@ public struct KeyboardStyle {
     public var cornerRadius: CGFloat
     public var letterFont: Font
     public var controlFont: Font
+    public var symbolFont: Font
+    /// Override the browser palette independently; otherwise derive it from the keyboard palette.
+    public var smileyStyle: SmileyKeyboardStyle?
+    var resolvedSmileyStyle: SmileyKeyboardStyle {
+        smileyStyle ?? .init(keyBackground: key, controlBackground: control, accent: foreground,
+                            foreground: foreground, secondaryForeground: foreground.opacity(0.65))
+    }
     public init(key: Color = .primary.opacity(0.08), control: Color = .gray.opacity(0.25),
                 foreground: Color = .primary, accent: Color = .accentColor.opacity(0.32),
                 shadow: Color = .black.opacity(0.25), background: Color = .clear,
                 border: Color = .clear, borderWidth: CGFloat = 0, cornerRadius: CGFloat = 8,
-                letterFont: Font = .system(size: 25), controlFont: Font = .system(size: 16)) {
+                letterFont: Font = .system(size: 25), controlFont: Font = .system(size: 16),
+                symbolFont: Font = .system(size: 22), smileyStyle: SmileyKeyboardStyle? = nil) {
         self.key = key; self.control = control; self.foreground = foreground
         self.accent = accent; self.shadow = shadow; self.background = background
         self.border = border; self.borderWidth = max(0, borderWidth); self.cornerRadius = max(0, cornerRadius)
         self.letterFont = letterFont; self.controlFont = controlFont
+        self.symbolFont = symbolFont; self.smileyStyle = smileyStyle
     }
 }
 

@@ -35,7 +35,7 @@
     "KeyboardLayout/README.md": {
       "after": {
         "mode": "100644",
-        "oid": "1d88223fea22c49171fd6a87e6ba1231094267a7"
+        "oid": "8beac2be81928cf2e26e00d0dcb61c67a4e13db1"
       },
       "before": {
         "mode": "100644",
@@ -73,14 +73,14 @@
     "KeyboardLayout/Sources/KeyboardLayout/KeyboardContentView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "15e6ce708e6878ac9d913be309fe077f1602736b"
+        "oid": "586ead6460200f58234a5aab04de9e10ee4eff08"
       },
       "before": null
     },
     "KeyboardLayout/Sources/KeyboardLayout/KeyboardSurface.swift": {
       "after": {
         "mode": "100644",
-        "oid": "0cf0eaba89e58037f9d4bd22e2e458fda39a6b83"
+        "oid": "78e27a606dee528132c02805534bae44506bc8b7"
       },
       "before": null
     },
@@ -98,10 +98,20 @@
       },
       "before": null
     },
+    "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "4834e86a3ce99c97ecbaadf1d9034dd46a4528d5"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "78e82322419fb56a6536352c750579a4fcb8c912"
+      }
+    },
     "KeyboardLayout/Sources/KeyboardLayout/TypingKeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "b411a0360a5ff1f4506a8874cb2de786f386416c"
+        "oid": "1d8968f63c07fc744afbc718799a2e5f51ee4569"
       },
       "before": null
     },
@@ -137,6 +147,13 @@
       "after": {
         "mode": "100644",
         "oid": "b6e658d8573fb5b47f2c06a8737159c5a43c2d7d"
+      },
+      "before": null
+    },
+    "KeyboardLayout/Tests/KeyboardLayoutTests/KeyboardAppearanceTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "d37329ad45d2f033b68caa9d5aa932cfc7a02c88"
       },
       "before": null
     },
@@ -187,7 +204,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "4e13b300db01c4c412dcf69db2038d4da0b8e25b"
+        "oid": "0ec16e5fb967624c19ae5be726cff74ee3f655a4"
       },
       "before": {
         "mode": "100644",

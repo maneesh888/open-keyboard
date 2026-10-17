@@ -52,7 +52,10 @@ available width; the number pad is centered and capped at 480 points. Widths bel
 keyboard viewport still remain bounded, but cannot provide normal touch-target widths. Consumers
 should provide at least 288 points for the standard ten-key layout. Row heights have a 44-point
 minimum. `KeyboardMetrics` configures row/cap heights and horizontal/vertical spacing; `KeyboardStyle`
-configures key/control/foreground/accent colors, fonts, background, shadow, radius, and border.
+configures key/control/foreground colors, the shift-highlight fill (`accent`), letter/control/symbol
+fonts, background, shadow, radius, and border. Emoji controls inherit the foreground and key/control
+palette. Supply `smileyStyle` for separate emoji key, selected-category, primary, and secondary
+colors. Injected host views retain their own styling responsibilities.
 
 `KeyboardSurfaceLayout.preferredHeight` is the sum of content, visible slots, their spacing, and
 padding. For an extension, the host applies this value to its `UIInputViewController` height

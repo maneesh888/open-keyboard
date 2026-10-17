@@ -37,7 +37,7 @@ public struct KeyboardContentView: View {
         } else if showsSmileys {
             VStack(spacing: 4) {
                 SmileyKeyboardView(state: smileys, showsSystemKeyboardSwitch: showsSystemKeyboardSwitch,
-                                   style: .init(controlBackground: style.control),
+                                   style: style.resolvedSmileyStyle,
                                    labels: .init(back: backLabel, backAccessibility: backLabel + ", back to typing"),
                                    onAction: onSmiley)
                     .frame(maxHeight: .infinity)
