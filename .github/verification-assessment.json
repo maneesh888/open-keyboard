@@ -204,7 +204,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "3c291454cd2cb80f6316ef883adfb1abd25f57c0"
+        "oid": "2beef0674ea901d8bff3ed3ae8671408e41d0d51"
       },
       "before": {
         "mode": "100644",
@@ -214,7 +214,7 @@
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "6ef658cf9db2a4f4fc195b909605c40b33f07355"
+        "oid": "69de4052e187e102f1f6815c9705ff3ffff4fda3"
       },
       "before": {
         "mode": "100644",
@@ -224,7 +224,7 @@
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "e39bc1c8fcb9685edb462f3510287a65ec00f1eb"
+        "oid": "b01e70bd4e43692c3a7c5b1ef2c01a84ad459b7a"
       },
       "before": {
         "mode": "100644",
@@ -234,7 +234,7 @@
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "63d7b0b1d590f0295a37961da39d0f58df492eb9"
+        "oid": "6817bae78fa0b05e0bda50419c2fef817925df49"
       },
       "before": {
         "mode": "100644",
@@ -253,8 +253,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Package geometry/state/history regression tests, host event and isolated-search regression tests, an independent consumer build, the full deterministic gate, and normal simulator observation of the real extension verify the affected local behavior. Independent review must inspect both the extraction and this applicability assessment. Focused recovery tests count requests after dismissal and retry; field-transition tests check current-proxy editing and stale numeric actions. Normal real-extension checks must cover error dismissal and numeric-to-text focus before typing, including the reported iPad landscape sequence. Recovery coverage must verify no host edit on ABC, cancellation of held numeric actions, persistence under stale traits, and automatic numeric selection for a new field. Normal iPhone and iPad proof must exercise the visible ABC control, literal typing afterward, native field switching, and the additional footer in portrait and landscape. Safari automatic field-reporting limitations must remain disclosed separately from manual recovery acceptance.",
-  "rationale": "This extraction moves local typing state, geometry, rendering and host view slots into a source Swift package and renames the optional emoji product. It does not change semantic requests, prompt contracts, parser behavior, gateway transport, model selection or external dependencies. The consumer retains document editing, AI callbacks, permissions and App Group ownership. The injectable emoji storage key is explicitly set to the previous key by the consumer. The host fixes route Back to Typing to local dismissal while retaining the existing invalid-response retry, and refresh numeric presentation from the current document proxy at UIKit text-will-change callbacks. They do not change request generation, response acceptance, retry transport, or model capability boundaries. The host number pad also gains an explicit ABC recovery action and a fixed recovery-row height; unchanged host traits preserve that local choice, and fresh host identity/type still selects numeric mode. No package or model behavior is changed by this recovery control.",
+  "proof": "Package geometry/state/history regression tests, host event and isolated-search regression tests, an independent consumer build, the full deterministic gate, and normal simulator observation of the real extension verify the affected local behavior. Independent review must inspect both the extraction and this applicability assessment. Focused recovery tests count requests after dismissal and retry; field-transition tests check current-proxy editing and stale numeric actions. Normal real-extension checks must cover error dismissal and numeric-to-text focus before typing, including the reported iPad landscape sequence.",
+  "rationale": "This extraction moves local typing state, geometry, rendering and host view slots into a source Swift package and renames the optional emoji product. It does not change semantic requests, prompt contracts, parser behavior, gateway transport, model selection or external dependencies. The consumer retains document editing, AI callbacks, permissions and App Group ownership. The injectable emoji storage key is explicitly set to the previous key by the consumer. The host fixes route Back to Typing to local dismissal while retaining the existing invalid-response retry, and refresh numeric presentation from the current document proxy at UIKit text-will-change callbacks. They do not change request generation, response acceptance, retry transport, or model capability boundaries.",
   "requirement_id": "R6",
   "schema": 1
 }

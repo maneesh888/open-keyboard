@@ -25,13 +25,13 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(controller.view.subviews.isEmpty)
     }
 
-    func testNumberPadAlwaysReservesRecoveryAndOptionalSystemSwitchFooter() {
+    func testNumberPadReservesOnlyTheSystemRequiredSwitchFooter() {
         let proxy = FakeTextDocumentProxy(text: "")
         proxy.keyboardType = .numberPad
         let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
         model.refreshNumberPadContext()
         XCTAssertFalse(model.needsSystemKeyboardSwitch)
-        XCTAssertEqual(model.numberPadHeight, 290)
+        XCTAssertEqual(model.numberPadHeight, 246)
         model.updateSystemKeyboardSwitchRequirement(true)
         XCTAssertTrue(model.needsSystemKeyboardSwitch)
         XCTAssertEqual(model.numberPadHeight, 290)
@@ -39,7 +39,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         model.nextKeyboard { switches += 1 }
         XCTAssertEqual(switches, 1)
         model.updateSystemKeyboardSwitchRequirement(false)
-        XCTAssertEqual(model.numberPadHeight, 290)
+        XCTAssertEqual(model.numberPadHeight, 246)
     }
 
     func testNumberPadGlobeUsesNativeTouchSequenceAndAccessibleHitArea() async throws {
@@ -199,46 +199,6 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
             XCTAssertEqual(textProxy.text, "Hello!")
             XCTAssertEqual(numericProxy.text, "123")
         }
-    }
-
-    func testNumberPadRecoveryRestoresLettersAndSurvivesStaleHostTraits() {
-        for type: UIKeyboardType in [.numberPad, .decimalPad] {
-            let proxy = FakeTextDocumentProxy(text: "123")
-            let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
-            model.toggleNumbers()
-            model.toggleSymbols()
-            proxy.keyboardType = type
-            model.refreshNumberPadContext()
-            let heldInteraction = model.numberPadInteractionID
-
-            model.returnToLettersFromNumberPad()
-            XCTAssertFalse(model.isNumberPadVisible)
-            XCTAssertEqual(model.inputMode, .letters)
-            XCTAssertFalse(model.isShiftEnabled)
-            XCTAssertNotEqual(model.numberPadInteractionID, heldInteraction)
-            XCTAssertEqual(proxy.text, "123", "Changing layouts must not edit the host")
-
-            model.refreshNumberPadContext()
-            XCTAssertFalse(model.isNumberPadVisible, "Stale traits must not undo explicit recovery")
-            model.handleNumberPadIntent(.deleteBackward, interactionID: heldInteraction)
-            XCTAssertEqual(proxy.text, "123", "A held numeric key must stop at recovery")
-            model.insert("a")
-            XCTAssertEqual(proxy.text, "123a")
-
-            proxy.documentIdentifier = UUID()
-            model.refreshNumberPadContext()
-            XCTAssertTrue(model.isNumberPadVisible, "A new numeric field must still auto-select the pad")
-        }
-    }
-
-    func testNumberPadRecoveryDoesNotChangeAnAlreadyVisibleTypingLayout() {
-        let proxy = FakeTextDocumentProxy(text: "Hello")
-        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
-        model.toggleNumbers()
-        model.toggleSymbols()
-        model.returnToLettersFromNumberPad()
-        XCTAssertEqual(model.inputMode, .symbols)
-        XCTAssertEqual(proxy.text, "Hello")
     }
 
     func testOpeningNumberPadCancelsQueuedZeroDelayAnalysis() async throws {

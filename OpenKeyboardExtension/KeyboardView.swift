@@ -163,25 +163,14 @@ struct KeyboardView: View {
                 .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
                 .padding(.vertical, 6)
                 .onDisappear { viewModel.cancelNumberPadInteraction() }
-            HStack {
-                Button(action: viewModel.returnToLettersFromNumberPad) {
-                    Text("ABC")
-                        .font(.system(size: 20))
-                        .foregroundStyle(OpenKeyboardTheme.Text.primary)
-                        .frame(width: 64, height: 44)
-                        .background(OpenKeyboardTheme.Surface.modifierKeyBackground,
-                                    in: RoundedRectangle(cornerRadius: 6))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Letters")
-                .accessibilityIdentifier("number_pad_letters")
-                if viewModel.needsSystemKeyboardSwitch {
+            if viewModel.needsSystemKeyboardSwitch {
+                HStack {
                     SystemKeyboardSwitchButton(onInputModeList: onInputModeList)
                         .frame(width: 44, height: 44)
+                    Spacer()
                 }
-                Spacer()
+                .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
             }
-            .padding(.horizontal, KeyboardPanelLayout.outerHorizontalPadding)
         }
     }
 

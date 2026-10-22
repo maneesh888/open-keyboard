@@ -343,11 +343,9 @@ final class KeyboardViewModel: ObservableObject {
         }
         return KeyboardPanelLayout.keyboardHeight(for: panelMode, actionPanelState: actionPanelState)
     }
-    static var numberPadPresentationHeight: CGFloat {
-        // Always reserve the recovery row, even when iOS supplies the globe outside our view.
-        NumberPadGeometry(availableWidth: 0).height + 12 + 44
+    var numberPadHeight: CGFloat {
+        NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemKeyboardSwitch ? 44 : 0)
     }
-    var numberPadHeight: CGFloat { Self.numberPadPresentationHeight }
     @Published private(set) var needsSystemKeyboardSwitch = false
 
     func updateSystemKeyboardSwitchRequirement(_ required: Bool) {
@@ -629,16 +627,6 @@ final class KeyboardViewModel: ObservableObject {
         isShowingSmileys = false
         isNumberPadVisible = true
         numberPadInteractionID = UUID()
-    }
-
-    func returnToLettersFromNumberPad() {
-        guard isNumberPadVisible else { return }
-        hapticFeedback.keyTapped()
-        cancelNumberPadInteraction()
-        typingState = KeyboardTypingState()
-        isNumberPadVisible = false
-        // Keep the last reported host identity/type. An unchanged (possibly stale)
-        // proxy must not undo this explicit choice; fresh host traits still auto-select.
     }
 
     func cancelNumberPadInteraction() { numberPadInteractionID = UUID() }
