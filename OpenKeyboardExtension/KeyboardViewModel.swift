@@ -295,7 +295,7 @@ struct KeyboardActionPanelState: Equatable {
 
 @MainActor
 final class KeyboardViewModel: ObservableObject {
-    private let textDocumentProxy: UITextDocumentProxy
+    private var textDocumentProxy: UITextDocumentProxy
     private let aiService: KeyboardAIServiceProviding
     private let hapticFeedback: KeyboardHapticFeedbackProviding
     private let nextTextPredictor: NextTextPredicting
@@ -589,7 +589,8 @@ final class KeyboardViewModel: ObservableObject {
             .takeUnretainedValue() as? UUID
     }
 
-    func refreshNumberPadContext() {
+    func refreshNumberPadContext(using proxy: UITextDocumentProxy? = nil) {
+        if let proxy { textDocumentProxy = proxy }
         guard let documentID = currentNumberPadDocumentID else {
             cancelNumberPadInteraction()
             return
@@ -1021,6 +1022,15 @@ final class KeyboardViewModel: ObservableObject {
         rewriteOptionsState = nil
         aiStatus = hasUsableGatewayConfig ? "Ready" : "Pair gateway in app"
         panelMode = .keyboard
+    }
+
+    func recoverFromActionError() {
+        guard let actionError else { return }
+        if actionError.kind == .invalidResponse {
+            retryAfterActionError()
+        } else {
+            clearActionError()
+        }
     }
 
     func retryAfterActionError() {

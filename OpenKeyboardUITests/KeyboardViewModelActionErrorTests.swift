@@ -179,6 +179,28 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertFalse(model.isNumberPadVisible)
     }
 
+    func testHostProxyReplacementRestoresTypingBeforeAnyTextEdit() {
+        for type: UIKeyboardType in [.numberPad, .decimalPad] {
+            let numericProxy = FakeTextDocumentProxy(text: "123")
+            numericProxy.keyboardType = type
+            let model = KeyboardViewModel(textDocumentProxy: numericProxy, loadConfig: { .default })
+            model.refreshNumberPadContext()
+            XCTAssertTrue(model.isNumberPadVisible)
+            let oldInteraction = model.numberPadInteractionID
+
+            let textProxy = FakeTextDocumentProxy(text: "Hello")
+            textProxy.documentIdentifier = UUID()
+            model.refreshNumberPadContext(using: textProxy)
+            XCTAssertFalse(model.isNumberPadVisible)
+            XCTAssertNotEqual(model.numberPadInteractionID, oldInteraction)
+            model.handleNumberPadIntent(.deleteBackward, interactionID: oldInteraction)
+            XCTAssertEqual(textProxy.text, "Hello")
+            model.insert("!")
+            XCTAssertEqual(textProxy.text, "Hello!")
+            XCTAssertEqual(numericProxy.text, "123")
+        }
+    }
+
     func testOpeningNumberPadCancelsQueuedZeroDelayAnalysis() async throws {
         let proxy = FakeTextDocumentProxy(text: "i has a apple and ths")
         let service = ProfileChangeIgnoringCancellationAIService(result: Self.grammarCorrectionResult())
@@ -1212,7 +1234,7 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         XCTAssertEqual(viewModel.aiStatus, "No issues found")
     }
 
-    func testBackToTypingAfterManualGrammarCapabilityFailureRetriesCurrentText() async {
+    func testBackToTypingAfterManualGrammarCapabilityFailureDoesNotRetry() async {
         let original = "i has a apple"
         let proxy = FakeTextDocumentProxy(text: original)
         let service = FailingThenSuccessfulGrammarAIService(result: Self.noIssueGrammarResult())
@@ -1228,16 +1250,46 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         await waitUntil { viewModel.actionError?.scope == .grammar }
 
         XCTAssertNil(viewModel.automaticAnalysisWarning)
-        viewModel.retryAfterActionError()
-        await waitUntil {
-            service.requestedTexts == [original, original]
-                && viewModel.actionError == nil
-                && !viewModel.isPerformingAIAction
-        }
+        viewModel.recoverFromActionError()
+        try? await Task.sleep(nanoseconds: 50_000_000)
 
+        XCTAssertEqual(service.requestedTexts, [original])
         XCTAssertEqual(proxy.text, original)
-        XCTAssertEqual(viewModel.completionPanelState, .noIssues)
-        XCTAssertEqual(viewModel.aiStatus, "No issues found")
+        XCTAssertNil(viewModel.actionError)
+        XCTAssertNil(viewModel.actionPanelState)
+        XCTAssertEqual(viewModel.panelMode, .keyboard)
+        XCTAssertEqual(viewModel.aiStatus, "Ready")
+    }
+
+    func testBackToTypingAfterWritingFailureDoesNotRequestImprove() async {
+        let proxy = FakeTextDocumentProxy(text: "Please keep these words.")
+        let service = ThrowingKeyboardAIService(error: .modelCapability)
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true)
+        model.showActionPanel()
+        await waitUntil { model.actionError != nil }
+        model.recoverFromActionError()
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(service.requestedActions, [.improve])
+        XCTAssertNil(model.actionError)
+        XCTAssertNil(model.actionPanelState)
+        XCTAssertEqual(model.panelMode, .keyboard)
+        XCTAssertEqual(proxy.text, "Please keep these words.")
+    }
+
+    func testTryAgainAfterInvalidResponseStillRetries() async {
+        let proxy = FakeTextDocumentProxy(text: "Please keep these words.")
+        let service = ThrowingKeyboardAIService(error: .invalidResponse)
+        let model = KeyboardViewModel(textDocumentProxy: proxy, aiService: service,
+            loadConfig: { Self.configuredGateway }, productionTestFullAccess: true)
+        model.showActionPanel()
+        await waitUntil { model.actionError?.kind == .invalidResponse }
+        model.recoverFromActionError()
+        XCTAssertNil(model.actionError)
+        XCTAssertEqual(model.panelMode, .actions)
+        await waitUntil { service.requestedActions.count == 2 }
+        XCTAssertEqual(service.requestedActions, [.improve, .improve])
+        XCTAssertEqual(proxy.text, "Please keep these words.")
     }
 
     func testTypingDoesNotClearWritingActionCapabilityFailure() async {

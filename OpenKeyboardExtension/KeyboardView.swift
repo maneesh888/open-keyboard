@@ -56,9 +56,8 @@ struct KeyboardView: View {
                 } else if let error = viewModel.actionError {
                     KeyboardActionErrorPanel(
                         error: error,
-                        onBackToTyping: { viewModel.retryAfterActionError() },
-                        onCopyDetails: { viewModel.copyActionErrorDetails() },
-                        onDismiss: { viewModel.clearActionError() }
+                        onRecover: { viewModel.recoverFromActionError() },
+                        onCopyDetails: { viewModel.copyActionErrorDetails() }
                     )
                 } else {
                     keyGrid
@@ -1040,9 +1039,8 @@ private struct RewriteOptionsPanel: View {
 
 private struct KeyboardActionErrorPanel: View {
     let error: KeyboardActionErrorState
-    let onBackToTyping: () -> Void
+    let onRecover: () -> Void
     let onCopyDetails: () -> Void
-    let onDismiss: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -1066,7 +1064,7 @@ private struct KeyboardActionErrorPanel: View {
             }
 
             HStack(spacing: 10) {
-                Button(action: onBackToTyping) {
+                Button(action: onRecover) {
                     Text(error.kind == .invalidResponse ? "Try again" : "Back to Typing")
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 42)
