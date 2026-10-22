@@ -107,9 +107,9 @@ final class KeyboardViewController: UIInputViewController {
         )
             .map { presentation, numberPad in
                 let (panelMode, actionPanelState, showing, smileys) = presentation
-                let (isNumberPadVisible, needsSystemSwitch) = numberPad
+                let (isNumberPadVisible, _) = numberPad
                 return isNumberPadVisible
-                    ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0)
+                    ? KeyboardViewModel.numberPadPresentationHeight
                     : KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
                                                            searchingSmileys: showing && smileys.isSearching)
             }
