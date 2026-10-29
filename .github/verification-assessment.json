@@ -1,260 +1,60 @@
 {
-  "base": "8f1e1ad765f3ed7ea65e0367c0c9788da67d9c9d",
+  "base": "742e943aea59ebfa1b1aa08e84c138315fc46ada",
   "changes": {
-    "KeyboardLayout/Examples/CompleteKeyboardConsumer/Package.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "3b8920805e7d5604d2293085b60eacc2ebd38857"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Examples/CompleteKeyboardConsumer/Sources/CompleteKeyboardConsumer/main.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "befc32c4af6025350b9c4b597ddcdf8401247f8d"
-      },
-      "before": null
-    },
-    "KeyboardLayout/LICENSE": {
-      "after": {
-        "mode": "100644",
-        "oid": "d17ced46f63902ff829d00a6a690af6d3f6f2dc5"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Package.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "09a97fa9c6ea4f0103366a1a81bf067d624d1992"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "31a50943406665c3c4106790b7fe2abae07f2358"
-      }
-    },
-    "KeyboardLayout/README.md": {
-      "after": {
-        "mode": "100644",
-        "oid": "8beac2be81928cf2e26e00d0dcb61c67a4e13db1"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "f4311bf427fb678ed62d5546a1c0d2111833c013"
-      }
-    },
-    "KeyboardLayout/Sources/KeyboardEmoji/CATALOGUE.md": {
-      "after": {
-        "mode": "100644",
-        "oid": "918919ca4cabefc7e51673c95ffbbf5a111995ea"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardEmoji/EmojiCatalogue.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "674e545e4a04fb75f5747cc860647d4b92df445a"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardEmoji/Resources/UNICODE-LICENSE.txt": {
-      "after": {
-        "mode": "100644",
-        "oid": "56da58912807030b451a4700687d5bd02c72d6ed"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardEmoji/Resources/emoji.json": {
-      "after": {
-        "mode": "100644",
-        "oid": "3d36163691738de3066fc1a09f7fbfdd2da69aef"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/KeyboardContentView.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "586ead6460200f58234a5aab04de9e10ee4eff08"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/KeyboardSurface.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "78e27a606dee528132c02805534bae44506bc8b7"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/KeyboardTouchLayout.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "8dcfc21361512465646848d80deb119d1b82cc0d"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/KeyboardTypingState.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "4722a7f4e071376348c2145d1a45bbd0c081cf1a"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/SmileyKeyboardView.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "4834e86a3ce99c97ecbaadf1d9034dd46a4528d5"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "78e82322419fb56a6536352c750579a4fcb8c912"
-      }
-    },
-    "KeyboardLayout/Sources/KeyboardLayout/TypingKeyboardView.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "1d8968f63c07fc744afbc718799a2e5f51ee4569"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Sources/OpenKeyboardEmoji/CATALOGUE.md": {
-      "after": null,
-      "before": {
-        "mode": "100644",
-        "oid": "918919ca4cabefc7e51673c95ffbbf5a111995ea"
-      }
-    },
-    "KeyboardLayout/Sources/OpenKeyboardEmoji/EmojiCatalogue.swift": {
-      "after": null,
-      "before": {
-        "mode": "100644",
-        "oid": "4f548508a0f60fd886be01e96c544d632cb8e796"
-      }
-    },
-    "KeyboardLayout/Sources/OpenKeyboardEmoji/Resources/UNICODE-LICENSE.txt": {
-      "after": null,
-      "before": {
-        "mode": "100644",
-        "oid": "56da58912807030b451a4700687d5bd02c72d6ed"
-      }
-    },
-    "KeyboardLayout/Sources/OpenKeyboardEmoji/Resources/emoji.json": {
-      "after": null,
-      "before": {
-        "mode": "100644",
-        "oid": "3d36163691738de3066fc1a09f7fbfdd2da69aef"
-      }
-    },
-    "KeyboardLayout/Tests/KeyboardEmojiTests/EmojiCatalogueTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "b6e658d8573fb5b47f2c06a8737159c5a43c2d7d"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Tests/KeyboardLayoutTests/KeyboardAppearanceTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "d37329ad45d2f033b68caa9d5aa932cfc7a02c88"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Tests/KeyboardLayoutTests/KeyboardSurfaceTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "b599f207ecdbcbf28c56f3b87043cb10d3dd4a06"
-      },
-      "before": null
-    },
-    "KeyboardLayout/Tests/OpenKeyboardEmojiTests/EmojiCatalogueTests.swift": {
-      "after": null,
-      "before": {
-        "mode": "100644",
-        "oid": "8bd6d5a022eaffab51ab015843b46e3a9743a8e6"
-      }
-    },
-    "OpenKeyboard.xcodeproj/project.pbxproj": {
-      "after": {
-        "mode": "100644",
-        "oid": "1ad5c92385af8555991442e081ebd7dbb5a7df7e"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "c58905351eaa7d471ee9bbb1e901f30ac2092f52"
-      }
-    },
     "OpenKeyboardExtension/KeyboardToolbarState.swift": {
       "after": {
         "mode": "100644",
+        "oid": "31fe6d6611fc7702a9c530932e46168800e5e809"
+      },
+      "before": {
+        "mode": "100644",
         "oid": "1d343073e3561f3c0bfe524567d07807147b3df1"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "7a9f45fcdf9f9a70c177feb934a2210c0e398748"
-      }
-    },
-    "OpenKeyboardExtension/KeyboardTouchLayout.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "be965d3f93cb9fa75e8ff8e85889c6786ebb4f38"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "c7eaa965c5524af4516f540622f7552889cfd1ae"
       }
     },
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "2beef0674ea901d8bff3ed3ae8671408e41d0d51"
+        "oid": "a69293914ea963aa6ee91cfc00d494cad79355c9"
       },
       "before": {
         "mode": "100644",
-        "oid": "a950487e7b974d6771c328475c3f2359859d62fe"
+        "oid": "2beef0674ea901d8bff3ed3ae8671408e41d0d51"
       }
     },
     "OpenKeyboardExtension/KeyboardViewController.swift": {
       "after": {
         "mode": "100644",
-        "oid": "69de4052e187e102f1f6815c9705ff3ffff4fda3"
+        "oid": "c9c87593709e860163baaff6b882f4641598c5d4"
       },
       "before": {
         "mode": "100644",
-        "oid": "14d314177081fedfb0d48a1429879e164144c09a"
+        "oid": "69de4052e187e102f1f6815c9705ff3ffff4fda3"
       }
     },
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "b01e70bd4e43692c3a7c5b1ef2c01a84ad459b7a"
+        "oid": "a2144a2459b820661390d17799c3523392f667b0"
       },
       "before": {
         "mode": "100644",
-        "oid": "7afb96e03aa91a0fcaec4628f184a71200a7eb3f"
+        "oid": "b01e70bd4e43692c3a7c5b1ef2c01a84ad459b7a"
       }
     },
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
+        "oid": "ea39f1fe40c305673d929230da2c8b35592c93b1"
+      },
+      "before": {
+        "mode": "100644",
         "oid": "6817bae78fa0b05e0bda50419c2fef817925df49"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "aec4afe7ec3311c1b06fd1c4946d78e8422cd16f"
-      }
-    },
-    "docs/SMILEY_KEYBOARD_PACKAGE.md": {
-      "after": {
-        "mode": "100644",
-        "oid": "b343a85e16a3d37e0c1b43c573031fc665dd1288"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "5c6cf48c24b1221d74ed69b514a334866f30d41b"
       }
     }
   },
   "live_impact": "none",
-  "proof": "Package geometry/state/history regression tests, host event and isolated-search regression tests, an independent consumer build, the full deterministic gate, and normal simulator observation of the real extension verify the affected local behavior. Independent review must inspect both the extraction and this applicability assessment. Focused recovery tests count requests after dismissal and retry; field-transition tests check current-proxy editing and stale numeric actions. Normal real-extension checks must cover error dismissal and numeric-to-text focus before typing, including the reported iPad landscape sequence.",
-  "rationale": "This extraction moves local typing state, geometry, rendering and host view slots into a source Swift package and renames the optional emoji product. It does not change semantic requests, prompt contracts, parser behavior, gateway transport, model selection or external dependencies. The consumer retains document editing, AI callbacks, permissions and App Group ownership. The injectable emoji storage key is explicitly set to the previous key by the consumer. The host fixes route Back to Typing to local dismissal while retaining the existing invalid-response retry, and refresh numeric presentation from the current document proxy at UIKit text-will-change callbacks. They do not change request generation, response acceptance, retry transport, or model capability boundaries.",
-  "requirement_id": "R6",
+  "proof": "Focused regression tests verify landscape height, row and cap metrics, unchanged full-width touch routing, numbers and symbols transitions, compact emoji behavior, number-pad height, expanded error panels, and portrait restoration. The exact-head full deterministic gate and normal Simulator proof through the real extension in ordinary Safari fields cover the affected layout and host lifecycle on both iPhone landscape directions, while an exact-head iPad run confirms the phone-only gate preserves existing iPad geometry.",
+  "rationale": "The change adds phone-only orientation detection and compact local keyboard geometry, typography, and height selection. It does not alter semantic operations, prompt contracts, request construction, response parsing, provider or model selection, gateway transport, retry policy, persistence, or external dependencies. The conservative default is triggered because local geometry state is carried in KeyboardViewModel.swift, but the diff only publishes and consumes isPhoneLandscape plus derived presentation metrics.",
+  "requirement_id": "R4",
   "schema": 1
 }
