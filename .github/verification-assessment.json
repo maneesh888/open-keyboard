@@ -4,7 +4,7 @@
     "OpenKeyboardExtension/KeyboardToolbarState.swift": {
       "after": {
         "mode": "100644",
-        "oid": "31fe6d6611fc7702a9c530932e46168800e5e809"
+        "oid": "a341af1b96200f1f567bd398f6f99165e89de4db"
       },
       "before": {
         "mode": "100644",
@@ -14,7 +14,7 @@
     "OpenKeyboardExtension/KeyboardView.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a69293914ea963aa6ee91cfc00d494cad79355c9"
+        "oid": "ac69e7b162ef5be65d564e5c0005bb008b44a6d5"
       },
       "before": {
         "mode": "100644",
@@ -34,17 +34,27 @@
     "OpenKeyboardExtension/KeyboardViewModel.swift": {
       "after": {
         "mode": "100644",
-        "oid": "a2144a2459b820661390d17799c3523392f667b0"
+        "oid": "b76e1a3d90e5c874591236c4cc9da7182ad468f3"
       },
       "before": {
         "mode": "100644",
         "oid": "b01e70bd4e43692c3a7c5b1ef2c01a84ad459b7a"
       }
     },
+    "OpenKeyboardUITests/KeyboardToolbarStateTests.swift": {
+      "after": {
+        "mode": "100644",
+        "oid": "e02c21828245462f39ec3496f3680ac9996f7da3"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "f8d762ed78ff47519087d77d6cf9ee552192828c"
+      }
+    },
     "OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift": {
       "after": {
         "mode": "100644",
-        "oid": "ea39f1fe40c305673d929230da2c8b35592c93b1"
+        "oid": "4629db39db7204368e1662b7e0a00a87be9a9f5f"
       },
       "before": {
         "mode": "100644",
@@ -53,8 +63,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Focused regression tests verify landscape height, row and cap metrics, unchanged full-width touch routing, numbers and symbols transitions, compact emoji behavior, number-pad height, expanded error panels, and portrait restoration. The exact-head full deterministic gate and normal Simulator proof through the real extension in ordinary Safari fields cover the affected layout and host lifecycle on both iPhone landscape directions, while an exact-head iPad run confirms the phone-only gate preserves existing iPad geometry.",
-  "rationale": "The change adds phone-only orientation detection and compact local keyboard geometry, typography, and height selection. It does not alter semantic operations, prompt contracts, request construction, response parsing, provider or model selection, gateway transport, retry policy, persistence, or external dependencies. The conservative default is triggered because local geometry state is carried in KeyboardViewModel.swift, but the diff only publishes and consumes isPhoneLandscape plus derived presentation metrics.",
+  "proof": "Focused regressions verify the 221-point landscape action-panel envelope, 56-point scroll viewport, side-by-side contextual layout inputs, preserved 351-point portrait and iPad action panel, and existing typing geometry. The exact-head full deterministic gate plus normal Simulator proof through the real extension in an ordinary landscape host field verify the affected presentation and interaction without unrelated model comparison.",
+  "rationale": "The diff changes only phone-landscape keyboard presentation geometry. It now applies the existing orientation state to the local action panel, uses the wide landscape axis to place translation and action carousels side by side, and keeps long results in a bounded scroll viewport. Prompt contracts, semantic operations, request construction, response parsing, provider or model selection, gateway transport, retry behavior, persistence, and dependencies are unchanged.",
   "requirement_id": "R4",
   "schema": 1
 }
