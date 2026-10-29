@@ -4,13 +4,17 @@ import SwiftUI
 public struct SmileyKeyboardStyle {
     public var keyBackground: Color
     public var controlBackground: Color
+    public var foreground: Color
+    public var secondaryForeground: Color
     public var accent: Color
     public var minimumCellWidth: Double
     public var maximumCellWidth: Double
     public var spacing: Double
     public init(keyBackground: Color = .clear, controlBackground: Color = .secondary.opacity(0.15),
                 accent: Color = .primary, minimumCellWidth: Double = 44,
-                maximumCellWidth: Double = 64, spacing: Double = 4) {
+                maximumCellWidth: Double = 64, spacing: Double = 4,
+                foreground: Color = .primary, secondaryForeground: Color = .secondary) {
+        self.foreground = foreground; self.secondaryForeground = secondaryForeground
         self.keyBackground = keyBackground; self.controlBackground = controlBackground; self.accent = accent
         self.minimumCellWidth = minimumCellWidth; self.maximumCellWidth = maximumCellWidth; self.spacing = spacing
     }
@@ -57,7 +61,7 @@ public struct SmileyKeyboardView: View {
                             .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                         if state.isSearching { Rectangle().frame(width: 1, height: 22).accessibilityHidden(true) }
                     }
-                    .font(.callout).foregroundStyle(state.searchQuery.isEmpty ? .secondary : .primary)
+                    .font(.callout).foregroundStyle(state.searchQuery.isEmpty ? style.secondaryForeground : style.foreground)
                     .padding(.horizontal, 10).frame(minHeight: 36)
                     .background(style.controlBackground, in: RoundedRectangle(cornerRadius: 10))
                 }
@@ -76,7 +80,7 @@ public struct SmileyKeyboardView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             Text(state.isSearching && !state.searchQuery.isEmpty ? "SEARCH RESULTS" : (state.selectedSection?.label.uppercased() ?? "EMOJI"))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                .font(.caption).foregroundStyle(style.secondaryForeground).lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
                 .fixedSize(horizontal: false, vertical: true)
             GeometryReader { geometry in
@@ -87,7 +91,7 @@ public struct SmileyKeyboardView: View {
                 if state.isSearching {
                     searchGrid(cellWidth: cellWidth)
                 } else if state.snapshot.sections.isEmpty {
-                    Text(labels.empty).font(.callout).foregroundStyle(.secondary)
+                    Text(labels.empty).font(.callout).foregroundStyle(style.secondaryForeground)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     categoryBrowser(width: geometry.size.width, rows: rows, cellWidth: cellWidth)
@@ -104,7 +108,7 @@ public struct SmileyKeyboardView: View {
                                 ForEach(state.snapshot.sections) { section in
                                     Button { onAction(.selectCategory(section.id)) } label: {
                                         Image(systemName: section.symbol).font(.system(size: 20))
-                                            .foregroundStyle(state.selectedCategoryID == section.id ? style.accent : .secondary)
+                                            .foregroundStyle(state.selectedCategoryID == section.id ? style.accent : style.secondaryForeground)
                                             .frame(width: 44, height: 44)
                                             .background {
                                                 if state.selectedCategoryID == section.id {
@@ -171,13 +175,13 @@ public struct SmileyKeyboardView: View {
                 }
             }
         }
-        .buttonStyle(.plain).foregroundStyle(.primary)
+        .buttonStyle(.plain).foregroundStyle(style.foreground)
         .accessibilityIdentifier("smiley_keyboard")
     }
     @ViewBuilder
     private func searchGrid(cellWidth: Double) -> some View {
         if state.visibleItems.isEmpty {
-            Text("No emoji found").font(.callout).foregroundStyle(.secondary)
+            Text("No emoji found").font(.callout).foregroundStyle(style.secondaryForeground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollViewReader { scroll in
@@ -206,7 +210,7 @@ public struct SmileyKeyboardView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             if section.items.isEmpty {
                                 Text(section.id == "recent" ? "No recently used emoji" : labels.empty)
-                                    .font(.callout).foregroundStyle(.secondary)
+                                    .font(.callout).foregroundStyle(style.secondaryForeground)
                                     .frame(width: sectionWidth, height: CGFloat(rows * 46))
                             } else {
                                 LazyHGrid(rows: Array(repeating: GridItem(.fixed(44), spacing: 2), count: rows), spacing: style.spacing) {

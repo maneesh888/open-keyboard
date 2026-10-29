@@ -1,6 +1,6 @@
 import XCTest
 import KeyboardLayout
-@testable import OpenKeyboardEmoji
+@testable import KeyboardEmoji
 
 final class EmojiCatalogueTests: XCTestCase {
     func testCompleteCatalogueHasUniqueLiteralSequencesAndSupportedVersions() {
@@ -33,9 +33,22 @@ final class EmojiCatalogueTests: XCTestCase {
         XCTAssertEqual(history.recentIDs().filter { $0 == "25" }.count, 1)
         date = date.addingTimeInterval(31 * 24 * 60 * 60)
         XCTAssertEqual(history.recentIDs(), [])
-        XCTAssertNil(defaults.data(forKey: "openkeyboard.emoji.recent.v1"))
+        XCTAssertNil(defaults.data(forKey: "keyboard.emoji.recent.v1"))
         history.record("1"); history.clear()
         XCTAssertEqual(history.recentIDs(), [])
+    }
+    func testConsumerSelectedStorageKeysPreserveHistoryAndStayIsolated() {
+        let suite = "emoji-tests-" + UUID().uuidString
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let first = EmojiHistoryStore(defaults: defaults, validIDs: ["a"], key: "consumer.previous.key")
+        first.record("a")
+        let reopened = EmojiHistoryStore(defaults: defaults, validIDs: ["a"], key: "consumer.previous.key")
+        XCTAssertEqual(reopened.recentIDs(), ["a"])
+        let isolated = EmojiHistoryStore(defaults: defaults, validIDs: ["a"])
+        XCTAssertEqual(isolated.recentIDs(), [])
+        isolated.clear()
+        XCTAssertEqual(first.recentIDs(), ["a"])
     }
     func testSearchAndVariantActionsStayLiteralAndCancelRestoresCategory() {
         var state = SmileyState(snapshot: EmojiCatalogue(maximumVersion: 16).snapshot())

@@ -5,6 +5,7 @@
 
 import CoreGraphics
 import Foundation
+import KeyboardLayout
 
 enum KeyboardPanelMode: Equatable {
     case keyboard
@@ -24,12 +25,12 @@ enum KeyboardPanelLayout {
     static let outerTopPadding: CGFloat = 2
     static let outerBottomPadding: CGFloat = 1
     // Native keys use a 54 pt row pitch with a smaller visible cap inside the touch target.
-    static let letterKeyHeight: CGFloat = 54
-    static let controlKeyHeight: CGFloat = 54
-    static let keyCapHeight: CGFloat = 43
-    static let keyRowSpacing: CGFloat = 0
-    static let keyShadowAllowance: CGFloat = 0
-    static let keyGridHeight: CGFloat = (letterKeyHeight * 3) + controlKeyHeight + (keyRowSpacing * 3) + keyShadowAllowance
+    static let letterKeyHeight: CGFloat = KeyboardMetrics().letterKeyHeight
+    static let controlKeyHeight: CGFloat = KeyboardMetrics().controlKeyHeight
+    static let keyCapHeight: CGFloat = KeyboardMetrics().keyCapHeight
+    static let keyRowSpacing: CGFloat = KeyboardMetrics().keyRowSpacing
+    static let keyShadowAllowance: CGFloat = KeyboardMetrics().keyShadowAllowance
+    static let keyGridHeight: CGFloat = KeyboardMetrics().keyGridHeight
     static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
     static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84

@@ -31,6 +31,12 @@ final class KeyboardViewController: UIInputViewController {
         refreshNumberPadHostContext()
     }
 
+    override func textWillChange(_ textInput: UITextInput?) {
+        super.textWillChange(textInput)
+        viewModel?.cancelNumberPadInteraction()
+        refreshNumberPadHostContext()
+    }
+
     override func textDidChange(_ textInput: UITextInput?) {
         super.textDidChange(textInput)
         refreshNumberPadHostContext()
@@ -118,7 +124,7 @@ final class KeyboardViewController: UIInputViewController {
 
     private func refreshNumberPadHostContext() {
         viewModel?.updateSystemKeyboardSwitchRequirement(needsInputModeSwitchKey)
-        viewModel?.refreshNumberPadContext()
+        viewModel?.refreshNumberPadContext(using: textDocumentProxy)
     }
 
     private func refreshRuntimeState() {

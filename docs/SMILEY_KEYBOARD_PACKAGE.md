@@ -1,7 +1,7 @@
 # Emoji browser packages
 
 `KeyboardLayout` owns content-independent emoji presentation and state. The separate
-`OpenKeyboardEmoji` product owns OpenKeyboard's bundled Unicode catalogue and local
+`KeyboardEmoji` product owns OpenKeyboard's bundled Unicode catalogue and local
 recent-selection storage. Neither product imports an AI module or makes network calls.
 The existing typing engine and other keyboard panels remain in the host.
 
