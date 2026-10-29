@@ -242,7 +242,16 @@ struct KeyboardActionPanelState: Equatable {
     }
 
     var actionResultViewportHeight: CGFloat {
-        showsTranslationTargetSelector
+        actionResultViewportHeight(isCompactLandscape: false)
+    }
+
+    func actionResultViewportHeight(isCompactLandscape: Bool) -> CGFloat {
+        if isCompactLandscape {
+            return showsTranslationTargetSelector
+                ? KeyboardPanelLayout.compactActionPanelContextualResultHeight
+                : KeyboardPanelLayout.compactActionPanelScrollableResultHeight
+        }
+        return showsTranslationTargetSelector
             ? KeyboardPanelLayout.actionPanelContextualResultHeight
             : KeyboardPanelLayout.actionPanelScrollableResultHeight
     }
@@ -334,6 +343,9 @@ final class KeyboardViewModel: ObservableObject {
     var usesCompactTypingLayout: Bool {
         usesCompactKeyboardHeight && !isShowingSmileys
     }
+    var usesCompactActionPanelLayout: Bool {
+        isPhoneLandscape && panelMode == .actions && actionPanelState != nil
+    }
     var typingMetrics: KeyboardMetrics {
         usesCompactTypingLayout ? KeyboardMetrics(rowHeight: 44, keyCapHeight: 33) : KeyboardMetrics()
     }
@@ -356,6 +368,9 @@ final class KeyboardViewModel: ObservableObject {
     static func presentationHeight(panelMode: KeyboardPanelMode, actionPanelState: KeyboardActionPanelState?,
                                    searchingSmileys: Bool, isPhoneLandscape: Bool = false,
                                    hasActionError: Bool = false) -> CGFloat {
+        if isPhoneLandscape && panelMode == .actions && actionPanelState != nil {
+            return KeyboardPanelLayout.compactActionPanelHeight
+        }
         if isPhoneLandscape && panelMode == .keyboard && !hasActionError && !searchingSmileys {
             return KeyboardPanelLayout.compactKeyboardHeight
         }

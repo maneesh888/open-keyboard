@@ -85,6 +85,46 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         )
     }
 
+    func testLandscapeActionPanelDropsExpansionAndUsesCompactResultViewport() {
+        let sourceText = "Please make this clearer."
+        let state = KeyboardActionPanelState(sourceText: sourceText)
+
+        XCTAssertEqual(
+            KeyboardViewModel.presentationHeight(
+                panelMode: .actions,
+                actionPanelState: state,
+                searchingSmileys: false,
+                isPhoneLandscape: false
+            ),
+            KeyboardPanelLayout.actionPanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardViewModel.presentationHeight(
+                panelMode: .actions,
+                actionPanelState: state,
+                searchingSmileys: false,
+                isPhoneLandscape: true
+            ),
+            KeyboardPanelLayout.compactActionPanelHeight
+        )
+        XCTAssertEqual(KeyboardPanelLayout.compactActionPanelHeight, 221)
+        XCTAssertEqual(
+            state.actionResultViewportHeight(isCompactLandscape: true),
+            KeyboardPanelLayout.compactActionPanelScrollableResultHeight
+        )
+
+        var translationState = state
+        translationState.selectAction(.translate(nil))
+        XCTAssertEqual(
+            translationState.actionResultViewportHeight(isCompactLandscape: true),
+            KeyboardPanelLayout.compactActionPanelContextualResultHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.compactActionPanelContextualResultHeight,
+            KeyboardPanelLayout.compactActionPanelScrollableResultHeight
+        )
+    }
+
     func testKeyboardControllerLoadsBeforeHostDocumentConnects() {
         let controller = KeyboardViewController()
         controller.loadViewIfNeeded()

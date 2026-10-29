@@ -108,6 +108,7 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.keyGridHeight, 216)
         XCTAssertEqual(KeyboardPanelLayout.preferredKeyboardHeight, 267)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
+        XCTAssertEqual(KeyboardPanelLayout.compactActionPanelHeight, 221)
     }
 
     @MainActor
@@ -329,6 +330,8 @@ final class KeyboardToolbarStateTests: XCTestCase {
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorHeight, 44)
         XCTAssertEqual(KeyboardPanelLayout.actionContextSelectorSpacing, 8)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelContextualResultHeight, 108)
+        XCTAssertEqual(KeyboardPanelLayout.compactActionPanelScrollableResultHeight, 56)
+        XCTAssertEqual(KeyboardPanelLayout.compactActionPanelContextualResultHeight, 56)
         XCTAssertEqual(KeyboardPanelLayout.actionPanelHeight, 351)
     }
 
