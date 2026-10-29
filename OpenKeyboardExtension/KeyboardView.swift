@@ -23,10 +23,10 @@ struct KeyboardView: View {
         let layout = KeyboardSurfaceLayout(
             contentHeight: showsToolbar
                 ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
-                    - KeyboardPanelLayout.toolbarRenderedHeight - KeyboardPanelLayout.toolbarSpacing
+                    - KeyboardPanelLayout.toolbarRenderedHeight - viewModel.typingToolbarSpacing
                 : viewportHeight,
             toolbarHeight: showsToolbar ? KeyboardPanelLayout.toolbarRenderedHeight : 0,
-            spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0,
+            spacing: showsToolbar ? viewModel.typingToolbarSpacing : 0,
             horizontalPadding: showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0,
             topPadding: showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0,
             bottomPadding: showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0
@@ -149,6 +149,7 @@ struct KeyboardView: View {
                             searchTyping: viewModel.searchTypingState,
                             interactionID: viewModel.numberPadInteractionID,
                             showsSystemKeyboardSwitch: showsSystemKeyboardSwitch, style: packageStyle,
+                            metrics: viewModel.typingMetrics,
                             onTyping: { viewModel.handleTypingAction($0, advance: onNextKeyboard) },
                             onSmiley: { viewModel.handleSmileyAction($0, advance: onNextKeyboard) })
     }
@@ -175,12 +176,17 @@ struct KeyboardView: View {
     }
 
     private var packageStyle: KeyboardStyle {
-        KeyboardStyle(key: OpenKeyboardTheme.Surface.keyBackground,
+        let compact = viewModel.usesCompactTypingLayout
+        return KeyboardStyle(key: OpenKeyboardTheme.Surface.keyBackground,
                       control: OpenKeyboardTheme.Surface.modifierKeyBackground,
                       foreground: OpenKeyboardTheme.Text.primary,
                       accent: OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32),
                       shadow: OpenKeyboardTheme.Shadow.key,
                       background: OpenKeyboardTheme.Surface.keyboardBackground,
+                      cornerRadius: compact ? 6 : 8,
+                      letterFont: .system(size: compact ? 20 : 25),
+                      controlFont: .system(size: compact ? 15 : 16),
+                      symbolFont: .system(size: compact ? 19 : 22),
                       smileyStyle: .init(controlBackground: OpenKeyboardTheme.Surface.modifierKeyBackground))
     }
 

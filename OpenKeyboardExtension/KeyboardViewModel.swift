@@ -330,18 +330,46 @@ final class KeyboardViewModel: ObservableObject {
     var isSearchingSmileys: Bool { isShowingSmileys && smileyState.isSearching }
     var displayedInputMode: KeyboardInputMode { isSearchingSmileys ? smileySearchInputMode : inputMode }
     var displayedShift: Bool { isSearchingSmileys ? smileySearchShift : isShiftEnabled }
+    @Published private(set) var isPhoneLandscape = false
+    var usesCompactTypingLayout: Bool {
+        usesCompactKeyboardHeight && !isShowingSmileys
+    }
+    var typingMetrics: KeyboardMetrics {
+        usesCompactTypingLayout ? KeyboardMetrics(rowHeight: 44, keyCapHeight: 33) : KeyboardMetrics()
+    }
+    var typingToolbarSpacing: CGFloat {
+        usesCompactTypingLayout ? KeyboardPanelLayout.compactToolbarSpacing : KeyboardPanelLayout.toolbarSpacing
+    }
+    private var usesCompactKeyboardHeight: Bool {
+        isPhoneLandscape && panelMode == .keyboard && !isNumberPadVisible
+            && actionError == nil && !isSearchingSmileys
+    }
     var keyboardPresentationHeight: CGFloat {
-        isNumberPadVisible ? numberPadHeight : Self.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
-                                searchingSmileys: isSearchingSmileys)
+        isNumberPadVisible ? numberPadHeight : Self.presentationHeight(
+            panelMode: panelMode,
+            actionPanelState: actionPanelState,
+            searchingSmileys: isSearchingSmileys,
+            isPhoneLandscape: isPhoneLandscape,
+            hasActionError: actionError != nil
+        )
     }
     static func presentationHeight(panelMode: KeyboardPanelMode, actionPanelState: KeyboardActionPanelState?,
-                                   searchingSmileys: Bool) -> CGFloat {
+                                   searchingSmileys: Bool, isPhoneLandscape: Bool = false,
+                                   hasActionError: Bool = false) -> CGFloat {
+        if isPhoneLandscape && panelMode == .keyboard && !hasActionError && !searchingSmileys {
+            return KeyboardPanelLayout.compactKeyboardHeight
+        }
         if panelMode == .keyboard && searchingSmileys {
             let searchHeader = max(44, UIFont.preferredFont(forTextStyle: .callout).lineHeight + 12)
             let caption = UIFont.preferredFont(forTextStyle: .caption1).lineHeight
             return KeyboardPanelLayout.keyGridHeight + max(148, searchHeader + caption + 52 + 24)
         }
         return KeyboardPanelLayout.keyboardHeight(for: panelMode, actionPanelState: actionPanelState)
+    }
+
+    func updatePhoneLandscape(_ isPhoneLandscape: Bool) {
+        guard self.isPhoneLandscape != isPhoneLandscape else { return }
+        self.isPhoneLandscape = isPhoneLandscape
     }
     var numberPadHeight: CGFloat {
         NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemKeyboardSwitch ? 44 : 0)
