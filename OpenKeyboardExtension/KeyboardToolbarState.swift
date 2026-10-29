@@ -21,6 +21,7 @@ enum KeyboardPanelLayout {
     static let toolbarControlSize: CGFloat = 34
     static let toolbarRenderedHeight: CGFloat = toolbarHeight
     static let toolbarSpacing: CGFloat = 10
+    static let compactToolbarSpacing: CGFloat = 4
     static let outerHorizontalPadding: CGFloat = 6
     static let outerTopPadding: CGFloat = 2
     static let outerBottomPadding: CGFloat = 1
@@ -31,16 +32,25 @@ enum KeyboardPanelLayout {
     static let keyRowSpacing: CGFloat = KeyboardMetrics().keyRowSpacing
     static let keyShadowAllowance: CGFloat = KeyboardMetrics().keyShadowAllowance
     static let keyGridHeight: CGFloat = KeyboardMetrics().keyGridHeight
+    static let compactKeyGridHeight: CGFloat = KeyboardMetrics(rowHeight: 44, keyCapHeight: 33).keyGridHeight
+    static let compactKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight
+        + compactToolbarSpacing + compactKeyGridHeight + outerBottomPadding
     static let preferredKeyboardHeight: CGFloat = outerTopPadding + toolbarRenderedHeight + toolbarSpacing + keyGridHeight + outerBottomPadding
     static let expandedPanelHeight: CGFloat = preferredKeyboardHeight
-    static let actionPanelHeight: CGFloat = preferredKeyboardHeight + 84
+    static let actionPanelExpansion: CGFloat = 84
+    static let actionPanelHeight: CGFloat = preferredKeyboardHeight + actionPanelExpansion
+    static let compactActionPanelHeight: CGFloat = compactKeyboardHeight
     static let actionPanelScrollableResultHeight: CGFloat = 160
+    static let compactActionPanelScrollableResultHeight: CGFloat = 56
     static let actionCarouselButtonHeight: CGFloat = 44
     static let actionContextSelectorHeight: CGFloat = 44
     static let actionContextSelectorSpacing: CGFloat = 8
     static let actionPanelContextualResultHeight: CGFloat = actionPanelScrollableResultHeight
         - actionContextSelectorHeight
         - actionContextSelectorSpacing
+    // Landscape uses the available width to place the translation target and action carousels
+    // beside each other, so the contextual result keeps the same compact viewport height.
+    static let compactActionPanelContextualResultHeight: CGFloat = compactActionPanelScrollableResultHeight
     static let actionControlButtonHeight: CGFloat = 44
     static let actionGroupedButtonWidth: CGFloat = 48
 

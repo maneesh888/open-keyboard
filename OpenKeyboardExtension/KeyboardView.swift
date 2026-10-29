@@ -23,10 +23,10 @@ struct KeyboardView: View {
         let layout = KeyboardSurfaceLayout(
             contentHeight: showsToolbar
                 ? viewportHeight - KeyboardPanelLayout.outerTopPadding - KeyboardPanelLayout.outerBottomPadding
-                    - KeyboardPanelLayout.toolbarRenderedHeight - KeyboardPanelLayout.toolbarSpacing
+                    - KeyboardPanelLayout.toolbarRenderedHeight - viewModel.typingToolbarSpacing
                 : viewportHeight,
             toolbarHeight: showsToolbar ? KeyboardPanelLayout.toolbarRenderedHeight : 0,
-            spacing: showsToolbar ? KeyboardPanelLayout.toolbarSpacing : 0,
+            spacing: showsToolbar ? viewModel.typingToolbarSpacing : 0,
             horizontalPadding: showsToolbar ? KeyboardPanelLayout.outerHorizontalPadding : 0,
             topPadding: showsToolbar ? KeyboardPanelLayout.outerTopPadding : 0,
             bottomPadding: showsToolbar ? KeyboardPanelLayout.outerBottomPadding : 0
@@ -66,6 +66,7 @@ struct KeyboardView: View {
                 if let state = viewModel.actionPanelState {
                     AIActionPanel(
                         state: state,
+                        isCompactLandscape: viewModel.usesCompactActionPanelLayout,
                         actionsEnabled: viewModel.canRunAIAction,
                         onSelect: { viewModel.selectActionPanelAction($0) },
                         onSelectTranslationTarget: { viewModel.selectActionPanelTranslationTarget($0) },
@@ -149,6 +150,7 @@ struct KeyboardView: View {
                             searchTyping: viewModel.searchTypingState,
                             interactionID: viewModel.numberPadInteractionID,
                             showsSystemKeyboardSwitch: showsSystemKeyboardSwitch, style: packageStyle,
+                            metrics: viewModel.typingMetrics,
                             onTyping: { viewModel.handleTypingAction($0, advance: onNextKeyboard) },
                             onSmiley: { viewModel.handleSmileyAction($0, advance: onNextKeyboard) })
     }
@@ -175,12 +177,17 @@ struct KeyboardView: View {
     }
 
     private var packageStyle: KeyboardStyle {
-        KeyboardStyle(key: OpenKeyboardTheme.Surface.keyBackground,
+        let compact = viewModel.usesCompactTypingLayout
+        return KeyboardStyle(key: OpenKeyboardTheme.Surface.keyBackground,
                       control: OpenKeyboardTheme.Surface.modifierKeyBackground,
                       foreground: OpenKeyboardTheme.Text.primary,
                       accent: OpenKeyboardTheme.Semantic.primaryAction.opacity(0.32),
                       shadow: OpenKeyboardTheme.Shadow.key,
                       background: OpenKeyboardTheme.Surface.keyboardBackground,
+                      cornerRadius: compact ? 6 : 8,
+                      letterFont: .system(size: compact ? 20 : 25),
+                      controlFont: .system(size: compact ? 15 : 16),
+                      symbolFont: .system(size: compact ? 19 : 22),
                       smileyStyle: .init(controlBackground: OpenKeyboardTheme.Surface.modifierKeyBackground))
     }
 
@@ -334,6 +341,7 @@ private struct KeyboardAIToolbar: View {
 
 private struct AIActionPanel: View {
     let state: KeyboardActionPanelState
+    let isCompactLandscape: Bool
     let actionsEnabled: Bool
     let onSelect: (KeyboardAIAction) -> Void
     let onSelectTranslationTarget: (KeyboardTranslationTarget) -> Void
@@ -352,14 +360,25 @@ private struct AIActionPanel: View {
             suggestionBlock
             Spacer(minLength: 0)
             if state.isCarouselVisible {
-                VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
-                    if state.showsTranslationTargetSelector {
+                if isCompactLandscape && state.showsTranslationTargetSelector {
+                    HStack(spacing: KeyboardPanelLayout.actionContextSelectorSpacing) {
                         translationTargetCarousel
+                            .frame(maxWidth: .infinity)
+                        actionCarousel
+                            .frame(maxWidth: .infinity)
                     }
-                    actionCarousel
+                    .padding(.bottom, carouselBottomPadding)
+                    .layoutPriority(1)
+                } else {
+                    VStack(spacing: state.showsTranslationTargetSelector ? KeyboardPanelLayout.actionContextSelectorSpacing : 0) {
+                        if state.showsTranslationTargetSelector {
+                            translationTargetCarousel
+                        }
+                        actionCarousel
+                    }
+                    .padding(.bottom, carouselBottomPadding)
+                    .layoutPriority(1)
                 }
-                .padding(.bottom, carouselBottomPadding)
-                .layoutPriority(1)
             }
             Divider()
                 .overlay(OpenKeyboardTheme.Stroke.control.opacity(0.5))
@@ -395,7 +414,9 @@ private struct AIActionPanel: View {
     }
 
     private var panelHeight: CGFloat {
-        KeyboardPanelLayout.actionPanelHeight
+        isCompactLandscape
+            ? KeyboardPanelLayout.compactActionPanelHeight
+            : KeyboardPanelLayout.actionPanelHeight
     }
 
     private var carouselHeight: CGFloat {
@@ -419,7 +440,7 @@ private struct AIActionPanel: View {
     }
 
     private var actionResultFontSize: CGFloat {
-        15
+        isCompactLandscape ? 14 : 15
     }
 
     private var header: some View {
@@ -440,8 +461,8 @@ private struct AIActionPanel: View {
         suggestionContent
         .frame(
             maxWidth: .infinity,
-            minHeight: state.actionResultViewportHeight,
-            maxHeight: state.actionResultViewportHeight,
+            minHeight: state.actionResultViewportHeight(isCompactLandscape: isCompactLandscape),
+            maxHeight: state.actionResultViewportHeight(isCompactLandscape: isCompactLandscape),
             alignment: state.selectedOption == nil ? .center : .topLeading
         )
         .padding(.top, 10)

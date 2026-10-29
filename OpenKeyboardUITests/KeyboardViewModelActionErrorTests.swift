@@ -18,6 +18,113 @@ final class KeyboardViewModelActionErrorTests: XCTestCase {
         super.tearDown()
     }
 
+    func testLandscapeKeyboardUsesCompactNativeLikeMetricsAndRestoresPortrait() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
+
+        XCTAssertEqual(model.keyboardPresentationHeight, 267)
+        XCTAssertEqual(model.typingMetrics.letterKeyHeight, 54)
+        model.updatePhoneLandscape(true)
+
+        XCTAssertEqual(model.keyboardPresentationHeight, 221)
+        XCTAssertTrue(model.usesCompactTypingLayout)
+        XCTAssertEqual(model.typingMetrics.letterKeyHeight, 44)
+        XCTAssertEqual(model.typingMetrics.keyCapHeight, 33)
+        XCTAssertEqual(model.typingMetrics.horizontalSpacing, KeyboardMetrics().horizontalSpacing)
+
+        let positions = KeyboardKeyPositions(
+            availableWidth: 812,
+            spacing: model.typingMetrics.horizontalSpacing
+        )
+        let topRow = positions.topRow(
+            keyIDs: KeyboardInputMode.letters.topRowKeys,
+            keyHeight: model.typingMetrics.letterKeyHeight
+        )
+        XCTAssertEqual(topRow.keys.first?.touchFrame.minX, 0)
+        XCTAssertEqual(topRow.keys.last?.touchFrame.maxX, 812)
+        XCTAssertEqual(topRow.keys.first?.touchFrame.height, 44)
+
+        model.toggleNumbers()
+        XCTAssertEqual(model.keyboardPresentationHeight, 221)
+        XCTAssertEqual(model.typingMetrics.letterKeyHeight, 44)
+
+        model.updatePhoneLandscape(false)
+        XCTAssertEqual(model.keyboardPresentationHeight, 267)
+        XCTAssertEqual(model.typingMetrics.letterKeyHeight, 54)
+    }
+
+    func testLandscapeEmojiHeightStaysCompactAndNumberPadKeepsItsOwnHeight() {
+        let proxy = FakeTextDocumentProxy(text: "")
+        let model = KeyboardViewModel(textDocumentProxy: proxy, loadConfig: { .default })
+        model.updatePhoneLandscape(true)
+
+        model.handleTypingAction(.smileys, advance: {})
+        XCTAssertEqual(model.keyboardPresentationHeight, 221)
+        XCTAssertFalse(model.usesCompactTypingLayout)
+
+        model.handleSmileyAction(.beginSearch, advance: {})
+        XCTAssertGreaterThan(model.keyboardPresentationHeight, 221)
+        model.handleSmileyAction(.endSearch, advance: {})
+        XCTAssertEqual(model.keyboardPresentationHeight, 221)
+
+        model.handleSmileyAction(.returnToTyping, advance: {})
+        proxy.keyboardType = .decimalPad
+        model.refreshNumberPadContext()
+        XCTAssertEqual(model.keyboardPresentationHeight, model.numberPadHeight)
+        XCTAssertFalse(model.usesCompactTypingLayout)
+
+        XCTAssertEqual(
+            KeyboardViewModel.presentationHeight(
+                panelMode: .keyboard,
+                actionPanelState: nil,
+                searchingSmileys: false,
+                isPhoneLandscape: true,
+                hasActionError: true
+            ),
+            267
+        )
+    }
+
+    func testLandscapeActionPanelDropsExpansionAndUsesCompactResultViewport() {
+        let sourceText = "Please make this clearer."
+        let state = KeyboardActionPanelState(sourceText: sourceText)
+
+        XCTAssertEqual(
+            KeyboardViewModel.presentationHeight(
+                panelMode: .actions,
+                actionPanelState: state,
+                searchingSmileys: false,
+                isPhoneLandscape: false
+            ),
+            KeyboardPanelLayout.actionPanelHeight
+        )
+        XCTAssertEqual(
+            KeyboardViewModel.presentationHeight(
+                panelMode: .actions,
+                actionPanelState: state,
+                searchingSmileys: false,
+                isPhoneLandscape: true
+            ),
+            KeyboardPanelLayout.compactActionPanelHeight
+        )
+        XCTAssertEqual(KeyboardPanelLayout.compactActionPanelHeight, 221)
+        XCTAssertEqual(
+            state.actionResultViewportHeight(isCompactLandscape: true),
+            KeyboardPanelLayout.compactActionPanelScrollableResultHeight
+        )
+
+        var translationState = state
+        translationState.selectAction(.translate(nil))
+        XCTAssertEqual(
+            translationState.actionResultViewportHeight(isCompactLandscape: true),
+            KeyboardPanelLayout.compactActionPanelContextualResultHeight
+        )
+        XCTAssertEqual(
+            KeyboardPanelLayout.compactActionPanelContextualResultHeight,
+            KeyboardPanelLayout.compactActionPanelScrollableResultHeight
+        )
+    }
+
     func testKeyboardControllerLoadsBeforeHostDocumentConnects() {
         let controller = KeyboardViewController()
         controller.loadViewIfNeeded()

@@ -21,14 +21,21 @@ final class KeyboardViewController: UIInputViewController {
 
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
+        refreshKeyboardLayout()
         refreshRuntimeState()
         applyKeyboardHeight(currentKeyboardHeight, forcingLayout: true)
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        refreshKeyboardLayout()
         refreshRuntimeState()
         refreshNumberPadHostContext()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        refreshKeyboardLayout()
     }
 
     override func textWillChange(_ textInput: UITextInput?) {
@@ -103,15 +110,18 @@ final class KeyboardViewController: UIInputViewController {
         Publishers.CombineLatest(
             Publishers.CombineLatest4(viewModel.$panelMode, viewModel.$actionPanelState,
                                       viewModel.$isShowingSmileys, viewModel.$smileyState),
-            Publishers.CombineLatest(viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch)
+            Publishers.CombineLatest4(viewModel.$isNumberPadVisible, viewModel.$needsSystemKeyboardSwitch,
+                                      viewModel.$isPhoneLandscape, viewModel.$actionError)
         )
-            .map { presentation, numberPad in
+            .map { presentation, context in
                 let (panelMode, actionPanelState, showing, smileys) = presentation
-                let (isNumberPadVisible, needsSystemSwitch) = numberPad
+                let (isNumberPadVisible, needsSystemSwitch, isPhoneLandscape, actionError) = context
                 return isNumberPadVisible
                     ? NumberPadGeometry(availableWidth: 0).height + 12 + (needsSystemSwitch ? 44 : 0)
                     : KeyboardViewModel.presentationHeight(panelMode: panelMode, actionPanelState: actionPanelState,
-                                                           searchingSmileys: showing && smileys.isSearching)
+                                                           searchingSmileys: showing && smileys.isSearching,
+                                                           isPhoneLandscape: isPhoneLandscape,
+                                                           hasActionError: actionError != nil)
             }
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -120,6 +130,13 @@ final class KeyboardViewController: UIInputViewController {
                 self.applyKeyboardHeight(height, forcingLayout: true)
             }
             .store(in: &cancellables)
+    }
+
+    private func refreshKeyboardLayout() {
+        let isPhoneLandscape = traitCollection.userInterfaceIdiom == .phone
+            && (view.window?.windowScene?.interfaceOrientation.isLandscape == true
+                || traitCollection.verticalSizeClass == .compact)
+        viewModel?.updatePhoneLandscape(isPhoneLandscape)
     }
 
     private func refreshNumberPadHostContext() {
