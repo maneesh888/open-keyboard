@@ -181,7 +181,14 @@ or ambiguous:
 1. **Simulator accessibility/control:** use a purpose-built, generically named integration to
    inspect the normal app's accessibility hierarchy, operate discoverable controls, type, tap,
    swipe, and capture direct Simulator screenshots. Accessibility metadata or action success alone
-   is not visual proof; inspect the resulting visible state and deliver the screenshots.
+   is not visual proof; inspect the resulting visible state and deliver the screenshots. For Xcode
+   MCP device interaction, pass this task worktree's absolute path as `workspaceIdentifier`, confirm
+   it is open with `XcodeListWorkspaces`, and hold the repository's shared Simulator lock for the
+   full session. Pass an exact newly created and
+   recorded disposable Simulator UUID, require `deviceIsSimulator == true` and an exact match to
+   that UUID, end the Xcode session before releasing the lock, and delete only that owned Simulator.
+   If the session returns a `skillToTrigger` integration that is unavailable, end the session and
+   continue to the next tier; do not synthesize events directly or claim interaction proof.
 2. **Computer Use:** when tier one is unavailable or insufficient for a system-level interaction or
    visual judgment, use Computer Use or equivalent host UI automation to inspect and operate the
    normal Simulator and capture direct screenshots.

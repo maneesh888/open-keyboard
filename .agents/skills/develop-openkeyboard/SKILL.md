@@ -88,6 +88,31 @@ task. A device evidence requirement is a blocker for Codex-operated proof when a
 absent, not permission. This restriction governs Codex and its tools; the user may perform their
 own verification and approve the exact head without granting device access.
 
+Use Xcode 27-or-newer MCP tools as focused accelerators when available. Bind each call to the
+active session worktree by passing its absolute path as `workspaceIdentifier`, and confirm it is
+open with `XcodeListWorkspaces` before the first call and after any Xcode-window change. Prefer
+project-aware reads of targets, schemes, test plans, tests, build settings, logs, issues, and Apple
+documentation. Xcode MCP tools supplement; they never replace the repository scripts, exact-head
+gates, independent review, or human approval. Treat an MCP build as build evidence only, a
+completed MCP test as automated regression evidence, and a rendered preview as diagnostic visual
+evidence only unless `AGENTS.md` explicitly defines a stronger route. Project-mutating Xcode tools
+require existing edit authority and the same diff, secret,
+artifact, hook, and verification review as filesystem edits.
+
+Hold the repository's shared Simulator lock for the full Xcode MCP device-interaction session.
+Create and record a fresh disposable simulator, pass only its exact UUID, and require
+`deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID before
+any install, launch, or synthesized event. Do not use best-match selection, a pre-existing
+Simulator, or a discovery call that may enumerate connected physical devices while physical-device
+authority is `NO`. End the interaction session and delete only the exact workflow-owned simulator.
+If the session returns a `skillToTrigger` integration that is unavailable, end the session and
+report the boundary instead of calling lower-level interaction tools directly.
+
+While physical-device authority is `NO`, do not call `XcodeListRunDestinations` or another tool that
+may enumerate a connected physical device. `BuildProject`, `RunAllTests`, `RunSomeTests`,
+`RunProject`, and `RenderPreview` inherit Xcode's active destination and do not accept an exact
+simulator UUID, so use the repository scripts instead of those destination-implicit actions.
+
 XCUITest real-extension coverage remains automated regression evidence. Test-seeded states remain
 diagnostics. Neither proves production behavior or physical-device behavior. UI, extension
 lifecycle, Apply/Copy/Back/Rerun, and result-presentation changes require the applicable normal

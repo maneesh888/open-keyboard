@@ -249,6 +249,48 @@ class. Record the route and its limits. Do not discard valid evidence solely bec
 tool or test name differs; do not relabel mocks as live, test-seeded UI as normal runtime, or a
 partial sequence as complete. Preserve valid evidence and investigate only the remaining gap.
 
+### Xcode MCP acceleration
+
+When an open Xcode 27 or newer workspace exposes Xcode tools through MCP, use them where they make
+focused investigation faster: identify the active session worktree with `XcodeListWorkspaces`,
+inspect targets, schemes, test plans, tests, build settings, build logs, issues, and Apple
+documentation, and use focused builds or tests only when the destination-safety rules below permit
+them. Xcode MCP tools supplement; they never replace the
+repository scripts, diff classification, exact-head full/live gates, independent review, or human
+approval. An MCP build is build evidence only, a completed MCP test is automated regression
+evidence, and a rendered preview is diagnostic visual evidence only. None is a repository gate
+unless this policy explicitly names that exact route.
+
+For every workspace-scoped Xcode MCP call, pass the active worktree's absolute path as its
+`workspaceIdentifier`; use `XcodeListWorkspaces` to confirm that exact workspace is open before the
+first call and after any Xcode-window change. Never edit or test the integration checkout by
+accident. Project-mutating tools require normal edit authority, must remain inside the work order,
+and still require Git diff,
+secret, generated-artifact, staging, hook, and verification review. Do not let an Xcode tool change
+signing, entitlements, Info.plist values, build settings, schemes, destinations, test plans,
+targets, or files merely because the tool is available.
+
+Treat every Xcode MCP build, test, run, preview, or device-interaction call that can use Simulator
+as Simulator-backed work. Hold the repository's shared Simulator lock for the full Xcode MCP
+device-interaction session. Use a newly created, recorded disposable simulator and pass its exact
+UUID; never use best-match device selection or operate on a pre-existing or user-open Simulator.
+Require `deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID
+before installing, launching, or synthesizing an event. Under default-denied physical-device
+authority, do not call `XcodeListRunDestinations` or another destination/device discovery tool that
+may enumerate a connected physical device. Destination-implicit actions such as `BuildProject`,
+`RunAllTests`, `RunSomeTests`, `RunProject`, and `RenderPreview` do not accept an exact simulator
+UUID; do not call them while physical-device authority is `NO`. Use the repository scripts instead.
+Always end the Xcode interaction session and delete only the exact workflow-owned disposable
+simulator. If the session returns a `skillToTrigger` integration that is unavailable, end the
+session, preserve any valid earlier evidence, and report the interaction as unavailable rather than
+bypassing the requirement.
+
+Xcode-returned accessibility hierarchies, screenshots, and logs are evidence only after inspection.
+For normal runtime proof, the app must still be normally installed and launched without test or
+seeded state, the visible result must be inspected, and every used screenshot must be delivered.
+Starting a session, booting a simulator, or receiving a successful action response alone is not
+visual acceptance.
+
 ### When runtime proof is required
 
 Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun, or result presentation

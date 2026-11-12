@@ -146,6 +146,67 @@ The explicit `./scripts/ios/test.sh ui` route remains broader than `--full`. It 
 credential- and simulator-state-dependent classes, so it is diagnostic rather than a mandatory
 credential-free push gate.
 
+## Xcode MCP acceleration
+
+Xcode 27 and newer can expose the open workspace through `xcrun mcpbridge`. The external agent must
+have Xcode Intelligence permission, Xcode must have the intended project open, and every call must
+pass the active session worktree's absolute path as `workspaceIdentifier`. Use
+`XcodeListWorkspaces` to confirm that exact workspace is open before the first call and after any
+Xcode-window change. A second Xcode window for the integration checkout is not an acceptable
+substitute.
+
+Use the project-aware tools proportionally:
+
+| Purpose | Helpful Xcode MCP tools | Evidence boundary |
+|---|---|---|
+| Resolve project state | `XcodeListWorkspaces`, `XcodeListTargets`, `XcodeListSchemes`, `XcodeListTestPlans` | Read-only discovery |
+| Select focused coverage | `GetTestList`, `GetTargetBuildSettings`, `GetFileCompilerFlags` | Read-only diagnostic input |
+| Diagnose an iteration | `GetBuildLog`, `GetConsoleOutput`, `XcodeRefreshCodeIssuesInFile` | Diagnostic evidence only |
+| Check Apple API guidance | `DocumentationSearch` | Source guidance, not implementation proof |
+| Compile an iteration | `BuildProject` | Build evidence only; never regression or runtime proof |
+| Run focused coverage | `RunSomeTests`, `RunAllTests` | Automated regression evidence only when destination safety below permits the call |
+| Inspect a preview | `RenderPreview` | Diagnostic visual evidence only; never regression or normal runtime proof |
+| Collect normal UI evidence | Xcode device-interaction hierarchy and screenshot tools | Normal proof only when every runtime condition below is met |
+
+Xcode MCP tools supplement; they never replace the repository scripts, proportional diff
+classification, exact-head `check.sh` and `check-live.sh` gates, independent review, protected
+GitHub checks, or human approval. Do not report an MCP build or focused test as a full repository
+gate. Preserve the repository scripts as the reproducible, head-bound acceptance route even when
+the equivalent Xcode action is faster during diagnosis.
+
+Tools that write files, targets, entitlements, Info.plist values, build settings, schemes,
+destinations, or test plans are normal repository mutations. Use them only with edit authority and
+only in the active worktree. Inspect the resulting Git diff and apply the same secret,
+generated-artifact, hook, staging, and verification checks required for any other edit. Avoid
+switching persistent Xcode state when a read-only inspection or repository command is sufficient.
+
+### Simulator and device-interaction safety
+
+Any MCP action that can build for, test on, run on, preview on, boot, install to, or interact with a
+Simulator is Simulator-backed work. Hold the repository's shared Simulator lock for the full Xcode
+MCP device-interaction session; acquiring it only for setup is insufficient. Create a fresh
+disposable simulator under that lock, record its canonical UUID, and pass that UUID to the Xcode
+session. Require `deviceIsSimulator == true` and an exact match to the recorded disposable
+simulator UUID before any install, launch, or synthesized event. Never use best-match device names
+or a pre-existing or user-open Simulator. End the MCP session before releasing the lock, then shut
+down and delete only the exact workflow-owned UUID.
+
+Physical-device authority remains independent and defaults to `NO`. While it is `NO`, avoid Xcode
+destination or device-discovery calls that may enumerate connected physical devices, including
+`XcodeListRunDestinations`, and never use a generic or best-match device identifier. The
+destination-implicit `BuildProject`, `RunAllTests`, `RunSomeTests`, `RunProject`, and `RenderPreview`
+actions do not accept an exact simulator UUID and may inherit a physical destination; do not call
+them while physical-device authority is `NO`. Use the repository scripts instead. If the session
+returns a `skillToTrigger` integration that the active environment cannot supply, end the session
+and record the interaction as unavailable. Do not bypass the requirement by calling
+event-synthesis tools directly.
+
+An Xcode hierarchy, screenshot path, or successful interaction response is not self-verifying.
+Normal runtime proof still requires a normally installed and launched app without `--uitesting`,
+debug injection, or seeded state; visible production interaction; screenshot inspection; the full
+runtime record; and delivery of every screenshot used as proof. A session that only starts or boots
+a Simulator proves tool setup, not app behavior.
+
 ## Targeted routing
 
 Select the smallest route that covers the acceptance criterion. These are starting points, not
