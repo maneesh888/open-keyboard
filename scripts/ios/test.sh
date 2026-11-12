@@ -609,22 +609,33 @@ create_disposable_simulator_for_device_type() {
   local display_name="$1"
   local device_type="$2"
   local created_simulator=""
-  local runtime runtime_identifiers simulator_name
+  local runtime runtime_identifiers sdk_major sdk_version simulator_name
 
   if [[ -n "$SENSITIVE_LIVE_SIMULATOR" || "$SENSITIVE_LIVE_SIMULATOR_OWNED" != "false" ]]; then
     echo -e "${RED}✗ Refusing to replace a disposable simulator still owned by this workflow.${NC}" >&2
     exit 1
   fi
 
+  sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+  sdk_major="${sdk_version%%.*}"
+  if [[ ! "$sdk_major" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}✗ Could not determine the active Xcode iOS Simulator SDK version.${NC}" >&2
+    exit 1
+  fi
+
   runtime_identifiers="$(
     xcrun simctl list runtimes -j |
       ruby -rjson -e '
+        maximum_runtime_major = Integer(ARGV.fetch(0), 10)
         runtimes = JSON.parse(STDIN.read).fetch("runtimes").select do |runtime|
-          runtime["isAvailable"] && runtime.fetch("identifier").include?(".SimRuntime.iOS-")
+          version = runtime.fetch("version").split(".").map(&:to_i)
+          runtime["isAvailable"] &&
+            runtime.fetch("identifier").include?(".SimRuntime.iOS-") &&
+            version.fetch(0) <= maximum_runtime_major
         end
         runtimes.sort_by { |runtime| runtime.fetch("version").split(".").map(&:to_i) }
           .reverse_each { |runtime| puts runtime.fetch("identifier") }
-      '
+      ' "$sdk_major"
   )"
   simulator_name="OpenKeyboard ${display_name} Test $$ $(date +%s)"
   while IFS= read -r runtime; do
@@ -767,8 +778,8 @@ case "$MODE" in
   deterministic-ui)
     echo -e "${YELLOW}Running deterministic OpenKeyboard UI-target tests on iPhone 16...${NC}"
     require_xcodebuild
-    # Xcode 27 resolves a name-only destination against the newest installed runtime even when
-    # that runtime cannot create the requested device type. Create the newest compatible device
+    # A name-only destination may resolve against a runtime newer than the active Xcode SDK or one
+    # that cannot create the requested device type. Create the newest SDK-compatible device
     # directly and select only the workflow-owned disposable simulator by exact UUID.
     trap cleanup_sensitive_live_artifacts EXIT
     trap 'exit 129' HUP

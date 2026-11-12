@@ -151,6 +151,10 @@ deterministic_ui_block="$(
 )"
 require_phrase 'create_disposable_simulator_for_device_type()' "$ROOT/scripts/ios/test.sh" \
   "The test runner must create an owned Simulator without resolving an existing named device."
+require_phrase 'xcrun --sdk iphonesimulator --show-sdk-version' "$ROOT/scripts/ios/test.sh" \
+  "The test runner must constrain disposable Simulators to the active Xcode SDK."
+require_phrase 'version.fetch(0) <= maximum_runtime_major' "$ROOT/scripts/ios/test.sh" \
+  "The test runner must reject installed runtimes newer than the active Xcode SDK."
 require_block_phrase 'create_disposable_simulator_for_device_type' "$deterministic_ui_block" \
   "Deterministic UI tests must create a workflow-owned disposable Simulator."
 require_block_phrase 'destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"' "$deterministic_ui_block" \
