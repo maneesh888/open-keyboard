@@ -682,6 +682,28 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
         XCTAssertEqual(repeated.map(\.replacementText), ["the", "the"])
     }
 
+    func testGrammarDiffKeepsUnchangedAnchorsOutOfAmbiguousAlignmentHunks() {
+        let dense = GrammarDiffService.edits(
+            from: "i has wrote ths sentance becaus this grammer checker should catches many mistake before i sends it",
+            to: "I wrote this sentence because this grammar checker should catch many mistakes before I send it."
+        )
+        for anchor in ["wrote", "checker", "should", "many", "before", "it"] {
+            XCTAssertFalse(dense.contains {
+                $0.originalText.contains(anchor) || $0.replacementText.contains(anchor)
+            }, "Unchanged anchor drifted into an edit: \(anchor)")
+        }
+
+        let repeated = GrammarDiffService.edits(
+            from: "Go. Go now very very today before dusk.",
+            to: "Go! Go now very today before dusk."
+        )
+        for anchor in ["today", "before", "dusk"] {
+            XCTAssertFalse(repeated.contains {
+                $0.originalText.contains(anchor) || $0.replacementText.contains(anchor)
+            }, "Unchanged anchor drifted into an edit: \(anchor)")
+        }
+    }
+
     func testGrammarDiffTerminatesAndReconstructsPathologicalStructuralChanges() {
         let cases = [
             (
@@ -720,6 +742,18 @@ final class KeyboardSuggestionModelsTests: XCTestCase {
     func testGrammarDiffFallsBackToOneWholeTextEditBeforeUnboundedDifferenceWork() {
         let source = Array(repeating: "alpha", count: 1_600).joined(separator: " ")
         let corrected = Array(repeating: "beta", count: 1_600).joined(separator: " ")
+
+        let edits = GrammarDiffService.edits(from: source, to: corrected)
+
+        XCTAssertEqual(edits.count, 1)
+        XCTAssertEqual(edits.first?.range, KeyboardTextRange(start: 0, end: source.count))
+        XCTAssertEqual(edits.first?.originalText, source)
+        XCTAssertEqual(edits.first?.replacementText, corrected)
+    }
+
+    func testGrammarDiffFallsBackToOneWholeTextEditBeforeUnboundedTraceGrowth() {
+        let source = Array(repeating: "alpha", count: 600).joined(separator: " ")
+        let corrected = Array(repeating: "beta", count: 600).joined(separator: " ")
 
         let edits = GrammarDiffService.edits(from: source, to: corrected)
 
