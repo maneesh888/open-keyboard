@@ -184,6 +184,35 @@ if [[ "$compatible_runtime_output" != "$expected_runtime_output" ]]; then
   echo "The runtime selector must keep compatible runtimes in descending order and reject iOS 27.2 under SDK 27.1." >&2
   exit 1
 fi
+multi_component_runtime_output="$(
+  printf '%s\n' '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1-10","version":"27.1.10","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1-2","version":"27.1.2","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1-1","version":"27.1.1","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1","version":"27.1","isAvailable":true}]}' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.1.2'
+)"
+expected_multi_component_output=$'com.apple.CoreSimulator.SimRuntime.iOS-27-1-2\ncom.apple.CoreSimulator.SimRuntime.iOS-27-1-1\ncom.apple.CoreSimulator.SimRuntime.iOS-27-1'
+if [[ "$multi_component_runtime_output" != "$expected_multi_component_output" ]]; then
+  echo "The runtime selector must compare every numeric version component." >&2
+  exit 1
+fi
+if printf '%s\n' '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0","version":"27.0","isAvailable":"false"}]}' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.1' >/dev/null 2>&1; then
+  echo "The runtime selector must reject non-boolean availability values." >&2
+  exit 1
+fi
+if printf '%s\n' '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0","version":"27.beta","isAvailable":true}]}' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.1' >/dev/null 2>&1; then
+  echo "The runtime selector must reject nonnumeric runtime versions." >&2
+  exit 1
+fi
+if printf '%s\n' '{"runtimes":[]}' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.beta' >/dev/null 2>&1; then
+  echo "The runtime selector must reject nonnumeric SDK versions." >&2
+  exit 1
+fi
+if printf '%s\n' '{"runtimes":' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.1' >/dev/null 2>&1; then
+  echo "The runtime selector must reject malformed runtime JSON." >&2
+  exit 1
+fi
 require_block_phrase 'create_disposable_simulator_for_device_type' "$deterministic_ui_block" \
   "Deterministic UI tests must create a workflow-owned disposable Simulator."
 require_block_phrase 'destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"' "$deterministic_ui_block" \

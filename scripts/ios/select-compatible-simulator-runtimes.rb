@@ -17,14 +17,27 @@ def version_at_most?(candidate, maximum)
 end
 
 maximum_version = numeric_version(ARGV.fetch(0))
-runtimes = JSON.parse($stdin.read).fetch("runtimes").map do |runtime|
-  next unless runtime["isAvailable"]
-  next unless runtime.fetch("identifier").include?(".SimRuntime.iOS-")
+runtime_records = JSON.parse($stdin.read).fetch("runtimes")
+raise TypeError, "runtimes must be an array" unless runtime_records.is_a?(Array)
 
-  version = numeric_version(runtime.fetch("version"))
+runtimes = runtime_records.map do |runtime|
+  raise TypeError, "runtime must be an object" unless runtime.is_a?(Hash)
+
+  available = runtime.fetch("isAvailable")
+  raise TypeError, "isAvailable must be boolean" unless available == true || available == false
+  next unless available
+
+  identifier = runtime.fetch("identifier")
+  raise TypeError, "identifier must be a string" unless identifier.is_a?(String)
+  next unless identifier.include?(".SimRuntime.iOS-")
+
+  raw_version = runtime.fetch("version")
+  raise TypeError, "version must be a string" unless raw_version.is_a?(String)
+
+  version = numeric_version(raw_version)
   next unless version_at_most?(version, maximum_version)
 
-  [version, runtime.fetch("identifier")]
+  [version, identifier]
 end.compact
 
 runtimes.sort_by(&:first).reverse_each { |(_version, identifier)| puts identifier }
