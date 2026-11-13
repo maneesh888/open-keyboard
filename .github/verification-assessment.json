@@ -4,7 +4,7 @@
     ".agents/skills/develop-openkeyboard/SKILL.md": {
       "after": {
         "mode": "100644",
-        "oid": "38d9480d5e11d6ba3a0f4923b0b871e396c6da87"
+        "oid": "572f3ef4c8201e9d8a67d45b1c4af32d265cb545"
       },
       "before": {
         "mode": "100644",
@@ -14,7 +14,7 @@
     "AGENTS.md": {
       "after": {
         "mode": "100644",
-        "oid": "d790a7fa117ad4c9141b69f4b5aba24a906fc3cb"
+        "oid": "f8d0e1f30ece494c97096796e6a0466897d98c06"
       },
       "before": {
         "mode": "100644",
@@ -44,7 +44,7 @@
     "docs/DEVELOPMENT_WORKFLOW.md": {
       "after": {
         "mode": "100644",
-        "oid": "40973eaabf6ca655b689245ade7b5c7712505dae"
+        "oid": "9b71b7e35562857f61d6d08bc3904fb4107b5662"
       },
       "before": {
         "mode": "100644",
@@ -54,7 +54,7 @@
     "docs/REAL_EXTENSION_SMOKE_PLAN.md": {
       "after": {
         "mode": "100644",
-        "oid": "2b476930c6b665c063f4fcef8ccd7d8c78ce0cf3"
+        "oid": "099d8ea55074e7b8ecd9b94d8259bdeef68d8fae"
       },
       "before": {
         "mode": "100644",
@@ -74,7 +74,7 @@
     "scripts/tests/runtime-proof-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "8aedbf45a512b723f2052ad61213f2db4e9cf339"
+        "oid": "7791c0af6f86030a6ea8348758f11ae68cb75608"
       },
       "before": {
         "mode": "100755",
@@ -83,8 +83,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on Xcode 27 and iOS 27, focused regressions covering the three original failures, unchanged-anchor stability, and bounded fallback, plus normal Simulator exercise of the affected grammar result presentation, prove the changed behavior. Independent review inspects the local diff algorithm, runtime-selection safeguards, workflow policy, and this complete path and blob binding.",
-  "rationale": "The diff documents the Xcode MCP workflow, selects a compatible disposable Simulator runtime in the deterministic test harness, and replaces GrammarDiffService OS-runtime CollectionDifference alignment with an equivalent bounded local Myers alignment. It changes neither semantic request construction, canonical prompt contracts, gateway transport, provider or model selection, response validation or parsing, nor dependency gitlinks. The grammar behavior changed is deterministic localization and presentation of an already-validated corrected string, so a live model matrix cannot distinguish or prove this runtime-alignment defect.",
+  "proof": "Exact-head full deterministic verification on the scoped Xcode 27.1 beta toolchain and iOS 27.1 runtime, focused regressions covering the three original failures, unchanged-anchor stability, and bounded fallback, plus exact-head repository-owner exercise of the affected grammar result presentation, prove the changed behavior. Independent review inspects the local diff algorithm, runtime-selection safeguards, Device Hub and MCP workflow policy, and this complete path and blob binding.",
+  "rationale": "The diff documents the Xcode 27 Device Hub and structured MCP interaction workflow, selects a compatible disposable Simulator runtime in the deterministic test harness, and replaces GrammarDiffService OS-runtime CollectionDifference alignment with an equivalent bounded local Myers alignment. It changes neither semantic request construction, canonical prompt contracts, gateway transport, provider or model selection, response validation or parsing, nor dependency gitlinks. The grammar behavior changed is deterministic localization and presentation of an already-validated corrected string, so a live model matrix cannot distinguish or prove this runtime-alignment defect.",
   "requirement_id": "R7",
   "schema": 1
 }
