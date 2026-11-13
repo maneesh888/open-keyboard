@@ -173,8 +173,17 @@ require_phrase 'create_disposable_simulator_for_device_type()' "$ROOT/scripts/io
   "The test runner must create an owned Simulator without resolving an existing named device."
 require_phrase 'xcrun --sdk iphonesimulator --show-sdk-version' "$ROOT/scripts/ios/test.sh" \
   "The test runner must constrain disposable Simulators to the active Xcode SDK."
-require_phrase 'version.fetch(0) <= maximum_runtime_major' "$ROOT/scripts/ios/test.sh" \
+require_phrase 'select-compatible-simulator-runtimes.rb' "$ROOT/scripts/ios/test.sh" \
   "The test runner must reject installed runtimes newer than the active Xcode SDK."
+compatible_runtime_output="$(
+  printf '%s\n' '{"runtimes":[{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-2","version":"27.2","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-1","version":"27.1","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-27-0","version":"27.0","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-26-4","version":"26.4","isAvailable":true},{"identifier":"com.apple.CoreSimulator.SimRuntime.iOS-28-0","version":"28.0","isAvailable":false},{"identifier":"com.apple.CoreSimulator.SimRuntime.xrOS-2-0","version":"2.0","isAvailable":true}]}' |
+    ruby "$ROOT/scripts/ios/select-compatible-simulator-runtimes.rb" '27.1'
+)"
+expected_runtime_output=$'com.apple.CoreSimulator.SimRuntime.iOS-27-1\ncom.apple.CoreSimulator.SimRuntime.iOS-27-0\ncom.apple.CoreSimulator.SimRuntime.iOS-26-4'
+if [[ "$compatible_runtime_output" != "$expected_runtime_output" ]]; then
+  echo "The runtime selector must keep compatible runtimes in descending order and reject iOS 27.2 under SDK 27.1." >&2
+  exit 1
+fi
 require_block_phrase 'create_disposable_simulator_for_device_type' "$deterministic_ui_block" \
   "Deterministic UI tests must create a workflow-owned disposable Simulator."
 require_block_phrase 'destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"' "$deterministic_ui_block" \
