@@ -270,6 +270,32 @@ secret, generated-artifact, staging, hook, and verification review. Do not let a
 signing, entitlements, Info.plist values, build settings, schemes, destinations, test plans,
 targets, or files merely because the tool is available.
 
+Before a Device Hub-backed Xcode 27-or-newer interaction, bind the attempt to one developer-tool
+installation without changing or relying on the host-global `xcode-select` state. Prefer a scoped
+`DEVELOPER_DIR` for repository commands and record the selected Xcode path, the output of
+`xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
+workflow-owned UUID.
+Open Device Hub from that same Xcode with **Xcode > Open Developer Tool > Device Hub**. Device Hub's
+sidebar is not a complete CoreSimulator inventory: it shows simulators added there or previously
+chosen as Xcode run destinations. Confirm the selected row's UUID and OS in the Info inspector
+against the owned UUID, and keep these distinct in diagnosis: host-window visibility, Device Hub
+sidebar membership, CoreSimulator device state, and the app's runtime state. A missing or hidden
+Device Hub row does not by itself establish that a simulator is unavailable, stopped, locked, or
+unauthorized.
+
+Apply version-specific Device Hub cautions without converting them into causal claims. Xcode 27
+can keep parallel-test simulators active while they are invisible in Device Hub, and its pasteboard
+transfer and synchronization behavior has changed; diagnose the exact route and device state
+instead of inferring a lock, authorization, or service failure. Xcode 27.1 may take several minutes
+on initial Simulator launch, and most app extensions are unavailable in the iPhone Duo Simulator
+runtime. Duo's Closed, Partially Open, and Open controls are device poses, not ordinary slab-device
+orientation; record the exact pose when it is an acceptance input. Use a supported non-Duo runtime
+for extension proof unless the acceptance criterion is specifically Duo behavior, in which case
+report the extension limitation rather than substituting a different claim. Do not install or
+change certificates or trust roots, broaden Xcode/MCP permissions, or place credentials, private
+endpoints, or other secrets on a clipboard as a workaround without explicit repository-owner
+authorization for that action.
+
 Treat every Xcode MCP build, test, run, preview, or device-interaction call that can use Simulator
 as Simulator-backed work. Hold the repository's shared Simulator lock for the full Xcode MCP
 device-interaction session. Use a newly created, recorded disposable simulator and pass its exact
@@ -327,12 +353,15 @@ ambiguous requirements:
 
 An interaction-tool error applies to that route only. A Computer Use report that the host is locked
 or Simulator is unavailable is a route-level failure, not a terminal runtime-proof conclusion. If
-Computer Use was selected, refresh its app state once and retry Simulator with the canonical bundle
-identifier `com.apple.iphonesimulator` when bundle targeting is supported; then try any other
-available non-XCTest Simulator accessibility/control route before falling back to human
-verification. Do not loop on a genuinely locked host. `simctl` may install, launch, inspect device
-state, and capture the current framebuffer, but those operations alone do not prove that the
-required visible interaction occurred.
+Computer Use was selected, refresh its app state once. For Xcode 27 or newer, first target Device
+Hub from the same recorded Xcode installation and verify the exact owned UUID; otherwise, or when
+that surface cannot be targeted, retry Simulator with the canonical bundle identifier
+`com.apple.iphonesimulator` when bundle targeting is supported. Then try any other available
+non-XCTest Simulator accessibility/control route before falling back to human verification. Do not
+loop on a genuinely locked host. `simctl` may install, launch, inspect device state, and capture the
+current framebuffer, but those operations alone do not prove that the required visible interaction
+occurred. A Device Hub screenshot is full device resolution, but it is normal runtime proof only
+when every interaction, inspection, privacy, runtime-record, and delivery requirement above is met.
 
 Tool availability does not change the proof standard. If interaction is unavailable, unreliable,
 or ambiguous, stop before push/readiness, state exactly what remains unverified, and provide the

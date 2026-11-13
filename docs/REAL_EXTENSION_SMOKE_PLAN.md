@@ -174,6 +174,24 @@ Live transport/model checks remain separate automated evidence through
 
 Use a clean simulator appropriate to the change and the exact commit intended for push.
 
+For Xcode 27-or-newer Device Hub interaction, bind setup and proof to one Xcode installation with a
+scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`. Record the selected Xcode
+path and `xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
+owned UUID. Open Device Hub from that same Xcode, select the simulator if it appears, and match its
+Info inspector UUID and OS to the owned UUID. Device Hub only lists simulators added there or
+previously used as Xcode run destinations, and parallel-test simulators may be active while hidden,
+so keep host-window visibility, sidebar membership, CoreSimulator state, and app runtime state
+separate. Do not infer a lock, authorization problem, or service failure from a missing row or a
+pasteboard transfer failure.
+
+Allow for a slow initial launch on Xcode 27.1. Treat iPhone Duo Closed, Partially Open, and Open as
+device poses and record the exact pose when relevant. Because most app extensions are unavailable
+in the Xcode 27.1 Duo runtime, use a supported non-Duo simulator for extension proof unless the
+requirement specifically targets Duo behavior; report that limitation instead of substituting a
+different claim. Never install or change certificates or trust roots, broaden Xcode/MCP
+permissions, or place credentials, private endpoints, or other secrets on a clipboard as a
+workaround without explicit repository-owner authorization for that action.
+
 Use this escalation hierarchy for interaction and proof generation. Stop when a tier produces every
 required result; retain valid evidence from an earlier tier and escalate only what remains missing
 or ambiguous:
@@ -199,11 +217,15 @@ The first two tiers are AI-verification routes and require screenshot inspection
 a separate authorization route and does not.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
-not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
-identifier `com.apple.iphonesimulator` when supported. If that retry fails, attempt any other
-available non-XCTest Simulator accessibility/control route before using the human handoff; do not
-keep retrying a genuinely locked host. `simctl` can support setup and capture the current
-framebuffer, but a capture alone does not prove that the required visible interaction occurred.
+not a terminal runtime-proof conclusion. Refresh its app state once. For Xcode 27 or newer, first
+target Device Hub from the same recorded Xcode installation and verify the exact owned UUID;
+otherwise, or when Device Hub cannot be targeted, retry Simulator with bundle identifier
+`com.apple.iphonesimulator` when supported. If that retry fails, attempt any other available
+non-XCTest Simulator accessibility/control route before using the human handoff; do not keep
+retrying a genuinely locked host. `simctl` can support setup and capture the current framebuffer,
+but a capture alone does not prove that the required visible interaction occurred. Device Hub's
+full-resolution screenshot likewise proves normal runtime only after the required production
+interaction, inspection, privacy review, runtime record, and artifact delivery.
 
 1. Build and install the app normally from Xcode using the required build configuration. Do not
    pass `--uitesting` or any debug-state/result-seeding arguments.

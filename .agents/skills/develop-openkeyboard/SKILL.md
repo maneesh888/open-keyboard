@@ -99,6 +99,25 @@ evidence only unless `AGENTS.md` explicitly defines a stronger route. Project-mu
 require existing edit authority and the same diff, secret,
 artifact, hook, and verification review as filesystem edits.
 
+For Device Hub-backed interaction, bind the attempt to one Xcode installation with scoped
+`DEVELOPER_DIR` rather than changing or relying on global `xcode-select`. Record the selected Xcode
+path, `xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact owned
+UUID, then open Device Hub from that same Xcode. Treat host-window visibility, Device Hub sidebar
+membership, CoreSimulator device state, and app runtime state as separate signals. Device Hub only
+lists simulators added there or previously used as Xcode run destinations, so a missing row is not
+proof that an owned simulator is stopped, locked, unauthorized, or unavailable. Confirm the Info
+inspector UUID and OS against the owned UUID before interaction.
+
+Use Xcode release-note caveats only to guide diagnosis: parallel-test simulators can be active while
+invisible in Xcode 27 Device Hub, and pasteboard transfer or synchronization behavior must not be
+relabelled as an authorization, lock, or service failure without direct evidence. Allow for Xcode
+27.1's slow initial Simulator launch. Treat iPhone Duo Closed, Partially Open, and Open as device
+poses and record the pose when relevant; most app extensions are unavailable in the Xcode 27.1 Duo
+runtime, so use a supported non-Duo runtime for extension proof unless Duo behavior is itself the
+criterion. Never install or change certificates or trust roots, broaden Xcode/MCP permissions, or
+put credentials, private endpoints, or other secrets on a clipboard as a workaround without
+explicit repository-owner authorization for that action.
+
 Hold the repository's shared Simulator lock for the full Xcode MCP device-interaction session.
 Create and record a fresh disposable simulator, pass only its exact UUID, and require
 `deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID before
@@ -130,12 +149,16 @@ attestation. Accessibility metadata or action success without an inspected visib
 Codex-captured screenshot is not AI visual proof.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
-not a terminal runtime-proof conclusion. Refresh once and retry Simulator with bundle identifier
+not a terminal runtime-proof conclusion. Refresh once; for Xcode 27 or newer, first target Device
+Hub from the same recorded Xcode installation and verify the exact owned UUID. Otherwise, or when
+that surface cannot be targeted, retry Simulator with bundle identifier
 `com.apple.iphonesimulator` when supported, then attempt any other available non-XCTest Simulator
 accessibility/control route. Do not loop on a genuinely locked host or treat a `simctl` framebuffer
-capture as proof of interaction. If interaction is still unavailable or ambiguous, stop before
-publication and disclose the gap; do not substitute more XCTest or ask the user to upload an
-image. Explicit repository-owner approval for the exact head selects the human authorization
+capture as proof of interaction. A full-resolution Device Hub screenshot still proves normal
+runtime only after the required production interaction, visible-state inspection, privacy review,
+runtime record, and artifact delivery. If interaction is still unavailable or ambiguous, stop
+before publication and disclose the gap; do not substitute more XCTest or ask the user to upload
+an image. Explicit repository-owner approval for the exact head selects the human authorization
 route, satisfies the runtime/device decision gate, and lets the workflow continue automatically
 through the remaining authorized stages without another runtime, readiness, or merge confirmation.
 Record the mode as `human-approved`, qualify `RUNTIME_VERIFIED` accordingly, keep the independently

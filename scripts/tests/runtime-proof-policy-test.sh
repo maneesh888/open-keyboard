@@ -104,6 +104,16 @@ require_phrase 'do not call them while physical-device authority is `NO`' "$ROOT
   "AGENTS.md must fail closed for destination-implicit Xcode actions."
 require_phrase 'An MCP build is build evidence only' "$ROOT/AGENTS.md" \
   "AGENTS.md must not classify build success as regression evidence."
+require_phrase 'without changing or relying on the host-global `xcode-select` state' "$ROOT/AGENTS.md" \
+  "AGENTS.md must bind Device Hub work without mutating global Xcode selection."
+require_phrase 'host-window visibility, Device Hub' "$ROOT/AGENTS.md" \
+  "AGENTS.md must distinguish the Device Hub host surface from simulator state."
+require_phrase 'can keep parallel-test simulators active while they are invisible in Device Hub' "$ROOT/AGENTS.md" \
+  "AGENTS.md must account for Xcode 27 hidden parallel-test simulators."
+require_phrase 'most app extensions are unavailable in the iPhone Duo Simulator' "$ROOT/AGENTS.md" \
+  "AGENTS.md must retain the Xcode 27.1 Duo extension limitation."
+require_phrase 'broaden Xcode/MCP permissions' "$ROOT/AGENTS.md" \
+  "AGENTS.md must not weaken trust, MCP permission, or clipboard-secret controls implicitly."
 
 require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must classify real-extension XCUITest accurately."
@@ -117,6 +127,12 @@ require_phrase 'If the session returns a `skillToTrigger` integration that is un
   "The development skill must fail closed when Xcode device interaction dependencies are unavailable."
 require_phrase 'so use the repository scripts instead of those destination-implicit actions' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must fail closed for destination-implicit Xcode actions."
+require_phrase '`DEVELOPER_DIR` rather than changing or relying on global `xcode-select`' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must keep Xcode selection scoped to the proof attempt."
+require_phrase 'Treat host-window visibility, Device Hub sidebar' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must distinguish host, Device Hub, simulator, and app states."
+require_phrase 'that surface cannot be targeted, retry Simulator with bundle identifier' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must retry the matching Xcode 27 Device Hub before legacy Simulator targeting."
 require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must block proof-sensitive publication without runtime proof."
 require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
@@ -146,6 +162,16 @@ require_phrase "Hold the repository's shared Simulator lock for the full Xcode" 
   "Development workflow must serialize Xcode MCP Simulator interaction."
 require_phrase 'MCP device interaction, pass this task worktree'"'"'s absolute path as `workspaceIdentifier`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The runtime plan must bind Xcode MCP proof to the active worktree."
+require_phrase '### Xcode 27 Device Hub preflight' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must define the Xcode 27 Device Hub preflight."
+require_phrase 'These release notes do not establish the cause of an' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must not turn Xcode release notes into a DTServiceHub causal claim."
+require_phrase 'full-device-resolution screenshot' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the Device Hub screenshot evidence boundary."
+require_phrase 'scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must record a scoped Xcode toolchain selection."
+require_phrase 'Because most app extensions are unavailable' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must route extension proof around the unsupported Xcode 27.1 Duo runtime."
 deterministic_ui_block="$(
   sed -n '/^  deterministic-ui)/,/^    ;;/p' "$ROOT/scripts/ios/test.sh"
 )"
