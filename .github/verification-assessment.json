@@ -64,7 +64,7 @@
     "scripts/ios/select-compatible-simulator-runtimes.rb": {
       "after": {
         "mode": "100644",
-        "oid": "b53bf412d6da51acd95834dc36c8ca3472007c23"
+        "oid": "97fe1ee5e6840261570d61712385bc0c453ed8ca"
       },
       "before": null
     },
@@ -81,7 +81,7 @@
     "scripts/tests/runtime-proof-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "ab712762974dbad8687de42ec6e1e833a2372266"
+        "oid": "86c11fbac766e8063cadc7f409916bdab1db691d"
       },
       "before": {
         "mode": "100755",
@@ -110,7 +110,7 @@
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and runtime-selection policy regressions including rejection of a newer minor runtime, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the relevant evidence.",
+  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and fail-closed runtime-selection regressions covering newer, multi-component, and malformed runtime metadata, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the relevant evidence.",
   "rationale": "The complete diff changes deterministic grammar alignment, Xcode 27 Simulator runtime selection and structured interaction workflow policy, runtime-proof documentation, and test tooling without changing semantic requests, prompts, transport, provider or model selection, response validation or parsing, or dependency gitlinks; live model execution cannot prove these deterministic and policy-only changes.",
   "requirement_id": "R7",
   "schema": 1
