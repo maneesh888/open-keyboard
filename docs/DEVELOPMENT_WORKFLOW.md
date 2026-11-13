@@ -43,72 +43,24 @@ These skills route work but do not weaken the proof requirements below.
 
 ## Authority and proof-first mode
 
-`AGENTS.md` owns the authority ledger and sticky constraints. Resolve them before fetching,
-creating a branch/worktree, initializing submodules, editing, staging, committing, pushing, or
-changing a PR. Record whether each constraint applies to a named checkpoint, the current phase or
-objective, or the whole task. Recompute the ledger when a phase completes and a clear request
-starts the next one; do not copy a completed read-only test phase's `NO` values into a later
-implementation phase. Exploratory language does not authorize tracked edits. Planning and
-proof-first experiments use existing routes or temporary non-repository harnesses.
-
-A clear bounded implementation request supplies standing conditional authority for the ordinary
-repository lifecycle through guarded merge. The user does not need to enumerate or separately
-authorize commit, push, draft PR creation or updates, readiness, and merge. Each stage still waits
-for its proportional deterministic, live, runtime, exact-head, review, and GitHub gates. Explicit
-sticky opt-outs override the corresponding stage; deployment and destructive cleanup remain
-separately authorized actions.
-
-Authority and readiness are separate. Once standing lifecycle authority is `YES`, incomplete
-deterministic, live, runtime, exact-head, review, or GitHub evidence leaves that stage `WAITING`;
-passing evidence makes it `READY`. Advance automatically from each ready stage to the next one
-without asking the user to repeat commit, push, PR, readiness, or merge permission. Evidence
-confidence cannot override an active objective- or task-wide opt-out.
-
-Physical-device interaction is a separate, default-denied authority. Do not discover, inspect,
-connect to, install on, launch on, sign for, test on, or capture from a physical device until the
-user explicitly requests that work. Simulator testing, a device-proof requirement, push/PR
-authority, and merge authority do not imply physical-device permission. This restriction applies
-to Codex and its tools; it does not prevent the user from performing their own verification and
-explicitly approving the exact head.
-
-Proof-first mode is active when the user requests results, testing, or model comparison before
-implementation. Every tracked repository mutation—including production, test, documentation,
-configuration, workflow, staging, and commit changes—remains prohibited until the requested
-evidence is reported and the user explicitly authorizes implementation. An HTTP `503` or other
-gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do not infer model
-capability, and stop without speculative production changes.
-
-Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
-`LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
-the PR requirement ledger's `VERIFIED`/`UNVERIFIED` values. Required unverified live/runtime status
-prohibits a claim that the behavior is fixed or working.
+`AGENTS.md` is the sole authority for the ledger, sticky constraints, proof-first transitions,
+physical-device denial, lifecycle autonomy, and task-status labels. Apply it before mutation and at
+every phase or state transition. Authority and readiness are separate: authorization permits a
+stage, while the proportional deterministic, live, runtime, exact-head, review, and GitHub evidence
+decides when that stage is ready. This reference only supplies the mechanics below.
 
 ## Evidence classes and claims
 
-Every verification artifact belongs to one of three runtime evidence classes:
-
-1. **Automated regression evidence:** unit tests, XCTest, XCUITest, mocked gateway tests, debug
-   launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. An
-   XCUITest that installs and activates the real keyboard extension remains automated evidence.
-2. **Normal simulator runtime proof:** a normally installed and launched app, without
-   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. Exercise the
-   affected normal app surface; extension/handoff criteria use the actual extension through an
-   ordinary host-app text field. Capture screenshots directly from Simulator/Xcode outside XCTest.
-3. **Physical-device proof:** the exact signed build is installed on the configured device and
-   exercised through the normal extension lifecycle. AI verification requires screenshots that the
-   AI captures and inspects. Human verification uses explicit exact-head owner approval and never
-   requires a user screenshot upload.
-
-These classes support separate claims: build success, automated regression coverage, transport
-success, semantic acceptance, visual/runtime acceptance, physical-device acceptance, independent
-review, signing, deployment, and App Review. Never infer a stronger claim from a weaker class.
-Normal GitHub CI proves deterministic behavior/build only. Automated tests—including real-extension
-XCUITest—cannot alone authorize a proof-sensitive push, PR readiness, release readiness, or a claim
-that the user-visible workflow works.
+Use the three evidence classes and exact claim boundaries defined in `AGENTS.md`. The routes below
+implement those classes; they never promote automated or diagnostic output into normal simulator
+or physical-device proof.
 
 ## Modes and cumulative gates
 
-Run targeted tests while editing, then run the highest cumulative gate required by the final state:
+Run targeted tests while editing. Do not repeatedly run cumulative gates after small evidence or
+wording changes. When the bounded diff is ready, freeze it and use the highest gate required by the
+next state. Validate or regenerate any diff-bound applicability manifest against the complete
+intended diff before the proportional hook or aggregate gate:
 
 | Mode | Final gate | Use |
 |---|---|---|
@@ -117,6 +69,14 @@ Run targeted tests while editing, then run the highest cumulative gate required 
 | Release | `./scripts/check.sh --hygiene` for classified documentation-only changes; `--full` otherwise, on exact `HEAD` | PR readiness, tag, or release |
 
 Calling `./scripts/check.sh` without an argument runs `--full`.
+
+The mandatory commit hook supplies the proportional staged Standard result; do not immediately
+duplicate that same command while the staged content is unchanged. After the final commit, run the
+Release gate once on the clean exact head, then perform the applicable live/runtime work and one
+independent review. When push is authorized, the mandatory pre-push hook is that Release run; do
+not manually run the same gate immediately before it. When push is unavailable, a manual local run
+does not exempt a later push from its hook. Any edit or commit starts a new exact-head cycle. No
+deterministic hook result substitutes for live/runtime evidence, GitHub checks, or review.
 
 Release readiness additionally requires exact-head GitHub checks and an independent review through
 `$review-verify-merge-pr`; the local deterministic gate alone is insufficient.
@@ -683,39 +643,14 @@ the protected `app-store-connect` environment.
 
 ## Planning and development automation
 
-`$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release
-mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
-change to the repository scripts above.
+`$develop-openkeyboard` is the direct route for a bounded implementation. Do not add routine
+planning or delegation. Use `$audit-openkeyboard-ui` for UI audits and
+`$write-openkeyboard-product-copy` for user-visible wording as routed by `AGENTS.md`.
 
-UI audit requests route to the read-only `$audit-openkeyboard-ui`. It traces SwiftUI controls,
-visible states, navigation, ViewModels, production behavior, and relevant tests across the requested
-screen and adjacent journey, without silently expanding the edit scope. It owns layout, behavior,
-accessibility, and interaction findings while delegating wording-specific analysis to
-`$write-openkeyboard-product-copy`. Source-only results must use `confirmed from code`, `likely
-visual risk`, or `requires simulator verification`; they never establish rendered or runtime
-acceptance. When fixes are authorized, use the audit inside `$develop-openkeyboard` and apply the
-normal implementation and proof gates.
-
-For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs
-inside the development route. It reviews the requested screen together with its incoming and
-outgoing journey, balances interface clarity with truthful product positioning, checks reachable
-states and accessibility language, and protects shared terminology. A copy audit remains read-only
-unless implementation is already authorized. The skill never edits canonical semantic prompts or
-generated user content, and an implemented UI-copy change still requires the normal UI proof route.
-
-For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
-`$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
-
-For an explicitly requested major milestone, roadmap, long-horizon plan, or multi-phase
-cross-cutting effort, the read-only `major-milestone-planner` invokes
-`$plan-openkeyboard-major-milestone`. It builds a dependency-aware sequence of bounded phases with
-entry criteria, exit criteria, proportional evidence, decision gates, risks, and the first
-executable work package. It does not make ordinary tasks adopt proof-first mode, and it does not
-require physical-device proof unless the requirement is device-specific or a material device-only
-uncertainty remains.
-
-A clear implementation request bypasses both planning routes. Neither planner edits, tests,
-publishes, or grants authority for a later lifecycle stage.
+Use the read-only `$plan-openkeyboard-work-package` only for an explicitly requested bounded plan or
+“what next” package. Use `$plan-openkeyboard-major-milestone` only for an explicitly requested
+roadmap, long-horizon milestone, or multi-phase plan. Neither planner mutates the repository or
+grants later lifecycle authority.
 
 ## Deployment
 

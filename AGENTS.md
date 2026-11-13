@@ -20,8 +20,8 @@ it.
    `codex/<session-slug>` on fresh `origin/main`. Put worktrees under
    `OPEN_KEYBOARD_WORKTREE_ROOT`, or a sibling `open-keyboard-worktrees` directory when unset. Do
    not fall back to a stale or different base without asking.
-4. **Bound or phase the task.** Record the objective, affected surfaces, exclusions, verification
-   level, required evidence class, and authority ledger. Route explicit major-milestone, roadmap,
+4. **Bound or phase the task.** Record one compact checkpoint with the objective, changed surfaces,
+   exclusions, required evidence, and authority ledger. Route explicit major-milestone, roadmap,
    long-horizon, or multi-phase planning to the read-only `major-milestone-planner` through
    `$plan-openkeyboard-major-milestone`. Route one bounded plan or a concise "what next" request to
    the read-only `work-package-planner` through `$plan-openkeyboard-work-package`. For a clear
@@ -36,21 +36,28 @@ it.
    Source inspection may establish code findings and visual risks, but never rendered or runtime
    acceptance. Reuse local patterns, add focused regression coverage for changed behavior, and
    preserve files outside the work order.
-6. **Verify and commit only when authorized.** Run affected tests, `git diff --check`, and the
-   proportional repository gate below. Recheck the authority ledger before staging and again
-   before committing. Install hooks with `./scripts/install-hooks.sh`; never use `--no-verify`.
-   Stage only intended files and inspect `git diff --cached --name-only` plus the staged diff for
-   secrets or generated artifacts.
+6. **Verify and commit only when authorized.** During diagnosis and implementation, run focused
+   tests for the changed behavior; do not repeatedly run a cumulative repository gate after small
+   edits. Once the bounded change is ready, freeze it, run `git diff --check`, and let the mandatory
+   commit hook run the proportional staged gate. Before that gate, validate or regenerate any
+   diff-bound applicability manifest against the complete intended diff. Do not immediately repeat
+   the same command when that hook already passed for unchanged staged content. Recheck authority
+   before staging and committing, install hooks with `./scripts/install-hooks.sh`, never use
+   `--no-verify`, and inspect the staged names and diff for secrets or generated artifacts.
 7. **Collect runtime proof when required and authorized.** Proof-sensitive user-facing changes
    require normal simulator runtime proof before push. Codex-operated physical-device interaction
    remains prohibited until the user explicitly requests it; a device-specific requirement creates
    a blocker for Codex-operated proof, not permission to connect to a device. The user may perform
    their own verification and explicitly approve the exact head without granting Codex device
    access. Follow the evidence and interaction rules below.
-8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
-   authorized push, run the exact-head diff-classified deterministic gate
+8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. After the
+   final commit freezes the exact head, run the diff-classified deterministic gate once
    (`./scripts/check.sh --hygiene` for documentation-only changes; `--full` otherwise) and the
-   classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
+   classifier-selected exact-head live gate, then perform one independent review. Any later edit or
+   commit starts a new exact-head cycle. When push is authorized, let the mandatory pre-push hook
+   supply that aggregate gate instead of running it manually immediately before push. If push is
+   unavailable and local evidence is required, run it manually and disclose that a later push hook
+   must repeat it. Open a draft PR, keep a requirement ledger, and use
    `$review-verify-merge-pr` for exact-head review, readiness, and guarded merge.
 9. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
    Remove a session worktree and delete its merged branch only after confirming it is clean and no
@@ -251,97 +258,28 @@ partial sequence as complete. Preserve valid evidence and investigate only the r
 
 ### Xcode MCP acceleration
 
-When an open Xcode 27 or newer workspace exposes Xcode tools through MCP, use them where they make
-focused investigation faster: identify the active session worktree with `XcodeListWorkspaces`,
-inspect targets, schemes, test plans, tests, build settings, build logs, issues, and Apple
-documentation, and use focused builds or tests only when the destination-safety rules below permit
-them. Xcode MCP tools supplement; they never replace the
-repository scripts, diff classification, exact-head full/live gates, independent review, or human
-approval. An MCP build is build evidence only, a completed MCP test is automated regression
-evidence, and a rendered preview is diagnostic visual evidence only. None is a repository gate
-unless this policy explicitly names that exact route.
+Use Xcode 27-or-newer MCP tools only as focused accelerators. Xcode MCP tools supplement; they never replace the
+repository scripts, diff classification, exact-head full/live gates, independent review,
+or human approval. Bind every workspace-scoped call to the active worktree's absolute path as
+`workspaceIdentifier`, confirm it with `XcodeListWorkspaces`, and apply normal edit authority and
+diff review to project mutations. An MCP build proves only a build, an MCP test is automated
+regression evidence, and a preview is diagnostic visual evidence.
 
-For every workspace-scoped Xcode MCP call, pass the active worktree's absolute path as its
-`workspaceIdentifier`; use `XcodeListWorkspaces` to confirm that exact workspace is open before the
-first call and after any Xcode-window change. Never edit or test the integration checkout by
-accident. Project-mutating tools require normal edit authority, must remain inside the work order,
-and still require Git diff,
-secret, generated-artifact, staging, hook, and verification review. Do not let an Xcode tool change
-signing, entitlements, Info.plist values, build settings, schemes, destinations, test plans,
-targets, or files merely because the tool is available.
+Simulator-capable Xcode interaction must use the repository's shared lock, a freshly created and
+recorded disposable simulator, and its exact UUID. Require `deviceIsSimulator == true`; never use
+best-match selection or a pre-existing Simulator. While physical-device authority is `NO`, avoid
+destination discovery that can enumerate connected devices and use repository scripts instead of
+destination-implicit actions. Bind Xcode/Device Hub work with scoped `DEVELOPER_DIR`, not global
+`xcode-select`; do not change certificates, trust, permissions, or clipboard secrets as a
+workaround. Always end the interaction session, delete only the owned Simulator, and fail closed
+when a required integration is unavailable.
 
-Before a Device Hub-backed Xcode 27-or-newer interaction, bind the attempt to one developer-tool
-installation without changing or relying on the host-global `xcode-select` state. Prefer a scoped
-`DEVELOPER_DIR` for repository commands and record the selected Xcode path, the output of
-`xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
-workflow-owned UUID.
-Open Device Hub from that same Xcode with **Xcode > Open Developer Tool > Device Hub**. Device Hub's
-sidebar is not a complete CoreSimulator inventory: it shows simulators added there or previously
-chosen as Xcode run destinations. Confirm the selected row's UUID and OS in the Info inspector
-against the owned UUID, and keep these distinct in diagnosis: host-window visibility, Device Hub
-sidebar membership, CoreSimulator device state, and the app's runtime state. A missing or hidden
-Device Hub row does not by itself establish that a simulator is unavailable, stopped, locked, or
-unauthorized.
-
-Apply version-specific Device Hub cautions without converting them into causal claims. Xcode 27
-can keep parallel-test simulators active while they are invisible in Device Hub, and its pasteboard
-transfer and synchronization behavior has changed; diagnose the exact route and device state
-instead of inferring a lock, authorization, or service failure. Xcode 27.1 may take several minutes
-on initial Simulator launch, and most app extensions are unavailable in the iPhone Duo Simulator
-runtime. Duo's Closed, Partially Open, and Open controls are device poses, not ordinary slab-device
-orientation; record the exact pose when it is an acceptance input. Use a supported non-Duo runtime
-for extension proof unless the acceptance criterion is specifically Duo behavior, in which case
-report the extension limitation rather than substituting a different claim. Do not install or
-change certificates or trust roots, broaden Xcode/MCP permissions, or place credentials, private
-endpoints, or other secrets on a clipboard as a workaround without explicit repository-owner
-authorization for that action.
-
-Keep automated Xcode testing separate from interactive Device Hub proof. XCTest and XCUIAutomation
-remain the repository's automated regression route and may run headlessly through `xcodebuild test`
-with a retained result bundle; Device Hub does not need to be visible or controllable for that gate.
-For a new-Xcode gate, identify the required Xcode marketing version, build number, and release
-channel against Apple's release listing, then run the repository script with a scoped
-`DEVELOPER_DIR`, a compatible runtime, and the exact workflow-owned simulator UUID. Do not install
-or update Xcode or change global developer-tool selection as part of the gate. A beta or RC proves
-only that named prerelease toolchain, not the current stable Xcode, and an older-Xcode fallback is
-diagnostic unless the requirement explicitly names it as the gate.
-
-Treat every Xcode MCP build, test, run, preview, or device-interaction call that can use Simulator
-as Simulator-backed work. Hold the repository's shared Simulator lock for the full Xcode MCP
-device-interaction session. Use a newly created, recorded disposable simulator and pass its exact
-UUID; never use best-match device selection or operate on a pre-existing or user-open Simulator.
-Require `deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID
-before installing, launching, or synthesizing an event. Under default-denied physical-device
-authority, do not call `XcodeListRunDestinations` or another destination/device discovery tool that
-may enumerate a connected physical device. Destination-implicit actions such as `BuildProject`,
-`RunAllTests`, `RunSomeTests`, `RunProject`, and `RenderPreview` do not accept an exact simulator
-UUID; do not call them while physical-device authority is `NO`. Use the repository scripts instead.
-Always end the Xcode interaction session and delete only the exact workflow-owned disposable
-simulator. If the session returns a `skillToTrigger` integration that is unavailable, end the
-session, preserve any valid earlier evidence, and report the interaction as unavailable rather than
-bypassing the requirement.
-
-When Xcode exposes the device-interaction capabilities, prefer them over blind host-coordinate
-clicks. Confirm the workspace with `XcodeListWorkspaces`; use destination discovery only when it can
-be constrained to simulators without enumerating physical devices, otherwise use the already
-recorded owned UUID. Start `DeviceInteractionStartWorkspaceSession` with that exact UUID, recheck
-`deviceIsSimulator` and the returned UUID, and use `DeviceInteractionInstallAndRun` for a normal
-unseeded launch. Follow the returned `skillToTrigger` worker instructions. Capture a fresh hierarchy
-before every synthesized event, derive coordinates from that hierarchy rather than a screenshot,
-inspect the direct screenshot after the event, then call `DeviceInteractionEndSession` even on
-failure. Record capture SHA, Xcode build, runtime/build, exact UUID, action, observed result,
-mock-versus-live data source, and whether the image covers only the app or the actual extension.
-An app-only screenshot or preview never proves the real keyboard-extension lifecycle.
-
-Use Xcode preview variants for focused layout diagnosis when available, including light/dark
-appearance, orientation, and Dynamic Type. Label every preview diagnostic evidence; it is not
-XCTest regression evidence, normal runtime proof, or real-extension lifecycle proof.
-
-Xcode-returned accessibility hierarchies, screenshots, and logs are evidence only after inspection.
-For normal runtime proof, the app must still be normally installed and launched without test or
-seeded state, the visible result must be inspected, and every used screenshot must be delivered.
-Starting a session, booting a simulator, or receiving a successful action response alone is not
-visual acceptance.
+Before Xcode/Device Hub work, load the detailed, version-specific preflight, destination-safety,
+structured-interaction, evidence-recording, and cleanup rules in
+`docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration`. Automated XCTest remains distinct from
+interactive Device Hub and normal runtime proof. A successful action, hierarchy, log, or screenshot
+is evidence only after the required production interaction and visible result are inspected; an
+app-only image never proves the keyboard-extension lifecycle.
 
 ### When runtime proof is required
 

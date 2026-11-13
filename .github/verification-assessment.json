@@ -4,7 +4,7 @@
     ".agents/skills/develop-openkeyboard/SKILL.md": {
       "after": {
         "mode": "100644",
-        "oid": "572f3ef4c8201e9d8a67d45b1c4af32d265cb545"
+        "oid": "c53b37e9f15d9f2a4bef9d6128097e474477ca57"
       },
       "before": {
         "mode": "100644",
@@ -14,7 +14,7 @@
     "AGENTS.md": {
       "after": {
         "mode": "100644",
-        "oid": "f8d0e1f30ece494c97096796e6a0466897d98c06"
+        "oid": "3d08b746a2b4f5e4857b1199697e1ba437f1c20e"
       },
       "before": {
         "mode": "100644",
@@ -44,7 +44,7 @@
     "docs/DEVELOPMENT_WORKFLOW.md": {
       "after": {
         "mode": "100644",
-        "oid": "9b71b7e35562857f61d6d08bc3904fb4107b5662"
+        "oid": "84999256a738a63dc7213b8f6f90543621fe456e"
       },
       "before": {
         "mode": "100644",
@@ -74,17 +74,37 @@
     "scripts/tests/runtime-proof-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "7791c0af6f86030a6ea8348758f11ae68cb75608"
+        "oid": "8b54c25587fcf512fb345c3b126344727736c56e"
       },
       "before": {
         "mode": "100755",
         "oid": "a8e2a60bdd8f45437a873f1d6ad30d413d09d6a9"
       }
+    },
+    "scripts/tests/workflow-authorization-policy-test.sh": {
+      "after": {
+        "mode": "100755",
+        "oid": "5e9253b3ba2b63aafd594818e06e07290c7d5db2"
+      },
+      "before": {
+        "mode": "100755",
+        "oid": "d3ac2a409f76fa9e6335b01893a4687ec916a16f"
+      }
+    },
+    "scripts/tests/workflow-policy-test.sh": {
+      "after": {
+        "mode": "100755",
+        "oid": "e77bad0a9d86e7c5f9e3bb159fd79c5d4fd5a7ff"
+      },
+      "before": {
+        "mode": "100755",
+        "oid": "3a1cfc7d793ae12be87e771fe057b17e9af860c7"
+      }
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on the scoped Xcode 27.1 beta toolchain and the newest installed iPhone-16-compatible iOS runtime, focused regressions covering the three original failures, unchanged-anchor stability, and bounded fallback, plus exact-head repository-owner exercise of the affected grammar result presentation, prove the changed behavior. Independent review inspects the local diff algorithm, runtime-selection safeguards, Device Hub and MCP workflow policy, and this complete path and blob binding.",
-  "rationale": "The diff documents the Xcode 27 Device Hub and structured MCP interaction workflow, selects a compatible disposable Simulator runtime in the deterministic test harness, and replaces GrammarDiffService OS-runtime CollectionDifference alignment with an equivalent bounded local Myers alignment. It changes neither semantic request construction, canonical prompt contracts, gateway transport, provider or model selection, response validation or parsing, nor dependency gitlinks. The grammar behavior changed is deterministic localization and presentation of an already-validated corrected string, so a live model matrix cannot distinguish or prove this runtime-alignment defect.",
+  "proof": "Exact-head full deterministic verification on scoped Xcode 27.1 with the newest compatible iPhone 16 runtime, focused grammar and policy regressions, complete diff bindings, and independent review prove the deterministic and workflow changes. Normal runtime grammar-result presentation or exact-head owner approval remains separately required; the assessment does not waive it.",
+  "rationale": "The diff documents Xcode 27 Device Hub and structured MCP interaction, selects an active-toolchain-compatible disposable Simulator runtime, replaces GrammarDiffService runtime-dependent alignment with bounded local Myers alignment, and consolidates workflow policy without changing shipping semantics. It changes neither semantic requests, prompts, transport, provider or model selection, response validation or parsing, nor dependency gitlinks; live model execution cannot prove these deterministic or policy-only changes.",
   "requirement_id": "R7",
   "schema": 1
 }

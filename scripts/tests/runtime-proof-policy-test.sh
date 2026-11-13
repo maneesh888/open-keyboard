@@ -92,69 +92,31 @@ require_phrase 'Computer Use or equivalent host UI automation' "$ROOT/AGENTS.md"
   "AGENTS.md must retain the generic host-UI automation fallback."
 require_phrase 'Xcode MCP tools supplement; they never replace the' "$ROOT/AGENTS.md" \
   "AGENTS.md must keep Xcode MCP supplemental to repository gates."
-require_phrase 'pass the active worktree'"'"'s absolute path as its' "$ROOT/AGENTS.md" \
+require_phrase 'active worktree'"'"'s absolute path as' "$ROOT/AGENTS.md" \
   "AGENTS.md must bind Xcode MCP calls to the active worktree."
-require_phrase '`XcodeListWorkspaces` to confirm that exact workspace is open' "$ROOT/AGENTS.md" \
+require_phrase 'confirm it with `XcodeListWorkspaces`' "$ROOT/AGENTS.md" \
   "AGENTS.md must verify the active Xcode workspace."
-require_phrase "Hold the repository's shared Simulator lock for the full Xcode MCP" "$ROOT/AGENTS.md" \
+require_phrase "repository's shared lock" "$ROOT/AGENTS.md" \
   "AGENTS.md must serialize Xcode MCP Simulator interaction."
-require_phrase '`deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID' "$ROOT/AGENTS.md" \
+require_phrase 'Require `deviceIsSimulator == true`' "$ROOT/AGENTS.md" \
   "AGENTS.md must bind Xcode MCP interaction to an owned Simulator."
-require_phrase 'do not call them while physical-device authority is `NO`' "$ROOT/AGENTS.md" \
+require_phrase 'destination discovery that can enumerate connected devices' "$ROOT/AGENTS.md" \
   "AGENTS.md must fail closed for destination-implicit Xcode actions."
-require_phrase 'An MCP build is build evidence only' "$ROOT/AGENTS.md" \
+require_phrase 'An MCP build proves only a build' "$ROOT/AGENTS.md" \
   "AGENTS.md must not classify build success as regression evidence."
-require_phrase 'without changing or relying on the host-global `xcode-select` state' "$ROOT/AGENTS.md" \
+require_phrase 'scoped `DEVELOPER_DIR`, not global' "$ROOT/AGENTS.md" \
   "AGENTS.md must bind Device Hub work without mutating global Xcode selection."
-require_phrase 'host-window visibility, Device Hub' "$ROOT/AGENTS.md" \
-  "AGENTS.md must distinguish the Device Hub host surface from simulator state."
-require_phrase 'can keep parallel-test simulators active while they are invisible in Device Hub' "$ROOT/AGENTS.md" \
-  "AGENTS.md must account for Xcode 27 hidden parallel-test simulators."
-require_phrase 'most app extensions are unavailable in the iPhone Duo Simulator' "$ROOT/AGENTS.md" \
-  "AGENTS.md must retain the Xcode 27.1 Duo extension limitation."
-require_phrase 'broaden Xcode/MCP permissions' "$ROOT/AGENTS.md" \
-  "AGENTS.md must not weaken trust, MCP permission, or clipboard-secret controls implicitly."
-require_phrase 'Device Hub does not need to be visible or controllable for that gate' "$ROOT/AGENTS.md" \
-  "AGENTS.md must keep automated XCTest independent of interactive Device Hub control."
-require_phrase 'only that named prerelease toolchain, not the current stable Xcode' "$ROOT/AGENTS.md" \
-  "AGENTS.md must not present a prerelease Xcode as current stable evidence."
-require_phrase 'older-Xcode fallback is' "$ROOT/AGENTS.md" \
-  "AGENTS.md must keep older-Xcode fallback results diagnostic by default."
-require_phrase '`DeviceInteractionStartWorkspaceSession` with that exact UUID' "$ROOT/AGENTS.md" \
-  "AGENTS.md must define the structured Xcode device-interaction session."
-require_phrase 'derive coordinates from that hierarchy rather than a screenshot' "$ROOT/AGENTS.md" \
-  "AGENTS.md must derive synthesized events from fresh accessibility state."
-require_phrase 'mock-versus-live data source' "$ROOT/AGENTS.md" \
-  "AGENTS.md must label screenshot data and extension scope."
-require_phrase 'light/dark' "$ROOT/AGENTS.md" \
-  "AGENTS.md must retain preview variants as diagnostic-only evidence."
+require_phrase 'docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration' "$ROOT/AGENTS.md" \
+  "AGENTS.md must route detailed Xcode mechanics to the development workflow."
 
-require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must classify real-extension XCUITest accurately."
-require_phrase 'Xcode MCP tools supplement; they never replace the' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must keep Xcode MCP supplemental to repository gates."
-require_phrase 'absolute path as `workspaceIdentifier`' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must bind Xcode MCP calls to the active worktree."
-require_phrase "Hold the repository's shared Simulator lock for the full Xcode MCP" "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must serialize Xcode MCP Simulator interaction."
-require_phrase 'If the session returns a `skillToTrigger` integration that is unavailable' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must fail closed when Xcode device interaction dependencies are unavailable."
-require_phrase 'so use the repository scripts instead of those destination-implicit actions' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must fail closed for destination-implicit Xcode actions."
-require_phrase '`DEVELOPER_DIR` rather than changing or relying on global `xcode-select`' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must keep Xcode selection scoped to the proof attempt."
-require_phrase 'Treat host-window visibility, Device Hub sidebar' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must distinguish host, Device Hub, simulator, and app states."
-require_phrase 'that surface cannot be targeted, retry Simulator with bundle identifier' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must retry the matching Xcode 27 Device Hub before legacy Simulator targeting."
-require_phrase 'Do not make interactive Device Hub control a prerequisite for automated regression.' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must preserve headless XCTest and XCUIAutomation gates."
-require_phrase '`DeviceInteractionInstallAndRun` without test or seed' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must require a normal unseeded MCP launch."
-require_phrase 'app-only-versus-extension scope' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must distinguish app screenshots from extension proof."
-require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must block proof-sensitive publication without runtime proof."
+require_phrase 'do not copy or weaken the repository'"'"'s authority, evidence, secret, Simulator, git, or review' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must keep AGENTS.md canonical instead of duplicating policy."
+require_phrase '`docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration`' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must route detailed Xcode mechanics to the canonical reference."
+require_phrase 'prefer repository scripts when an action cannot target the exact owned' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must fail closed for unsafe Xcode destinations."
+require_phrase 'never discover or operate a physical device' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must preserve default-denied physical-device authority."
 require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
   "The review skill must block automatic authorization without AI screenshot proof."
 require_phrase 'explicit repository-owner approval for the exact head may accept that disclosed gap' "$ROOT/.codex/agents/pr-reviewer.toml" \
