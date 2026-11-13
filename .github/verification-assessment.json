@@ -44,7 +44,7 @@
     "docs/DEVELOPMENT_WORKFLOW.md": {
       "after": {
         "mode": "100644",
-        "oid": "84999256a738a63dc7213b8f6f90543621fe456e"
+        "oid": "52762c07541d29e20afbbb2528bd4f6d0cdc4f88"
       },
       "before": {
         "mode": "100644",
@@ -103,8 +103,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on scoped Xcode 27.1 with the newest compatible iPhone 16 runtime, focused grammar and policy regressions, complete diff bindings, and independent review prove the deterministic and workflow changes. Normal runtime grammar-result presentation or exact-head owner approval remains separately required; the assessment does not waive it.",
-  "rationale": "The diff documents Xcode 27 Device Hub and structured MCP interaction, selects an active-toolchain-compatible disposable Simulator runtime, replaces GrammarDiffService runtime-dependent alignment with bounded local Myers alignment, and consolidates workflow policy without changing shipping semantics. It changes neither semantic requests, prompts, transport, provider or model selection, response validation or parsing, nor dependency gitlinks; live model execution cannot prove these deterministic or policy-only changes.",
+  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and workflow-policy regressions, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the evidence relevant to the changed behavior.",
+  "rationale": "The complete diff changes deterministic grammar alignment, Xcode 27 Simulator and structured interaction workflow policy, runtime-proof documentation, and test tooling without changing semantic requests, prompts, transport, provider or model selection, response validation or parsing, or dependency gitlinks; live model execution cannot prove these deterministic and policy-only changes.",
   "requirement_id": "R7",
   "schema": 1
 }
