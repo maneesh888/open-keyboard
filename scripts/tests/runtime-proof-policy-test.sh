@@ -120,6 +120,14 @@ require_phrase 'only that named prerelease toolchain, not the current stable Xco
   "AGENTS.md must not present a prerelease Xcode as current stable evidence."
 require_phrase 'older-Xcode fallback is' "$ROOT/AGENTS.md" \
   "AGENTS.md must keep older-Xcode fallback results diagnostic by default."
+require_phrase '`DeviceInteractionStartWorkspaceSession` with that exact UUID' "$ROOT/AGENTS.md" \
+  "AGENTS.md must define the structured Xcode device-interaction session."
+require_phrase 'derive coordinates from that hierarchy rather than a screenshot' "$ROOT/AGENTS.md" \
+  "AGENTS.md must derive synthesized events from fresh accessibility state."
+require_phrase 'mock-versus-live data source' "$ROOT/AGENTS.md" \
+  "AGENTS.md must label screenshot data and extension scope."
+require_phrase 'light/dark' "$ROOT/AGENTS.md" \
+  "AGENTS.md must retain preview variants as diagnostic-only evidence."
 
 require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must classify real-extension XCUITest accurately."
@@ -141,6 +149,10 @@ require_phrase 'that surface cannot be targeted, retry Simulator with bundle ide
   "The development skill must retry the matching Xcode 27 Device Hub before legacy Simulator targeting."
 require_phrase 'Do not make interactive Device Hub control a prerequisite for automated regression.' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must preserve headless XCTest and XCUIAutomation gates."
+require_phrase '`DeviceInteractionInstallAndRun` without test or seed' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must require a normal unseeded MCP launch."
+require_phrase 'app-only-versus-extension scope' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must distinguish app screenshots from extension proof."
 require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must block proof-sensitive publication without runtime proof."
 require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
@@ -186,6 +198,12 @@ require_phrase 'An installed prerelease proves only its named build and channel'
   "Development workflow must preserve the installed-Xcode release-channel boundary."
 require_phrase 'validated result bundle even when Device Hub cannot be' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The runtime plan must keep XCTest automation available without interactive Device Hub."
+require_phrase '### Structured Xcode interaction route' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must define the structured MCP interaction route."
+require_phrase '`DeviceInteractionEndSession` on success, failure, or abandonment' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must always close the Xcode interaction session."
+require_phrase 'App-only screenshots do not prove' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the real-extension evidence boundary."
 deterministic_ui_block="$(
   sed -n '/^  deterministic-ui)/,/^    ;;/p' "$ROOT/scripts/ios/test.sh"
 )"

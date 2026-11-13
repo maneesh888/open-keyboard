@@ -278,6 +278,36 @@ debug injection, or seeded state; visible production interaction; screenshot ins
 runtime record; and delivery of every screenshot used as proof. A session that only starts or boots
 a Simulator proves tool setup, not app behavior.
 
+### Structured Xcode interaction route
+
+When the installed Xcode exposes device-interaction MCP capabilities, use their structured state
+instead of guessing host coordinates:
+
+1. Confirm the exact worktree with `XcodeListWorkspaces`.
+2. Discover run destinations only if the capability can be constrained to simulators without
+   enumerating physical devices. Otherwise keep the repository-created exact owned UUID.
+3. Call `DeviceInteractionStartWorkspaceSession` with the worktree and owned UUID. Require
+   `deviceIsSimulator == true` and the returned UUID to match exactly.
+4. Call `DeviceInteractionInstallAndRun` with no `--uitesting`, mock, debug-state, or seed arguments.
+5. Follow the returned `skillToTrigger` worker instructions. If that worker is unavailable, end the
+   session and escalate to the next proof tier rather than synthesizing events directly.
+6. Capture a fresh accessibility hierarchy, derive the next coordinate from it, synthesize the
+   event, and inspect the direct post-action screenshot. Repeat from a fresh hierarchy after every
+   state change.
+7. Call `DeviceInteractionEndSession` on success, failure, or abandonment before releasing the
+   Simulator lock, then delete only the exact owned simulator.
+
+For each screenshot, record the capture SHA, Xcode marketing version/build/channel,
+simulator runtime/build and UUID, action, visible result, whether the data path is mock or live, and
+whether the image covers the app only or the actual extension. App-only screenshots do not prove
+keyboard-extension activation, cross-process handoff, or normal extension behavior; those criteria
+still require an ordinary host-app text field and the real extension.
+
+Xcode preview variants can accelerate layout diagnosis across light/dark appearance, orientation,
+and Dynamic Type. A preview is diagnostic visual evidence only, even when it renders correctly. It
+does not prove a build gate, XCTest behavior, normal runtime interaction, or the keyboard-extension
+lifecycle.
+
 ## Targeted routing
 
 Select the smallest route that covers the acceptance criterion. These are starting points, not

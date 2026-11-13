@@ -321,6 +321,22 @@ simulator. If the session returns a `skillToTrigger` integration that is unavail
 session, preserve any valid earlier evidence, and report the interaction as unavailable rather than
 bypassing the requirement.
 
+When Xcode exposes the device-interaction capabilities, prefer them over blind host-coordinate
+clicks. Confirm the workspace with `XcodeListWorkspaces`; use destination discovery only when it can
+be constrained to simulators without enumerating physical devices, otherwise use the already
+recorded owned UUID. Start `DeviceInteractionStartWorkspaceSession` with that exact UUID, recheck
+`deviceIsSimulator` and the returned UUID, and use `DeviceInteractionInstallAndRun` for a normal
+unseeded launch. Follow the returned `skillToTrigger` worker instructions. Capture a fresh hierarchy
+before every synthesized event, derive coordinates from that hierarchy rather than a screenshot,
+inspect the direct screenshot after the event, then call `DeviceInteractionEndSession` even on
+failure. Record capture SHA, Xcode build, runtime/build, exact UUID, action, observed result,
+mock-versus-live data source, and whether the image covers only the app or the actual extension.
+An app-only screenshot or preview never proves the real keyboard-extension lifecycle.
+
+Use Xcode preview variants for focused layout diagnosis when available, including light/dark
+appearance, orientation, and Dynamic Type. Label every preview diagnostic evidence; it is not
+XCTest regression evidence, normal runtime proof, or real-extension lifecycle proof.
+
 Xcode-returned accessibility hierarchies, screenshots, and logs are evidence only after inspection.
 For normal runtime proof, the app must still be normally installed and launched without test or
 seeded state, the visible result must be inspected, and every used screenshot must be delivered.

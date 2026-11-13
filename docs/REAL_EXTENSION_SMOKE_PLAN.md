@@ -214,6 +214,14 @@ or ambiguous:
    that UUID, end the Xcode session before releasing the lock, and delete only that owned Simulator.
    If the session returns a `skillToTrigger` integration that is unavailable, end the session and
    continue to the next tier; do not synthesize events directly or claim interaction proof.
+   When the Xcode interaction capabilities are available, use the structured route:
+   `XcodeListWorkspaces`, simulator-only destination discovery when safe,
+   `DeviceInteractionStartWorkspaceSession`, exact returned simulator/UUID checks,
+   `DeviceInteractionInstallAndRun`, the required interaction worker, a fresh hierarchy before each
+   hierarchy-derived event, direct screenshot inspection, and `DeviceInteractionEndSession`.
+   Record mock-versus-live and app-only-versus-extension scope with the capture SHA, toolchain,
+   runtime/build, UUID, action, and result. An app-only image or preview does not prove the real
+   keyboard-extension lifecycle.
 2. **Computer Use:** when tier one is unavailable or insufficient for a system-level interaction or
    visual judgment, use Computer Use or equivalent host UI automation to inspect and operate the
    normal Simulator and capture direct screenshots.

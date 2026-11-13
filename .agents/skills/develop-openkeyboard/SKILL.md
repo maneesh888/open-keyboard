@@ -136,6 +136,20 @@ authority is `NO`. End the interaction session and delete only the exact workflo
 If the session returns a `skillToTrigger` integration that is unavailable, end the session and
 report the boundary instead of calling lower-level interaction tools directly.
 
+When the interaction capabilities are discoverable, prefer their structured route over blind host
+clicks: confirm `XcodeListWorkspaces`; discover destinations only if the call can stay
+Simulator-only; start `DeviceInteractionStartWorkspaceSession` with the owned UUID; recheck the
+returned simulator flag and UUID; call `DeviceInteractionInstallAndRun` without test or seed
+arguments; follow the returned `skillToTrigger` worker instructions; capture a fresh hierarchy;
+derive each action from that hierarchy; inspect the direct post-action screenshot; and always call
+`DeviceInteractionEndSession`. Record the capture SHA, Xcode build, runtime/build, exact UUID,
+action, result, mock-versus-live source, and app-only-versus-extension scope. An app screenshot or
+preview is never real keyboard-extension lifecycle proof.
+
+Use light/dark, orientation, and Dynamic Type preview variants for focused layout diagnosis when
+available, but label them diagnostic visual evidence rather than automated regression, normal
+runtime, or extension proof.
+
 While physical-device authority is `NO`, do not call `XcodeListRunDestinations` or another tool that
 may enumerate a connected physical device. `BuildProject`, `RunAllTests`, `RunSomeTests`,
 `RunProject`, and `RenderPreview` inherit Xcode's active destination and do not accept an exact
