@@ -192,6 +192,13 @@ different claim. Never install or change certificates or trust roots, broaden Xc
 permissions, or place credentials, private endpoints, or other secrets on a clipboard as a
 workaround without explicit repository-owner authorization for that action.
 
+This interactive procedure is normal runtime proof, not the automated XCTest gate. Run automated
+XCTest/XCUIAutomation through the repository scripts with a scoped `DEVELOPER_DIR`, compatible
+runtime, exact workflow-owned UUID, and validated result bundle even when Device Hub cannot be
+shown or controlled. Record the Xcode marketing version, build, and release channel. A beta or RC
+proves only that named prerelease, and an older-Xcode fallback is diagnostic unless the requirement
+explicitly names it. Do not install or update Xcode or change global toolchain selection here.
+
 Use this escalation hierarchy for interaction and proof generation. Stop when a tier produces every
 required result; retain valid evidence from an earlier tier and escalate only what remains missing
 or ambiguous:

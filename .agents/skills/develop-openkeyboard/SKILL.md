@@ -118,6 +118,15 @@ criterion. Never install or change certificates or trust roots, broaden Xcode/MC
 put credentials, private endpoints, or other secrets on a clipboard as a workaround without
 explicit repository-owner authorization for that action.
 
+Do not make interactive Device Hub control a prerequisite for automated regression. Run XCTest and
+XCUIAutomation through the repository scripts and their `xcodebuild test` result-bundle route. For
+a new-Xcode gate, record the required marketing version, build number, and release channel against
+Apple's release listing, then use a scoped `DEVELOPER_DIR`, compatible runtime, and exact owned
+simulator UUID. Do not install or update Xcode or alter global toolchain selection. Treat a beta or
+RC as evidence for that named prerelease only, and an older-Xcode fallback as diagnostic unless the
+requirement explicitly defines it as the gate. Keep this automated evidence distinct from normal
+runtime Device Hub interaction and screenshots.
+
 Hold the repository's shared Simulator lock for the full Xcode MCP device-interaction session.
 Create and record a fresh disposable simulator, pass only its exact UUID, and require
 `deviceIsSimulator == true` and an exact match to the recorded disposable simulator UUID before

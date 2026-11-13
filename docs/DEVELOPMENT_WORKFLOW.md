@@ -223,6 +223,24 @@ or trust roots, broaden Xcode/MCP permissions, or put credentials, private endpo
 secrets on a clipboard as a workaround without explicit repository-owner authorization for that
 action.
 
+#### Automated gates are not Device Hub interaction
+
+Interactive Device Hub availability is not a prerequisite for XCTest or XCUIAutomation. Apple's
+testing documentation supports running a test plan or selected XCTest cases with `xcodebuild test`,
+and XCUIAutomation remains the automated UI-workflow framework. The repository scripts own that
+route, including exact simulator selection, result-bundle retention long enough to validate the
+outcome, cleanup, and the automated-regression evidence label. Do not replace a repository
+automated gate with manual Device Hub interaction, and do not relabel its result as normal runtime
+proof.
+
+When the acceptance criterion is compatibility with a new Xcode release, record the required
+marketing version and build and whether Apple lists it as beta, RC, or stable. Run the repository
+gate with a command-scoped `DEVELOPER_DIR`, a compatible runtime, and an exact workflow-owned UUID.
+Do not install or update Xcode and do not change global developer-tool selection within this route.
+An installed prerelease proves only its named build and channel; it is not evidence for the current
+stable release. An older toolchain may be retained as fallback diagnostics, but it does not satisfy
+the new-Xcode gate unless the requirement explicitly accepts that version.
+
 Official sources reviewed for this policy on 2026-11-13:
 
 - [Managing your simulated and physical devices in Device Hub](https://developer.apple.com/documentation/xcode/managing-your-simulated-and-physical-devices-in-device-hub)
@@ -230,6 +248,8 @@ Official sources reviewed for this policy on 2026-11-13:
 - [Capturing screenshots and videos from devices](https://developer.apple.com/documentation/xcode/capturing-screenshots-and-videos-from-devices)
 - [Xcode 27 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes)
 - [Xcode 27.1 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27_1-release-notes)
+- [Running tests and interpreting results](https://developer.apple.com/documentation/xcode/running-tests-and-interpreting-results)
+- [Testing](https://developer.apple.com/documentation/xcode/testing)
 
 ### Simulator and device-interaction safety
 

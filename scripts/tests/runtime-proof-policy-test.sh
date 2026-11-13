@@ -114,6 +114,12 @@ require_phrase 'most app extensions are unavailable in the iPhone Duo Simulator'
   "AGENTS.md must retain the Xcode 27.1 Duo extension limitation."
 require_phrase 'broaden Xcode/MCP permissions' "$ROOT/AGENTS.md" \
   "AGENTS.md must not weaken trust, MCP permission, or clipboard-secret controls implicitly."
+require_phrase 'Device Hub does not need to be visible or controllable for that gate' "$ROOT/AGENTS.md" \
+  "AGENTS.md must keep automated XCTest independent of interactive Device Hub control."
+require_phrase 'only that named prerelease toolchain, not the current stable Xcode' "$ROOT/AGENTS.md" \
+  "AGENTS.md must not present a prerelease Xcode as current stable evidence."
+require_phrase 'older-Xcode fallback is' "$ROOT/AGENTS.md" \
+  "AGENTS.md must keep older-Xcode fallback results diagnostic by default."
 
 require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must classify real-extension XCUITest accurately."
@@ -133,6 +139,8 @@ require_phrase 'Treat host-window visibility, Device Hub sidebar' "$ROOT/.agents
   "The development skill must distinguish host, Device Hub, simulator, and app states."
 require_phrase 'that surface cannot be targeted, retry Simulator with bundle identifier' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must retry the matching Xcode 27 Device Hub before legacy Simulator targeting."
+require_phrase 'Do not make interactive Device Hub control a prerequisite for automated regression.' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must preserve headless XCTest and XCUIAutomation gates."
 require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
   "The development skill must block proof-sensitive publication without runtime proof."
 require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
@@ -172,6 +180,12 @@ require_phrase 'scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-s
   "The runtime plan must record a scoped Xcode toolchain selection."
 require_phrase 'Because most app extensions are unavailable' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The runtime plan must route extension proof around the unsupported Xcode 27.1 Duo runtime."
+require_phrase '#### Automated gates are not Device Hub interaction' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must separate automated new-Xcode gates from Device Hub proof."
+require_phrase 'An installed prerelease proves only its named build and channel' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the installed-Xcode release-channel boundary."
+require_phrase 'validated result bundle even when Device Hub cannot be' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must keep XCTest automation available without interactive Device Hub."
 deterministic_ui_block="$(
   sed -n '/^  deterministic-ui)/,/^    ;;/p' "$ROOT/scripts/ios/test.sh"
 )"
