@@ -605,6 +605,58 @@ create_sensitive_live_simulator() {
   SENSITIVE_LIVE_SIMULATOR_OWNED="true"
 }
 
+create_disposable_simulator_for_device_type() {
+  local display_name="$1"
+  local device_type="$2"
+  local created_simulator=""
+  local runtime runtime_identifiers sdk_major sdk_version simulator_name
+
+  if [[ -n "$SENSITIVE_LIVE_SIMULATOR" || "$SENSITIVE_LIVE_SIMULATOR_OWNED" != "false" ]]; then
+    echo -e "${RED}✗ Refusing to replace a disposable simulator still owned by this workflow.${NC}" >&2
+    exit 1
+  fi
+
+  sdk_version="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+  sdk_major="${sdk_version%%.*}"
+  if [[ ! "$sdk_major" =~ ^[0-9]+$ ]]; then
+    echo -e "${RED}✗ Could not determine the active Xcode iOS Simulator SDK version.${NC}" >&2
+    exit 1
+  fi
+
+  runtime_identifiers="$(
+    xcrun simctl list runtimes -j |
+      ruby -rjson -e '
+        maximum_runtime_major = Integer(ARGV.fetch(0), 10)
+        runtimes = JSON.parse(STDIN.read).fetch("runtimes").select do |runtime|
+          version = runtime.fetch("version").split(".").map(&:to_i)
+          runtime["isAvailable"] &&
+            runtime.fetch("identifier").include?(".SimRuntime.iOS-") &&
+            version.fetch(0) <= maximum_runtime_major
+        end
+        runtimes.sort_by { |runtime| runtime.fetch("version").split(".").map(&:to_i) }
+          .reverse_each { |runtime| puts runtime.fetch("identifier") }
+      ' "$sdk_major"
+  )"
+  simulator_name="OpenKeyboard ${display_name} Test $$ $(date +%s)"
+  while IFS= read -r runtime; do
+    [[ -n "$runtime" ]] || continue
+    created_simulator="$(
+      xcrun simctl create "$simulator_name" "$device_type" "$runtime" 2>/dev/null
+    )" || continue
+    if [[ "$created_simulator" =~ ^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$ ]]; then
+      break
+    fi
+    created_simulator=""
+  done <<< "$runtime_identifiers"
+
+  if [[ -z "$created_simulator" ]]; then
+    echo -e "${RED}✗ No installed iOS runtime supports the ${display_name} Simulator type.${NC}" >&2
+    exit 1
+  fi
+  SENSITIVE_LIVE_SIMULATOR="$created_simulator"
+  SENSITIVE_LIVE_SIMULATOR_OWNED="true"
+}
+
 simulator_mode_requires_lock() {
   case "${1:-}" in
     ui|deterministic-ui|live-ui|live-gateway-smoke|live-provider-matrix|live-model-differential|real-keyboard-live|screenshots)
@@ -726,10 +778,23 @@ case "$MODE" in
   deterministic-ui)
     echo -e "${YELLOW}Running deterministic OpenKeyboard UI-target tests on iPhone 16...${NC}"
     require_xcodebuild
+    # A name-only destination may resolve against a runtime newer than the active Xcode SDK or one
+    # that cannot create the requested device type. Create the newest SDK-compatible device
+    # directly and select only the workflow-owned disposable simulator by exact UUID.
+    trap cleanup_sensitive_live_artifacts EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    create_disposable_simulator_for_device_type \
+      "Deterministic UI" \
+      "com.apple.CoreSimulator.SimDeviceType.iPhone-16"
+    destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"
+    xcrun simctl boot "$SENSITIVE_LIVE_SIMULATOR" >/dev/null 2>&1 || true
+    xcrun simctl bootstatus "$SENSITIVE_LIVE_SIMULATOR" -b >/dev/null
     run_xcodebuild xcodebuild test \
       -project "$PROJECT" \
       -scheme "$SCHEME" \
-      -destination "$DESTINATION" \
+      -destination "$destination" \
       -configuration Debug \
       -derivedDataPath "$DETERMINISTIC_UI_DERIVED_DATA" \
       -parallel-testing-enabled NO \
@@ -740,6 +805,8 @@ case "$MODE" in
       -skip-testing:OpenKeyboardUITests/LiveModelDifferentialTests \
       CODE_SIGN_IDENTITY="" \
       CODE_SIGNING_REQUIRED=NO
+    cleanup_sensitive_live_artifacts
+    trap - EXIT HUP INT TERM
     echo -e "${GREEN}✓ Deterministic UI-target tests complete${NC}"
     ;;
 

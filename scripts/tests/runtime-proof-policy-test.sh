@@ -48,6 +48,28 @@ require_phrase() {
   fi
 }
 
+require_block_phrase() {
+  local phrase="$1"
+  local block="$2"
+  local message="$3"
+
+  if [[ "$block" != *"$phrase"* ]]; then
+    echo "$message" >&2
+    exit 1
+  fi
+}
+
+reject_block_phrase() {
+  local phrase="$1"
+  local block="$2"
+  local message="$3"
+
+  if [[ "$block" == *"$phrase"* ]]; then
+    echo "$message" >&2
+    exit 1
+  fi
+}
+
 require_phrase '**Automated regression evidence:**' "$ROOT/AGENTS.md" \
   "AGENTS.md must define automated regression evidence."
 require_phrase '**Normal simulator runtime proof:**' "$ROOT/AGENTS.md" \
@@ -68,11 +90,33 @@ require_phrase 'a purpose-built, generically named Simulator-control integration
   "AGENTS.md must prefer a vendor-neutral Simulator-control integration."
 require_phrase 'Computer Use or equivalent host UI automation' "$ROOT/AGENTS.md" \
   "AGENTS.md must retain the generic host-UI automation fallback."
+require_phrase 'Xcode MCP tools supplement; they never replace the' "$ROOT/AGENTS.md" \
+  "AGENTS.md must keep Xcode MCP supplemental to repository gates."
+require_phrase 'active worktree'"'"'s absolute path as' "$ROOT/AGENTS.md" \
+  "AGENTS.md must bind Xcode MCP calls to the active worktree."
+require_phrase 'confirm it with `XcodeListWorkspaces`' "$ROOT/AGENTS.md" \
+  "AGENTS.md must verify the active Xcode workspace."
+require_phrase "repository's shared lock" "$ROOT/AGENTS.md" \
+  "AGENTS.md must serialize Xcode MCP Simulator interaction."
+require_phrase 'Require `deviceIsSimulator == true`' "$ROOT/AGENTS.md" \
+  "AGENTS.md must bind Xcode MCP interaction to an owned Simulator."
+require_phrase 'destination discovery that can enumerate connected devices' "$ROOT/AGENTS.md" \
+  "AGENTS.md must fail closed for destination-implicit Xcode actions."
+require_phrase 'An MCP build proves only a build' "$ROOT/AGENTS.md" \
+  "AGENTS.md must not classify build success as regression evidence."
+require_phrase 'scoped `DEVELOPER_DIR`, not global' "$ROOT/AGENTS.md" \
+  "AGENTS.md must bind Device Hub work without mutating global Xcode selection."
+require_phrase 'docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration' "$ROOT/AGENTS.md" \
+  "AGENTS.md must route detailed Xcode mechanics to the development workflow."
 
-require_phrase 'XCUITest real-extension coverage remains automated regression' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must classify real-extension XCUITest accurately."
-require_phrase 'do not push or create/update a readiness PR until normal simulator runtime' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
-  "The development skill must block proof-sensitive publication without runtime proof."
+require_phrase 'do not copy or weaken the repository'"'"'s authority, evidence, secret, Simulator, git, or review' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must keep AGENTS.md canonical instead of duplicating policy."
+require_phrase '`docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration`' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must route detailed Xcode mechanics to the canonical reference."
+require_phrase 'prefer repository scripts when an action cannot target the exact owned' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must fail closed for unsafe Xcode destinations."
+require_phrase 'never discover or operate a physical device' "$ROOT/.agents/skills/develop-openkeyboard/SKILL.md" \
+  "The development skill must preserve default-denied physical-device authority."
 require_phrase 'Missing required AI simulator or physical-device screenshots' "$ROOT/.agents/skills/review-verify-merge-pr/SKILL.md" \
   "The review skill must block automatic authorization without AI screenshot proof."
 require_phrase 'explicit repository-owner approval for the exact head may accept that disclosed gap' "$ROOT/.codex/agents/pr-reviewer.toml" \
@@ -92,6 +136,57 @@ require_phrase '## Automated real-extension regression routes' "$ROOT/docs/REAL_
   "The extension plan must label automated real-extension routes."
 require_phrase '## Normal simulator runtime procedure' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The extension plan must provide a normal runtime procedure."
+require_phrase '## Xcode MCP acceleration' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must define Xcode MCP acceleration."
+require_phrase '`XcodeListWorkspaces` to confirm that exact workspace is open' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must verify the active Xcode workspace."
+require_phrase "Hold the repository's shared Simulator lock for the full Xcode" "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must serialize Xcode MCP Simulator interaction."
+require_phrase 'MCP device interaction, pass this task worktree'"'"'s absolute path as `workspaceIdentifier`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must bind Xcode MCP proof to the active worktree."
+require_phrase '### Xcode 27 Device Hub preflight' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must define the Xcode 27 Device Hub preflight."
+require_phrase 'These release notes do not establish the cause of an' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must not turn Xcode release notes into a DTServiceHub causal claim."
+require_phrase 'full-device-resolution screenshot' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the Device Hub screenshot evidence boundary."
+require_phrase 'scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must record a scoped Xcode toolchain selection."
+require_phrase 'Because most app extensions are unavailable' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must route extension proof around the unsupported Xcode 27.1 Duo runtime."
+require_phrase '#### Automated gates are not Device Hub interaction' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must separate automated new-Xcode gates from Device Hub proof."
+require_phrase 'An installed prerelease proves only its named build and channel' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the installed-Xcode release-channel boundary."
+require_phrase 'validated result bundle even when Device Hub cannot be' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must keep XCTest automation available without interactive Device Hub."
+require_phrase '### Structured Xcode interaction route' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must define the structured MCP interaction route."
+require_phrase '`DeviceInteractionEndSession` on success, failure, or abandonment' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must always close the Xcode interaction session."
+require_phrase 'App-only screenshots do not prove' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must preserve the real-extension evidence boundary."
+deterministic_ui_block="$(
+  sed -n '/^  deterministic-ui)/,/^    ;;/p' "$ROOT/scripts/ios/test.sh"
+)"
+require_phrase 'create_disposable_simulator_for_device_type()' "$ROOT/scripts/ios/test.sh" \
+  "The test runner must create an owned Simulator without resolving an existing named device."
+require_phrase 'xcrun --sdk iphonesimulator --show-sdk-version' "$ROOT/scripts/ios/test.sh" \
+  "The test runner must constrain disposable Simulators to the active Xcode SDK."
+require_phrase 'version.fetch(0) <= maximum_runtime_major' "$ROOT/scripts/ios/test.sh" \
+  "The test runner must reject installed runtimes newer than the active Xcode SDK."
+require_block_phrase 'create_disposable_simulator_for_device_type' "$deterministic_ui_block" \
+  "Deterministic UI tests must create a workflow-owned disposable Simulator."
+require_block_phrase 'destination="$(simulator_destination "$SENSITIVE_LIVE_SIMULATOR")"' "$deterministic_ui_block" \
+  "Deterministic UI tests must select the owned Simulator by exact UUID."
+require_block_phrase '-destination "$destination"' "$deterministic_ui_block" \
+  "Deterministic UI xcodebuild must use the exact owned Simulator destination."
+reject_block_phrase '-destination "$DESTINATION"' "$deterministic_ui_block" \
+  "Deterministic UI xcodebuild must not fall back to a name-only destination."
+require_block_phrase 'xcrun simctl bootstatus "$SENSITIVE_LIVE_SIMULATOR" -b' "$deterministic_ui_block" \
+  "Deterministic UI tests must wait for the owned Simulator to boot."
+require_block_phrase 'cleanup_sensitive_live_artifacts' "$deterministic_ui_block" \
+  "Deterministic UI tests must clean up the exact owned Simulator."
 require_phrase '## Physical-device procedure' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The extension plan must provide a physical-device procedure."
 require_phrase 'Do not run more XCTest as a substitute for the missing runtime proof.' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \

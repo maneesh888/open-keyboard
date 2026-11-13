@@ -43,72 +43,24 @@ These skills route work but do not weaken the proof requirements below.
 
 ## Authority and proof-first mode
 
-`AGENTS.md` owns the authority ledger and sticky constraints. Resolve them before fetching,
-creating a branch/worktree, initializing submodules, editing, staging, committing, pushing, or
-changing a PR. Record whether each constraint applies to a named checkpoint, the current phase or
-objective, or the whole task. Recompute the ledger when a phase completes and a clear request
-starts the next one; do not copy a completed read-only test phase's `NO` values into a later
-implementation phase. Exploratory language does not authorize tracked edits. Planning and
-proof-first experiments use existing routes or temporary non-repository harnesses.
-
-A clear bounded implementation request supplies standing conditional authority for the ordinary
-repository lifecycle through guarded merge. The user does not need to enumerate or separately
-authorize commit, push, draft PR creation or updates, readiness, and merge. Each stage still waits
-for its proportional deterministic, live, runtime, exact-head, review, and GitHub gates. Explicit
-sticky opt-outs override the corresponding stage; deployment and destructive cleanup remain
-separately authorized actions.
-
-Authority and readiness are separate. Once standing lifecycle authority is `YES`, incomplete
-deterministic, live, runtime, exact-head, review, or GitHub evidence leaves that stage `WAITING`;
-passing evidence makes it `READY`. Advance automatically from each ready stage to the next one
-without asking the user to repeat commit, push, PR, readiness, or merge permission. Evidence
-confidence cannot override an active objective- or task-wide opt-out.
-
-Physical-device interaction is a separate, default-denied authority. Do not discover, inspect,
-connect to, install on, launch on, sign for, test on, or capture from a physical device until the
-user explicitly requests that work. Simulator testing, a device-proof requirement, push/PR
-authority, and merge authority do not imply physical-device permission. This restriction applies
-to Codex and its tools; it does not prevent the user from performing their own verification and
-explicitly approving the exact head.
-
-Proof-first mode is active when the user requests results, testing, or model comparison before
-implementation. Every tracked repository mutation—including production, test, documentation,
-configuration, workflow, staging, and commit changes—remains prohibited until the requested
-evidence is reported and the user explicitly authorizes implementation. An HTTP `503` or other
-gateway-availability failure is an external blocker: report `LIVE_UNVERIFIED`, do not infer model
-capability, and stop without speculative production changes.
-
-Task handoffs use every applicable evidence label: `EXPERIMENTAL`, `DETERMINISTIC_VERIFIED`,
-`LIVE_UNVERIFIED`/`LIVE_VERIFIED`, and `RUNTIME_UNVERIFIED`/`RUNTIME_VERIFIED`. These do not replace
-the PR requirement ledger's `VERIFIED`/`UNVERIFIED` values. Required unverified live/runtime status
-prohibits a claim that the behavior is fixed or working.
+`AGENTS.md` is the sole authority for the ledger, sticky constraints, proof-first transitions,
+physical-device denial, lifecycle autonomy, and task-status labels. Apply it before mutation and at
+every phase or state transition. Authority and readiness are separate: authorization permits a
+stage, while the proportional deterministic, live, runtime, exact-head, review, and GitHub evidence
+decides when that stage is ready. This reference only supplies the mechanics below.
 
 ## Evidence classes and claims
 
-Every verification artifact belongs to one of three runtime evidence classes:
-
-1. **Automated regression evidence:** unit tests, XCTest, XCUITest, mocked gateway tests, debug
-   launch states, seeded UI/result states, component hosts, and `XCTAttachment` screenshots. An
-   XCUITest that installs and activates the real keyboard extension remains automated evidence.
-2. **Normal simulator runtime proof:** a normally installed and launched app, without
-   `--uitesting`, debug-state injection, seeded result panels, or test-host shortcuts. Exercise the
-   affected normal app surface; extension/handoff criteria use the actual extension through an
-   ordinary host-app text field. Capture screenshots directly from Simulator/Xcode outside XCTest.
-3. **Physical-device proof:** the exact signed build is installed on the configured device and
-   exercised through the normal extension lifecycle. AI verification requires screenshots that the
-   AI captures and inspects. Human verification uses explicit exact-head owner approval and never
-   requires a user screenshot upload.
-
-These classes support separate claims: build success, automated regression coverage, transport
-success, semantic acceptance, visual/runtime acceptance, physical-device acceptance, independent
-review, signing, deployment, and App Review. Never infer a stronger claim from a weaker class.
-Normal GitHub CI proves deterministic behavior/build only. Automated tests—including real-extension
-XCUITest—cannot alone authorize a proof-sensitive push, PR readiness, release readiness, or a claim
-that the user-visible workflow works.
+Use the three evidence classes and exact claim boundaries defined in `AGENTS.md`. The routes below
+implement those classes; they never promote automated or diagnostic output into normal simulator
+or physical-device proof.
 
 ## Modes and cumulative gates
 
-Run targeted tests while editing, then run the highest cumulative gate required by the final state:
+Run targeted tests while editing. Do not repeatedly run cumulative gates after small evidence or
+wording changes. When the bounded diff is ready, freeze it and use the highest gate required by the
+next state. Validate or regenerate any diff-bound applicability manifest against the complete
+intended diff before the proportional hook or aggregate gate:
 
 | Mode | Final gate | Use |
 |---|---|---|
@@ -117,6 +69,14 @@ Run targeted tests while editing, then run the highest cumulative gate required 
 | Release | `./scripts/check.sh --hygiene` for classified documentation-only changes; `--full` otherwise, on exact `HEAD` | PR readiness, tag, or release |
 
 Calling `./scripts/check.sh` without an argument runs `--full`.
+
+The mandatory commit hook supplies the proportional staged Standard result; do not immediately
+duplicate that same command while the staged content is unchanged. After the final commit, run the
+Release gate once on the clean exact head, then perform the applicable live/runtime work and one
+independent review. When push is authorized, the mandatory pre-push hook is that Release run; do
+not manually run the same gate immediately before it. When push is unavailable, a manual local run
+does not exempt a later push from its hook. Any edit or commit starts a new exact-head cycle. No
+deterministic hook result substitutes for live/runtime evidence, GitHub checks, or review.
 
 Release readiness additionally requires exact-head GitHub checks and an independent review through
 `$review-verify-merge-pr`; the local deterministic gate alone is insufficient.
@@ -145,6 +105,168 @@ gateway verification remain separate. The runtime proof does not replace XCTest 
 The explicit `./scripts/ios/test.sh ui` route remains broader than `--full`. It includes
 credential- and simulator-state-dependent classes, so it is diagnostic rather than a mandatory
 credential-free push gate.
+
+## Xcode MCP acceleration
+
+Xcode 27 and newer can expose the open workspace through `xcrun mcpbridge`. The external agent must
+have Xcode Intelligence permission, Xcode must have the intended project open, and every call must
+pass the active session worktree's absolute path as `workspaceIdentifier`. Use
+`XcodeListWorkspaces` to confirm that exact workspace is open before the first call and after any
+Xcode-window change. A second Xcode window for the integration checkout is not an acceptable
+substitute.
+
+Use the project-aware tools proportionally:
+
+| Purpose | Helpful Xcode MCP tools | Evidence boundary |
+|---|---|---|
+| Resolve project state | `XcodeListWorkspaces`, `XcodeListTargets`, `XcodeListSchemes`, `XcodeListTestPlans` | Read-only discovery |
+| Select focused coverage | `GetTestList`, `GetTargetBuildSettings`, `GetFileCompilerFlags` | Read-only diagnostic input |
+| Diagnose an iteration | `GetBuildLog`, `GetConsoleOutput`, `XcodeRefreshCodeIssuesInFile` | Diagnostic evidence only |
+| Check Apple API guidance | `DocumentationSearch` | Source guidance, not implementation proof |
+| Compile an iteration | `BuildProject` | Build evidence only; never regression or runtime proof |
+| Run focused coverage | `RunSomeTests`, `RunAllTests` | Automated regression evidence only when destination safety below permits the call |
+| Inspect a preview | `RenderPreview` | Diagnostic visual evidence only; never regression or normal runtime proof |
+| Collect normal UI evidence | Xcode device-interaction hierarchy and screenshot tools | Normal proof only when every runtime condition below is met |
+
+Xcode MCP tools supplement; they never replace the repository scripts, proportional diff
+classification, exact-head `check.sh` and `check-live.sh` gates, independent review, protected
+GitHub checks, or human approval. Do not report an MCP build or focused test as a full repository
+gate. Preserve the repository scripts as the reproducible, head-bound acceptance route even when
+the equivalent Xcode action is faster during diagnosis.
+
+Tools that write files, targets, entitlements, Info.plist values, build settings, schemes,
+destinations, or test plans are normal repository mutations. Use them only with edit authority and
+only in the active worktree. Inspect the resulting Git diff and apply the same secret,
+generated-artifact, hook, staging, and verification checks required for any other edit. Avoid
+switching persistent Xcode state when a read-only inspection or repository command is sufficient.
+
+### Xcode 27 Device Hub preflight
+
+Bind each Device Hub proof attempt to one developer-tool installation. Use a command-scoped
+`DEVELOPER_DIR` for repository commands and record the selected Xcode application path,
+`xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
+workflow-owned UUID. Do not change or depend on the machine-global `xcode-select` state. Open
+Device Hub from that same Xcode with **Xcode > Open Developer Tool > Device Hub**.
+
+Device Hub's sidebar is a curated view, not a complete CoreSimulator inventory: it shows
+simulators added in Device Hub or previously selected as Xcode run destinations. Select the
+intended row and compare its Info inspector UUID and OS with the workflow-owned UUID and recorded
+runtime. Keep four states separate in every diagnosis:
+
+1. whether the host Device Hub window is visible and controllable;
+2. whether the simulator appears in the Device Hub sidebar;
+3. the exact owned simulator's CoreSimulator state; and
+4. the app's launch and runtime state on that simulator.
+
+A missing or hidden row does not by itself prove that a simulator is stopped, unavailable, locked,
+or unauthorized. Xcode 27 release notes specifically say that simulators running parallel tests
+may be invisible in Device Hub. They also describe pasteboard transfer timeout and synchronization
+changes, so a paste failure is not evidence of a lock, authorization failure, or service failure.
+Inspect the exact route and state instead. These release notes do not establish the cause of an
+older `DTServiceHub` or lockdown error; retain such an error only as an observed pre-XCTest routing
+failure unless direct evidence establishes more.
+
+For Xcode 27.1, allow several minutes for an initial Simulator launch before classifying the route
+as unavailable. The iPhone Duo Device Hub controls select Closed, Partially Open, and Open device
+poses; record the exact pose and orientation when either is an acceptance input. Most app
+extensions are unavailable in the Xcode 27.1 Duo Simulator runtime. Use a supported non-Duo
+simulator for extension proof unless the acceptance criterion specifically requires Duo behavior;
+when it does, report the platform limitation rather than substituting evidence from a different
+runtime. Apple's camera and microphone interaction limitation applies to physical-device Device Hub
+sessions only and never grants physical-device authority.
+
+Device Hub can capture a full-device-resolution screenshot regardless of Mac display resolution.
+That capture is normal runtime evidence only after the normal production interaction, visible-state
+inspection, privacy review, runtime record, and artifact delivery requirements are satisfied; it
+does not upgrade a preview, automated test, or seeded state. Never install or change certificates
+or trust roots, broaden Xcode/MCP permissions, or put credentials, private endpoints, or other
+secrets on a clipboard as a workaround without explicit repository-owner authorization for that
+action.
+
+#### Automated gates are not Device Hub interaction
+
+Interactive Device Hub availability is not a prerequisite for XCTest or XCUIAutomation. Apple's
+testing documentation supports running a test plan or selected XCTest cases with `xcodebuild test`,
+and XCUIAutomation remains the automated UI-workflow framework. The repository scripts own that
+route, including exact simulator selection, result-bundle retention long enough to validate the
+outcome, cleanup, and the automated-regression evidence label. Do not replace a repository
+automated gate with manual Device Hub interaction, and do not relabel its result as normal runtime
+proof.
+
+When the acceptance criterion is compatibility with a new Xcode release, record the required
+marketing version and build and whether Apple lists it as beta, RC, or stable. Run the repository
+gate with a command-scoped `DEVELOPER_DIR`, a compatible runtime, and an exact workflow-owned UUID.
+Do not install or update Xcode and do not change global developer-tool selection within this route.
+An installed prerelease proves only its named build and channel; it is not evidence for the current
+stable release. An older toolchain may be retained as fallback diagnostics, but it does not satisfy
+the new-Xcode gate unless the requirement explicitly accepts that version.
+
+Official sources reviewed for this policy on 2026-11-13:
+
+- [Managing your simulated and physical devices in Device Hub](https://developer.apple.com/documentation/xcode/managing-your-simulated-and-physical-devices-in-device-hub)
+- [Interacting with your app in Device Hub](https://developer.apple.com/documentation/xcode/interacting-with-your-app-in-device-hub)
+- [Capturing screenshots and videos from devices](https://developer.apple.com/documentation/xcode/capturing-screenshots-and-videos-from-devices)
+- [Xcode 27 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27-release-notes)
+- [Xcode 27.1 release notes](https://developer.apple.com/documentation/xcode-release-notes/xcode-27_1-release-notes)
+- [Running tests and interpreting results](https://developer.apple.com/documentation/xcode/running-tests-and-interpreting-results)
+- [Testing](https://developer.apple.com/documentation/xcode/testing)
+
+### Simulator and device-interaction safety
+
+Any MCP action that can build for, test on, run on, preview on, boot, install to, or interact with a
+Simulator is Simulator-backed work. Hold the repository's shared Simulator lock for the full Xcode
+MCP device-interaction session; acquiring it only for setup is insufficient. Create a fresh
+disposable simulator under that lock, record its canonical UUID, and pass that UUID to the Xcode
+session. Require `deviceIsSimulator == true` and an exact match to the recorded disposable
+simulator UUID before any install, launch, or synthesized event. Never use best-match device names
+or a pre-existing or user-open Simulator. End the MCP session before releasing the lock, then shut
+down and delete only the exact workflow-owned UUID.
+
+Physical-device authority remains independent and defaults to `NO`. While it is `NO`, avoid Xcode
+destination or device-discovery calls that may enumerate connected physical devices, including
+`XcodeListRunDestinations`, and never use a generic or best-match device identifier. The
+destination-implicit `BuildProject`, `RunAllTests`, `RunSomeTests`, `RunProject`, and `RenderPreview`
+actions do not accept an exact simulator UUID and may inherit a physical destination; do not call
+them while physical-device authority is `NO`. Use the repository scripts instead. If the session
+returns a `skillToTrigger` integration that the active environment cannot supply, end the session
+and record the interaction as unavailable. Do not bypass the requirement by calling
+event-synthesis tools directly.
+
+An Xcode hierarchy, screenshot path, or successful interaction response is not self-verifying.
+Normal runtime proof still requires a normally installed and launched app without `--uitesting`,
+debug injection, or seeded state; visible production interaction; screenshot inspection; the full
+runtime record; and delivery of every screenshot used as proof. A session that only starts or boots
+a Simulator proves tool setup, not app behavior.
+
+### Structured Xcode interaction route
+
+When the installed Xcode exposes device-interaction MCP capabilities, use their structured state
+instead of guessing host coordinates:
+
+1. Confirm the exact worktree with `XcodeListWorkspaces`.
+2. Discover run destinations only if the capability can be constrained to simulators without
+   enumerating physical devices. Otherwise keep the repository-created exact owned UUID.
+3. Call `DeviceInteractionStartWorkspaceSession` with the worktree and owned UUID. Require
+   `deviceIsSimulator == true` and the returned UUID to match exactly.
+4. Call `DeviceInteractionInstallAndRun` with no `--uitesting`, mock, debug-state, or seed arguments.
+5. Follow the returned `skillToTrigger` worker instructions. If that worker is unavailable, end the
+   session and escalate to the next proof tier rather than synthesizing events directly.
+6. Capture a fresh accessibility hierarchy, derive the next coordinate from it, synthesize the
+   event, and inspect the direct post-action screenshot. Repeat from a fresh hierarchy after every
+   state change.
+7. Call `DeviceInteractionEndSession` on success, failure, or abandonment before releasing the
+   Simulator lock, then delete only the exact owned simulator.
+
+For each screenshot, record the capture SHA, Xcode marketing version/build/channel,
+simulator runtime/build and UUID, action, visible result, whether the data path is mock or live, and
+whether the image covers the app only or the actual extension. App-only screenshots do not prove
+keyboard-extension activation, cross-process handoff, or normal extension behavior; those criteria
+still require an ordinary host-app text field and the real extension.
+
+Xcode preview variants can accelerate layout diagnosis across light/dark appearance, orientation,
+and Dynamic Type. A preview is diagnostic visual evidence only, even when it renders correctly. It
+does not prove a build gate, XCTest behavior, normal runtime interaction, or the keyboard-extension
+lifecycle.
 
 ## Targeted routing
 
@@ -317,13 +439,15 @@ evidence and escalate only the missing or ambiguous proof:
    or ambiguous. Request an exact-head approve/reject decision, never a screenshot upload.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
-not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
-identifier `com.apple.iphonesimulator` when supported, then try any other available non-XCTest
-Simulator accessibility/control route. Do not loop on a genuinely locked host. `simctl` setup or
-framebuffer capture may support the proof session but does not establish the required visible
-interaction by itself. If interaction is still unavailable, unreliable, or ambiguous, stop before
-push/readiness and state the unverified behavior. Running more XCTest does not resolve the blocker,
-and asking the user to upload screenshots is not a fallback.
+not a terminal runtime-proof conclusion. Refresh its app state once. For Xcode 27 or newer, first
+target Device Hub from the same recorded Xcode installation and verify the exact owned UUID;
+otherwise, or when Device Hub cannot be targeted, retry Simulator with bundle identifier
+`com.apple.iphonesimulator` when supported. Then try any other available non-XCTest Simulator
+accessibility/control route. Do not loop on a genuinely locked host. `simctl` setup or framebuffer
+capture may support the proof session but does not establish the required visible interaction by
+itself. If interaction is still unavailable, unreliable, or ambiguous, stop before push/readiness
+and state the unverified behavior. Running more XCTest does not resolve the blocker, and asking the
+user to upload screenshots is not a fallback.
 
 ### Human runtime approval
 
@@ -519,39 +643,14 @@ the protected `app-store-connect` environment.
 
 ## Planning and development automation
 
-`$develop-openkeyboard` is the default implementation route. It selects Fast, Standard, or Release
-mode, keeps UI, ViewModel, service, extension, gateway, and secret boundaries explicit, and maps the
-change to the repository scripts above.
+`$develop-openkeyboard` is the direct route for a bounded implementation. Do not add routine
+planning or delegation. Use `$audit-openkeyboard-ui` for UI audits and
+`$write-openkeyboard-product-copy` for user-visible wording as routed by `AGENTS.md`.
 
-UI audit requests route to the read-only `$audit-openkeyboard-ui`. It traces SwiftUI controls,
-visible states, navigation, ViewModels, production behavior, and relevant tests across the requested
-screen and adjacent journey, without silently expanding the edit scope. It owns layout, behavior,
-accessibility, and interaction findings while delegating wording-specific analysis to
-`$write-openkeyboard-product-copy`. Source-only results must use `confirmed from code`, `likely
-visual risk`, or `requires simulator verification`; they never establish rendered or runtime
-acceptance. When fixes are authorized, use the audit inside `$develop-openkeyboard` and apply the
-normal implementation and proof gates.
-
-For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs
-inside the development route. It reviews the requested screen together with its incoming and
-outgoing journey, balances interface clarity with truthful product positioning, checks reachable
-states and accessibility language, and protects shared terminology. A copy audit remains read-only
-unless implementation is already authorized. The skill never edits canonical semantic prompts or
-generated user content, and an implemented UI-copy change still requires the normal UI proof route.
-
-For one bounded task or a concise "what next" request, the read-only `work-package-planner` invokes
-`$plan-openkeyboard-work-package`. It returns a compact work order with source-object digests.
-
-For an explicitly requested major milestone, roadmap, long-horizon plan, or multi-phase
-cross-cutting effort, the read-only `major-milestone-planner` invokes
-`$plan-openkeyboard-major-milestone`. It builds a dependency-aware sequence of bounded phases with
-entry criteria, exit criteria, proportional evidence, decision gates, risks, and the first
-executable work package. It does not make ordinary tasks adopt proof-first mode, and it does not
-require physical-device proof unless the requirement is device-specific or a material device-only
-uncertainty remains.
-
-A clear implementation request bypasses both planning routes. Neither planner edits, tests,
-publishes, or grants authority for a later lifecycle stage.
+Use the read-only `$plan-openkeyboard-work-package` only for an explicitly requested bounded plan or
+“what next” package. Use `$plan-openkeyboard-major-milestone` only for an explicitly requested
+roadmap, long-horizon milestone, or multi-phase plan. Neither planner mutates the repository or
+grants later lifecycle authority.
 
 ## Deployment
 

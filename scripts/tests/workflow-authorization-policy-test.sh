@@ -35,6 +35,17 @@ require_phrase() {
   fi
 }
 
+reject_phrase() {
+  local phrase="$1"
+  local file="$2"
+  local message="$3"
+
+  if rg --fixed-strings --quiet "$phrase" "$file"; then
+    echo "$message" >&2
+    exit 1
+  fi
+}
+
 for ledger_field in \
   'Objective:' \
   'Current objective/phase:' \
@@ -80,9 +91,9 @@ require_phrase 'Physical-device interaction defaults to `NO` and is independentl
   'AGENTS.md must default physical-device interaction to denied.'
 require_phrase 'do not grant physical-device authority.' "$AGENTS" \
   'AGENTS.md must not infer device authority from simulator, evidence, lifecycle, or merge work.'
-require_phrase 'Physical-device interaction is a separate ledger entry that defaults to `NO`' "$DEVELOP_SKILL" \
+require_phrase 'Physical-device interaction remains a separate default-`NO` entry.' "$DEVELOP_SKILL" \
   'The development skill must keep physical-device interaction separately denied by default.'
-require_phrase 'A device evidence requirement is a blocker for Codex-operated proof when authority is' "$DEVELOP_SKILL" \
+require_phrase 'never discover or operate a physical device' "$DEVELOP_SKILL" \
   'The development skill must not treat required device proof as device authority.'
 require_phrase 'Physical-device interaction remains separately denied until the user explicitly requests it.' "$REVIEW_SKILL" \
   'The review lifecycle must not infer physical-device authority.'
@@ -147,16 +158,16 @@ for task_status in \
   require_phrase "\`$task_status\`" "$AGENTS" "AGENTS.md is missing task status $task_status."
 done
 
-require_phrase 'never call behavior fixed or' "$DEVELOP_SKILL" \
+require_phrase 'Do not call behavior fixed or' "$DEVELOP_SKILL" \
   'The development skill must reject fixed/working claims with missing proof.'
-require_phrase 'A later ambiguous request cannot' "$DEVELOP_SKILL" \
-  'The development skill must preserve sticky constraints across follow-ups.'
-require_phrase 'standing conditional authority for the complete' "$DEVELOP_SKILL" \
-  'The development skill must carry a clear implementation through the complete normal lifecycle.'
-require_phrase 'A completed read-only test checkpoint does not keep its phase-scoped `NO` values' "$DEVELOP_SKILL" \
-  'The development skill must expire phase-scoped authority constraints.'
-require_phrase 'an authorized stage with incomplete evidence is' "$DEVELOP_SKILL" \
-  'The development skill must separate lifecycle gate state from authority.'
+require_phrase 'Use `AGENTS.md` as the canonical execution policy.' "$DEVELOP_SKILL" \
+  'The development skill must preserve canonical sticky-constraint semantics by reference.'
+require_phrase 'Proceed directly for a bounded implementation.' "$DEVELOP_SKILL" \
+  'The development skill must not add a planning gate to bounded work.'
+require_phrase 'Recompute it at phase changes and before each' "$DEVELOP_SKILL" \
+  'The development skill must recompute canonical authority at phase transitions.'
+require_phrase 'current authority/gate state.' "$DEVELOP_SKILL" \
+  'The development skill must track authority separately from gate state.'
 require_phrase 'The user does not' "$REVIEW_SKILL" \
   'The review skill must not require the user to name each normal lifecycle stage.'
 require_phrase 'Authority mode: READ_ONLY | PROOF_FIRST | IMPLEMENTATION' "$PLAN_SKILL" \
@@ -177,16 +188,16 @@ require_phrase 'do not resurrect a completed checkpoint' "$REVIEW_SKILL" \
   'The review lifecycle must not revive expired phase-scoped constraints.'
 require_phrase 'If any active sticky constraint says `keep draft`' "$REVIEW_SKILL" \
   'The guarded merge must honor active sticky constraints, not only the latest instruction.'
-require_phrase 'do not copy a completed read-only test phase' "$DEVELOPMENT_WORKFLOW" \
-  'The detailed workflow must recompute authority across a phase transition.'
-require_phrase 'Authority and readiness are separate.' "$DEVELOPMENT_WORKFLOW" \
+require_phrase '`AGENTS.md` is the sole authority for the ledger, sticky constraints, proof-first transitions' "$DEVELOPMENT_WORKFLOW" \
+  'The detailed workflow must defer authority semantics to the canonical policy.'
+require_phrase 'Authority and readiness are separate:' "$DEVELOPMENT_WORKFLOW" \
   'The detailed workflow must separate authority from evidence readiness.'
 
 require_phrase 'render or attach every screenshot actually used as' "$AGENTS" \
   'AGENTS.md must require final-response delivery of every AI proof screenshot.'
 require_phrase 'earlier commentary is not final proof' "$AGENTS" \
   'AGENTS.md must reject commentary-only screenshot delivery.'
-require_phrase 'Render or attach every required' "$DEVELOP_SKILL" \
+require_phrase 'Render or attach required' "$DEVELOP_SKILL" \
   'The development skill must deliver required screenshots in the final response.'
 require_phrase 'render or attach every screenshot used' "$REVIEW_SKILL" \
   'The review skill must deliver AI proof screenshots in the final response.'
@@ -196,8 +207,8 @@ require_phrase 'Never ask the user to upload or transfer screenshots' "$AGENTS" 
   'AGENTS.md must prohibit user screenshot-upload requests.'
 require_phrase 'An explicit owner approval for the exact current head selects the human authorization route' "$AGENTS" \
   'AGENTS.md must let exact-head human approval clear the runtime decision gate.'
-require_phrase 'without another runtime, readiness, or merge confirmation' "$DEVELOP_SKILL" \
-  'The development skill must continue automatically after exact-head human approval.'
+require_phrase 'Human verification asks for an exact-head' "$DEVELOP_SKILL" \
+  'The development skill must route exact-head human approval without screenshot upload.'
 require_phrase 'Ask the repository owner only whether they approve or reject that exact head' "$REAL_EXTENSION_SMOKE_PLAN" \
   'The runtime smoke plan must use approval, not uploaded screenshots, for human verification.'
 require_phrase '### Final confirmation delivery' "$REAL_EXTENSION_SMOKE_PLAN" \
@@ -210,8 +221,8 @@ require_phrase 'not a terminal runtime-proof conclusion' "$AGENTS" \
   'AGENTS.md must not make the first Computer Use lock report terminal.'
 require_phrase '`com.apple.iphonesimulator`' "$AGENTS" \
   'AGENTS.md must require the canonical Simulator bundle-target retry when supported.'
-require_phrase 'A Computer Use report that the host is locked' "$DEVELOP_SKILL" \
-  'The development skill must recover from a Computer Use lock report before blocking.'
+require_phrase 'follow the normal-runtime hierarchy in `AGENTS.md`' "$DEVELOP_SKILL" \
+  'The development skill must defer route recovery to the canonical normal-runtime hierarchy.'
 require_phrase 'A Computer Use report that the host' "$DEVELOPMENT_WORKFLOW" \
   'The detailed workflow must treat Computer Use lock reports as route-level failures.'
 require_phrase 'A Computer Use report that the host is locked' "$REAL_EXTENSION_SMOKE_PLAN" \
@@ -228,8 +239,8 @@ require_phrase 'escalate only the missing or' "$AGENTS" \
   'AGENTS.md must preserve valid proof and escalate only evidence gaps.'
 require_phrase 'Accessibility metadata and action' "$AGENTS" \
   'AGENTS.md must not treat accessibility metadata or action success as visual proof.'
-require_phrase 'three-tier normal-Simulator escalation hierarchy' "$DEVELOP_SKILL" \
-  'The development skill must use the three-tier proof hierarchy.'
+require_phrase 'follow the normal-runtime hierarchy in `AGENTS.md`' "$DEVELOP_SKILL" \
+  'The development skill must use the canonical proof hierarchy.'
 require_phrase '1. **Simulator accessibility/control:**' "$DEVELOPMENT_WORKFLOW" \
   'The detailed workflow must start with Simulator accessibility/control.'
 require_phrase '2. **Computer Use:**' "$DEVELOPMENT_WORKFLOW" \
@@ -244,8 +255,8 @@ require_phrase './scripts/verify-runtime-proof-carry-forward.sh <capture-sha> <c
   'AGENTS.md must require the trusted carry-forward verifier.'
 require_phrase 'never claim that it was captured from the current SHA' "$AGENTS" \
   'AGENTS.md must preserve the original screenshot capture SHA.'
-require_phrase 'no other exact-head gate or authorization carries forward' "$DEVELOP_SKILL" \
-  'The development skill must confine carry-forward to normal-Simulator evidence.'
+require_phrase 'Only the narrow' "$DEVELOP_SKILL" \
+  'The development skill must confine carry-forward to the canonical narrow exception.'
 require_phrase 'verified test-only carry-forward record bound to the current head' "$REVIEW_SKILL" \
   'The review skill must recognize verifier-bound test-only runtime evidence.'
 require_phrase '### Test-only carry-forward procedure' "$REAL_EXTENSION_SMOKE_PLAN" \
@@ -258,6 +269,27 @@ require_phrase 'truthful documentation, commit subjects, or proof claims' "$REVI
   'The independent reviewer must inspect commit-message truthfulness.'
 require_phrase 'Evidence boundary: this hook can establish DETERMINISTIC_VERIFIED only;' "$PRE_COMMIT" \
   'The pre-commit hook must state its deterministic-only evidence boundary.'
+
+require_phrase 'affected tests only; do not repeatedly run cumulative gates after small edits.' "$DEVELOP_SKILL" \
+  'The development skill must prefer focused iteration over repeated aggregate gates.'
+require_phrase 'Let the mandatory commit' "$DEVELOP_SKILL" \
+  'The development skill must rely on the mandatory proportional commit hook.'
+require_phrase 'instead of immediately rerunning the same command manually.' "$DEVELOP_SKILL" \
+  'The development skill must not immediately duplicate an unchanged hook result.'
+require_phrase 'validate or regenerate any diff-bound applicability manifest against that complete diff' "$DEVELOP_SKILL" \
+  'The development skill must refresh applicability bindings before the final gate.'
+require_phrase 'validate or regenerate any' "$AGENTS" \
+  'AGENTS.md must validate applicability bindings within the freeze checkpoint.'
+require_phrase 'After the final commit freezes the exact head, run one classifier-selected aggregate gate:' "$DEVELOP_SKILL" \
+  'The development skill must define one final exact-head aggregate gate.'
+require_phrase 'perform one exact-head independent' "$DEVELOP_SKILL" \
+  'The development skill must defer independent review until the final freeze.'
+reject_phrase 'DeviceInteractionStartWorkspaceSession' "$DEVELOP_SKILL" \
+  'The compact development skill must not duplicate detailed Xcode interaction mechanics.'
+if (( $(wc -l < "$DEVELOP_SKILL") > 120 )); then
+  echo 'The development skill exceeded its 120-line compact execution budget.' >&2
+  exit 1
+fi
 
 if rg --fixed-strings --quiet 'Honor the latest explicit opt-out' "${POLICY_FILES[@]}" ||
     rg --quiet 'Honor the latest .*do not commit' "${POLICY_FILES[@]}"; then

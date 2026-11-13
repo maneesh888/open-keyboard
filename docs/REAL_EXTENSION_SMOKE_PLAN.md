@@ -174,6 +174,31 @@ Live transport/model checks remain separate automated evidence through
 
 Use a clean simulator appropriate to the change and the exact commit intended for push.
 
+For Xcode 27-or-newer Device Hub interaction, bind setup and proof to one Xcode installation with a
+scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`. Record the selected Xcode
+path and `xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
+owned UUID. Open Device Hub from that same Xcode, select the simulator if it appears, and match its
+Info inspector UUID and OS to the owned UUID. Device Hub only lists simulators added there or
+previously used as Xcode run destinations, and parallel-test simulators may be active while hidden,
+so keep host-window visibility, sidebar membership, CoreSimulator state, and app runtime state
+separate. Do not infer a lock, authorization problem, or service failure from a missing row or a
+pasteboard transfer failure.
+
+Allow for a slow initial launch on Xcode 27.1. Treat iPhone Duo Closed, Partially Open, and Open as
+device poses and record the exact pose when relevant. Because most app extensions are unavailable
+in the Xcode 27.1 Duo runtime, use a supported non-Duo simulator for extension proof unless the
+requirement specifically targets Duo behavior; report that limitation instead of substituting a
+different claim. Never install or change certificates or trust roots, broaden Xcode/MCP
+permissions, or place credentials, private endpoints, or other secrets on a clipboard as a
+workaround without explicit repository-owner authorization for that action.
+
+This interactive procedure is normal runtime proof, not the automated XCTest gate. Run automated
+XCTest/XCUIAutomation through the repository scripts with a scoped `DEVELOPER_DIR`, compatible
+runtime, exact workflow-owned UUID, and validated result bundle even when Device Hub cannot be
+shown or controlled. Record the Xcode marketing version, build, and release channel. A beta or RC
+proves only that named prerelease, and an older-Xcode fallback is diagnostic unless the requirement
+explicitly names it. Do not install or update Xcode or change global toolchain selection here.
+
 Use this escalation hierarchy for interaction and proof generation. Stop when a tier produces every
 required result; retain valid evidence from an earlier tier and escalate only what remains missing
 or ambiguous:
@@ -181,7 +206,22 @@ or ambiguous:
 1. **Simulator accessibility/control:** use a purpose-built, generically named integration to
    inspect the normal app's accessibility hierarchy, operate discoverable controls, type, tap,
    swipe, and capture direct Simulator screenshots. Accessibility metadata or action success alone
-   is not visual proof; inspect the resulting visible state and deliver the screenshots.
+   is not visual proof; inspect the resulting visible state and deliver the screenshots. For Xcode
+   MCP device interaction, pass this task worktree's absolute path as `workspaceIdentifier`, confirm
+   it is open with `XcodeListWorkspaces`, and hold the repository's shared Simulator lock for the
+   full session. Pass an exact newly created and
+   recorded disposable Simulator UUID, require `deviceIsSimulator == true` and an exact match to
+   that UUID, end the Xcode session before releasing the lock, and delete only that owned Simulator.
+   If the session returns a `skillToTrigger` integration that is unavailable, end the session and
+   continue to the next tier; do not synthesize events directly or claim interaction proof.
+   When the Xcode interaction capabilities are available, use the structured route:
+   `XcodeListWorkspaces`, simulator-only destination discovery when safe,
+   `DeviceInteractionStartWorkspaceSession`, exact returned simulator/UUID checks,
+   `DeviceInteractionInstallAndRun`, the required interaction worker, a fresh hierarchy before each
+   hierarchy-derived event, direct screenshot inspection, and `DeviceInteractionEndSession`.
+   Record mock-versus-live and app-only-versus-extension scope with the capture SHA, toolchain,
+   runtime/build, UUID, action, and result. An app-only image or preview does not prove the real
+   keyboard-extension lifecycle.
 2. **Computer Use:** when tier one is unavailable or insufficient for a system-level interaction or
    visual judgment, use Computer Use or equivalent host UI automation to inspect and operate the
    normal Simulator and capture direct screenshots.
@@ -192,11 +232,15 @@ The first two tiers are AI-verification routes and require screenshot inspection
 a separate authorization route and does not.
 
 A Computer Use report that the host is locked or Simulator is unavailable is a route-level failure,
-not a terminal runtime-proof conclusion. Refresh its app state once and retry Simulator with bundle
-identifier `com.apple.iphonesimulator` when supported. If that retry fails, attempt any other
-available non-XCTest Simulator accessibility/control route before using the human handoff; do not
-keep retrying a genuinely locked host. `simctl` can support setup and capture the current
-framebuffer, but a capture alone does not prove that the required visible interaction occurred.
+not a terminal runtime-proof conclusion. Refresh its app state once. For Xcode 27 or newer, first
+target Device Hub from the same recorded Xcode installation and verify the exact owned UUID;
+otherwise, or when Device Hub cannot be targeted, retry Simulator with bundle identifier
+`com.apple.iphonesimulator` when supported. If that retry fails, attempt any other available
+non-XCTest Simulator accessibility/control route before using the human handoff; do not keep
+retrying a genuinely locked host. `simctl` can support setup and capture the current framebuffer,
+but a capture alone does not prove that the required visible interaction occurred. Device Hub's
+full-resolution screenshot likewise proves normal runtime only after the required production
+interaction, inspection, privacy review, runtime record, and artifact delivery.
 
 1. Build and install the app normally from Xcode using the required build configuration. Do not
    pass `--uitesting` or any debug-state/result-seeding arguments.
