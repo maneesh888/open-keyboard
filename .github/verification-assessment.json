@@ -61,10 +61,17 @@
         "oid": "80047cd8bf0e6999d54697f1fa2506a8284adab1"
       }
     },
+    "scripts/ios/select-compatible-simulator-runtimes.rb": {
+      "after": {
+        "mode": "100644",
+        "oid": "b53bf412d6da51acd95834dc36c8ca3472007c23"
+      },
+      "before": null
+    },
     "scripts/ios/test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "edfafc661facb6b81352568cda5388d14e7da53d"
+        "oid": "1f1e2673be8bb84715e5938862e2e53f927691fb"
       },
       "before": {
         "mode": "100755",
@@ -74,7 +81,7 @@
     "scripts/tests/runtime-proof-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "8b54c25587fcf512fb345c3b126344727736c56e"
+        "oid": "ab712762974dbad8687de42ec6e1e833a2372266"
       },
       "before": {
         "mode": "100755",
@@ -103,8 +110,8 @@
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and workflow-policy regressions, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the evidence relevant to the changed behavior.",
-  "rationale": "The complete diff changes deterministic grammar alignment, Xcode 27 Simulator and structured interaction workflow policy, runtime-proof documentation, and test tooling without changing semantic requests, prompts, transport, provider or model selection, response validation or parsing, or dependency gitlinks; live model execution cannot prove these deterministic and policy-only changes.",
+  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and runtime-selection policy regressions including rejection of a newer minor runtime, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the relevant evidence.",
+  "rationale": "The complete diff changes deterministic grammar alignment, Xcode 27 Simulator runtime selection and structured interaction workflow policy, runtime-proof documentation, and test tooling without changing semantic requests, prompts, transport, provider or model selection, response validation or parsing, or dependency gitlinks; live model execution cannot prove these deterministic and policy-only changes.",
   "requirement_id": "R7",
   "schema": 1
 }
