@@ -308,7 +308,7 @@ rg --fixed-strings --quiet '$write-openkeyboard-product-copy' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-work-package' "$DEVELOP_SKILL"
 rg --quiet '\$plan-openkeyboard-major-milestone' "$DEVELOP_SKILL"
 rg --quiet '\$review-verify-merge-pr' "$DEVELOP_SKILL"
-rg --quiet '^## Lifecycle autonomy$' "$DEVELOP_SKILL"
+rg --quiet '^## Lifecycle and handoff$' "$DEVELOP_SKILL"
 rg --quiet '^name: write-openkeyboard-product-copy$' "$PRODUCT_COPY_SKILL"
 rg --fixed-strings --quiet 'predecessor to target to successor' "$PRODUCT_COPY_SKILL"
 ruby -e '
@@ -329,27 +329,16 @@ ruby -e '
     agents.include?(expected_agents_route)
 
   expected_develop_route =
-    "For work centered on user-visible app or keyboard wording, use " \
-    "`$write-openkeyboard-product-copy` to review the target screen, incoming and outgoing journey, " \
-    "product claims, terminology, reachable states, and accessibility labels before editing."
-  abort "The development skill must apply the product-copy specialist to screen, journey, claim, state, and accessibility decisions before editing." unless
+    "Use `$audit-openkeyboard-ui` for UI audit work and `$write-openkeyboard-product-copy` for " \
+    "user-visible wording work as routed by `AGENTS.md`"
+  abort "The development skill must route wording work to the canonical product-copy specialist." unless
     develop.include?(expected_develop_route)
 
-  workflow_requirements = {
-    "development route" =>
-      "For work centered on visible app or keyboard wording, `$write-openkeyboard-product-copy` runs inside the development route.",
-    "screen-to-journey review" =>
-      "It reviews the requested screen together with its incoming and outgoing journey, balances interface clarity with truthful product positioning, checks reachable states and accessibility language, and protects shared terminology.",
-    "read-only audit boundary" =>
-      "A copy audit remains read-only unless implementation is already authorized.",
-    "semantic prompt boundary" =>
-      "The skill never edits canonical semantic prompts or generated user content",
-    "UI proof boundary" =>
-      "an implemented UI-copy change still requires the normal UI proof route."
-  }
-  workflow_requirements.each do |label, requirement|
-    abort "The development workflow is missing the product-copy #{label}." unless workflow.include?(requirement)
-  end
+  workflow_route =
+    "Use `$audit-openkeyboard-ui` for UI audits and `$write-openkeyboard-product-copy` for " \
+    "user-visible wording as routed by `AGENTS.md`."
+  abort "The development workflow must retain compact product-copy routing." unless
+    workflow.include?(workflow_route)
 
   semantic_scope =
     "Keep semantic operation identifiers, model instructions, prompt wording, response schemas, " \
@@ -509,25 +498,13 @@ ruby -e '
       agents,
       /[Dd]elegate wording-specific analysis to `\$write-openkeyboard-product-copy`\..*Source inspection may establish code findings and visual risks, but never rendered or runtime acceptance\./
     ],
-    "development-skill read-only and authorized-fix routes" => [
+    "development-skill compact specialist route" => [
       develop,
-      /Route UI audit requests through the read-only `\$audit-openkeyboard-ui`\..*When UI fixes are authorized, use it inside this implementation loop to trace SwiftUI controls and visible states through navigation, ViewModels, production behavior, and relevant tests before editing\./
+      /Use `\$audit-openkeyboard-ui` for UI audit work and `\$write-openkeyboard-product-copy` for user-visible wording work as routed by `AGENTS.md`/
     ],
-    "development-skill scope and specialist boundaries" => [
-      develop,
-      /Review adjacent screens for journey continuity without adding them to the edit scope\..*delegate wording-specific analysis to `\$write-openkeyboard-product-copy`\..*never present source inspection as rendered or runtime acceptance\./
-    ],
-    "documented read-only audit route" => [
+    "documented compact specialist route" => [
       workflow,
-      /UI audit requests route to the read-only `\$audit-openkeyboard-ui`\..*without silently expanding the edit scope\./
-    ],
-    "documented specialist and evidence boundaries" => [
-      workflow,
-      /It owns layout, behavior, accessibility, and interaction findings while delegating wording-specific analysis to `\$write-openkeyboard-product-copy`\..*Source-only results must use `confirmed from code`, `likely visual risk`, or `requires simulator verification`; they never establish rendered or runtime acceptance\./
-    ],
-    "documented authorized-fix route" => [
-      workflow,
-      /When fixes are authorized, use the audit inside `\$develop-openkeyboard` and apply the normal implementation and proof gates\./
+      /Use `\$audit-openkeyboard-ui` for UI audits and `\$write-openkeyboard-product-copy` for user-visible wording as routed by `AGENTS.md`\./
     ]
   }
   routing_requirements.each do |label, (source, pattern)|
@@ -545,7 +522,7 @@ rg --fixed-strings --quiet 'First bounded work package:' "$MILESTONE_PLAN_SKILL"
 rg --fixed-strings --quiet 'physical device by default' "$MILESTONE_PLAN_SKILL"
 rg --quiet 'allow_implicit_invocation:[[:space:]]*false' "$MILESTONE_PLAN_INTERFACE"
 rg --fixed-strings --quiet '$plan-openkeyboard-major-milestone' "$ROOT/AGENTS.md"
-rg --fixed-strings --quiet 'A clear implementation request bypasses both planning routes.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
+rg --fixed-strings --quiet '`$develop-openkeyboard` is the direct route for a bounded implementation.' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md"
 rg --quiet '^## Independent review$' "$PR_TEMPLATE"
 rg --quiet '^## Requirements and proof$' "$PR_TEMPLATE"
 rg --quiet '^## Merge authorization$' "$PR_TEMPLATE"

@@ -221,6 +221,7 @@ struct GrammarEdit: Equatable, Identifiable, Sendable {
 
 struct GrammarDiffService {
     private static let maximumTokenProduct = 2_000_000
+    private static let maximumTraceCellCount = 2_000_000
 
     private enum TokenKind: Equatable {
         case word
@@ -246,15 +247,11 @@ struct GrammarDiffService {
         guard source.count <= Self.maximumTokenProduct / max(target.count, 1) else {
             return [wholeTextEdit(from: original, to: corrected)]
         }
-        let difference = target.difference(from: source)
-        let removedOffsets = Set(difference.removals.compactMap { change -> Int? in
-            guard case .remove(let offset, _, _) = change else { return nil }
-            return offset
-        })
-        let insertedOffsets = Set(difference.insertions.compactMap { change -> Int? in
-            guard case .insert(let offset, _, _) = change else { return nil }
-            return offset
-        })
+        guard let differenceOffsets = stableDifferenceOffsets(from: source, to: target) else {
+            return [wholeTextEdit(from: original, to: corrected)]
+        }
+        let removedOffsets = differenceOffsets.removals
+        let insertedOffsets = differenceOffsets.insertions
 
         var edits: [GrammarEdit] = []
         var sourceIndex = 0
@@ -332,6 +329,95 @@ struct GrammarDiffService {
         }
         appendHunk()
         return edits
+    }
+
+    private static func stableDifferenceOffsets(
+        from source: [Token],
+        to target: [Token]
+    ) -> (removals: Set<Int>, insertions: Set<Int>)? {
+        if source.isEmpty {
+            return ([], Set(target.indices))
+        }
+        if target.isEmpty {
+            return (Set(source.indices), [])
+        }
+
+        // Keep diff alignment independent of the host OS Swift runtime. This is the same greedy
+        // Myers tie-break used by Swift's original CollectionDifference implementation: advance
+        // along the target only when that reaches farther than removing from the source.
+        let maximumDepth = source.count + target.count
+        let frontierWidth = maximumDepth * 2 + 3
+        guard frontierWidth <= maximumTraceCellCount else { return nil }
+        let origin = maximumDepth + 1
+        var frontier = [Int](repeating: 0, count: frontierWidth)
+        frontier[origin + 1] = 0
+        var trace: [[Int]] = []
+
+        for depth in 0...maximumDepth {
+            guard (depth + 1) <= maximumTraceCellCount / frontierWidth else {
+                return nil
+            }
+            trace.append(frontier)
+
+            for diagonal in stride(from: -depth, through: depth, by: 2) {
+                let frontierIndex = origin + diagonal
+                var sourceIndex: Int
+                if diagonal == -depth ||
+                    (diagonal != depth && frontier[frontierIndex - 1] < frontier[frontierIndex + 1]) {
+                    sourceIndex = frontier[frontierIndex + 1]
+                } else {
+                    sourceIndex = frontier[frontierIndex - 1] + 1
+                }
+                var targetIndex = sourceIndex - diagonal
+
+                while sourceIndex < source.count,
+                      targetIndex < target.count,
+                      source[sourceIndex] == target[targetIndex] {
+                    sourceIndex += 1
+                    targetIndex += 1
+                }
+                frontier[frontierIndex] = sourceIndex
+
+                guard sourceIndex == source.count, targetIndex == target.count else { continue }
+
+                var removals = Set<Int>()
+                var insertions = Set<Int>()
+                var backtrackSource = source.count
+                var backtrackTarget = target.count
+
+                if depth > 0 {
+                    for backtrackDepth in stride(from: depth, through: 1, by: -1) {
+                        let previousFrontier = trace[backtrackDepth]
+                        let backtrackDiagonal = backtrackSource - backtrackTarget
+                        let previousDiagonal: Int
+                        if backtrackDiagonal == -backtrackDepth ||
+                            (backtrackDiagonal != backtrackDepth &&
+                                previousFrontier[origin + backtrackDiagonal - 1] <
+                                previousFrontier[origin + backtrackDiagonal + 1]) {
+                            previousDiagonal = backtrackDiagonal + 1
+                        } else {
+                            previousDiagonal = backtrackDiagonal - 1
+                        }
+                        let previousSource = previousFrontier[origin + previousDiagonal]
+                        let previousTarget = previousSource - previousDiagonal
+
+                        while backtrackSource > previousSource, backtrackTarget > previousTarget {
+                            backtrackSource -= 1
+                            backtrackTarget -= 1
+                        }
+                        if backtrackSource == previousSource {
+                            backtrackTarget -= 1
+                            insertions.insert(backtrackTarget)
+                        } else {
+                            backtrackSource -= 1
+                            removals.insert(backtrackSource)
+                        }
+                    }
+                }
+                return (removals, insertions)
+            }
+        }
+        return nil
     }
 
     private static func wholeTextEdit(from original: String, to corrected: String) -> GrammarEdit {

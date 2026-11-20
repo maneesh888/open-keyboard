@@ -20,8 +20,8 @@ it.
    `codex/<session-slug>` on fresh `origin/main`. Put worktrees under
    `OPEN_KEYBOARD_WORKTREE_ROOT`, or a sibling `open-keyboard-worktrees` directory when unset. Do
    not fall back to a stale or different base without asking.
-4. **Bound or phase the task.** Record the objective, affected surfaces, exclusions, verification
-   level, required evidence class, and authority ledger. Route explicit major-milestone, roadmap,
+4. **Bound or phase the task.** Record one compact checkpoint with the objective, changed surfaces,
+   exclusions, required evidence, and authority ledger. Route explicit major-milestone, roadmap,
    long-horizon, or multi-phase planning to the read-only `major-milestone-planner` through
    `$plan-openkeyboard-major-milestone`. Route one bounded plan or a concise "what next" request to
    the read-only `work-package-planner` through `$plan-openkeyboard-work-package`. For a clear
@@ -36,21 +36,28 @@ it.
    Source inspection may establish code findings and visual risks, but never rendered or runtime
    acceptance. Reuse local patterns, add focused regression coverage for changed behavior, and
    preserve files outside the work order.
-6. **Verify and commit only when authorized.** Run affected tests, `git diff --check`, and the
-   proportional repository gate below. Recheck the authority ledger before staging and again
-   before committing. Install hooks with `./scripts/install-hooks.sh`; never use `--no-verify`.
-   Stage only intended files and inspect `git diff --cached --name-only` plus the staged diff for
-   secrets or generated artifacts.
+6. **Verify and commit only when authorized.** During diagnosis and implementation, run focused
+   tests for the changed behavior; do not repeatedly run a cumulative repository gate after small
+   edits. Once the bounded change is ready, freeze it, run `git diff --check`, and let the mandatory
+   commit hook run the proportional staged gate. Before that gate, validate or regenerate any
+   diff-bound applicability manifest against the complete intended diff. Do not immediately repeat
+   the same command when that hook already passed for unchanged staged content. Recheck authority
+   before staging and committing, install hooks with `./scripts/install-hooks.sh`, never use
+   `--no-verify`, and inspect the staged names and diff for secrets or generated artifacts.
 7. **Collect runtime proof when required and authorized.** Proof-sensitive user-facing changes
    require normal simulator runtime proof before push. Codex-operated physical-device interaction
    remains prohibited until the user explicitly requests it; a device-specific requirement creates
    a blocker for Codex-operated proof, not permission to connect to a device. The user may perform
    their own verification and explicitly approve the exact head without granting Codex device
    access. Follow the evidence and interaction rules below.
-8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. Before an
-   authorized push, run the exact-head diff-classified deterministic gate
+8. **Publish and review.** Recheck the authority ledger before any push or PR mutation. After the
+   final commit freezes the exact head, run the diff-classified deterministic gate once
    (`./scripts/check.sh --hygiene` for documentation-only changes; `--full` otherwise) and the
-   classifier-selected exact-head live gate. Open a draft PR, keep a requirement ledger, and use
+   classifier-selected exact-head live gate, then perform one independent review. Any later edit or
+   commit starts a new exact-head cycle. When push is authorized, let the mandatory pre-push hook
+   supply that aggregate gate instead of running it manually immediately before push. If push is
+   unavailable and local evidence is required, run it manually and disclose that a later push hook
+   must repeat it. Open a draft PR, keep a requirement ledger, and use
    `$review-verify-merge-pr` for exact-head review, readiness, and guarded merge.
 9. **Finish safely.** Report exact evidence boundaries. After merge, inspect relevant `main` CI.
    Remove a session worktree and delete its merged branch only after confirming it is clean and no
@@ -249,6 +256,31 @@ class. Record the route and its limits. Do not discard valid evidence solely bec
 tool or test name differs; do not relabel mocks as live, test-seeded UI as normal runtime, or a
 partial sequence as complete. Preserve valid evidence and investigate only the remaining gap.
 
+### Xcode MCP acceleration
+
+Use Xcode 27-or-newer MCP tools only as focused accelerators. Xcode MCP tools supplement; they never replace the
+repository scripts, diff classification, exact-head full/live gates, independent review,
+or human approval. Bind every workspace-scoped call to the active worktree's absolute path as
+`workspaceIdentifier`, confirm it with `XcodeListWorkspaces`, and apply normal edit authority and
+diff review to project mutations. An MCP build proves only a build, an MCP test is automated
+regression evidence, and a preview is diagnostic visual evidence.
+
+Simulator-capable Xcode interaction must use the repository's shared lock, a freshly created and
+recorded disposable simulator, and its exact UUID. Require `deviceIsSimulator == true`; never use
+best-match selection or a pre-existing Simulator. While physical-device authority is `NO`, avoid
+destination discovery that can enumerate connected devices and use repository scripts instead of
+destination-implicit actions. Bind Xcode/Device Hub work with scoped `DEVELOPER_DIR`, not global
+`xcode-select`; do not change certificates, trust, permissions, or clipboard secrets as a
+workaround. Always end the interaction session, delete only the owned Simulator, and fail closed
+when a required integration is unavailable.
+
+Before Xcode/Device Hub work, load the detailed, version-specific preflight, destination-safety,
+structured-interaction, evidence-recording, and cleanup rules in
+`docs/DEVELOPMENT_WORKFLOW.md#xcode-mcp-acceleration`. Automated XCTest remains distinct from
+interactive Device Hub and normal runtime proof. A successful action, hierarchy, log, or screenshot
+is evidence only after the required production interaction and visible result are inspected; an
+app-only image never proves the keyboard-extension lifecycle.
+
 ### When runtime proof is required
 
 Changes affecting UI, keyboard-extension lifecycle, Apply/Copy/Back/Rerun, or result presentation
@@ -285,12 +317,15 @@ ambiguous requirements:
 
 An interaction-tool error applies to that route only. A Computer Use report that the host is locked
 or Simulator is unavailable is a route-level failure, not a terminal runtime-proof conclusion. If
-Computer Use was selected, refresh its app state once and retry Simulator with the canonical bundle
-identifier `com.apple.iphonesimulator` when bundle targeting is supported; then try any other
-available non-XCTest Simulator accessibility/control route before falling back to human
-verification. Do not loop on a genuinely locked host. `simctl` may install, launch, inspect device
-state, and capture the current framebuffer, but those operations alone do not prove that the
-required visible interaction occurred.
+Computer Use was selected, refresh its app state once. For Xcode 27 or newer, first target Device
+Hub from the same recorded Xcode installation and verify the exact owned UUID; otherwise, or when
+that surface cannot be targeted, retry Simulator with the canonical bundle identifier
+`com.apple.iphonesimulator` when bundle targeting is supported. Then try any other available
+non-XCTest Simulator accessibility/control route before falling back to human verification. Do not
+loop on a genuinely locked host. `simctl` may install, launch, inspect device state, and capture the
+current framebuffer, but those operations alone do not prove that the required visible interaction
+occurred. A Device Hub screenshot is full device resolution, but it is normal runtime proof only
+when every interaction, inspection, privacy, runtime-record, and delivery requirement above is met.
 
 Tool availability does not change the proof standard. If interaction is unavailable, unreliable,
 or ambiguous, stop before push/readiness, state exactly what remains unverified, and provide the
