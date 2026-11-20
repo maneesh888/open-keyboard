@@ -146,12 +146,25 @@ require_phrase 'MCP device interaction, pass this task worktree'"'"'s absolute p
   "The runtime plan must bind Xcode MCP proof to the active worktree."
 require_phrase '### Xcode 27 Device Hub preflight' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
   "Development workflow must define the Xcode 27 Device Hub preflight."
+require_phrase "Treat opening Device Hub's unfiltered sidebar as physical-device discovery" "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must treat unfiltered Device Hub inventory as physical-device discovery."
+require_phrase 'With physical-device authority `NO`, do not open that sidebar' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
+  "Development workflow must fail closed before Device Hub can expose physical-device inventory."
 require_phrase 'These release notes do not establish the cause of an' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
   "Development workflow must not turn Xcode release notes into a DTServiceHub causal claim."
 require_phrase 'full-device-resolution screenshot' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \
   "Development workflow must preserve the Device Hub screenshot evidence boundary."
 require_phrase 'scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The runtime plan must record a scoped Xcode toolchain selection."
+require_phrase "Treat opening Device Hub's unfiltered sidebar as physical-device discovery" "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must treat unfiltered Device Hub inventory as physical-device discovery."
+require_phrase 'With physical-device authority `NO`, do not open that sidebar' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
+  "The runtime plan must fail closed before Device Hub can expose physical-device inventory."
+if rg --quiet 'Open Device Hub from (that Xcode|that same Xcode)' \
+    "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md"; then
+  echo "Device Hub guidance still opens unfiltered inventory before establishing physical-device authority or simulator-only scope." >&2
+  exit 1
+fi
 require_phrase 'Because most app extensions are unavailable' "$ROOT/docs/REAL_EXTENSION_SMOKE_PLAN.md" \
   "The runtime plan must route extension proof around the unsupported Xcode 27.1 Duo runtime."
 require_phrase '#### Automated gates are not Device Hub interaction' "$ROOT/docs/DEVELOPMENT_WORKFLOW.md" \

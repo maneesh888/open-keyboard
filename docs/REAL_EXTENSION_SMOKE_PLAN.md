@@ -177,12 +177,16 @@ Use a clean simulator appropriate to the change and the exact commit intended fo
 For Xcode 27-or-newer Device Hub interaction, bind setup and proof to one Xcode installation with a
 scoped `DEVELOPER_DIR`; do not change or rely on global `xcode-select`. Record the selected Xcode
 path and `xcodebuild -version`, Device Hub/Xcode version, simulator runtime and build, and exact
-owned UUID. Open Device Hub from that same Xcode, select the simulator if it appears, and match its
-Info inspector UUID and OS to the owned UUID. Device Hub only lists simulators added there or
-previously used as Xcode run destinations, and parallel-test simulators may be active while hidden,
-so keep host-window visibility, sidebar membership, CoreSimulator state, and app runtime state
-separate. Do not infer a lock, authorization problem, or service failure from a missing row or a
-pasteboard transfer failure.
+owned UUID. Treat opening Device Hub's unfiltered sidebar as physical-device discovery because it can reveal
+paired-device inventory. With physical-device authority `NO`, do not open that sidebar;
+use the exact-UUID structured Simulator route below or another route proven to constrain discovery
+to Simulators before presenting inventory. Only after simulator-only scoping is established, or
+physical-device discovery is explicitly authorized, select the simulator and match its Info UUID
+and OS to the owned UUID. Device Hub only lists simulators added there or previously used as Xcode
+run destinations, and parallel-test simulators may be active while hidden, so keep host-window
+visibility, sidebar membership, CoreSimulator state, and app runtime state separate. Do not infer
+a lock, authorization problem, or service failure from a missing row or a pasteboard transfer
+failure.
 
 Allow for a slow initial launch on Xcode 27.1. Treat iPhone Duo Closed, Partially Open, and Open as
 device poses and record the exact pose when relevant. Because most app extensions are unavailable

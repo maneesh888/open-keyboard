@@ -124,9 +124,13 @@ requirements.
 
 Bind each attempt to one Xcode installation with command-scoped `DEVELOPER_DIR`; record the app
 path, `xcodebuild -version`, release channel, runtime/build, and exact owned UUID. Never change or
-depend on global `xcode-select`. Open Device Hub from that Xcode, select the intended row, and match
-its Info UUID and OS to the owned Simulator. Distinguish host-window control, sidebar visibility,
-CoreSimulator state, and app runtime state.
+depend on global `xcode-select`. Treat opening Device Hub's unfiltered sidebar as physical-device discovery
+because it can reveal paired-device inventory. With physical-device authority `NO`, do not open that sidebar:
+use the exact-UUID structured Simulator route below, or another route proven
+to constrain discovery to Simulators before presenting inventory. Only when physical-device
+discovery is explicitly authorized, or a simulator-only view is established first, select the
+intended row and match its Info UUID and OS to the owned Simulator. Distinguish host-window control,
+sidebar visibility, CoreSimulator state, and app runtime state.
 
 The sidebar is curated, not a complete inventory. Xcode 27 notes say parallel-test Simulators may
 be hidden and describe pasteboard timeout/synchronization changes; neither a hidden row nor paste
