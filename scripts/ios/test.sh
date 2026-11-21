@@ -142,6 +142,11 @@ DEFAULT_SIMULATOR_GATEWAY_SEED_FILE=".agent/local-seeds/openkeyboard-gateway.env
 DEFAULT_REAL_KEYBOARD_SIMULATOR="iPhone 17 Pro"
 source "$REPO_ROOT/scripts/ios/live-test-safety.sh"
 source "$REPO_ROOT/scripts/ios/verification-resume.sh"
+case "$MODE" in
+  live-gateway-smoke|live-provider-matrix|live-model-differential)
+    openkeyboard_bind_verification_base
+    ;;
+esac
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

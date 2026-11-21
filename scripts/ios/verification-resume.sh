@@ -1,5 +1,13 @@
 #!/usr/bin/env bash
 
+# Resolve the comparison base before the live preflight removes its ambient control name.
+# The immutable non-private SHA survives child-environment scrubbing.
+openkeyboard_bind_verification_base() {
+  local selected_base="${OPEN_KEYBOARD_LIVE_BASE_REF:-${OPEN_KEYBOARD_CHECK_BASE_REF:-origin/main}}"
+  OPEN_KEYBOARD_CHECK_BASE_REF="$(git -C "$REPO_ROOT" rev-parse --verify "$selected_base^{commit}")" || exit 2
+  export OPEN_KEYBOARD_CHECK_BASE_REF
+}
+
 # These helpers run inside the repository Simulator lock. A miss only schedules execution.
 # Do not forward seed-backed environment values to receipt housekeeping tools.
 openkeyboard_verification_receipt() (

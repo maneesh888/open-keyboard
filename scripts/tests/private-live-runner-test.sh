@@ -35,6 +35,9 @@ cat > "$REPO/scripts/ios/test.sh" <<'MOCK'
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -f "$ROOT/.agent/expected-base" ]]; then
+  [[ "${OPEN_KEYBOARD_CHECK_BASE_REF:-}" == "$(cat "$ROOT/.agent/expected-base")" ]] || exit 76
+fi
 [[ "$1" != core ]] || exit 0
 if [[ "$1" == live-provider-matrix ]]; then
   printf '%s\n' \
@@ -92,6 +95,13 @@ assert_private() {
   fi
 }
 printf valid > "$REPO/.agent/scenario"
+git -C "$REPO" -c core.hooksPath=/dev/null commit --allow-empty -qm next
+# Every canonical child must receive the resolved caller-selected comparison SHA.
+git -C "$REPO" rev-parse HEAD > "$REPO/.agent/expected-base"
+run_gate OPEN_KEYBOARD_LIVE_BASE_REF=HEAD
+assert_private
+# The default remains origin/main, which intentionally differs from HEAD here.
+git -C "$REPO" rev-parse origin/main > "$REPO/.agent/expected-base"
 run_gate
 assert_private
 grep -q 'model_identity_matches=low=true, high=true' "$FIXTURE/output"

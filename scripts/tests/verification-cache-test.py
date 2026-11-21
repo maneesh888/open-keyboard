@@ -218,6 +218,16 @@ class ReceiptTests(unittest.TestCase):
             with self.assertRaises(cache.CacheError):
                 cache.main()
 
+    def test_context_put_cannot_mint_deterministic_passes(self):
+        context = self.area / "context.json"
+        with patch.object(sys, "argv", ["cache", "context", str(self.repo), str(context)]):
+            self.assertEqual(cache.main(), 0)
+        for stage in ("contract", "core", "build", "deterministic-ui"):
+            with patch.object(sys, "argv", ["cache", "put", str(context), stage]):
+                with self.assertRaises(cache.CacheError):
+                    cache.main()
+            self.assertIsNone(self.store.get(self.store.binding([]), stage))
+
     def test_changed_input_during_command_cannot_save_a_pass(self):
         path = self.repo / "scripts/ios/test.sh"
         path.parent.mkdir(parents=True)
@@ -358,7 +368,7 @@ openkeyboard_extract_live_diagnostic_evidence() {
   printf 'diagnostic_outcomes_%s=transport=passed, grammar=%s, rewrite=passed, translation=passed\\n' "$2" "$grammar"
 }
 '''
-        return subprocess.run(["bash", "-c", program + helpers + "\n" + body], cwd=self.repo,
+        return subprocess.run(["bash", "-c", program + helpers + "\nopenkeyboard_bind_verification_base\n" + body], cwd=self.repo,
                               env={**self.environment, **environment}, text=True, capture_output=True)
 
     def lines(self):
@@ -378,6 +388,20 @@ openkeyboard_extract_live_diagnostic_evidence() {
         third = self.run_route("live-provider-matrix")
         self.assertEqual(third.returncode, 0, third.stderr)
         self.assertEqual(self.lines(), [], "A completed matrix must not build or allocate a Simulator again")
+
+    def test_live_base_ref_survives_preflight_and_invalidates_provider_rows(self):
+        subprocess.run(["git", "-C", str(self.repo), "commit", "--allow-empty", "-qm", "next"], check=True)
+        first = self.run_route("live-provider-matrix", OPEN_KEYBOARD_LIVE_BASE_REF="HEAD")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.events.unlink()
+        second = self.run_route("live-provider-matrix", OPEN_KEYBOARD_LIVE_BASE_REF="HEAD~1")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual([v for v in self.lines() if v.startswith("provider-")],
+                         ["provider-openai", "provider-anthropic", "provider-openrouter", "provider-gateway"])
+        self.events.unlink()
+        third = self.run_route("live-provider-matrix", OPEN_KEYBOARD_LIVE_BASE_REF="HEAD~1")
+        self.assertEqual(third.returncode, 0, third.stderr)
+        self.assertEqual(self.lines(), [])
 
     def test_high_only_retry_preserves_verified_low_boundary_and_warning_contracts(self):
         first = self.run_route("live-model-differential", FAIL_ROW="profile-high")

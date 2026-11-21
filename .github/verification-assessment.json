@@ -41,7 +41,7 @@
     "scripts/check-live.sh": {
       "after": {
         "mode": "100755",
-        "oid": "7001369a9ec60faf0574300a9a59fc3c106b4c20"
+        "oid": "bb6cb2a9333d397ebad21b6019622d70595bd476"
       },
       "before": {
         "mode": "100755",
@@ -61,7 +61,7 @@
     "scripts/ios/test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "2285e0539a6f300685b527fa39aace862f4617c0"
+        "oid": "8bfeedd9a1d7b00a11c571b3e543e0947eada535"
       },
       "before": {
         "mode": "100755",
@@ -71,7 +71,7 @@
     "scripts/ios/verification-resume.sh": {
       "after": {
         "mode": "100644",
-        "oid": "a078d094d17c2d48c241910db61e99d88c77033f"
+        "oid": "526f8a9548c730a23a798a0de298cb5c528aaac2"
       },
       "before": null
     },
@@ -88,7 +88,7 @@
     "scripts/tests/private-live-runner-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "ec6bff6ca264d5d07d13fb759478aef8883003c4"
+        "oid": "b01ad21f76f17ddfee4fc54dcc449311778aeb5b"
       },
       "before": {
         "mode": "100755",
@@ -98,7 +98,7 @@
     "scripts/tests/verification-cache-test.py": {
       "after": {
         "mode": "100644",
-        "oid": "88cafcd49764f030ddee7b27282ad72053506c48"
+        "oid": "df11ab7a50831216fd77ec6ce7f96ed7eb202997"
       },
       "before": null
     },
@@ -115,13 +115,13 @@
     "scripts/verification-cache.py": {
       "after": {
         "mode": "100644",
-        "oid": "0cb09b1e6de668096dc6330ba7fcdb284a1be4d4"
+        "oid": "5933aab2f86b292afa4778986899ab8031c684a5"
       },
       "before": null
     }
   },
   "live_impact": "none",
-  "proof": "Twenty-one deterministic receipt and mocked live-runner regressions exercise failed-only provider/profile/reference-role retries, exact-head/base/seed/toolchain invalidation, dirty trees, expiry, tampering, role swaps, forced failures, diagnostic invalidation, metadata lock availability, and canonical commands. Existing private seed/model-binding, Simulator ownership/serialization, workflow/negative policy suites and the exact-head full deterministic gate remain required. Independent review must inspect the complete diff, receipt trust boundary, unchanged assertions, and this assessment.",
+  "proof": "Twenty-three deterministic receipt and mocked live-runner regressions exercise failed-only provider/profile/reference-role retries, exact-head/base/seed/toolchain invalidation, dirty trees, expiry, tampering, role swaps, forced failures, diagnostic invalidation, metadata lock availability, and canonical commands, parent/direct live-base propagation, and rejection of context-based deterministic pass creation. Existing private seed/model-binding, Simulator ownership/serialization, workflow/negative policy suites and the exact-head full deterministic gate remain required. Independent review must inspect the complete diff, receipt trust boundary, unchanged assertions, and this assessment.",
   "rationale": "This diff changes local verification orchestration and same-head receipt integrity only. App/extension production sources, semantic prompts/contracts, provider/model selection, requests, response parsers, dependencies, and live outcome assertions are unchanged. The live runner executes the existing canonical tests or reuses authenticated same-head passing rows after guarded seed and role validation. A live model comparison would test unchanged model behavior rather than invalidation, replay, privacy, or concurrency correctness.",
   "requirement_id": "R8",
   "schema": 1

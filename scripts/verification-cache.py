@@ -312,6 +312,8 @@ def main():
                     raise CacheError("verification inputs changed during execution")
                 cache.put(binding, args.stage, "passed")
         return 0
+    if args.operation == "put" and args.stage in {"contract", "core", "build", "deterministic-ui"}:
+        raise CacheError("deterministic receipts require canonical execution")
     context = context_file(args.context)
     if context["binding"] is None:
         return 1 if args.operation == "get" else 0
