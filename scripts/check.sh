@@ -2,11 +2,23 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERIFICATION_HEAD="$(git -C "$ROOT" rev-parse --verify HEAD)"
+if [[ "${OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA:-$VERIFICATION_HEAD}" != "$VERIFICATION_HEAD" ]]; then
+  echo "Verification HEAD changed before the deterministic gate." >&2
+  exit 2
+fi
+export OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA="$VERIFICATION_HEAD"
 MODE="${1:---full}"
+if [[ "${2:-}" == "--fresh" && "$#" -eq 2 ]]; then
+  export OPEN_KEYBOARD_VERIFICATION_FRESH=1
+elif [[ "$#" -gt 1 ]]; then
+  echo "Only an optional --fresh may follow the check mode." >&2
+  exit 2
+fi
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/check.sh [--hygiene|--quick|--full]
+Usage: ./scripts/check.sh [--hygiene|--quick|--full] [--fresh]
 
   --hygiene  Validate shell/YAML syntax, policies, secrets, and whitespace.
   --quick    Run hygiene, OpenKeyboardCore tests, and the app/extension build.
@@ -82,6 +94,7 @@ run_script_policy_tests() {
   "$ROOT/scripts/tests/live-test-safety-test.sh"
   "$ROOT/scripts/tests/live-evidence-policy-test.sh"
   "$ROOT/scripts/tests/private-live-runner-test.sh"
+  python3 -I "$ROOT/scripts/tests/verification-cache-test.py"
   "$ROOT/scripts/tests/pr-requirements-policy-test.sh"
   "$ROOT/scripts/tests/pr-review-record-policy-test.sh"
   "$ROOT/scripts/tests/review-workflow-snapshot-test.sh"
@@ -116,16 +129,16 @@ run_hygiene() {
 
 run_quick() {
   run_hygiene --quick
-  "$ROOT/scripts/check-semantic-prompt-contract.sh"
+  python3 -I "$ROOT/scripts/verification-cache.py" run "$ROOT" contract -- "$ROOT/scripts/check-semantic-prompt-contract.sh"
   "$ROOT/scripts/local-ci.sh" --quick
   echo "OpenKeyboard quick checks passed."
 }
 
 run_full() {
   run_hygiene --full
-  "$ROOT/scripts/check-semantic-prompt-contract.sh"
+  python3 -I "$ROOT/scripts/verification-cache.py" run "$ROOT" contract -- "$ROOT/scripts/check-semantic-prompt-contract.sh"
   "$ROOT/scripts/local-ci.sh" --quick
-  "$ROOT/scripts/ios/test.sh" deterministic-ui
+  python3 -I "$ROOT/scripts/verification-cache.py" run "$ROOT" deterministic-ui -- "$ROOT/scripts/ios/test.sh" deterministic-ui
   echo "OpenKeyboard full deterministic checks passed."
 }
 
@@ -148,3 +161,8 @@ case "$MODE" in
     exit 2
     ;;
 esac
+
+if [[ "$(git -C "$ROOT" rev-parse --verify HEAD)" != "$VERIFICATION_HEAD" ]]; then
+  echo "Verification HEAD changed during the deterministic gate." >&2
+  exit 2
+fi

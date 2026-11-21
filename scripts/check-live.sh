@@ -12,6 +12,12 @@ esac
 set -euo pipefail
 
 TARGET="${1:-}"
+if [[ "${2:-}" == "--fresh" && "$#" -eq 2 ]]; then
+  export OPEN_KEYBOARD_VERIFICATION_FRESH=1
+elif [[ "$#" -gt 1 ]]; then
+  echo "Only an optional --fresh may follow the live target." >&2
+  exit 2
+fi
 REQUIRED_MODEL_INPUT_SET="false"
 REQUIRED_MODEL_INPUT=""
 REQUIRED_MODELS_INPUT_SET="false"
@@ -115,7 +121,7 @@ differential_evidence_file=""
 
 usage() {
   cat <<'EOF'
-Usage: ./scripts/check-live.sh {gateway|gateway-differential}
+Usage: ./scripts/check-live.sh {gateway|gateway-differential} [--fresh]
 
 The gateway check reads the persistent ignored seed in the primary checkout:
   <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env
@@ -215,7 +221,7 @@ require_private_evidence_shape() {
   fi
 }
 
-if [[ "$#" -ne 1 || ( "$TARGET" != "gateway" && "$TARGET" != "gateway-differential" ) ]]; then
+if [[ ( "$TARGET" != "gateway" && "$TARGET" != "gateway-differential" ) ]]; then
   usage >&2
   exit 2
 fi
@@ -229,6 +235,10 @@ if [[ ! "$HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 
 require_clean_checkout
+if [[ "${OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA:-$HEAD_SHA}" != "$HEAD_SHA" ]]; then
+  fail "Verification HEAD changed before the live gate."
+fi
+export OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA="$HEAD_SHA"
 
 EXPECTED_SHA="${OPEN_KEYBOARD_LIVE_EXPECTED_SHA:-$HEAD_SHA}"
 if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ || "$EXPECTED_SHA" != "$HEAD_SHA" ]]; then
@@ -397,7 +407,7 @@ env \
   -u SIMCTL_CHILD_OPEN_KEYBOARD_TEST_API_KEY \
   -u SIMCTL_CHILD_OPEN_KEYBOARD_TEST_MODEL \
   -u SIMCTL_CHILD_OPEN_KEYBOARD_REPLACE_EXISTING_CONFIG \
-  "$ROOT/scripts/ios/test.sh" core
+  python3 -I "$ROOT/scripts/verification-cache.py" run "$ROOT" core -- "$ROOT/scripts/ios/test.sh" core
 
 POST_DETERMINISTIC_SHA="$(git -C "$ROOT" rev-parse --verify HEAD)"
 if [[ "$POST_DETERMINISTIC_SHA" != "$HEAD_SHA" ]]; then

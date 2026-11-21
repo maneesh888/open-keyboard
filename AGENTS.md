@@ -405,6 +405,18 @@ Use every applicable task-status label exactly:
 These task labels do not replace PR requirement-row `VERIFIED`/`UNVERIFIED`. Never describe a task
 as fixed or working while a required live or runtime status remains unverified.
 
+### Same-head resumable verification
+
+Use the existing classified verification commands to resume failed or missing stages when the
+committed head and verification inputs are unchanged. Only validated, authenticated local passing
+receipts within their 24-hour lifetime may be reused. Changed heads, seeds, toolchains, relevant
+build controls, dirty trees, expired/corrupted records, and mismatched roles cannot reuse proof.
+Hygiene, policy/negative tests, secrets, and whitespace checks remain fresh. `--fresh` forces
+execution of selected stages. Failed, skipped, diagnostic-only, or incomplete results never become
+passes. Keep all required rows, aggregate full/live gates, runtime/human approval, independent
+review, and protected GitHub checks intact. Follow `docs/RESUMABLE_VERIFICATION.md` for scope,
+private storage, invalidation, and concurrent execution. Never import older logs as receipts.
+
 ## Verification routes
 
 Prefer repository scripts to equivalent hand-written commands:

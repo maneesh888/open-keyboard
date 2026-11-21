@@ -9,7 +9,14 @@ FIXTURE="$(mktemp -d)"
 trap 'rm -rf -- "$FIXTURE"' EXIT
 REPO="$FIXTURE/repo"
 mkdir -p "$REPO/scripts/ios" "$REPO/.agent/local-seeds"
-cp "$ROOT/scripts/check-live.sh" "$REPO/scripts/"
+cp "$ROOT/scripts/check-live.sh" "$ROOT/scripts/verification-cache.py" "$REPO/scripts/"
+mkdir -p "$REPO/bin"
+cat > "$REPO/bin/xcrun" <<'MOCK_TOOLCHAIN'
+#!/bin/bash
+if [[ "$1" == simctl ]]; then printf '{"runtimes":[]}\n'; else printf 'fixture-swift\n'; fi
+MOCK_TOOLCHAIN
+printf '#!/bin/bash\necho fixture-xcode\n' > "$REPO/bin/xcodebuild"
+chmod +x "$REPO/bin/xcrun" "$REPO/bin/xcodebuild"
 cp "$ROOT/scripts/ios/live-test-safety.sh" "$REPO/scripts/ios/"
 printf '#!/bin/bash\necho gateway\n' > "$REPO/scripts/live-impact.sh"
 chmod +x "$REPO/scripts/live-impact.sh"
@@ -75,9 +82,9 @@ git -C "$REPO" add .
 git -C "$REPO" -c core.hooksPath=/dev/null commit -qm fixture
 git -C "$REPO" update-ref refs/remotes/origin/main HEAD
 run_gate() {
-  env -u OPEN_KEYBOARD_LIVE_REQUIRED_MODEL -u OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
+  env -u OPEN_KEYBOARD_CHECK_BASE_REF -u OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA -u OPEN_KEYBOARD_LIVE_REQUIRED_MODEL -u OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
     -u OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE "$@" \
-    bash -ax "$REPO/scripts/check-live.sh" "${GATE_TARGET:-gateway-differential}" > "$FIXTURE/output" 2>&1
+    PATH="$REPO/bin:$PATH" bash -ax "$REPO/scripts/check-live.sh" "${GATE_TARGET:-gateway-differential}" > "$FIXTURE/output" 2>&1
 }
 assert_private() {
   if grep -Eq 'identity-sentinel|credential-sentinel|text-sentinel|private.invalid|12.345s|23.456s' "$FIXTURE/output"; then
