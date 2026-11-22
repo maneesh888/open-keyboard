@@ -7,6 +7,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+VERIFICATION_HEAD="$(git -C "$REPO_ROOT" rev-parse --verify HEAD)"
+if [[ "${OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA:-$VERIFICATION_HEAD}" != "$VERIFICATION_HEAD" ]]; then
+  echo "Verification HEAD changed before local CI." >&2
+  exit 2
+fi
+export OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA="$VERIFICATION_HEAD"
 RESULTS_DIR="$REPO_ROOT/.ci-results"
 TIMESTAMP="$(date +"%Y%m%d_%H%M%S")"
 LOG_FILE="$RESULTS_DIR/local-ci_$TIMESTAMP.log"
@@ -24,7 +30,11 @@ run_step() {
   local name="$1"
   shift
   echo -e "${CYAN}⏳ $name${NC}" | tee -a "$LOG_FILE"
-  if "$@" 2>&1 | tee -a "$LOG_FILE"; then
+  local command=("$@")
+  if [[ "${1:-}" == "$SCRIPT_DIR/ios/test.sh" && ( "${2:-}" == core || "${2:-}" == build ) && "$#" -eq 2 ]]; then
+    command=(python3 -I "$SCRIPT_DIR/verification-cache.py" run "$REPO_ROOT" "$2" -- "$@")
+  fi
+  if "${command[@]}" 2>&1 | tee -a "$LOG_FILE"; then
     echo -e "${GREEN}✅ $name passed${NC}" | tee -a "$LOG_FILE"
   else
     echo -e "${RED}❌ $name failed${NC}" | tee -a "$LOG_FILE"
@@ -86,6 +96,11 @@ case "$MODE" in
     exit 1
     ;;
 esac
+
+if [[ "$(git -C "$REPO_ROOT" rev-parse --verify HEAD)" != "$VERIFICATION_HEAD" ]]; then
+  echo "Verification HEAD changed during local CI." >&2
+  exit 2
+fi
 
 echo -e "${GREEN}✅ OpenKeyboard local CI complete${NC}"
 echo "Log: $LOG_FILE"

@@ -9,7 +9,14 @@ FIXTURE="$(mktemp -d)"
 trap 'rm -rf -- "$FIXTURE"' EXIT
 REPO="$FIXTURE/repo"
 mkdir -p "$REPO/scripts/ios" "$REPO/.agent/local-seeds"
-cp "$ROOT/scripts/check-live.sh" "$REPO/scripts/"
+cp "$ROOT/scripts/check-live.sh" "$ROOT/scripts/verification-cache.py" "$REPO/scripts/"
+mkdir -p "$REPO/bin"
+cat > "$REPO/bin/xcrun" <<'MOCK_TOOLCHAIN'
+#!/bin/bash
+if [[ "$1" == simctl ]]; then printf '{"runtimes":[]}\n'; else printf 'fixture-swift\n'; fi
+MOCK_TOOLCHAIN
+printf '#!/bin/bash\necho fixture-xcode\n' > "$REPO/bin/xcodebuild"
+chmod +x "$REPO/bin/xcrun" "$REPO/bin/xcodebuild"
 cp "$ROOT/scripts/ios/live-test-safety.sh" "$REPO/scripts/ios/"
 printf '#!/bin/bash\necho gateway\n' > "$REPO/scripts/live-impact.sh"
 chmod +x "$REPO/scripts/live-impact.sh"
@@ -28,6 +35,9 @@ cat > "$REPO/scripts/ios/test.sh" <<'MOCK'
 #!/bin/bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+if [[ -f "$ROOT/.agent/expected-base" ]]; then
+  [[ "${OPEN_KEYBOARD_CHECK_BASE_REF:-}" == "$(cat "$ROOT/.agent/expected-base")" ]] || exit 76
+fi
 [[ "$1" != core ]] || exit 0
 if [[ "$1" == live-provider-matrix ]]; then
   printf '%s\n' \
@@ -75,9 +85,9 @@ git -C "$REPO" add .
 git -C "$REPO" -c core.hooksPath=/dev/null commit -qm fixture
 git -C "$REPO" update-ref refs/remotes/origin/main HEAD
 run_gate() {
-  env -u OPEN_KEYBOARD_LIVE_REQUIRED_MODEL -u OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
+  env -u OPEN_KEYBOARD_CHECK_BASE_REF -u OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA -u OPEN_KEYBOARD_LIVE_REQUIRED_MODEL -u OPEN_KEYBOARD_LIVE_REQUIRED_MODELS \
     -u OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE "$@" \
-    bash -ax "$REPO/scripts/check-live.sh" "${GATE_TARGET:-gateway-differential}" > "$FIXTURE/output" 2>&1
+    PATH="$REPO/bin:$PATH" bash -ax "$REPO/scripts/check-live.sh" "${GATE_TARGET:-gateway-differential}" > "$FIXTURE/output" 2>&1
 }
 assert_private() {
   if grep -Eq 'identity-sentinel|credential-sentinel|text-sentinel|private.invalid|12.345s|23.456s' "$FIXTURE/output"; then
@@ -85,6 +95,13 @@ assert_private() {
   fi
 }
 printf valid > "$REPO/.agent/scenario"
+git -C "$REPO" -c core.hooksPath=/dev/null commit --allow-empty -qm next
+# Every canonical child must receive the resolved caller-selected comparison SHA.
+git -C "$REPO" rev-parse HEAD > "$REPO/.agent/expected-base"
+run_gate OPEN_KEYBOARD_LIVE_BASE_REF=HEAD
+assert_private
+# The default remains origin/main, which intentionally differs from HEAD here.
+git -C "$REPO" rev-parse origin/main > "$REPO/.agent/expected-base"
 run_gate
 assert_private
 grep -q 'model_identity_matches=low=true, high=true' "$FIXTURE/output"

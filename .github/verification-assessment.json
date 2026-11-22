@@ -1,117 +1,148 @@
 {
-  "base": "742e943aea59ebfa1b1aa08e84c138315fc46ada",
+  "base": "496453feb19c20f72361bcb8b47457ceaa538815",
   "changes": {
-    ".agents/skills/develop-openkeyboard/SKILL.md": {
+    ".github/workflows/ci.yml": {
       "after": {
         "mode": "100644",
-        "oid": "c53b37e9f15d9f2a4bef9d6128097e474477ca57"
+        "oid": "208f0fae8efce6a0344a93fb595643c7accd14a2"
       },
       "before": {
         "mode": "100644",
-        "oid": "73a0d4f330f92b898941d56c7957d722d9880e49"
+        "oid": "75cf9c7de453b75547da661fbdb57438712eeac4"
+      }
+    },
+    ".github/workflows/live.yml": {
+      "after": {
+        "mode": "100644",
+        "oid": "208ebfb59a93b5124f743618d44c4637a868b475"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "5111877590bd5820b36ae4017b6ab46d421cd8d4"
       }
     },
     "AGENTS.md": {
       "after": {
         "mode": "100644",
+        "oid": "eb5b25de2bff94b8b08d96d79de9c3865e50e3ef"
+      },
+      "before": {
+        "mode": "100644",
         "oid": "3d08b746a2b4f5e4857b1199697e1ba437f1c20e"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "6ee937d26a4af0bfe60a487081b2c81a1a7a9fe8"
-      }
-    },
-    "OpenKeyboard/Models/KeyboardSuggestionModels.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "288236784e3c60abf4d8e843152eb20e7d3f337e"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "192fca04a5139bd7a47435fe0282d3fc9fd878de"
-      }
-    },
-    "OpenKeyboardUITests/KeyboardSuggestionModelsTests.swift": {
-      "after": {
-        "mode": "100644",
-        "oid": "15afb00f6b64051db3c1a20746bafb1e0a36ad33"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "fb03bc0a02db0c999863472d7073db698f2f6944"
       }
     },
     "docs/DEVELOPMENT_WORKFLOW.md": {
       "after": {
         "mode": "100644",
+        "oid": "a683c7d6f90fbcc5ce8c3ba2484e4f23498097b5"
+      },
+      "before": {
+        "mode": "100644",
         "oid": "18caeb072ee5f28ac8f135e6c8393c1ca9f2f841"
+      }
+    },
+    "docs/LIVE_EVIDENCE_PRIVACY.md": {
+      "after": {
+        "mode": "100644",
+        "oid": "97954e6ed124d37c4b90b8408e8d5385418c6965"
       },
       "before": {
         "mode": "100644",
-        "oid": "c9ba3e146fd15f3d959aa5a4a71a5162e6aff50c"
+        "oid": "e5712158468a63e398ec2f4a5e824d6991b4acc2"
       }
     },
-    "docs/REAL_EXTENSION_SMOKE_PLAN.md": {
+    "docs/RESUMABLE_VERIFICATION.md": {
       "after": {
         "mode": "100644",
-        "oid": "9043fdabe20c727a1ab2bf1f2167d8c8ee0fc441"
-      },
-      "before": {
-        "mode": "100644",
-        "oid": "80047cd8bf0e6999d54697f1fa2506a8284adab1"
-      }
-    },
-    "scripts/ios/select-compatible-simulator-runtimes.rb": {
-      "after": {
-        "mode": "100644",
-        "oid": "97fe1ee5e6840261570d61712385bc0c453ed8ca"
+        "oid": "f74f094354b7e3f2017cd9ff9b04936d0d2ff760"
       },
       "before": null
+    },
+    "scripts/check-live.sh": {
+      "after": {
+        "mode": "100755",
+        "oid": "bb6cb2a9333d397ebad21b6019622d70595bd476"
+      },
+      "before": {
+        "mode": "100755",
+        "oid": "fe5608ee55e28dca0d59f33bfcfcc15abddc544e"
+      }
+    },
+    "scripts/check.sh": {
+      "after": {
+        "mode": "100755",
+        "oid": "9ac35d00bbad23c82f75478468b17208e9454868"
+      },
+      "before": {
+        "mode": "100755",
+        "oid": "cab6659b75d7ae6f936cf9e1fd1d412d3a463049"
+      }
     },
     "scripts/ios/test.sh": {
       "after": {
         "mode": "100755",
+        "oid": "8bfeedd9a1d7b00a11c571b3e543e0947eada535"
+      },
+      "before": {
+        "mode": "100755",
         "oid": "1f1e2673be8bb84715e5938862e2e53f927691fb"
-      },
-      "before": {
-        "mode": "100755",
-        "oid": "78f16f5908b56c3ab804e8d2a7c68cdbcad35e59"
       }
     },
-    "scripts/tests/runtime-proof-policy-test.sh": {
+    "scripts/ios/verification-resume.sh": {
+      "after": {
+        "mode": "100644",
+        "oid": "526f8a9548c730a23a798a0de298cb5c528aaac2"
+      },
+      "before": null
+    },
+    "scripts/local-ci.sh": {
       "after": {
         "mode": "100755",
-        "oid": "e7512de2e55cbfdcd0faafa6f3f20e70c4baeee6"
+        "oid": "b6812c144f4680da3e5ec326aa54e97fbfe7dc49"
       },
       "before": {
         "mode": "100755",
-        "oid": "a8e2a60bdd8f45437a873f1d6ad30d413d09d6a9"
+        "oid": "0e59783b317d098f197adbf58d3d3e5bbc33cf8f"
       }
     },
-    "scripts/tests/workflow-authorization-policy-test.sh": {
+    "scripts/tests/private-live-runner-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "5e9253b3ba2b63aafd594818e06e07290c7d5db2"
+        "oid": "b01ad21f76f17ddfee4fc54dcc449311778aeb5b"
       },
       "before": {
         "mode": "100755",
-        "oid": "d3ac2a409f76fa9e6335b01893a4687ec916a16f"
+        "oid": "d897bfad0baf8717a5d984f39b6225b5cd37c477"
       }
+    },
+    "scripts/tests/verification-cache-test.py": {
+      "after": {
+        "mode": "100644",
+        "oid": "f0be5dcbd5aceed68780fda7303cbadfd753835e"
+      },
+      "before": null
     },
     "scripts/tests/workflow-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "e77bad0a9d86e7c5f9e3bb159fd79c5d4fd5a7ff"
+        "oid": "40090b4830f092ad3d08e148fee798068317e350"
       },
       "before": {
         "mode": "100755",
-        "oid": "3a1cfc7d793ae12be87e771fe057b17e9af860c7"
+        "oid": "e77bad0a9d86e7c5f9e3bb159fd79c5d4fd5a7ff"
       }
+    },
+    "scripts/verification-cache.py": {
+      "after": {
+        "mode": "100644",
+        "oid": "6519477e7a34993ce39d5caa5756bd3fdafe9402"
+      },
+      "before": null
     }
   },
   "live_impact": "none",
-  "proof": "Exact-head full deterministic verification on Xcode 27.1, focused grammar and fail-closed runtime-selection regressions covering newer, multi-component, and malformed runtime metadata, complete diff bindings, independent exact-head review, and normal runtime grammar-result presentation or exact-head owner approval provide the relevant evidence.",
-  "rationale": "The complete diff changes deterministic grammar alignment, Xcode 27 Simulator runtime selection and structured interaction workflow policy, runtime-proof documentation, and test tooling without changing semantic requests, prompts, transport, provider or model selection, response validation or parsing, or dependency gitlinks; live model execution cannot prove these deterministic and policy-only changes.",
-  "requirement_id": "R7",
+  "proof": "Twenty-five deterministic receipt and mocked live-runner regressions exercise failed-only provider/profile/reference-role retries, exact-head/base/seed/toolchain invalidation, dirty trees, expiry, tampering, role swaps, forced failures, diagnostic invalidation, metadata lock availability, and canonical commands, parent/direct live-base propagation, and rejection of context-based deterministic pass creation. Existing private seed/model-binding, Simulator ownership/serialization, workflow/negative policy suites and the exact-head full deterministic gate remain required. Independent review must inspect the complete diff, receipt trust boundary, unchanged assertions, and this assessment. Focused event-filter policy assertions require every retained head/body/review event and reject redundant draft-only scheduling. Independent review must assess this trigger change and retained exact-head protection. Real-Git dependency fixtures reject deinitialized, wrong-pin, tracked-dirty, and nested dirty submodules even when local ignore settings hide them.",
+  "rationale": "This diff changes local verification orchestration and same-head receipt integrity only. App/extension production sources, semantic prompts/contracts, provider/model selection, requests, response parsers, dependencies, and live outcome assertions are unchanged. The live runner executes the existing canonical tests or reuses authenticated same-head passing rows after guarded seed and role validation. A live model comparison would test unchanged model behavior rather than invalidation, replay, privacy, or concurrency correctness. Draft-only CI events are removed because they change no bound evidence; all head/body/reopen and review-mutation events and strict protected checks remain. This prevents readiness from starting an otherwise identical gate cycle.",
+  "requirement_id": "R8",
   "schema": 1
 }

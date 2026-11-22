@@ -164,6 +164,22 @@ rg --quiet '^  required-review-evidence:$' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-requirements\.sh' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
 rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
+ruby -e '
+  ARGV.each do |path|
+    source = File.read(path)
+    block = source.match(/^  pull_request:\n    types:\n(?<types>(?:      - [a-z_]+\n)+)/)&.[](:types)
+    abort "Pull-request event filter is missing." unless block
+    types = block.scan(/^      - ([a-z_]+)$/).flatten
+    unless types == %w[opened synchronize reopened edited]
+      abort "Head/body/reopen events must stay checked; draft-only events must not restart exact-head gates."
+    end
+  end
+  source = File.read(ARGV.fetch(0))
+  block = source.match(/^  pull_request_review:\n    types:\n(?<types>(?:      - [a-z_]+\n)+)/)&.[](:types)
+  unless block && block.scan(/^      - ([a-z_]+)$/).flatten == %w[submitted edited dismissed]
+    abort "Every review evidence mutation must retain its protected validation event."
+  end
+' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'event_head_sha="$(jq -er '\''.pull_request.head.sha'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"
@@ -618,25 +634,32 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
+  resume_source = File.read(ARGV.fetch(1))
+  builder = resume_source.match(/^openkeyboard_prepare_live_test_artifacts\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The resumable live artifact builder is missing." unless builder
   live_case = source.match(/^  live-gateway-smoke\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The iOS test runner is missing live-gateway-smoke mode." unless live_case
-  unless live_case.include?(%q{create_sensitive_live_simulator "iPhone 16"})
+  unless builder.include?(%q{create_sensitive_live_simulator "iPhone 16"}) &&
+      live_case.include?(%q{openkeyboard_prepare_live_test_artifacts})
     abort "The live gateway smoke must create a disposable iPhone 16 simulator."
   end
   unless live_case.include?(%q{inject_xctestrun_live_smoke_env "$xctestrun"})
     abort "The live gateway smoke must use the encoded sensitive environment handoff."
   end
-  unless live_case.include?(%q{chmod 600 "$xctestrun"})
+  unless builder.include?(%q{chmod 600 "$xctestrun"})
     abort "The live gateway smoke must make its injected xctestrun private."
   end
   expected = %q{-destination "$destination"}
-  unless live_case.scan(expected).length == 2
+  unless live_case.scan(expected).length == 1 && builder.scan(expected).length == 1
     abort "Both live gateway Xcode invocations must use the disposable simulator destination."
   end
-' "$ROOT/scripts/ios/test.sh"
+' "$ROOT/scripts/ios/test.sh" "$ROOT/scripts/ios/verification-resume.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   live_tests = File.read(ARGV.fetch(1))
+  resume_source = File.read(ARGV.fetch(2))
+  builder = resume_source.match(/^openkeyboard_prepare_live_test_artifacts\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The resumable live artifact builder is missing." unless builder
   matrix_case = source.match(/^  live-provider-matrix\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The iOS test runner is missing live-provider-matrix mode." unless matrix_case
   ambient_scrub = matrix_case.index("openkeyboard_unset_seed_backed_live_ambient_inputs")
@@ -644,7 +667,10 @@ ruby -e '
   unless ambient_scrub && toolchain_preflight && ambient_scrub < toolchain_preflight
     abort "The provider matrix must scrub ambient credentials before toolchain preflight or build."
   end
-  unless matrix_case.scan(/xcodebuild build-for-testing/).length == 1
+  unless builder.scan(/xcodebuild build-for-testing/).length == 1 &&
+      matrix_case.include?(%q{if ! openkeyboard_resume_lookup "provider-$provider"; then}) &&
+      matrix_case.include?(%q{openkeyboard_prepare_live_test_artifacts}) &&
+      builder.include?(%q{-destination "$destination"})
     abort "The provider matrix must build its Xcode test artifacts exactly once."
   end
   unless matrix_case.include?("for provider in openai anthropic openrouter gateway")
@@ -663,12 +689,12 @@ ruby -e '
   unless positions.all? && positions == positions.sort
     abort "The provider matrix must load, inject, scrub, execute, and validate each row in fail-closed order."
   end
-  unless matrix_case.include?(%q{create_sensitive_live_simulator "iPhone 16"}) &&
+  unless builder.include?(%q{create_sensitive_live_simulator "iPhone 16"}) &&
       matrix_case.include?(%q{live-provider-$provider.xcresult}) &&
       matrix_case.include?(%q{uac_validate_live_env_file "$uac_checkout" "$uac_seed_file"}) &&
       matrix_case.include?(%q{openkeyboard_require_private_seed_permissions "$uac_seed_file"}) &&
       matrix_case.include?(%q{openkeyboard_require_trusted_seed_directory "$uac_checkout"}) &&
-      matrix_case.include?(%q{chmod 600 "$xctestrun"})
+      builder.include?(%q{chmod 600 "$xctestrun"})
     abort "The provider matrix must use one owned simulator, isolated result bundles, and the canonical ignored seed."
   end
   retained_fields = %w[
@@ -716,7 +742,7 @@ ruby -e '
       live_tests.scan(%q{let providerValue = environment["OPEN_KEYBOARD_TEST_PROVIDER"]}).length < 2
     abort "Live XCTest entry points must require an explicit provider identity."
   end
-' "$ROOT/scripts/ios/test.sh" "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
+' "$ROOT/scripts/ios/test.sh" "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift" "$ROOT/scripts/ios/verification-resume.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
   safety_source = File.read(ARGV.fetch(1))
@@ -873,9 +899,14 @@ ruby -e '
 ' "$ROOT/scripts/ios/test.sh"
 ruby -e '
   source = File.read(ARGV.fetch(0))
+  resume_source = File.read(ARGV.fetch(1))
+  builder = resume_source.match(/^openkeyboard_prepare_live_test_artifacts\(\) \{\n(?<body>.*?)^\}$/m)&.[](:body)
+  abort "The resumable live artifact builder is missing." unless builder
   differential_case = source.match(/^  live-model-differential\)\n(?<body>.*?)^    ;;$/m)&.[](:body)
   abort "The iOS test runner is missing live-model-differential mode." unless differential_case
-  unless differential_case.scan(/xcodebuild build-for-testing/).length == 1
+  unless builder.scan(/xcodebuild build-for-testing/).length == 1 &&
+      differential_case.include?(%q{openkeyboard_prepare_live_test_artifacts}) &&
+      builder.include?(%q{-destination "$destination"})
     abort "The differential live runner must build its Xcode test artifacts exactly once."
   end
   unless differential_case.include?("for profile_role in low high")
@@ -898,7 +929,7 @@ ruby -e '
       differential_case.include?(%q{"$LIVE_DIFFERENTIAL_EXECUTION_MODE"})
     abort "The differential runner must apply strict-versus-diagnostic completion semantics."
   end
-' "$ROOT/scripts/ios/test.sh"
+' "$ROOT/scripts/ios/test.sh" "$ROOT/scripts/ios/verification-resume.sh"
 rg --fixed-strings --quiet 'live-gateway-diagnostics-\(role)' "$ROOT/OpenKeyboardUITests/GatewayClientArchitectureTests.swift"
 rg --quiet '^openkeyboard_format_live_diagnostic_attachment()' "$ROOT/scripts/ios/live-test-safety.sh"
 rg --quiet '^openkeyboard_extract_live_diagnostic_evidence()' "$ROOT/scripts/ios/live-test-safety.sh"

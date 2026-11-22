@@ -77,3 +77,14 @@ this rules task. There is no general skip switch.
 Every changed head requires fresh full/live evidence, independent review, and protected checks.
 Other tasks retain their own required normal runtime proof or exact-head human approval. This
 policy change does not grant verification or merge authority for another task.
+
+## Same-head resume receipts
+
+`docs/RESUMABLE_VERIFICATION.md` defines authenticated, owner-only local pass receipts. Their opaque
+keyed binding covers the complete guarded seed input; it is not a published identity hash. Raw
+identities, credentials, endpoints, prompts/responses, and test artifacts are never retained in a
+receipt. Temporary exact-model IPC/context records are still deleted on exit. Each resumed gate
+reloads and validates its seed, preserves exact role/model comparisons, and requires all classified
+outcomes. Cached diagnostics retain their actual sanitized statuses. Public assertions, trusted-base
+validation, exact-head review, runtime decisions, and GitHub checks are unchanged. Receipts expire
+within 24 hours and cannot cross a commit or changed verification-input boundary.

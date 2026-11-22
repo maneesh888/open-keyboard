@@ -423,6 +423,11 @@ approval, with the missing AI evidence disclosed.
 
 ## GitHub checks
 
+Draft-only `ready_for_review` and `converted_to_draft` transitions do not schedule new CI/live-policy
+runs. They change no bound evidence and otherwise create a guarded-readiness loop. Commit, PR-body,
+reopen, and review mutation events retain their checks; strict branch protection and exact-head
+review/merge validation are unchanged.
+
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
 It validates the requirement ledger and durable independent-review link, then classifies the
 exact-head diff against the base-owned classifier. Repository hygiene always runs. For a
@@ -595,3 +600,12 @@ The live workflow requires the private schema on its exact trusted base, with no
 fallback, legacy projection, synthetic timings, or separate migration environment. Both event
 and current snapshots must pass; four-provider outcomes and exact-head independent review remain
 mandatory. Unknown fields in the live-evidence section fail closed.
+
+## Resuming unchanged-head verification
+
+The existing full/live commands reuse authenticated same-head passing stages and rerun failed or
+missing stages. Use `--fresh` after an external service or otherwise unobserved build-input change.
+See [Resumable verification](RESUMABLE_VERIFICATION.md) for the 24-hour expiry, input bindings,
+provider/profile granularity, private receipt storage, and unchanged publication gates. Hygiene and
+policy/negative checks remain fresh. A new commit requires fresh execution; no historic log can be
+imported as a cached pass.
