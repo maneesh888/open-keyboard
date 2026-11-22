@@ -61,10 +61,11 @@ def repository_environment():
     return environment
 
 
-def output(command, cwd=None):
+def output(command, cwd=None, strip=True):
     environment = repository_environment() if command[0] == "git" else os.environ.copy()
-    return subprocess.check_output(command, cwd=cwd, env=environment,
-                                   stderr=subprocess.DEVNULL).decode().strip()
+    value = subprocess.check_output(command, cwd=cwd, env=environment,
+                                    stderr=subprocess.DEVNULL).decode()
+    return value.strip() if strip else value
 
 
 def private(path, directory=False):
@@ -130,6 +131,33 @@ def toolchain():
     return versions
 
 
+def clean_checkout(repo, visited=None):
+    repo = Path(repo).resolve()
+    visited = set() if visited is None else visited
+    if repo in visited:
+        return False
+    visited.add(repo)
+    if output(["git", "status", "--porcelain", "--untracked-files=all",
+               "--ignore-submodules=none"], repo):
+        return False
+    # Inspect each recorded child explicitly: parent status can hide nested dirt,
+    # and an empty deinitialized directory otherwise resolves Git to its parent.
+    for entry in output(["git", "ls-tree", "-r", "-z", "HEAD"], repo, strip=False).split("\0"):
+        if not entry:
+            continue
+        metadata, name = entry.split("\t", 1)
+        mode, kind, pinned = metadata.split()
+        if mode != "160000":
+            continue
+        child = repo / name
+        if (child.is_symlink() or not child.is_dir()
+                or Path(output(["git", "rev-parse", "--show-toplevel"], child)).resolve() != child.resolve()
+                or output(["git", "rev-parse", "HEAD"], child) != pinned
+                or not clean_checkout(child, visited)):
+            return False
+    return True
+
+
 def snapshot(repo, seed_paths):
     head = output(["git", "rev-parse", "HEAD"], repo)
     if not re.fullmatch(r"[0-9a-f]{40}", head):
@@ -137,7 +165,7 @@ def snapshot(repo, seed_paths):
     expected_head = os.environ.get("OPEN_KEYBOARD_VERIFICATION_EXPECTED_SHA", head)
     if expected_head != head:
         raise CacheError("verification head changed")
-    if output(["git", "status", "--porcelain", "--untracked-files=all"], repo):
+    if not clean_checkout(repo):
         return None
     base_ref = (os.environ.get("OPEN_KEYBOARD_CHECK_BASE_REF")
                 or os.environ.get("OPEN_KEYBOARD_LIVE_BASE_REF") or "origin/main")

@@ -41,7 +41,8 @@ nor creates verification receipts. A later diagnostic failure cannot fall back t
 
 Receipts are valid for at most 24 hours. Their private keyed binding covers:
 
-- the exact clean HEAD and comparison base;
+- the exact clean HEAD and comparison base, with every recursive submodule initialized at its
+  recorded gitlink and clean regardless of local submodule-ignore settings;
 - Xcode/Swift, host/Python, Node/Java version results, available Simulator runtime identifiers and
   build versions, and supported compiler/build environment controls;
 - the guarded seed file contents for the live route, including profile/model/endpoint/credential
@@ -55,6 +56,13 @@ executed stage, so a concurrent head, seed, or toolchain change cannot mint a pa
 role distinctness, selected-model comparisons, complete outcome classification, and final exact-head
 validation still run. Use `--fresh` after an external service, model implementation, or custom build
 input changes in a way not observable through the recorded configuration/version inputs.
+
+Draft-only PR transitions do not start CI or live-policy workflows: they change neither the head,
+body, nor reviews and must not restart the guarded readiness handoff. Opened, synchronized,
+reopened, and edited PR events still validate their exact-head evidence; submitted, edited, and
+dismissed reviews still create the protected review check. Strict required checks and native
+exact-head merge protection remain mandatory. This event filter does not reuse a result across
+commits or suppress a head/body/review change.
 
 The mandatory pre-push hook still invokes the full classified deterministic and live commands.
 Receipts do not carry between commits, replace GitHub checks or independent review, or authorize

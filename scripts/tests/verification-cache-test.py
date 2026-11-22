@@ -60,6 +60,21 @@ class ReceiptTests(unittest.TestCase):
         self.git("add", ".")
         self.git("commit", "-qm", "fixture")
 
+    def git_at(self, root, *args):
+        return subprocess.check_output(["git", "-C", str(root), *args], stderr=subprocess.DEVNULL).decode().strip()
+
+    def dependency(self, name):
+        root = self.area / name
+        root.mkdir()
+        self.git_at(root, "init", "-q")
+        self.git_at(root, "config", "user.name", "Fixture")
+        self.git_at(root, "config", "user.email", "fixture@example.invalid")
+        self.git_at(root, "config", "commit.gpgsign", "false")
+        (root / "tracked").write_text("first")
+        self.git_at(root, "add", ".")
+        self.git_at(root, "commit", "-qm", "fixture")
+        return root, self.git_at(root, "rev-parse", "HEAD")
+
     def binding(self):
         return self.store.binding([self.seed])
 
@@ -106,6 +121,55 @@ class ReceiptTests(unittest.TestCase):
         self.assertNotEqual(initial, new_head)
         self.git("update-ref", "refs/remotes/origin/main", "HEAD")
         self.assertNotEqual(new_head, self.binding())
+
+    def test_submodules_must_be_initialized_pinned_and_clean_despite_ignore_settings(self):
+        dependency, pinned = self.dependency("dependency")
+        self.git("-c", "protocol.file.allow=always", "submodule", "add", "-q", str(dependency), "Vendor/example")
+        self.commit()
+        binding = self.binding()
+        self.assertIsNotNone(binding)
+        self.store.put(binding, "core", "passed")
+        context = self.area / "context.json"
+        with patch.object(sys, "argv", ["cache", "context", str(self.repo), str(context), str(self.seed)]):
+            self.assertEqual(cache.main(), 0)
+        self.git("config", "submodule.Vendor/example.ignore", "all")
+        self.git("submodule", "deinit", "-f", "--", "Vendor/example")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertIsNone(self.binding())
+        with patch.object(sys, "argv", ["cache", "get", str(context), "core"]):
+            with self.assertRaises(cache.CacheError):
+                cache.main()
+        self.git("-c", "protocol.file.allow=always", "submodule", "update", "--init", "--", "Vendor/example")
+        checked = self.repo / "Vendor/example"
+        self.git("config", "submodule.Vendor/example.ignore", "all")
+        self.git_at(checked, "config", "user.name", "Fixture")
+        self.git_at(checked, "config", "user.email", "fixture@example.invalid")
+        self.git_at(checked, "config", "commit.gpgsign", "false")
+        (checked / "tracked").write_text("next")
+        self.git_at(checked, "add", ".")
+        self.git_at(checked, "commit", "-qm", "different")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertIsNone(self.binding())
+        self.git_at(checked, "checkout", "-q", "--detach", pinned)
+        self.assertEqual(binding, self.binding())
+        (checked / "tracked").write_text("dirty")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertIsNone(self.binding())
+
+    def test_nested_submodule_dirt_is_checked_inside_each_recursive_checkout(self):
+        leaf, _ = self.dependency("leaf")
+        middle, _ = self.dependency("middle")
+        self.git_at(middle, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(leaf), "leaf")
+        self.git_at(middle, "commit", "-qam", "nested")
+        self.git("-c", "protocol.file.allow=always", "submodule", "add", "-q", str(middle), "Vendor/middle")
+        self.git("-c", "protocol.file.allow=always", "submodule", "update", "--init", "--recursive")
+        self.commit()
+        self.assertIsNotNone(self.binding())
+        checked = self.repo / "Vendor/middle"
+        self.git_at(checked, "config", "submodule.leaf.ignore", "all")
+        (checked / "leaf/tracked").write_text("nested dirty")
+        self.assertEqual(self.git("status", "--porcelain", "--ignore-submodules=none"), "")
+        self.assertIsNone(self.binding())
 
     def test_foreign_hook_git_state_does_not_redirect_the_fingerprint(self):
         initial = self.binding()

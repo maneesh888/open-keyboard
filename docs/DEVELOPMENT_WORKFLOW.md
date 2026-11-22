@@ -423,6 +423,11 @@ approval, with the missing AI evidence disclosed.
 
 ## GitHub checks
 
+Draft-only `ready_for_review` and `converted_to_draft` transitions do not schedule new CI/live-policy
+runs. They change no bound evidence and otherwise create a guarded-readiness loop. Commit, PR-body,
+reopen, and review mutation events retain their checks; strict branch protection and exact-head
+review/merge validation are unchanged.
+
 `.github/workflows/ci.yml` checks out the exact pull-request head with read-only permissions.
 It validates the requirement ledger and durable independent-review link, then classifies the
 exact-head diff against the base-owned classifier. Repository hygiene always runs. For a

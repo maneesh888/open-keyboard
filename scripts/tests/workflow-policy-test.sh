@@ -164,6 +164,22 @@ rg --quiet '^  required-review-evidence:$' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-requirements\.sh' "$CI_WORKFLOW"
 rg --quiet 'validate-pr-review-record\.sh' "$CI_WORKFLOW"
 rg --quiet 'pull_request_review:' "$CI_WORKFLOW"
+ruby -e '
+  ARGV.each do |path|
+    source = File.read(path)
+    block = source.match(/^  pull_request:\n    types:\n(?<types>(?:      - [a-z_]+\n)+)/)&.[](:types)
+    abort "Pull-request event filter is missing." unless block
+    types = block.scan(/^      - ([a-z_]+)$/).flatten
+    unless types == %w[opened synchronize reopened edited]
+      abort "Head/body/reopen events must stay checked; draft-only events must not restart exact-head gates."
+    end
+  end
+  source = File.read(ARGV.fetch(0))
+  block = source.match(/^  pull_request_review:\n    types:\n(?<types>(?:      - [a-z_]+\n)+)/)&.[](:types)
+  unless block && block.scan(/^      - ([a-z_]+)$/).flatten == %w[submitted edited dismissed]
+    abort "Every review evidence mutation must retain its protected validation event."
+  end
+' "$CI_WORKFLOW" "$LIVE_WORKFLOW"
 rg --quiet 'pull-requests:[[:space:]]*read' "$CI_WORKFLOW"
 rg --quiet 'pull-request-reviews\.json' "$CI_WORKFLOW"
 rg --fixed-strings --quiet 'event_head_sha="$(jq -er '\''.pull_request.head.sha'\'' "$GITHUB_EVENT_PATH")"' "$CI_WORKFLOW"

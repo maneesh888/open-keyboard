@@ -1,6 +1,26 @@
 {
   "base": "496453feb19c20f72361bcb8b47457ceaa538815",
   "changes": {
+    ".github/workflows/ci.yml": {
+      "after": {
+        "mode": "100644",
+        "oid": "208f0fae8efce6a0344a93fb595643c7accd14a2"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "75cf9c7de453b75547da661fbdb57438712eeac4"
+      }
+    },
+    ".github/workflows/live.yml": {
+      "after": {
+        "mode": "100644",
+        "oid": "208ebfb59a93b5124f743618d44c4637a868b475"
+      },
+      "before": {
+        "mode": "100644",
+        "oid": "5111877590bd5820b36ae4017b6ab46d421cd8d4"
+      }
+    },
     "AGENTS.md": {
       "after": {
         "mode": "100644",
@@ -14,7 +34,7 @@
     "docs/DEVELOPMENT_WORKFLOW.md": {
       "after": {
         "mode": "100644",
-        "oid": "30f0401be4a839fdc496611b2b593edf5f785108"
+        "oid": "a683c7d6f90fbcc5ce8c3ba2484e4f23498097b5"
       },
       "before": {
         "mode": "100644",
@@ -34,7 +54,7 @@
     "docs/RESUMABLE_VERIFICATION.md": {
       "after": {
         "mode": "100644",
-        "oid": "d8d4293aab84d46001694b6a4e941a7e3e2eae5d"
+        "oid": "f74f094354b7e3f2017cd9ff9b04936d0d2ff760"
       },
       "before": null
     },
@@ -98,14 +118,14 @@
     "scripts/tests/verification-cache-test.py": {
       "after": {
         "mode": "100644",
-        "oid": "df11ab7a50831216fd77ec6ce7f96ed7eb202997"
+        "oid": "f0be5dcbd5aceed68780fda7303cbadfd753835e"
       },
       "before": null
     },
     "scripts/tests/workflow-policy-test.sh": {
       "after": {
         "mode": "100755",
-        "oid": "e88328b3c5a7d98e7b88eb3704d9303a155d18cd"
+        "oid": "40090b4830f092ad3d08e148fee798068317e350"
       },
       "before": {
         "mode": "100755",
@@ -115,14 +135,14 @@
     "scripts/verification-cache.py": {
       "after": {
         "mode": "100644",
-        "oid": "5933aab2f86b292afa4778986899ab8031c684a5"
+        "oid": "6519477e7a34993ce39d5caa5756bd3fdafe9402"
       },
       "before": null
     }
   },
   "live_impact": "none",
-  "proof": "Twenty-three deterministic receipt and mocked live-runner regressions exercise failed-only provider/profile/reference-role retries, exact-head/base/seed/toolchain invalidation, dirty trees, expiry, tampering, role swaps, forced failures, diagnostic invalidation, metadata lock availability, and canonical commands, parent/direct live-base propagation, and rejection of context-based deterministic pass creation. Existing private seed/model-binding, Simulator ownership/serialization, workflow/negative policy suites and the exact-head full deterministic gate remain required. Independent review must inspect the complete diff, receipt trust boundary, unchanged assertions, and this assessment.",
-  "rationale": "This diff changes local verification orchestration and same-head receipt integrity only. App/extension production sources, semantic prompts/contracts, provider/model selection, requests, response parsers, dependencies, and live outcome assertions are unchanged. The live runner executes the existing canonical tests or reuses authenticated same-head passing rows after guarded seed and role validation. A live model comparison would test unchanged model behavior rather than invalidation, replay, privacy, or concurrency correctness.",
+  "proof": "Twenty-five deterministic receipt and mocked live-runner regressions exercise failed-only provider/profile/reference-role retries, exact-head/base/seed/toolchain invalidation, dirty trees, expiry, tampering, role swaps, forced failures, diagnostic invalidation, metadata lock availability, and canonical commands, parent/direct live-base propagation, and rejection of context-based deterministic pass creation. Existing private seed/model-binding, Simulator ownership/serialization, workflow/negative policy suites and the exact-head full deterministic gate remain required. Independent review must inspect the complete diff, receipt trust boundary, unchanged assertions, and this assessment. Focused event-filter policy assertions require every retained head/body/review event and reject redundant draft-only scheduling. Independent review must assess this trigger change and retained exact-head protection. Real-Git dependency fixtures reject deinitialized, wrong-pin, tracked-dirty, and nested dirty submodules even when local ignore settings hide them.",
+  "rationale": "This diff changes local verification orchestration and same-head receipt integrity only. App/extension production sources, semantic prompts/contracts, provider/model selection, requests, response parsers, dependencies, and live outcome assertions are unchanged. The live runner executes the existing canonical tests or reuses authenticated same-head passing rows after guarded seed and role validation. A live model comparison would test unchanged model behavior rather than invalidation, replay, privacy, or concurrency correctness. Draft-only CI events are removed because they change no bound evidence; all head/body/reopen and review-mutation events and strict protected checks remain. This prevents readiness from starting an otherwise identical gate cycle.",
   "requirement_id": "R8",
   "schema": 1
 }
