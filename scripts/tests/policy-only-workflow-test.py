@@ -73,6 +73,10 @@ class PolicyWorkflowTests(unittest.TestCase):
     def test_policy_modification(self):
         self.classify("none")
 
+    def test_legacy_trusted_differential_allows_policy_rollout(self):
+        self.write_validator('echo gateway-differential')
+        self.classify("none")
+
     def test_designated_additions(self):
         for path in ("docs/VERIFICATION_APPLICABILITY.md", "scripts/verification-assessment.py",
                      "scripts/tests/verification-assessment-test.py", "scripts/tests/policy-only-workflow-test.py"):

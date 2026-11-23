@@ -67,7 +67,7 @@ jobs:
               "$VALIDATOR_ROOT/live-impact.sh" "$PR_BASE_SHA" "$PR_HEAD_SHA"
           )"
           case "$trusted_live_impact" in
-            none|gateway)
+            none|gateway|gateway-differential)
               ;;
             *)
               echo "Live-impact classification returned an invalid result." >&2
