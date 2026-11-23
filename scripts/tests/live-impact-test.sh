@@ -72,14 +72,36 @@ for gateway_sensitive_path in "${gateway_sensitive_paths[@]}"; do
 done
 
 
+policy_only_paths=(
+  .githooks/pre-push
+  .github/workflows/live.yml
+  AGENTS.md
+  README.md
+  docs/DEVELOPMENT_WORKFLOW.md
+  docs/LIVE_EVIDENCE_PRIVACY.md
+  docs/VERIFICATION_APPLICABILITY.md
+  scripts/check-live.sh
+  scripts/ios/live-test-safety.sh
+  scripts/ios/seed-simulator-gateway-config.sh
+  scripts/live-impact.sh
+  scripts/tests/live-impact-test.sh
+  scripts/tests/live-test-safety-test.sh
+  scripts/tests/policy-only-workflow-test.py
+  scripts/tests/private-live-runner-test.sh
+  scripts/tests/verification-assessment-test.py
+  scripts/tests/workflow-policy-test.sh
+  scripts/verification-assessment.py
+)
+
+for policy_only_path in "${policy_only_paths[@]}"; do
+  assert_impact_path "$policy_only_path" none
+done
+
 live_workflow_paths=(
   .gitmodules
   Vendor/semantic-prompt-contract
   Vendor/universal-ai-connector
-  scripts/check-live.sh
-  scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
-  scripts/ios/seed-simulator-gateway-config.sh
   scripts/ios/test.sh
   scripts/tests/universal-ai-connector-policy-test.sh
 )
