@@ -104,9 +104,9 @@ Legacy fallback seed variables:
   OPEN_KEYBOARD_SIMULATOR_API_KEY=your-real-key
   OPEN_KEYBOARD_SIMULATOR_MODEL=your-model
 
-Two-profile live verification instead defines complete LOW and HIGH triples.
-The default reference selection uses HIGH when present, otherwise the legacy
-fallback. It never silently selects LOW.
+Two-profile optional differential verification defines complete LOW and HIGH
+triples. The default reference selection uses LOW when present, otherwise the
+legacy fallback. The required exact-head gateway gate requires LOW explicitly.
 
 The real seed file must live in the primary checkout's ignored local path:
   <primary-checkout>/.agent/local-seeds/openkeyboard-gateway.env

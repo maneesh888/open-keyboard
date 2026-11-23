@@ -118,9 +118,10 @@ or provider review comments without the applicable explicit authorization.
    `./scripts/check.sh --hygiene` only for `docs`; run `./scripts/check.sh --full` for `full`.
    Require a clean exact head and inspect the changed paths behind the classification.
 10. Follow the exact classifier result on the same head: `gateway` requires
-   `./scripts/check-live.sh gateway`; `gateway-differential` requires
-   `./scripts/check-live.sh gateway-differential`. Exact single-model work sets
-   `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL`; differential work sets the canonical
+   `./scripts/check-live.sh gateway`, which binds the required LOW profile and four-provider matrix.
+   `gateway-differential` is an explicit optional diagnostic, not a classifier-selected blocker,
+   unless the user named the comparison as an acceptance criterion. Exact single-model work sets
+   `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL`; an explicit differential sets the canonical
    `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<id>, high=<id>'` mapping. Missing, substituted,
    reversed, malformed, stale, or diagnostic-only profile evidence is `UNVERIFIED`. A low success
    at the candidate boundary or intermittent low outcome cannot be promoted to a passing gate.

@@ -238,10 +238,12 @@ return-from-Settings requirement, and improved diagnostics do not prove the unde
   acceptance criterion involves its lifecycle or cross-process handoff. Do not add a live model
   comparison unless requests, responses, parsing, provider/model selection, or capability behavior
   are affected. Privacy assertions still need deletion, expiry, redaction, and late-response tests.
-- Gateway/model behavior needs live evidence for the affected behavior. A differential comparison
-  is required for capability boundaries, model-role behavior, or a specifically requested matrix;
-  sharing a file with those behaviors is not enough. Canonical contract and dependency changes
-  retain their differential requirement.
+- Gateway/model behavior needs live evidence for the affected behavior. The required automatic gate
+  exercises the LOW local profile plus the OpenAI, Anthropic, OpenRouter, and generic-gateway
+  provider matrix. A LOW/HIGH differential is an explicit, non-blocking diagnostic unless the user
+  makes that comparison an acceptance criterion; sharing a file with those behaviors is not enough
+  to make the optional matrix mandatory. Canonical contract and dependency changes retain the
+  required gateway gate.
 
 When the conservative classifier over-selects, create a diff-bound assessment using
 `docs/VERIFICATION_APPLICABILITY.md`. The classifier validates complete path/blob/mode bindings;
@@ -438,7 +440,7 @@ Prefer repository scripts to equivalent hand-written commands:
 | Automated low/high model matrix | `./scripts/ios/test.sh live-model-differential` |
 | Automated real-extension regression | `./scripts/ios/test.sh real-keyboard-live` |
 | Exact-head live gateway gate | `./scripts/check-live.sh gateway` |
-| Exact-head differential/pre-release gate | `./scripts/check-live.sh gateway-differential` |
+| Optional exact-head LOW/HIGH diagnostic | `./scripts/check-live.sh gateway-differential` |
 | Normal extension runtime | `docs/REAL_EXTENSION_SMOKE_PLAN.md` |
 
 XCTest/XCUITest routes may be used freely while implementing and diagnosing. Always label them
@@ -467,19 +469,21 @@ Git's common directory. Keep it ignored, untracked, mode `600`, current-user-own
 ACLs, and never copy it into a worktree. Use
 `scripts/ios/openkeyboard-gateway.seed.env.example` as the template.
 
-The seed accepts either one complete legacy URL/key/model profile or complete, distinct LOW and
-HIGH profiles. Reject partial/unknown/duplicate keys, unsafe model IDs, reversed roles, fallback,
-or substitution. Never hardcode or print credentials or exact local model identities. Exact-model
-work must run the exact required model. Use `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<id>` for a single
-model or `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<id>, high=<id>'` for the matrix. A successful or
-intermittent low boundary remains diagnostic/`UNVERIFIED` when the expected boundary is not
-established.
+The required automatic gate needs a complete LOW URL/key/model profile. A complete, distinct HIGH
+profile may also be configured for the optional differential and may use a supported cloud provider
+such as OpenRouter. Reject partial/unknown/duplicate keys, unsafe model IDs, reversed roles,
+fallback, or substitution. Never hardcode or print credentials or exact local model identities.
+Exact-model work must run the exact required model. Use `OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=<id>` for
+the required single LOW model or `OPEN_KEYBOARD_LIVE_REQUIRED_MODELS='low=<id>, high=<id>'` for an
+explicit matrix. A successful or intermittent low boundary remains diagnostic/`UNVERIFIED` only
+when that optional boundary experiment was explicitly requested.
 
 ### Privacy-preserving live evidence
 
 Exact selected-model matching stays local: compare the guarded seed, any explicit task requirement,
-and each actually selected LOW/HIGH profile byte-for-byte. Require distinct roles, both profiles,
-no fallback, and every classified semantic outcome. Never publish model identities or their hashes,
+and each actually selected profile byte-for-byte. The automatic gate requires LOW; an explicitly
+requested differential additionally requires distinct LOW/HIGH roles, both profiles, no fallback,
+and every matrix outcome. Never publish model identities or their hashes,
 credentials, private endpoints, prompts, responses, or timing fingerprints. The local runner may use
 mode-600 temporary identity records for comparisons; it must delete them on exit and never print
 raw live-test output. A public model-agnostic requirement still verifies the exact seeded reference.

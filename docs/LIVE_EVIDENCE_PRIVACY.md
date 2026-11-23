@@ -1,11 +1,12 @@
 # Private live-evidence contract
 
 The public record describes roles and outcomes. Model identity remains a private local input.
-`check-live.sh` compares an explicit model requirement, when supplied, to the guarded seed and
-compares the differential runner's actual profile identities to that same selection. The runner
-rechecks each role when loading its seed before injection. Both roles must be complete and distinct.
-The gate rejects substitution, reversed roles, missing results, stale/dirty heads, a successful LOW
-boundary, failed HIGH execution, and diagnostic-only results. No model hash is published.
+`check-live.sh gateway` compares an explicit model requirement, when supplied, to the guarded LOW
+profile and runs the four-provider matrix. The optional differential compares both actual profile
+identities to the guarded selection and rechecks each role before injection. When explicitly run,
+both roles must be complete and distinct, and the diagnostic rejects substitution, reversed roles,
+missing results, stale/dirty heads, a successful LOW boundary, failed HIGH execution, and
+diagnostic-only results. No model hash is published.
 
 ## Public schema
 
@@ -59,18 +60,18 @@ All bindings must be true and all outcomes passed for every live-impacting head.
 may use only `not required`. This policy PR's automated evidence is not normal UI runtime proof.
 
 Connector gitlinks, bootstrap scripts, Settings model selection, and service adapters require the
-model-differential gate. Canonical prompt-contract ownership and exact pinned package checks remain
-unchanged. New adapter behavior must preserve exact model/request/response-target matching,
+gateway gate: LOW plus the four-provider matrix. The LOW/HIGH differential remains available when
+a comparison is explicitly requested. Canonical prompt-contract ownership and exact pinned package
+checks remain unchanged. New adapter behavior must preserve exact model/request/response-target matching,
 no generation fallback for discovery, strict parsing, retries, and operation-scoped warnings.
 
 ## Haptics classifier assessment
 
 `KeyboardViewModel.swift` owns local key actions and semantic request, retry, warning, and result
 state. File-level classification cannot establish that a haptic call leaves those contracts intact.
-A keyword or changed-line exemption would miss control-flow and numeric changes. This PR retains
-its differential classification, with a regression for a haptic-only edit. Safe separation would
-require a separately reviewed product refactor with explicit dependency boundaries; it is outside
-this rules task. There is no general skip switch.
+A keyword or changed-line exemption would miss control-flow and numeric changes, so the file retains
+gateway classification with a regression for a haptic-only edit. The required LOW and provider
+coverage remains intact; there is no general skip switch.
 
 ## Revalidation after adoption
 

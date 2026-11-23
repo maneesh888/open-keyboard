@@ -72,7 +72,7 @@ for gateway_sensitive_path in "${gateway_sensitive_paths[@]}"; do
 done
 
 
-differential_workflow_paths=(
+live_workflow_paths=(
   .gitmodules
   Vendor/semantic-prompt-contract
   Vendor/universal-ai-connector
@@ -84,11 +84,11 @@ differential_workflow_paths=(
   scripts/tests/universal-ai-connector-policy-test.sh
 )
 
-for differential_workflow_path in "${differential_workflow_paths[@]}"; do
-  assert_impact_path "$differential_workflow_path" gateway-differential
+for live_workflow_path in "${live_workflow_paths[@]}"; do
+  assert_impact_path "$live_workflow_path" gateway
 done
 
-differential_model_pipeline_paths=(
+live_model_pipeline_paths=(
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Models/AppConfig.swift
   OpenKeyboard/Models/KeyboardSuggestionModels.swift
@@ -104,28 +104,28 @@ differential_model_pipeline_paths=(
   OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift
 )
 
-for differential_model_pipeline_path in "${differential_model_pipeline_paths[@]}"; do
+for live_model_pipeline_path in "${live_model_pipeline_paths[@]}"; do
   assert_impact_path \
-    "$differential_model_pipeline_path" \
-    gateway-differential \
+    "$live_model_pipeline_path" \
+    gateway \
     'numericThreshold = 0.50'
 done
 
 assert_impact_path \
   OpenKeyboardExtension/KeyboardAIService.swift \
-  gateway-differential \
+  gateway \
   'if expectedScriptRatio < 0.50'
 assert_impact_path \
   OpenKeyboardExtension/KeyboardViewModel.swift \
-  gateway-differential \
+  gateway \
   'let maximumAttempts = 1'
 assert_impact_path \
   OpenKeyboard/Views/KeyboardPreviewLabView.swift \
   gateway \
   'unrelated keyboard layout adjustment'
 
-assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway-differential 'hapticGenerator.impactOccurred()'
-assert_impact_path OpenKeyboard/ViewModels/SettingsViewModel.swift gateway-differential 'selectedModel = selection'
+assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway 'hapticGenerator.impactOccurred()'
+assert_impact_path OpenKeyboard/ViewModels/SettingsViewModel.swift gateway 'selectedModel = selection'
 gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
 git -C "$FIXTURE" checkout -q -B rename-base "$docs_sha"

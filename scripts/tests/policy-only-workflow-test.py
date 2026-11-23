@@ -36,7 +36,7 @@ class PolicyWorkflowTests(unittest.TestCase):
         self.write("AGENTS.md", "revised policy\n")
         self.validator = Path(self.tmp.name) / "trusted"
         self.validator.mkdir()
-        self.write_validator('echo gateway-differential')
+        self.write_validator('echo gateway')
         self.env.update(PR_BASE_SHA=self.base, VALIDATOR_ROOT=str(self.validator),
                         GITHUB_WORKSPACE=str(self.root), GITHUB_ENV=str(Path(self.tmp.name) / "env"))
 
@@ -59,7 +59,7 @@ class PolicyWorkflowTests(unittest.TestCase):
         self.git("commit", "--allow-empty", "-qm", "fixture")
         return self.git("rev-parse", "HEAD")
 
-    def classify(self, expected="gateway-differential", error=False):
+    def classify(self, expected="gateway", error=False):
         self.env["PR_HEAD_SHA"] = self.commit()
         result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", STEP], cwd=self.root,
                                 env=self.env, capture_output=True, text=True)

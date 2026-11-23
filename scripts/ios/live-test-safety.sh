@@ -579,16 +579,16 @@ openkeyboard_select_simulator_gateway_profile() {
 }
 
 openkeyboard_select_reference_simulator_gateway_profile() {
-  local high_state legacy_state
-  high_state="$(openkeyboard_simulator_gateway_profile_state high)" || return 2
+  local low_state legacy_state
+  low_state="$(openkeyboard_simulator_gateway_profile_state low)" || return 2
   legacy_state="$(openkeyboard_simulator_gateway_profile_state legacy)" || return 2
 
-  if [[ "$high_state" == "complete" ]]; then
-    openkeyboard_select_simulator_gateway_profile high
+  if [[ "$low_state" == "complete" ]]; then
+    openkeyboard_select_simulator_gateway_profile low
   elif [[ "$legacy_state" == "complete" ]]; then
     openkeyboard_select_simulator_gateway_profile legacy
   else
-    echo "Ordinary live verification requires the high profile or the legacy fallback profile." >&2
+    echo "Ordinary live verification requires the low profile or the legacy fallback profile." >&2
     return 2
   fi
 }

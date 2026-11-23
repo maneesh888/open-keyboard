@@ -117,8 +117,12 @@ if rg --quiet 'live-policy-migration|trusted-gateway-projection|source |cp "scri
   echo "Live policy must use trusted validators without candidate fallback or migration projections." >&2
   exit 1
 fi
-rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK"
-rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"
+if rg --fixed-strings --quiet 'gateway-differential)' "$PRE_PUSH_HOOK" ||
+    rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway-differential' "$PRE_PUSH_HOOK"; then
+  echo "Pre-push must not select the optional differential gate automatically." >&2
+  exit 1
+fi
+rg --fixed-strings --quiet '"$ROOT/scripts/check-live.sh" gateway' "$PRE_PUSH_HOOK"
 rg --quiet 'git show "\$PR_BASE_SHA:scripts/\$validator_name"' "$LIVE_WORKFLOW"
 rg --quiet 'environment:[[:space:]]*live-policy' "$LIVE_WORKFLOW"
 rg --quiet 'local_live_verification_count' "$LIVE_EVIDENCE_VALIDATOR"

@@ -10,7 +10,9 @@ live evidence for that behavior. The independent reviewer checks this reasoning.
 ## Default and assessed impact
 
 `scripts/live-impact.sh BASE HEAD` keeps conservative defaults for shipping paths and reports
-`none`, `gateway`, or `gateway-differential`. Policy-only changes to the classifier, validators,
+`none` or `gateway`. The required gateway route checks the LOW profile plus the four-provider
+matrix. The LOW/HIGH differential remains an explicit optional diagnostic rather than an automatic
+applicability target. Policy-only changes to the classifier, validators,
 CI workflow, PR template, hooks, and documentation need deterministic policy regression and review,
 not a model call. Runtime test harnesses, seeds, dependencies, and production files retain defaults.
 
@@ -40,7 +42,7 @@ file when binding the diff, avoiding a self-referential hash. Run the classifier
 and review after any changed path, blob, mode, or merge base. Modified assessments with missing,
 extra, duplicated, malformed, or stale content fail closed. An inherited assessment is ignored for
 a new PR; deleting it restores default classification. Uncommitted files never affect committed
-classification. Contract/gitlink changes cannot be reduced below differential verification.
+classification. Contract/gitlink changes cannot be reduced below gateway verification.
 
 In the PR requirements table, add the named assessment requirement with an observable criterion
 such as “Verification covers the changed behavior without unrelated model calls.” Include the
@@ -77,16 +79,18 @@ provider behavior. Keep privacy/consent regression coverage even when live model
 A candidate cannot replace its trusted-base classifier/helper to approve its own assessment.
 The live workflow additionally contains a narrow, literal policy-file allowlist. This is an
 explicit change to the workflow trust boundary: a complete policy-only diff can select no live
-execution even when the base classifier selects differential. The old live test is not claimed as
+execution even when the base classifier selects a live target. The old live test is not claimed as
 executed or passed. This corrects the rollout requirement itself instead of requiring unrelated
 model calls to introduce the correction.
 
 The rule checks the entire merge-base-to-head diff with NUL-delimited paths and rename detection
-disabled. Existing allowlisted files must remain regular blobs with identical modes. Only the
-four explicitly designated documentation/helper/test files may be added, at their expected modes.
-Deletions, mode/type changes, unknown paths, shipping code, dependencies, runtime configuration,
-seeds, live runners, and assessment manifests cannot use this rule. Invalid Git objects or diff
-output fail the job; they never select a fallback. Every other diff uses the trusted-base result.
+disabled. Existing allowlisted files must remain regular blobs with identical modes. Only explicitly
+designated documentation/helper/test files may be added, at their expected modes. The exact
+allowlist includes the live-policy runner and its negative tests so a policy-only gate-selection
+change can land without executing the obsolete gate it removes; independent review must inspect
+those files in full. Deletions, mode/type changes, unknown paths, shipping code, dependencies,
+runtime configuration, seeds, and assessment manifests cannot use this rule. Invalid Git objects
+or diff output fail the job; they never select a fallback. Every other diff uses the trusted-base result.
 Trusted classifier failures still fail the job, and evidence validators remain base-loaded.
 The inline boundary interpreter uses isolated mode so checkout modules and PYTHONPATH cannot
 replace its standard-library imports before the diff is checked.

@@ -37,7 +37,6 @@ git -C "$ROOT" diff \
   "$BASE_SHA...$HEAD_SHA" > "$changed_paths_file"
 
 live_required="false"
-differential_required="false"
 while IFS= read -r -d '' changed_path; do
   case "$changed_path" in
     .gitmodules | \
@@ -74,7 +73,7 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/openkeyboard-gateway.seed.env.example | \
       scripts/ios/seed-simulator-gateway-config.sh | \
       scripts/ios/test.sh)
-      differential_required="true"
+      live_required="true"
       ;;
     OpenKeyboard/Models/AppConfig.swift | \
       OpenKeyboard/ViewModels/SettingsViewModel.swift | \
@@ -93,15 +92,13 @@ while IFS= read -r -d '' changed_path; do
       # These files define or prove model selection, parsing, capability classification,
       # retries, and operation-scoped warning state. Line-keyword matching can miss
       # semantic changes such as numeric threshold or retry-count edits, so changes to
-      # these narrowly selected model-pipeline files always require the differential gate.
-      differential_required="true"
+      # these narrowly selected model-pipeline files always require the live gateway gate.
+      live_required="true"
       ;;
   esac
 done < "$changed_paths_file"
 
-if [[ "$differential_required" == "true" ]]; then
-  default_impact="gateway-differential"
-elif [[ "$live_required" == "true" ]]; then
+if [[ "$live_required" == "true" ]]; then
   default_impact="gateway"
 else
   default_impact="none"
