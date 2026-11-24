@@ -23,7 +23,8 @@ After initializing submodules, run `./scripts/bootstrap-universal-ai-connector.s
 Xcode build. Repository iOS test routes call it automatically. The bootstrap verifies the checkout
 against the recorded gitlink, refuses tracked connector modifications, invokes the connector's
 canonical XCFramework build, and validates its arm64 iOS device and Simulator slices. Connector
-gitlink changes require the exact-head differential live matrix. Bootstrap, package-project,
+gitlink changes require the exact-head gateway gate: the LOW local profile plus the four-provider
+matrix. Bootstrap, package-project,
 adapter, model-discovery, and generation-pipeline changes default to live verification, subject to
 behavior-scoped assessment. Normal simulator proof applies when acceptance includes a user-visible
 workflow; nonvisual gateway criteria may use relevant live evidence.
@@ -207,7 +208,7 @@ blanket requirements for every edit in a shared file; apply verification applica
 | Keyboard extension/App Group behavior | Focused extension/persistence regression and normal handoff proof; `real-keyboard-live` only when verifying live AI behavior |
 | Gateway runtime or contract | `./scripts/check-live.sh gateway` for automated transport/contract evidence; normal runtime proof when user-visible semantic behavior changes |
 | Parser compatibility or retry | Relevant live schema/semantic/failure evidence; assess whether the gateway or differential route fits the changed behavior |
-| Model capability boundary, model-role comparison, or requested matrix | `./scripts/check-live.sh gateway-differential` on committed exact `HEAD` |
+| Explicit model-capability or role comparison | Optional `./scripts/check-live.sh gateway-differential` on committed exact `HEAD`; blocking only when named by the acceptance criterion |
 | Workflow, hooks, or security policy | `./scripts/check.sh --hygiene` |
 
 ## Persistent local configuration
@@ -237,11 +238,12 @@ Git and disposable worktrees must not transport it. Protected release signing us
 environment secrets instead of a local ignored file. Other live test routes that accept environment
 variables do not persist them in the repository.
 
-The strict seed parser accepts either a complete legacy URL/API-key/model triple or complete
-`LOW`/`HIGH` triples. A configured role can never be partial. Duplicate variables, unknown keys,
-unsafe model IDs, missing differential roles, identical role models, reversed mappings, and silent
-substitution are rejected without printing values. Ordinary checks use the high profile when it is
-configured and otherwise use the legacy fallback; they never silently use the low profile.
+The strict seed parser accepts a complete legacy URL/API-key/model triple or complete `LOW`/`HIGH`
+triples. A configured role can never be partial. Duplicate variables, unknown keys, unsafe model
+IDs, missing differential roles, identical role models, reversed mappings, and silent substitution
+are rejected without printing values. The required exact-head gateway check selects LOW. HIGH is
+retained for an explicit optional differential and may point to a supported cloud provider such as
+OpenRouter; it is never required merely to complete the automatic gate.
 
 The exact-head gateway gate also runs the four-provider Settings/connector matrix from the pinned
 connector's guarded ignored live seed. OpenAI, Anthropic, OpenRouter, and OpenAI-compatible Gateway
@@ -311,11 +313,11 @@ The path must be `.githooks`.
   `simctl` cleanup, and never modify the selected existing simulator. The automated real-keyboard
   route seeds and restarts only its disposable simulator, then deletes it on exit.
 - Never use `--no-verify`. A missing toolchain or credential is a blocker for the affected gate.
-- The exact-head impact classifier selects `gateway-differential` only for changes touching
-  model-capability classification, long-input handling, parser compatibility, retry behavior,
-  automatic-analysis warnings, manual-action scope, Translate warning scope, or runtime matrix
-  execution itself. Policy-only classification is covered by deterministic tests. Pre-release verification invokes `./scripts/check-live.sh gateway-differential`
-  explicitly. Unrelated pull requests do not run the two-profile matrix.
+- The exact-head impact classifier selects only `none` or `gateway`. The required `gateway` target
+  exercises LOW plus the four-provider matrix. `gateway-differential` remains an explicit manual
+  diagnostic and is never selected by pre-push, CI applicability, readiness, or pre-release policy
+  unless the user made the comparison an acceptance criterion. Policy-only classification is
+  covered by deterministic tests.
 
 ## Normal simulator and device proof gate
 

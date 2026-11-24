@@ -89,19 +89,27 @@ jobs:
           # This exact allowlist is a reviewed CI policy boundary, not proof of file safety.
           # Existing entries may only be modified; additions are explicitly designated.
           existing = {
+              ".githooks/pre-push": "100755",
               ".agents/skills/develop-openkeyboard/SKILL.md": "100644",
               ".agents/skills/review-verify-merge-pr/SKILL.md": "100644",
               ".codex/agents/pr-reviewer.toml": "100644",
               ".github/pull_request_template.md": "100644",
               ".github/workflows/live.yml": "100644",
               "AGENTS.md": "100644",
+              "README.md": "100644",
               "docs/DEVELOPMENT_WORKFLOW.md": "100644",
+              "docs/LIVE_EVIDENCE_PRIVACY.md": "100644",
               "scripts/check-environment.sh": "100755",
+              "scripts/check-live.sh": "100755",
               "scripts/check.sh": "100755",
+              "scripts/ios/live-test-safety.sh": "100644",
+              "scripts/ios/seed-simulator-gateway-config.sh": "100755",
               "scripts/live-impact.sh": "100755",
               "scripts/tests/live-evidence-policy-test.sh": "100755",
               "scripts/tests/live-impact-test.sh": "100755",
               "scripts/tests/live-policy-bootstrap-test.sh": "100755",
+              "scripts/tests/live-test-safety-test.sh": "100755",
+              "scripts/tests/private-live-runner-test.sh": "100755",
               "scripts/tests/workflow-policy-test.sh": "100755",
           }
           addable = {

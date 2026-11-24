@@ -532,9 +532,9 @@ fi
 
 openkeyboard_load_simulator_gateway_seed "$DUAL_PROFILE_SEED"
 openkeyboard_select_reference_simulator_gateway_profile
-if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "high" || \
-      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "high-model:120b" ]]; then
-  echo "Reference live verification did not select the configured high profile." >&2
+if [[ "$OPEN_KEYBOARD_SIMULATOR_SELECTED_PROFILE" != "low" || \
+      "$OPEN_KEYBOARD_SIMULATOR_MODEL" != "low-model:2b" ]]; then
+  echo "Reference live verification did not select the configured low profile." >&2
   exit 1
 fi
 

@@ -72,23 +72,45 @@ for gateway_sensitive_path in "${gateway_sensitive_paths[@]}"; do
 done
 
 
-differential_workflow_paths=(
+policy_only_paths=(
+  .githooks/pre-push
+  .github/workflows/live.yml
+  AGENTS.md
+  README.md
+  docs/DEVELOPMENT_WORKFLOW.md
+  docs/LIVE_EVIDENCE_PRIVACY.md
+  docs/VERIFICATION_APPLICABILITY.md
+  scripts/check-live.sh
+  scripts/ios/live-test-safety.sh
+  scripts/ios/seed-simulator-gateway-config.sh
+  scripts/live-impact.sh
+  scripts/tests/live-impact-test.sh
+  scripts/tests/live-test-safety-test.sh
+  scripts/tests/policy-only-workflow-test.py
+  scripts/tests/private-live-runner-test.sh
+  scripts/tests/verification-assessment-test.py
+  scripts/tests/workflow-policy-test.sh
+  scripts/verification-assessment.py
+)
+
+for policy_only_path in "${policy_only_paths[@]}"; do
+  assert_impact_path "$policy_only_path" none
+done
+
+live_workflow_paths=(
   .gitmodules
   Vendor/semantic-prompt-contract
   Vendor/universal-ai-connector
-  scripts/check-live.sh
-  scripts/ios/live-test-safety.sh
   scripts/ios/openkeyboard-gateway.seed.env.example
-  scripts/ios/seed-simulator-gateway-config.sh
   scripts/ios/test.sh
   scripts/tests/universal-ai-connector-policy-test.sh
 )
 
-for differential_workflow_path in "${differential_workflow_paths[@]}"; do
-  assert_impact_path "$differential_workflow_path" gateway-differential
+for live_workflow_path in "${live_workflow_paths[@]}"; do
+  assert_impact_path "$live_workflow_path" gateway
 done
 
-differential_model_pipeline_paths=(
+live_model_pipeline_paths=(
   OpenKeyboard/Services/Nested/AnyGatewayRuntime.swift
   OpenKeyboard/Models/AppConfig.swift
   OpenKeyboard/Models/KeyboardSuggestionModels.swift
@@ -104,28 +126,28 @@ differential_model_pipeline_paths=(
   OpenKeyboardUITests/KeyboardViewModelActionErrorTests.swift
 )
 
-for differential_model_pipeline_path in "${differential_model_pipeline_paths[@]}"; do
+for live_model_pipeline_path in "${live_model_pipeline_paths[@]}"; do
   assert_impact_path \
-    "$differential_model_pipeline_path" \
-    gateway-differential \
+    "$live_model_pipeline_path" \
+    gateway \
     'numericThreshold = 0.50'
 done
 
 assert_impact_path \
   OpenKeyboardExtension/KeyboardAIService.swift \
-  gateway-differential \
+  gateway \
   'if expectedScriptRatio < 0.50'
 assert_impact_path \
   OpenKeyboardExtension/KeyboardViewModel.swift \
-  gateway-differential \
+  gateway \
   'let maximumAttempts = 1'
 assert_impact_path \
   OpenKeyboard/Views/KeyboardPreviewLabView.swift \
   gateway \
   'unrelated keyboard layout adjustment'
 
-assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway-differential 'hapticGenerator.impactOccurred()'
-assert_impact_path OpenKeyboard/ViewModels/SettingsViewModel.swift gateway-differential 'selectedModel = selection'
+assert_impact_path OpenKeyboardExtension/KeyboardViewModel.swift gateway 'hapticGenerator.impactOccurred()'
+assert_impact_path OpenKeyboard/ViewModels/SettingsViewModel.swift gateway 'selectedModel = selection'
 gateway_sha="$(git -C "$FIXTURE" rev-parse HEAD)"
 
 git -C "$FIXTURE" checkout -q -B rename-base "$docs_sha"

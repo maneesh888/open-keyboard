@@ -73,11 +73,11 @@ class AssessmentTests(unittest.TestCase):
         return result.stdout.strip()
 
     def test_shared_file_requires_assessment_to_reduce_gate(self):
-        self.assertEqual(self.classify(), "gateway-differential")
+        self.assertEqual(self.classify(), "gateway")
         self.assess()
         self.assertEqual(self.classify(), "none")
 
-    def test_focused_gateway_can_replace_unrelated_differential(self):
+    def test_focused_gateway_preserves_required_live_coverage(self):
         self.assess(self.draft("gateway"))
         self.assertEqual(self.classify(), "gateway")
 
@@ -118,13 +118,13 @@ class AssessmentTests(unittest.TestCase):
         self.base = self.assess()
         self.write(self.path, "let retryCount = 8\n")
         self.commit()
-        self.assertEqual(self.classify(), "gateway-differential")
+        self.assertEqual(self.classify(), "gateway")
 
     def test_deleted_assessment_restores_default(self):
         self.assess()
         (self.root / module.PATH).unlink()
         self.commit()
-        self.assertEqual(self.classify(), "gateway-differential")
+        self.assertEqual(self.classify(), "gateway")
 
     def test_dependency_change_cannot_be_exempted(self):
         self.write(".gitmodules", "changed dependency\n")
@@ -147,7 +147,7 @@ class AssessmentTests(unittest.TestCase):
 
     def test_worktree_assessment_does_not_change_committed_classification(self):
         self.write(module.PATH, json.dumps(self.draft()))
-        self.assertEqual(self.classify(self.candidate), "gateway-differential")
+        self.assertEqual(self.classify(self.candidate), "gateway")
 
     def test_workflow_checks_both_assessment_snapshots(self):
         head = self.assess()
@@ -172,12 +172,12 @@ class AssessmentTests(unittest.TestCase):
         blob = module.entry(str(self.root), head, module.PATH)["oid"]
         body = self.root / "body.md"
         body.write_text(f"| R2 | Applicability | Correct scope | Diff review | assessment {blob} | VERIFIED |\n")
-        self.assertEqual(module.resolve(str(self.root), self.base, head, "gateway-differential", str(body)), "none")
+        self.assertEqual(module.resolve(str(self.root), self.base, head, "gateway", str(body)), "none")
         for invalid in ("", body.read_text().replace(blob, "stale"), body.read_text() * 2,
                         body.read_text().replace("R2", "R1")):
             body.write_text(invalid)
             with self.assertRaises(ValueError):
-                module.resolve(str(self.root), self.base, head, "gateway-differential", str(body))
+                module.resolve(str(self.root), self.base, head, "gateway", str(body))
 
 
 if __name__ == "__main__":

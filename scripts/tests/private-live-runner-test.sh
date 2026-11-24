@@ -50,7 +50,7 @@ if [[ "$1" == live-gateway-smoke ]]; then
   if [[ "$(cat "$ROOT/.agent/scenario")" == substituted ]]; then
     printf 'model=substituted-identity-sentinel\n' > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
   else
-    printf 'model=high-identity-sentinel\n' > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
+    printf 'model=low-identity-sentinel\n' > "$OPEN_KEYBOARD_LIVE_EVIDENCE_OUTPUT"
   fi
   exit 0
 fi
@@ -131,10 +131,20 @@ fi
 assert_private
 GATE_TARGET=gateway
 printf valid > "$REPO/.agent/scenario"
+cat > "$REPO/.agent/local-seeds/openkeyboard-gateway.env" <<'SEED'
+OPEN_KEYBOARD_SIMULATOR_LOW_GATEWAY_URL=https://private.invalid
+OPEN_KEYBOARD_SIMULATOR_LOW_API_KEY=credential-sentinel
+OPEN_KEYBOARD_SIMULATOR_LOW_MODEL=low-identity-sentinel
+SEED
+chmod 600 "$REPO/.agent/local-seeds/openkeyboard-gateway.env"
 run_gate
 assert_private
 grep -q 'model_identity_matches=reference=true' "$FIXTURE/output"
-run_gate OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=high-identity-sentinel
+run_gate OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=low-identity-sentinel
+assert_private
+if run_gate OPEN_KEYBOARD_LIVE_REQUIRE_DIFFERENTIAL=true; then
+  echo "Ordinary gate accepted implicit differential escalation." >&2; exit 1
+fi
 assert_private
 for requirement in wrong-identity-sentinel model-agnostic ''; do
   if run_gate "OPEN_KEYBOARD_LIVE_REQUIRED_MODEL=$requirement"; then

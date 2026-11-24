@@ -10,7 +10,7 @@ import subprocess
 import sys
 
 PATH = ".github/verification-assessment.json"
-TARGETS = {"none": 0, "gateway": 1, "gateway-differential": 2}
+TARGETS = {"none": 0, "gateway": 1}
 
 
 def git(root, *args):
@@ -75,10 +75,10 @@ def resolve(root, base, head, default, body_file=None):
     }
     if not expected or data["changes"] != expected:
         raise ValueError("Assessment must bind every changed path, mode, and blob; regenerate after changes")
-    # Dependency/contract changes always need the full live gate, even with an assessment.
+    # Dependency/contract changes always need the required live gateway gate, even with an assessment.
     if any(path == ".gitmodules" or path.startswith("Vendor/") for path in expected):
-        if data["live_impact"] != "gateway-differential":
-            raise ValueError("Dependency and canonical contract changes require differential live verification")
+        if data["live_impact"] != "gateway":
+            raise ValueError("Dependency and canonical contract changes require live gateway verification")
     if body_file is not None:
         with open(body_file, encoding="utf-8") as stream:
             body = stream.read()

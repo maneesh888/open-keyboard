@@ -265,22 +265,14 @@ trap 'exit_live_gate_after_signal 143' TERM
 
 LIVE_MODE="$TARGET"
 if [[ "$LIVE_MODE" == "gateway" ]]; then
-  if git -C "$ROOT" rev-parse --verify "$LIVE_BASE_SHA^{commit}" >/dev/null 2>&1; then
-    LIVE_IMPACT="$($ROOT/scripts/live-impact.sh "$LIVE_BASE_SHA" "$HEAD_SHA")" ||
-      fail "Live-impact classification failed."
-    if [[ "$LIVE_IMPACT" == "gateway-differential" ]]; then
-      LIVE_MODE="gateway-differential"
-      echo "The exact-head impact classifier requires the targeted two-profile matrix."
-    fi
-  elif [[ "${OPEN_KEYBOARD_LIVE_REQUIRE_DIFFERENTIAL:-}" == "true" ]]; then
-    LIVE_MODE="gateway-differential"
-  else
-    fail "Live verification could not resolve OPEN_KEYBOARD_LIVE_BASE_REF."
+  LIVE_IMPACT="$($ROOT/scripts/live-impact.sh "$LIVE_BASE_SHA" "$HEAD_SHA")" ||
+    fail "Live-impact classification failed."
+  if [[ "$LIVE_IMPACT" != "none" && "$LIVE_IMPACT" != "gateway" ]]; then
+    fail "Live-impact classification returned an unsupported automatic target."
   fi
-fi
-
-if [[ "${OPEN_KEYBOARD_LIVE_REQUIRE_DIFFERENTIAL:-}" == "true" ]]; then
-  LIVE_MODE="gateway-differential"
+  if [[ "${OPEN_KEYBOARD_LIVE_REQUIRE_DIFFERENTIAL:-}" == "true" ]]; then
+    fail "Automatic differential escalation is unsupported; invoke gateway-differential explicitly."
+  fi
 fi
 
 openkeyboard_require_compatible_live_model_inputs \
@@ -310,8 +302,8 @@ if [[ "$LIVE_MODE" == "gateway-differential" ]]; then
   MODEL_IDENTITY_MATCHES="low=true, high=true"
   MODEL_ROLES_DISTINCT="true"
 else
-  openkeyboard_select_reference_simulator_gateway_profile ||
-    fail "Reference live-model profile selection failed."
+  openkeyboard_select_simulator_gateway_profile low ||
+    fail "Required LOW local-model profile selection failed."
   TESTED_MODEL="$OPEN_KEYBOARD_SIMULATOR_MODEL"
   if [[ "$REQUIRED_MODEL_INPUT_SET" == "true" ]]; then
     REQUIRED_MODEL="$REQUIRED_MODEL_INPUT"

@@ -37,8 +37,39 @@ git -C "$ROOT" diff \
   "$BASE_SHA...$HEAD_SHA" > "$changed_paths_file"
 
 live_required="false"
-differential_required="false"
+policy_only="true"
 while IFS= read -r -d '' changed_path; do
+  case "$changed_path" in
+    .githooks/pre-push | \
+      .agents/skills/develop-openkeyboard/SKILL.md | \
+      .agents/skills/review-verify-merge-pr/SKILL.md | \
+      .codex/agents/pr-reviewer.toml | \
+      .github/pull_request_template.md | \
+      .github/workflows/live.yml | \
+      AGENTS.md | \
+      README.md | \
+      docs/DEVELOPMENT_WORKFLOW.md | \
+      docs/LIVE_EVIDENCE_PRIVACY.md | \
+      docs/VERIFICATION_APPLICABILITY.md | \
+      scripts/check-environment.sh | \
+      scripts/check-live.sh | \
+      scripts/check.sh | \
+      scripts/ios/live-test-safety.sh | \
+      scripts/ios/seed-simulator-gateway-config.sh | \
+      scripts/live-impact.sh | \
+      scripts/tests/live-evidence-policy-test.sh | \
+      scripts/tests/live-impact-test.sh | \
+      scripts/tests/live-policy-bootstrap-test.sh | \
+      scripts/tests/live-test-safety-test.sh | \
+      scripts/tests/policy-only-workflow-test.py | \
+      scripts/tests/private-live-runner-test.sh | \
+      scripts/tests/verification-assessment-test.py | \
+      scripts/tests/workflow-policy-test.sh | \
+      scripts/verification-assessment.py)
+      ;;
+    *) policy_only="false" ;;
+  esac
+
   case "$changed_path" in
     .gitmodules | \
       scripts/check-live.sh | \
@@ -74,7 +105,7 @@ while IFS= read -r -d '' changed_path; do
       scripts/ios/openkeyboard-gateway.seed.env.example | \
       scripts/ios/seed-simulator-gateway-config.sh | \
       scripts/ios/test.sh)
-      differential_required="true"
+      live_required="true"
       ;;
     OpenKeyboard/Models/AppConfig.swift | \
       OpenKeyboard/ViewModels/SettingsViewModel.swift | \
@@ -93,14 +124,14 @@ while IFS= read -r -d '' changed_path; do
       # These files define or prove model selection, parsing, capability classification,
       # retries, and operation-scoped warning state. Line-keyword matching can miss
       # semantic changes such as numeric threshold or retry-count edits, so changes to
-      # these narrowly selected model-pipeline files always require the differential gate.
-      differential_required="true"
+      # these narrowly selected model-pipeline files always require the live gateway gate.
+      live_required="true"
       ;;
   esac
 done < "$changed_paths_file"
 
-if [[ "$differential_required" == "true" ]]; then
-  default_impact="gateway-differential"
+if [[ "$policy_only" == "true" ]]; then
+  default_impact="none"
 elif [[ "$live_required" == "true" ]]; then
   default_impact="gateway"
 else

@@ -292,10 +292,10 @@ in `docs/REAL_EXTENSION_SMOKE_PLAN.md` before push.
 
 The seed may contain complete `LOW` and `HIGH` URL/API-key/model triples for targeted model
 comparison. Every configured role must be complete, model IDs must pass the strict safety grammar,
-and the parser rejects duplicate or unknown variables. Ordinary gateway verification selects the
-high profile when present; otherwise it accepts the documented complete legacy triple. It never
-silently substitutes the low profile. The committed seed example documents both formats without
-containing real endpoints, keys, or model IDs.
+and the parser rejects duplicate or unknown variables. Required gateway verification selects LOW;
+HIGH remains available for an explicit optional differential and can point to a supported cloud
+provider such as OpenRouter. The committed seed example documents the formats without containing
+real endpoints, keys, or model IDs.
 
 `live-provider-matrix` uses the pinned connector's guarded local-config parser to read only the
 documented provider credentials from the ignored `.env.live` in the Universal AI Connector's
@@ -330,11 +330,11 @@ role-binding booleans, no-substitution assertion, exact head, and required outco
 legacy timing fields and validates that non-sensitive record; local execution attests the
 secret-backed comparison.
 
-Changes to model-capability classification, long-input handling, parser compatibility, retry
-behavior, automatic-analysis warnings, manual-action error scope, or Translate warning scope use
-`./scripts/check-live.sh gateway-differential`. Pre-release verification uses the same targeted
-matrix; unrelated pull requests continue to run deterministic checks once and do not run the
-matrix.
+Automatic live applicability selects `./scripts/check-live.sh gateway`, which checks LOW and the
+OpenAI, Anthropic, OpenRouter, and generic-gateway provider matrix. The LOW/HIGH
+`./scripts/check-live.sh gateway-differential` route remains available as an explicit manual
+diagnostic, but it is not a pre-push, CI, readiness, or pre-release blocker unless a requested
+acceptance criterion specifically requires that comparison.
 
 `OPEN_KEYBOARD_SIMULATOR_GATEWAY_SEED_FILE` may select another regular, ignored, untracked, private
 file, but it must remain under the primary checkout's `.agent/local-seeds/` directory. Direct Swift
