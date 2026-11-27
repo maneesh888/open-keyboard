@@ -576,7 +576,9 @@ the protected `app-store-connect` environment.
 ## Planning and development automation
 
 `$develop-openkeyboard` is the direct route for a bounded implementation. Do not add routine
-planning or delegation. Use `$audit-openkeyboard-ui` for UI audits and
+planning. Use selective delegation under [Agent model routing](AGENT_MODEL_ROUTING.md) when bounded
+independent work justifies its context cost; direct work remains appropriate for small tasks.
+Use `$audit-openkeyboard-ui` for UI audits and
 `$write-openkeyboard-product-copy` for user-visible wording as routed by `AGENTS.md`.
 
 Use the read-only `$plan-openkeyboard-work-package` only for an explicitly requested bounded plan or
