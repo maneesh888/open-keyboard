@@ -26,6 +26,14 @@ rules here.
    signing, deployment, or proof mechanics; load `docs/VERIFICATION_APPLICABILITY.md` only for a
    diff-bound alternative-proof assessment.
 
+## Route bounded work
+
+Apply `AGENTS.md` task-based agent and model routing before delegation. Read
+`docs/AGENT_MODEL_ROUTING.md` only when assigning work: select a model by difficulty and consequence,
+provide a compact fresh-context packet, and keep ownership and evidence boundaries explicit.
+Prescribed test execution and log extraction can use a lightweight agent; ambiguous failures and
+final acceptance escalate. Do not add agents when a direct tool call is sufficient.
+
 ## Implement and verify
 
 1. Keep edits inside the checkpoint and follow the repository's MVVM, theme, App Group, Keychain,

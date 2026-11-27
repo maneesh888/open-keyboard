@@ -66,6 +66,27 @@ it.
 Ask only when progress needs a material choice about scope, destructive action, credentials,
 external deployment, base branch, dirty-work ownership, or state-change authority.
 
+## Task-based agent and model routing
+
+Use task difficulty and consequence to select an available model before delegating. Prefer a
+lightweight model for bounded source lookup, prescribed test execution, and redacted log/result
+extraction; use a workhorse for scoped implementation or diagnosis and a frontier model for
+ambiguous architecture, security/authority decisions, and independent final review. Routine
+output collection is not final semantic, visual, or release acceptance.
+
+Delegate only when the independent work is substantial enough to repay startup and context cost.
+Use fresh, compact task packets rather than copying the conversation; include the worktree, exact
+revision, authority constraints, owned files/resources, acceptance criterion, and required return
+evidence. Parallelize disjoint work, keep one owner per mutation/resource, and serialize Simulator
+work through repository scripts. The root owns integration and lifecycle mutations; the independent
+reviewer remains read-only and isolated from implementation conclusions.
+
+Before spawning, read `docs/AGENT_MODEL_ROUTING.md` for the model defaults, supported override
+mechanism, escalation triggers, evidence handoff, and measurement limits. This policy authorizes
+selective delegation, not mandatory agents for every task. Higher-priority restrictions and explicit
+user model preferences still apply. Never weaken a gate, change a live gateway model, or claim token
+savings merely because a cheaper agent was selected.
+
 ## User authority and proof-first mode
 
 Before the first mutation, internally record and retain this ledger:
